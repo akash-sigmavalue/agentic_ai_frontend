@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Check } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -14,44 +15,96 @@ import type { GraphNodeId, PipelineDurations } from "../../types/agents";
 import type { AskResult, Chunk, TokenUsage, UploadResult } from "../../types/api";
 import { useRouter } from "next/navigation";
 
+function normalizeAnswerMarkdown(content: string) {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/\n(?=\d+\.\s+)/g, "\n\n")
+    .replace(/\n(?=(?:Reference|Source):)/gi, "\n\n")
+    .replace(/^(Reference|Source):/gim, "**$1:**");
+}
+
 function MarkdownAnswer({ content }: { content: string }) {
   return (
-    <div className="text-[#243044] text-[15px] leading-[1.68] overflow-wrap-break-word prose prose-sm max-w-none
-      prose-h3:text-[#101828] prose-h3:font-bold prose-h3:text-[19px] prose-h3:leading-[1.3] prose-h3:mt-6 prose-h3:mb-2 prose-h3:first:mt-0
-      prose-h4:text-[#101828] prose-h4:font-bold prose-h4:text-base prose-h4:leading-[1.3] prose-h4:mt-5 prose-h4:mb-2 prose-h4:first:mt-0
-      prose-p:text-[#243044] prose-p:mb-[14px] prose-p:last:mb-0
-      prose-strong:text-[#111827] prose-strong:font-bold
-      prose-ul:my-4 prose-ul:pl-6 prose-ol:my-4 prose-ol:pl-6
-      prose-li:my-[6px] prose-li:pl-0.5">
+    <div className="text-[#243044] text-[15px] leading-[1.75] overflow-wrap-break-word">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          h1: ({ children }) => (
+            <h1 className="m-0 mb-4 text-[#101828] text-[25px] leading-[1.2] font-bold">
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="mt-7 mb-3 first:mt-0 text-[#101828] text-[21px] leading-[1.25] font-bold pb-2 border-b border-[#e5eaf2]">
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="mt-6 mb-2 first:mt-0 text-[#182230] text-[18px] leading-[1.3] font-bold">
+              {children}
+            </h3>
+          ),
+          h4: ({ children }) => (
+            <h4 className="mt-5 mb-2 first:mt-0 text-[#182230] text-base leading-[1.35] font-bold">
+              {children}
+            </h4>
+          ),
+          p: ({ children }) => (
+            <p className="m-0 mb-4 last:mb-0 text-[#243044]">
+              {children}
+            </p>
+          ),
+          strong: ({ children }) => (
+            <strong className="font-bold text-[#101828]">
+              {children}
+            </strong>
+          ),
+          ul: ({ children }) => (
+            <ul className="my-4 grid gap-2 pl-0 list-none">
+              {children}
+            </ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="my-4 grid gap-3 pl-6 list-decimal marker:text-[#1f5eff] marker:font-bold">
+              {children}
+            </ol>
+          ),
+          li: ({ children }) => (
+            <li className="pl-1 text-[#243044] leading-[1.65]">
+              {children}
+            </li>
+          ),
           img: ({ src, alt }) => {
             if (!src) {
               return null;
             }
-            return <img src={src} alt={alt || ""} className="my-4 border border-[#d8dee8] rounded-lg bg-white p-2.5 max-h-[560px] object-contain" />;
+            return <img src={src} alt={alt || ""} className="my-5 border border-[#d8dee8] rounded-lg bg-white p-2.5 max-h-[560px] object-contain shadow-sm" />;
           },
           table: ({ children }) => (
-            <div className="w-full my-4 border border-[#c2cada] rounded-lg overflow-x-auto bg-white">
-              <table className="w-full border-collapse text-sm leading-[1.45]">
+            <div className="w-full my-5 border border-[#c9d4e4] rounded-lg overflow-x-auto bg-white shadow-sm">
+              <table className="w-full border-collapse text-sm leading-[1.5]">
                 {children}
               </table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-r border-[#d8dee8] last:border-r-0 p-[11px] text-left align-top bg-[#eef2f6] text-[#202939] font-bold whitespace-nowrap">
+            <th className="border-b border-r border-[#d8dee8] last:border-r-0 p-3 text-left align-top bg-[#eef3fb] text-[#182230] font-bold whitespace-nowrap">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border-b border-r border-[#d8dee8] last:border-r-0 p-[11px] text-left align-top">
+            <td className="border-b border-r border-[#edf1f7] last:border-r-0 p-3 text-left align-top text-[#243044]">
               {children}
             </td>
           ),
+          blockquote: ({ children }) => (
+            <blockquote className="my-5 border-l-4 border-[#1f5eff] bg-[#f5f8ff] text-[#243044] rounded-r-lg px-4 py-3">
+              {children}
+            </blockquote>
+          ),
         }}
       >
-        {content}
+        {normalizeAnswerMarkdown(content)}
       </ReactMarkdown>
     </div>
   );
@@ -78,7 +131,8 @@ function MarkdownAnswer({ content }: { content: string }) {
     return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
   }
 
-  function PipelineGraph({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function _PipelineGraph({
     active,
     ready,
     durations,
@@ -93,6 +147,7 @@ function MarkdownAnswer({ content }: { content: string }) {
       { id: "start", label: "Start", sub: "Document ready" },
       { id: "retrieve", label: "Retrieve", sub: "FAISS / BM25 / Rerank" },
       { id: "generate", label: "Generate", sub: "gpt-4o-mini / temperature 0.2" },
+      { id: "check_answer", label: "Verify", sub: "Answer grounding / applicability check" },
       { id: "end", label: "Complete", sub: "Answer delivered" },
     ];
     const activeIndex = active ? nodes.findIndex((node) => node.id === active) : -1;
@@ -147,6 +202,92 @@ function MarkdownAnswer({ content }: { content: string }) {
                   <span className="text-[#0a0a0a] text-[11.5px] font-medium leading-[1.4] overflow-wrap-anywhere">
                     {node.sub}
                   </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function StepperPipelineGraph({
+    active,
+    ready,
+    durations,
+    totalDuration,
+  }: {
+    active: GraphNodeId | null;
+    ready: boolean;
+    durations: PipelineDurations;
+    totalDuration: number | null;
+  }) {
+    const nodes: { id: GraphNodeId; label: string; sub?: string }[] = [
+      { id: "start", label: "Start", sub: "Document ready" },
+      { id: "retrieve", label: "Retrieve", sub: "FAISS / BM25 / Rerank" },
+      { id: "generate", label: "Generate", sub: "gpt-4o-mini / temperature 0.2" },
+      { id: "check_answer", label: "Verify", sub: "Answer grounding / applicability check" },
+      { id: "end", label: "Complete", sub: "Answer delivered" },
+    ];
+    const activeIndex = active ? nodes.findIndex((node) => node.id === active) : -1;
+
+    return (
+      <div className="mt-6 rounded-lg border border-[#d8dee8] bg-white p-4 shadow-[0_12px_28px_rgba(16,24,40,0.07)]" aria-label="LangGraph execution pipeline">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="m-0 text-[11px] font-bold uppercase tracking-wider text-[#202939]">LangGraph Pipeline</p>
+          <span className="rounded-full border border-[#e1e7f0] bg-[#f8fafc] px-2.5 py-1 text-[10px] font-bold leading-none text-[#475467]">
+            {totalDuration ? `Total ${formatDuration(totalDuration)}` : active ? "Running" : ready ? "Ready" : "Idle"}
+          </span>
+        </div>
+
+        <div className="grid gap-3">
+          {nodes.map((node, index) => {
+            const isActive = active === node.id;
+            const duration = durations[node.id];
+            const isComplete = duration != null || activeIndex > index;
+            const isReadyStart = !active && ready && node.id === "start";
+            const progress = isComplete ? 100 : isActive ? 75 : 0;
+            const ringColor = isComplete ? "#22c55e" : isActive ? "#1f5eff" : "#d7dee9";
+            const durationLabel = duration != null ? formatDuration(duration) : isActive ? "Running" : isReadyStart ? "Ready" : "< 1s";
+
+            return (
+              <div key={node.id} className="grid grid-cols-[48px_1fr] items-center gap-3">
+                <div
+                  className="grid h-11 w-11 place-items-center rounded-full p-[3px] shadow-[0_3px_10px_rgba(16,24,40,0.12)]"
+                  style={{
+                    background: `conic-gradient(${ringColor} ${progress * 3.6}deg, #eef2f7 0deg)`,
+                  }}
+                >
+                  <div
+                    className={`grid h-full w-full place-items-center rounded-full text-[10px] font-bold
+                      ${isComplete ? "bg-white text-[#16a34a]" : ""}
+                      ${isActive ? "bg-white text-[#1f5eff]" : ""}
+                      ${!isComplete && !isActive ? "bg-white text-[#667085]" : ""}`}
+                  >
+                    {isComplete ? <Check className="h-5 w-5" strokeWidth={3} /> : `${progress}%`}
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-lg border px-3.5 py-3 shadow-[0_6px_16px_rgba(16,24,40,0.04)] transition-all
+                    ${isActive ? "border-[#c9d7f5] bg-[#f5f8ff] shadow-[0_10px_22px_rgba(31,94,255,0.10)]" : ""}
+                    ${isComplete && !isActive ? "border-[#e1e7f0] bg-white" : ""}
+                    ${isReadyStart ? "border-[#d9e7ff] bg-[#fbfdff]" : ""}
+                    ${!isComplete && !isActive && !isReadyStart ? "border-[#e5eaf2] bg-[#fbfcfe]" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`m-0 text-[13px] font-bold leading-[1.2] ${isActive ? "text-[#1f5eff]" : "text-[#182230]"}`}>
+                        {node.label}
+                      </p>
+                      <p className={`m-0 mt-1 text-[11px] font-medium leading-[1.35] ${isActive ? "text-[#174bd2]" : "text-[#475467]"}`}>
+                        {node.sub}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-[10px] font-bold leading-none ${isActive ? "text-[#1f5eff]" : "text-[#475467]"}`}>
+                      {durationLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
             );
@@ -242,6 +383,7 @@ function MarkdownAnswer({ content }: { content: string }) {
 
         setActiveNode("generate");
         let fullAnswer = "";
+        let checkStartedAt: number | null = null;
 
         setAskResult({ answer: "", chunks: [], token_usage: { input: 0, output: 0 } });
 
@@ -267,10 +409,16 @@ function MarkdownAnswer({ content }: { content: string }) {
                 try {
                   const data = JSON.parse(dataStr);
                   if (data.type === "token") {
+                    if (checkStartedAt == null) {
+                      checkStartedAt = performance.now();
+                      setStageDurations((prev) => ({ ...prev, generate: checkStartedAt! - generateStartedAt }));
+                      setActiveNode("check_answer");
+                    }
                     fullAnswer += data.content;
                     setAskResult((prev) => prev ? { ...prev, answer: fullAnswer } : null);
                   } else if (data.type === "done") {
                     const completeStartedAt = performance.now();
+                    const verifyStartedAt = checkStartedAt ?? completeStartedAt;
                     setAskResult({
                       answer: fullAnswer,
                       chunks: data.chunks,
@@ -279,14 +427,15 @@ function MarkdownAnswer({ content }: { content: string }) {
                     const completedAt = performance.now();
                     setStageDurations((prev) => ({
                       ...prev,
-                      generate: completeStartedAt - generateStartedAt,
+                      generate: prev.generate ?? verifyStartedAt - generateStartedAt,
+                      check_answer: completeStartedAt - verifyStartedAt,
                       end: completedAt - completeStartedAt,
                     }));
                     setTotalDuration(completedAt - totalStartedAt);
                     setActiveNode("end");
                     completed = true;
                   }
-                } catch (e) {
+                } catch {
                   console.error("Failed to parse SSE line", dataStr);
                 }
               }
@@ -298,7 +447,12 @@ function MarkdownAnswer({ content }: { content: string }) {
 
         if (!completed) {
           const completedAt = performance.now();
-          setStageDurations((prev) => ({ ...prev, generate: completedAt - generateStartedAt, end: 0 }));
+          setStageDurations((prev) => ({
+            ...prev,
+            generate: prev.generate ?? completedAt - generateStartedAt,
+            check_answer: checkStartedAt ? completedAt - checkStartedAt : 0,
+            end: 0,
+          }));
           setTotalDuration(completedAt - totalStartedAt);
           setActiveNode("end");
         }
@@ -380,7 +534,7 @@ function MarkdownAnswer({ content }: { content: string }) {
               </dl>
             ) : null}
 
-            <PipelineGraph
+            <StepperPipelineGraph
               active={activeNode}
               ready={Boolean(uploadResult)}
               durations={stageDurations}
@@ -389,7 +543,7 @@ function MarkdownAnswer({ content }: { content: string }) {
           </aside>
 
           {/* Main Content Panel */}
-          <section className="border border-[#d8dee8] rounded-lg bg-[#e4d6d6] shadow-[0_18px_45px_rgba(22,32,51,0.08)] p-5 min-h-[560px]">
+          <section className="border border-[#d8dee8] rounded-lg bg-[#f6f8fb] shadow-[0_18px_45px_rgba(22,32,51,0.08)] p-5 min-h-[560px]">
             <form onSubmit={askQuestion} className="grid gap-[14px]">
               <label htmlFor="question" className="text-[#344054] text-xs font-bold">Question</label>
               <textarea
@@ -411,8 +565,24 @@ function MarkdownAnswer({ content }: { content: string }) {
 
             {askResult ? (
               <div className="mt-[26px] pt-[22px] border-t border-[#d8dee8]">
-                <h2 className="m-0 mb-[14px] text-[#101828] text-[21px] leading-[1.3]">Answer</h2>
-                <MarkdownAnswer content={askResult.answer} />
+                <article className="overflow-hidden border border-[#d8dee8] rounded-lg bg-white shadow-[0_14px_32px_rgba(16,24,40,0.08)]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#e5eaf2] bg-[#fbfcff] px-5 py-4">
+                    <div>
+                      <p className="m-0 text-[11px] font-bold tracking-wider uppercase text-[#1f5eff]">
+                        Verified Response
+                      </p>
+                      <h2 className="m-0 mt-1 text-[#101828] text-[22px] leading-[1.25] font-bold">
+                        Answer
+                      </h2>
+                    </div>
+                    <span className="w-fit rounded-full border border-[#c9d7f5] bg-[#eef4ff] px-3 py-1 text-xs font-bold text-[#174bd2]">
+                      Document-grounded
+                    </span>
+                  </div>
+                  <div className="px-5 py-5 sm:px-6 sm:py-6">
+                    <MarkdownAnswer content={askResult.answer} />
+                  </div>
+                </article>
 
                 {answerImages.length ? (
                   <section className="mt-5" aria-label="Visual references">

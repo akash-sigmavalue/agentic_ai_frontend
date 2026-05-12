@@ -87,6 +87,6 @@ export interface MarkerData {
   context?: string;
 }
 
-export type GraphNodeId = "start" | "retrieve" | "generate" | "end";
+export type GraphNodeId = "start" | "retrieve" | "generate" | "check_answer" | "end";
 
 export type PipelineDurations = Partial<Record<GraphNodeId, number>>;
