@@ -140,11 +140,34 @@ function ComparisonModal({ projects, onClose }) {
 }
 
 // ── Comparable Table with Checkboxes ─────────────────────────────
+const INITIAL_COMPARABLE_RADIUS_KM = 2;
+
+function getComparableDistanceKm(comp) {
+  const rawDistance = comp?.distance_from_subject_km;
+  if (rawDistance === null || rawDistance === undefined || rawDistance === "") return null;
+  const distance = Number(String(rawDistance).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(distance) ? distance : null;
+}
+
 function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showAllComparables, setShowAllComparables] = useState(false);
+
   if (!comparables || comparables.length === 0) return null;
 
-  const allSelected = comparables.every((_, i) => selectedComps?.has(i));
+  const indexedComparables = comparables.map((comp, originalIndex) => ({
+    comp,
+    originalIndex,
+    distanceKm: getComparableDistanceKm(comp),
+  }));
+  const nearbyComparables = indexedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
+  const visibleComparables = showAllComparables ? indexedComparables : nearbyComparables;
+  const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
+  const hasHiddenComparables = hiddenComparableCount > 0;
+  const visibleResultLabel = showAllComparables
+    ? `${comparables.length} results`
+    : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
+  const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
@@ -158,9 +181,9 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   checked={allSelected}
                   onChange={() => {
                     if (allSelected) {
-                      comparables.forEach((_, i) => onToggle?.(i, false));
+                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
                     } else {
-                      comparables.forEach((_, i) => onToggle?.(i, true));
+                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
                     }
                   }}
                   className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
@@ -180,11 +203,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           </tr>
         </thead>
         <tbody>
-          {comparables.map((comp, i) => {
-            const isChecked = selectedComps?.has(i);
+          {visibleComparables.map(({ comp, originalIndex }) => {
+            const isChecked = selectedComps?.has(originalIndex);
             return (
               <tr
-                key={`${comp.project_name}-${i}`}
+                key={`${comp.project_name}-${originalIndex}`}
                 className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
               >
                 {selectable && (
@@ -192,7 +215,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     <input
                       type="checkbox"
                       checked={isChecked || false}
-                      onChange={() => onToggle?.(i, !isChecked)}
+                      onChange={() => onToggle?.(originalIndex, !isChecked)}
                       className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
                     />
                   </td>
@@ -222,6 +245,26 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           })}
         </tbody>
       </table>
+      {visibleComparables.length === 0 && (
+        <div className="px-4 py-6 text-center text-xs text-text-dim">
+          No comparable projects found within {INITIAL_COMPARABLE_RADIUS_KM} km.
+          {hasHiddenComparables ? " Use Show more to view farther projects." : ""}
+        </div>
+      )}
+      {hasHiddenComparables && (
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-bg-input/40 px-4 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim">
+            {showAllComparables ? "Showing all comparable projects" : `${hiddenComparableCount} farther project(s) hidden`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAllComparables((prev) => !prev)}
+            className="rounded-lg border border-[#fb923c]/35 bg-[#fb923c]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fb923c] transition hover:border-[#fb923c] hover:bg-[#fb923c]/15"
+          >
+            {showAllComparables ? `Show within ${INITIAL_COMPARABLE_RADIUS_KM} km` : "Show more"}
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -233,7 +276,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{comparables.length} results</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
@@ -255,7 +298,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Comparable Projects Detail</h3>
-                  <p className="text-[10px] text-text-dim">{comparables.length} results found in vicinity</p>
+                  <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
               <button
