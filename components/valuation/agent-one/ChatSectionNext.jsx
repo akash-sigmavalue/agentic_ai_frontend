@@ -194,6 +194,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <th className="px-3 py-2.5 font-semibold">Location</th>
             <th className="px-3 py-2.5 font-semibold">Country</th>
             <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
             <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
             <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
             <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
@@ -226,6 +227,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <td className="px-3 py-2.5">
                   <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
                     {comp.property_type || "—"}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                    {comp.project_category || "—"}
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
@@ -352,6 +358,7 @@ function ListingTable({ listings }) {
             )}
           </td>
           <td className="px-3 py-2 text-text-secondary">{lst.property_type || "—"}</td>
+          <td className="px-3 py-2 text-text-secondary">{lst.project_category || "—"}</td>
           <td className="px-3 py-2 text-text-secondary">{lst.listing_type || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary">{lst.bhk || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.currency || "—"}</td>
@@ -390,6 +397,7 @@ function ListingTable({ listings }) {
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <th className="px-3 py-2.5 font-semibold">Project</th>
             <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
             <th className="px-3 py-2.5 font-semibold">List Type</th>
             <th className="px-3 py-2.5 font-semibold text-center">BHK</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
