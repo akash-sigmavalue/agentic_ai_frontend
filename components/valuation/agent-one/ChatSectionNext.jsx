@@ -10,6 +10,7 @@ const QUICK_PROMPTS = [
 ];
 
 const PLACEHOLDER_MAP = {
+  project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
@@ -2106,8 +2107,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
 
+            // Determine property type to decide if project_name should be shown
+            const propType = ents?.property_type;
+            const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
+
             const fields = Object.entries(ents)
-              .filter(([k, v]) => v !== null && v !== "" && typeof v !== 'object' && !ignoreKeys.includes(k) && !k.startsWith("_"))
+              .filter(([k, v]) => {
+                if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
+                if (v === null || v === "" || typeof v === 'object') return false;
+                // Hide project_name for plot types (not applicable)
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                return true;
+              })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
 
             if (ents.coordinates && typeof ents.coordinates === 'object') {
