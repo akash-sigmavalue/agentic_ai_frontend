@@ -298,6 +298,7 @@ export type UploadResult = {
 export type Chunk = {
   source: string;
   page: string;
+  page_range?: string;
   type?: "text" | "table" | "image";
   content?: string;
   image_base64?: string;
@@ -309,4 +310,5 @@ export type AskResult = {
   answer: string;
   chunks: Chunk[];
   token_usage: TokenUsage;
+  verified?: boolean;
 };
