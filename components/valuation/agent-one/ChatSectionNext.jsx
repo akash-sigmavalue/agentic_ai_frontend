@@ -503,6 +503,9 @@ function CleanedTable({ listings }) {
   const [isMaximized, setIsMaximized] = useState(false);
   if (!listings || listings.length === 0) return null;
 
+  // Detect if this is a plot property based on enriched data
+  const isPlot = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full text-left text-xs">
@@ -515,6 +518,16 @@ function CleanedTable({ listings }) {
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
+            
+            {isPlot && (
+              <>
+                <th className="px-3 py-2.5 font-semibold text-center text-accent">Plot FSI</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Const. Cost</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
+              </>
+            )}
+
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
@@ -543,6 +556,30 @@ function CleanedTable({ listings }) {
                   ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
                   : "—"}
               </td>
+
+              {isPlot && (
+                <>
+                  <td className="px-3 py-2 text-center font-mono text-text-secondary">
+                    {lst.plot_fsi_range ? `${lst.plot_fsi_range.low} - ${lst.plot_fsi_range.high}` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                    {lst.plot_construction_cost_range 
+                      ? `${lst.plot_construction_cost_range.currency}${lst.plot_construction_cost_range.low.toLocaleString()} - ${lst.plot_construction_cost_range.high.toLocaleString()}` 
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                    {lst.plot_derived_rate_per_sqft 
+                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}` 
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                    {lst.plot_derived_rate_range 
+                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}` 
+                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold">NEG VALUE</span> : "—")}
+                  </td>
+                </>
+              )}
+
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
@@ -564,7 +601,9 @@ function CleanedTable({ listings }) {
         <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Cleaned & Normalized Data</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
+              {isPlot ? "Cleaned & Plot Valuation Data" : "Cleaned & Normalized Data"}
+            </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
@@ -587,7 +626,9 @@ function CleanedTable({ listings }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Normalized Listing Data</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
+                    {isPlot ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
+                  </h3>
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
               </div>
