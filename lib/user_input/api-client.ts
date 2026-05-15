@@ -1,6 +1,6 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "http://localhost:8000";
+import { API_BASE_URL, apiRequest } from "@/lib/api-client";
+
+export { API_BASE_URL };
 
 export async function parseApiError(response: Response) {
   try {
@@ -12,18 +12,15 @@ export async function parseApiError(response: Response) {
 }
 
 export function uploadDocumentRequest(formData: FormData) {
-  return fetch(`${API_BASE_URL}/user-input/documents`, {
+  return apiRequest("/user-input/documents", {
     method: "POST",
     body: formData,
   });
 }
 
 export function askQuestionStreamRequest(question: string) {
-  return fetch(`${API_BASE_URL}/user-input/ask/stream`, {
+  return apiRequest("/user-input/ask/stream", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify({ question }),
   });
 }

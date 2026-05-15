@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
+import { apiUrl } from '@/lib/api-client';
 import "./web_search.css"
 
 type Message = {
@@ -72,7 +73,7 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`);
+      const response = await fetch(apiUrl(`/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`));
 
       if (!response.body) throw new Error("No response body");
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { PromptToWorkflowResponse } from "../../types/api";
-import { API_BASE_URL, CONNECTOR_API_ROUTES } from "../../lib/api-client";
+import { API_BASE_URL, CONNECTOR_API_ROUTES, apiUrl } from "../../lib/api-client";
 
 export interface GoogleOAuthStartResponse {
   auth_url: string;
@@ -49,7 +49,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(apiUrl(path), {
       ...init,
       headers,
     });

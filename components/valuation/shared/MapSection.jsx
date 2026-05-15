@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap, LayersControl, Circle, Polygon, Polyline } from "react-leaflet";
 import L from "leaflet";
+import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -130,7 +131,7 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   return null;
 }
 
-export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, backendUrl = "http://localhost:8000" }) {
+export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
@@ -162,14 +163,14 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       const results = await Promise.all(markers.map(async (m) => {
         let res;
         try {
-          res = await fetch(`${backendUrl}/api/local-amenities`, {
+          res = await fetch(apiUrl("/api/local-amenities"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: amenityRadius, city_name: city })
           });
         } catch (fetchErr) {
           console.error("Fetch error for marker:", m, fetchErr);
-          throw new Error(`Connection to backend failed at ${backendUrl}. Please ensure the backend server is running.`);
+          throw new Error(`Connection to backend failed at ${API_BASE_URL}. Please ensure the backend server is running.`);
         }
 
         if (!res.ok) {
@@ -249,14 +250,14 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       const results = await Promise.all(markers.map(async (m) => {
         let res;
         try {
-          res = await fetch(`${backendUrl}/api/builtup-density`, {
+          res = await fetch(apiUrl("/api/builtup-density"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: densityRadius })
           });
         } catch (fetchErr) {
           console.error("Fetch error for density:", m, fetchErr);
-          throw new Error(`Connection to backend failed at ${backendUrl}. Please ensure the backend server is running.`);
+          throw new Error(`Connection to backend failed at ${API_BASE_URL}. Please ensure the backend server is running.`);
         }
 
         if (!res.ok) {
@@ -378,7 +379,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         lng: markers[i + 1]?.lng,
       }));
 
-      const res = await fetch(`${backendUrl}/api/cbd-identification`, {
+      const res = await fetch(apiUrl("/api/cbd-identification"), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject, comparables }),

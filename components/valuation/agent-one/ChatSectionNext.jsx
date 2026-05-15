@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
+import { apiUrl } from "@/lib/api-client";
 
 const QUICK_PROMPTS = [
   "Value a 2BHK flat in Hiranandani Gardens, Powai, Mumbai. 1100 sqft, 5 years old, floor 15/25, West facing",
@@ -1072,7 +1073,7 @@ function FactoringResultCard({ data, area_unit }) {
 
 
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, backendUrl = "http://localhost:8000", factorialData: externalFactorialData }) {
+export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1217,7 +1218,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/listing_stream`, {
+      const response = await fetch(apiUrl("/listing_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1342,7 +1343,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/cleaning_stream`, {
+      const response = await fetch(apiUrl("/cleaning_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1477,7 +1478,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1591,7 +1592,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_analysis_stream`, {
+      const response = await fetch(apiUrl("/factorial_analysis_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1738,7 +1739,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setIsStreaming(true);
 
     try {
-      const response = await fetch(`${backendUrl}/ask_stream_valuation?question=${encodeURIComponent(trimmed)}`, {
+      const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}`), {
         signal: abortRef.current.signal,
       });
 
@@ -2064,7 +2065,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
