@@ -649,6 +649,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
             <th className="px-4 py-3 font-semibold text-right">Avg Rate</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Lower</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Upper</th>
+            <th className="px-4 py-3 font-semibold text-center">Rate Source</th>
           </tr>
         </thead>
         <tbody>
@@ -745,6 +746,17 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {row.rate_derived_from === "micromarket" ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                        Micromarket
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                        Listing
+                      </span>
+                    )}
+                  </td>
                 </tr>
               </Fragment>
             );
