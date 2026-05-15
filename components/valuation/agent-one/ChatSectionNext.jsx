@@ -2138,8 +2138,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
-            // Pre-select all comparables by default
-            setSelectedComps(new Set(comps.map((_, i) => i)));
+            // Pre-select only comparables within the initial radius by default
+            const initialSelected = comps
+              .map((comp, i) => {
+                const dist = getComparableDistanceKm(comp);
+                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
+                  return i;
+                }
+                return -1;
+              })
+              .filter((i) => i !== -1);
+            setSelectedComps(new Set(initialSelected));
           }
 
           if (event.type === "done") {
