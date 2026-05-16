@@ -520,15 +520,19 @@ function formatPrice(value, currency = "INR") {
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings, onRecalculate }) {
+function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
   const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
   if (!listings || listings.length === 0) return null;
 
-  // Detect if this is a plot property based on enriched data
-  const isPlot = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+  // Detect if we have plot data and if the subject itself is a plot
+  const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+  const isPlotSubject = subjectPropertyType?.toLowerCase() === "plot";
+  
+  // Only show the FSI/CC overrides if we have plot data AND the subject is a plot
+  const showPlotControls = hasPlotData && isPlotSubject;
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
@@ -543,10 +547,9 @@ function CleanedTable({ listings, onRecalculate }) {
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
             
-            {isPlot && (
+            {hasPlotData && (
               <>
-                <th className="px-3 py-2.5 font-semibold text-center text-accent">Plot FSI</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Const. Cost</th>
+                {showPlotControls && <th className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>}
                 <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
                 <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
                 <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
@@ -582,10 +585,12 @@ function CleanedTable({ listings, onRecalculate }) {
                   : "—"}
               </td>
 
-              {isPlot && (
+              {hasPlotData && (
                 <>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex flex-col items-center gap-1">
+                  {showPlotControls && (
+                    <>
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex flex-col items-center gap-1">
                       <div className="flex items-center gap-1">
                         <span className="text-[8px] opacity-40 uppercase">Low</span>
                         <input
@@ -654,6 +659,8 @@ function CleanedTable({ listings, onRecalculate }) {
                       </div>
                     </div>
                   </td>
+                  </>
+                  )}
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {lst.plot_derived_rate_per_sqft 
                       ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}` 
@@ -694,7 +701,7 @@ function CleanedTable({ listings, onRecalculate }) {
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
-              {isPlot ? "Cleaned & Plot Valuation Data" : "Cleaned & Normalized Data"}
+              {hasPlotData ? "Cleaned & Plot Valuation Data" : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
@@ -709,7 +716,7 @@ function CleanedTable({ listings, onRecalculate }) {
           </div>
         </div>
         
-        {isPlot && onRecalculate && (
+        {showPlotControls && onRecalculate && (
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
             <input 
@@ -756,9 +763,10 @@ function CleanedTable({ listings, onRecalculate }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
-                    {isPlot ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
+                    {hasPlotData ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
                   </h3>
-                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0">
+                  {showPlotControls && onRecalculate && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
                     <input 
                       type="number" 
@@ -783,6 +791,7 @@ function CleanedTable({ listings, onRecalculate }) {
                       Apply All & Recalculate
                     </button>
                   </div>
+                  )}
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
               </div>
@@ -2869,7 +2878,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                     />
                   )}
                   {message.listings && <ListingTable listings={message.listings} />}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
                       <FactorialTable
