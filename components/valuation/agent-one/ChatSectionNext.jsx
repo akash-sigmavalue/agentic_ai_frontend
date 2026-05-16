@@ -200,6 +200,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
             <th className="px-3 py-2.5 font-semibold">Reason</th>
+            <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
             <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
           </tr>
         </thead>
@@ -239,6 +240,25 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
                 <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
                 <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                <td className="px-3 py-2.5 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className={`text-[11px] font-bold ${
+                      (comp.location_certainty_score || 0) >= 0.9 ? "text-success" :
+                      (comp.location_certainty_score || 0) >= 0.7 ? "text-warning" : "text-danger"
+                    }`}>
+                      {comp.location_certainty_score ? (comp.location_certainty_score * 100).toFixed(0) + "%" : "—"}
+                    </span>
+                    <div className="w-12 h-1 bg-border rounded-full overflow-hidden mt-0.5">
+                      <div 
+                        className={`h-full ${
+                          (comp.location_certainty_score || 0) >= 0.9 ? "bg-success" :
+                          (comp.location_certainty_score || 0) >= 0.7 ? "bg-warning" : "bg-danger"
+                        }`}
+                        style={{ width: `${(comp.location_certainty_score || 1) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
                 <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                   {comp.source_url ? (
                     <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
@@ -499,8 +519,11 @@ function formatPrice(value, currency = "INR") {
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings }) {
+function CleanedTable({ listings, onRecalculate }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [fsiGlobal, setFsiGlobal] = useState("");
+  const [ccGlobal, setCcGlobal] = useState("");
+  const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
   if (!listings || listings.length === 0) return null;
 
   // Detect if this is a plot property based on enriched data
@@ -525,6 +548,7 @@ function CleanedTable({ listings }) {
                 <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Const. Cost</th>
                 <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
                 <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
+                <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
               </>
             )}
 
@@ -559,13 +583,75 @@ function CleanedTable({ listings }) {
 
               {isPlot && (
                 <>
-                  <td className="px-3 py-2 text-center font-mono text-text-secondary">
-                    {lst.plot_fsi_range ? `${lst.plot_fsi_range.low} - ${lst.plot_fsi_range.high}` : "—"}
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_low ?? (lst.plot_fsi_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_high ?? (lst.plot_fsi_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                    {lst.plot_construction_cost_range 
-                      ? `${lst.plot_construction_cost_range.currency}${lst.plot_construction_cost_range.low.toLocaleString()} - ${lst.plot_construction_cost_range.high.toLocaleString()}` 
-                      : "—"}
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_low ?? (lst.plot_construction_cost_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_high ?? (lst.plot_construction_cost_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {lst.plot_derived_rate_per_sqft 
@@ -575,7 +661,12 @@ function CleanedTable({ listings }) {
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
                     {lst.plot_derived_rate_range 
                       ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}` 
-                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold">NEG VALUE</span> : "—")}
+                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                      {lst.plot_derived_by || "llm"}
+                    </span>
                   </td>
                 </>
               )}
@@ -616,6 +707,43 @@ function CleanedTable({ listings }) {
             </div>
           </div>
         </div>
+        
+        {isPlot && onRecalculate && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+            <input 
+              type="number" 
+              step="0.1"
+              placeholder="FSI" 
+              value={fsiGlobal} 
+              onChange={e => setFsiGlobal(e.target.value)} 
+              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+            />
+            <input 
+              type="number" 
+              placeholder="CC (₹/sqft)" 
+              value={ccGlobal} 
+              onChange={e => setCcGlobal(e.target.value)} 
+              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+            />
+            <div className="h-4 w-px bg-border mx-2" />
+            <button 
+              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+              className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+            >
+              Apply All & Recalculate
+            </button>
+            {Object.keys(rowOverrides).length > 0 && (
+              <button 
+                onClick={() => setRowOverrides({})}
+                className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+              >
+                Reset Edits
+              </button>
+            )}
+          </div>
+        )}
+
         {tableContent}
       </div>
 
@@ -629,6 +757,31 @@ function CleanedTable({ listings }) {
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
                     {isPlot ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
                   </h3>
+                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="FSI" 
+                      value={fsiGlobal} 
+                      onChange={e => setFsiGlobal(e.target.value)} 
+                      className="w-24 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="CC (₹/sqft)" 
+                      value={ccGlobal} 
+                      onChange={e => setCcGlobal(e.target.value)} 
+                      className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+                    />
+                    <div className="h-4 w-px bg-border mx-2" />
+                    <button 
+                      onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                      className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                    >
+                      Apply All & Recalculate
+                    </button>
+                  </div>
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
               </div>
@@ -639,8 +792,9 @@ function CleanedTable({ listings }) {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar flex flex-col gap-4">
+
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden bg-bg-card flex-1">
                 {tableContent}
               </div>
             </div>
@@ -1752,6 +1906,129 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   };
 
 
+  // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
+  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
+    if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
+    
+    setIsCleaningStreaming(true);
+    setStreamingNote("Recalculating plot rates with overrides...");
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Recalculate plot rates with manual adjustments.`, meta: "Now" },
+      { role: "assistant", content: "Applying user overrides and recalculating...", meta: "Live" },
+    ]);
+
+    try {
+      const payload = {
+        cleaned_listings: cleanedData,
+        subject: subjectData,
+        property_type: subjectData.property_type || "plot",
+        overrides: rowOverrides,
+      };
+      if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
+      if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
+
+      const response = await fetch(`${backendUrl}/recalculate_plot_rates_stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Recalculate request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let newCleanedListings = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "recalculate_start") summary = event.content || "Recalculating plot rates...";
+          else if (event.type === "recalculate_results") {
+            summary = `Recalculation ready — ${event.content?.listings?.length || 0} listings.`;
+            newCleanedListings = event.content.listings;
+          }
+          else if (event.type === "recalculate_done") summary = "Plot rate recalculation complete.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+
+          if (event.type === "recalculate_results" && event.content?.listings) {
+            setCleanedData(event.content.listings);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "cleaning results",
+                  cleaned_listings: event.content.listings,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "recalculate_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "recalculation done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+      
+      if (newCleanedListings) {
+         setFactorialData(null);
+         setFactorialAnalysisData(null);
+      }
+
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Recalculate error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsCleaningStreaming(false);
+      setStreamingNote("");
+    }
+  };
+
+
   // ── Proceed to Factorial Table (Step 4) ────────────────────────
   const submitFactorial = async () => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isFactorialStreaming) return;
@@ -2560,7 +2837,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                     />
                   )}
                   {message.listings && <ListingTable listings={message.listings} />}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
                       <FactorialTable
