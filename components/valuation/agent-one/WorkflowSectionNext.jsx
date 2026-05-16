@@ -10,6 +10,7 @@ import ReactFlow, {
   Position,
   Handle,
 } from "reactflow";
+import "reactflow/dist/style.css";
 import { buildWorkflowFromEvents } from "@/lib/valuation/workflow";
 
 const NODE_WIDTH = 340;

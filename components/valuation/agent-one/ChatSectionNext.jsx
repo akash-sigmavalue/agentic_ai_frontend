@@ -10,6 +10,7 @@ const QUICK_PROMPTS = [
 ];
 
 const PLACEHOLDER_MAP = {
+  project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
@@ -843,6 +844,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
             <th className="px-4 py-3 font-semibold text-right">Avg Rate</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Lower</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Upper</th>
+            <th className="px-4 py-3 font-semibold text-center">Rate Source</th>
           </tr>
         </thead>
         <tbody>
@@ -939,6 +941,17 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {row.rate_derived_from === "micromarket" ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                        Micromarket
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                        Listing
+                      </span>
+                    )}
+                  </td>
                 </tr>
               </Fragment>
             );
@@ -2424,8 +2437,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
 
+            // Determine property type to decide if project_name should be shown
+            const propType = ents?.property_type;
+            const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
+
             const fields = Object.entries(ents)
-              .filter(([k, v]) => v !== null && v !== "" && typeof v !== 'object' && !ignoreKeys.includes(k) && !k.startsWith("_"))
+              .filter(([k, v]) => {
+                if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
+                if (v === null || v === "" || typeof v === 'object') return false;
+                // Hide project_name for plot types (not applicable)
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                return true;
+              })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
 
             if (ents.coordinates && typeof ents.coordinates === 'object') {
@@ -2445,8 +2468,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
-            // Pre-select all comparables by default
-            setSelectedComps(new Set(comps.map((_, i) => i)));
+            // Pre-select only comparables within the initial radius by default
+            const initialSelected = comps
+              .map((comp, i) => {
+                const dist = getComparableDistanceKm(comp);
+                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
+                  return i;
+                }
+                return -1;
+              })
+              .filter((i) => i !== -1);
+            setSelectedComps(new Set(initialSelected));
           }
 
           if (event.type === "done") {
