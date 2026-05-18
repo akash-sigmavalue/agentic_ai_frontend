@@ -242,23 +242,19 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
                 <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
                 <td className="px-3 py-2.5 text-center">
-                  <div className="flex flex-col items-center">
-                    <span className={`text-[11px] font-bold ${
-                      (comp.location_certainty_score || 0) >= 0.9 ? "text-success" :
-                      (comp.location_certainty_score || 0) >= 0.7 ? "text-warning" : "text-danger"
+                  {comp.location_certainty ? (
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                      comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
                     }`}>
-                      {comp.location_certainty_score ? (comp.location_certainty_score * 100).toFixed(0) + "%" : "—"}
+                      {comp.location_certainty}
                     </span>
-                    <div className="w-12 h-1 bg-border rounded-full overflow-hidden mt-0.5">
-                      <div 
-                        className={`h-full ${
-                          (comp.location_certainty_score || 0) >= 0.9 ? "bg-success" :
-                          (comp.location_certainty_score || 0) >= 0.7 ? "bg-warning" : "bg-danger"
-                        }`}
-                        style={{ width: `${(comp.location_certainty_score || 1) * 100}%` }}
-                      />
-                    </div>
-                  </div>
+                  ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                      comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                    }`}>
+                      {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
+                    </span>
+                  ) : "—")}
                 </td>
                 <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                   {comp.source_url ? (
