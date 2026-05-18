@@ -12,6 +12,7 @@ const QUICK_PROMPTS = [
 const PLACEHOLDER_MAP = {
   project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
+  salable_area_sqft: "e.g. 1100 sqft",
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
   age_years: "e.g. 5, or '0' for Under Construction",
@@ -23,6 +24,21 @@ const PLACEHOLDER_MAP = {
   occupancy_status: "vacant / leased / self_use",
   water_availability: "good / moderate / poor",
   clear_height: "e.g. 20 ft",
+};
+
+const getCurrencySymbol = (currencyCode) => {
+  if (!currencyCode) return "₹";
+  try {
+    const formatter = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: currencyCode.toUpperCase().trim(),
+    });
+    const parts = formatter.formatToParts(0);
+    const symbolPart = parts.find((part) => part.type === "currency");
+    return symbolPart ? symbolPart.value : currencyCode;
+  } catch (e) {
+    return currencyCode || "₹";
+  }
 };
 
 function summarizeEvent(event) {
@@ -1079,9 +1095,9 @@ function ValuationResult({ data, currency = "INR" }) {
               onChange={(e) => setConfLevel(e.target.value)}
               className="rounded-lg border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-2 py-1 text-xs font-bold text-[#10b981] outline-none cursor-pointer hover:bg-[rgba(16,185,129,0.15)] transition"
             >
-              <option value="90">90%</option>
-              <option value="95">95%</option>
-              <option value="99">99%</option>
+              <option value="90" className="bg-bg-card text-text-primary">90%</option>
+              <option value="95" className="bg-bg-card text-text-primary">95%</option>
+              <option value="99" className="bg-bg-card text-text-primary">99%</option>
             </select>
           </div>
         </div>
@@ -1124,8 +1140,7 @@ function ValuationResult({ data, currency = "INR" }) {
 
 
 
-// ── Factoring Result Card (Step 5) ──────────────────────────────
-function FactoringResultCard({ data, area_unit }) {
+function FactoringResultCard({ data, area_unit, subjectData }) {
   const [maximizedFactor, setMaximizedFactor] = useState(null);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
@@ -1139,8 +1154,26 @@ function FactoringResultCard({ data, area_unit }) {
     raw_markdown_report,
   } = data;
 
-  const fmtRate = (val) => val ? "\u20B9" + Number(val).toLocaleString() : "—";
+  const currencyCode = subjectData?.currency || "INR";
+  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
+  const formatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  });
+  const formatterDec = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 2,
+  });
+
+  const fmtRate = (val) => val ? formatter.format(Number(val)) : "—";
+  const fmt = (val) => val ? formatterDec.format(Number(val)) : "—";
   const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
+
+  const rate = Number(subject_final_rate || 0);
+  const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || 0);
+  const calculatedValue = rate * area;
   const rateBasis = "Saleable Area";
   const rateUnitLabel = `${area_unit || "sqft"} ${rateBasis.toLowerCase()}`;
   const adjColor = (val) => {
@@ -1203,7 +1236,11 @@ function FactoringResultCard({ data, area_unit }) {
   };
 
   const DashboardContent = (
-    <div className={`mt-8 overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-auto border-accent/30" : ""}`}>
+    <div className={`mt-8 rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+      isSectionMaximized
+        ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
+        : "overflow-hidden"
+    }`}>
       {/* Detail Modal */}
       {maximizedFactor && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-bg-deep/95 p-4 md:p-12 backdrop-blur-xl animate-in fade-in duration-300">
@@ -1479,7 +1516,7 @@ function FactoringResultCard({ data, area_unit }) {
                         <p className="font-mono text-xs font-black text-white/50">{fmtRate(low)}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[7px] font-black uppercase tracking-widest text-accent/50">Subject Rate</p>
+                        <p className="text-[7px] font-black uppercase tracking-[0.14em] text-accent/50">Subject Rate</p>
                         <p className="font-mono text-[11px] font-black text-accent">{fmtRate(final)}</p>
                         <p className="text-[7px] text-white/20 mt-0.5">{pct.toFixed(0)}th percentile</p>
                       </div>
@@ -1491,6 +1528,22 @@ function FactoringResultCard({ data, area_unit }) {
                   </div>
                 );
               })()}
+
+              {area > 0 && (
+                <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
+                  <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
+                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-accent/70">Final Market Approach Property Value</span>
+                  
+                  <div className="space-y-1">
+                    <h1 className="font-mono text-4xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
+                      {fmt(calculatedValue)}
+                    </h1>
+                    <p className="text-[9px] text-accent/60 font-semibold uppercase tracking-widest">
+                      Derived Rate {fmtRate(rate)}/sqft × Subject Area {area.toLocaleString()} sqft
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -1525,7 +1578,260 @@ function FactoringResultCard({ data, area_unit }) {
   return DashboardContent;
 }
 
+// ── Cost Approach Inputs Form ────────────────────────────────────
+function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData }) {
+  if (!schema) return null;
 
+  return (
+    <div className="mt-8 overflow-hidden rounded-[2rem] border border-warning/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/20 text-warning text-xl border border-warning/30">
+          🏗️
+        </div>
+        <div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Parameters</h3>
+          <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest font-bold opacity-50">Please enter cost-specific details for subject project</p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        {schema.inputs?.map((inp) => {
+          let label = inp.label;
+          let placeholder = inp.default || 0;
+          if (inp.field === "uds_sqft") {
+            label = "UDS area in sqft";
+          } else if (inp.field === "total_life_of_building") {
+            label = "Economic Life (Years)";
+            placeholder = 60;
+          } else if (inp.field === "age_of_property") {
+            label = "Age of Property (Years)";
+          } else if (inp.field === "net_plot_area_sqft") {
+            label = "Net Plot Area (sqft)";
+          } else if (inp.field === "rate_of_plot_per_sqft") {
+            const sym = getCurrencySymbol(subjectData?.currency);
+            label = `Land Rate per sqft (${sym})`;
+          }
+
+          return (
+            <label key={inp.field} className="flex flex-col gap-1.5">
+              <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+                {label}
+              </span>
+              <input
+                type="number"
+                value={values[inp.field] !== undefined ? values[inp.field] : ""}
+                onChange={(e) => onChange(inp.field, e.target.value)}
+                placeholder={`e.g. ${placeholder}`}
+                className="rounded-xl border border-border bg-white/[0.03] px-3.5 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/[0.05]"
+              />
+            </label>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={onSubmit}
+        disabled={isCalculating}
+        className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
+      >
+        {isCalculating ? "Calculating Cost Valuation..." : "Execute Cost Approach Calculation"}
+      </button>
+    </div>
+  );
+}
+
+// ── Cost Result Card ─────────────────────────────────────────────
+function CostResultCard({ data, subjectData }) {
+  const [isSectionMaximized, setIsSectionMaximized] = useState(false);
+  if (!data) return null;
+
+  const derived_rate_per_sqft = data.inputs?.derived_rate_per_sqft;
+  const area_sqft = data.inputs?.area_sqft;
+  const uds_sqft = data.inputs?.uds_sqft;
+  const rate_of_plot_per_sqft = data.inputs?.rate_of_plot_per_sqft;
+  const age_of_property = data.inputs?.age_of_property;
+  const total_life_of_building = data.inputs?.total_life_of_building;
+
+  const property_price = data.calculations?.property_price;
+  const land_value = data.calculations?.land_cost;
+  const construction_cost = data.calculations?.construction_cost;
+  const depreciation_rate = (data.calculations?.depreciation_rate_pct || 0) / 100;
+  const depreciation_amount = data.calculations?.depreciated_construction_cost;
+
+  const final_property_value = data.result?.cost_value;
+  const property_type = data.property_type;
+
+  const audit_trail = {
+    land_value_formula: data.formula_audit?.step_2,
+    construction_cost_formula: data.formula_audit?.step_3,
+    depreciation_formula: data.formula_audit?.step_4,
+    final_value_formula: data.formula_audit?.step_6,
+  };
+
+  const currencyCode = subjectData?.currency || "INR";
+  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
+  const formatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  });
+
+  const fmt = (val) => val != null ? formatter.format(Number(val)) : "—";
+  const fmtRate = (val) => val != null ? formatter.format(Number(val)) : "—";
+
+  const DashboardContent = (
+    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+      isSectionMaximized
+        ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
+        : "overflow-hidden"
+    }`}>
+      {/* Header */}
+      <div className="border-b border-white/5 bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
+            <div>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Valuation Appraisal</h2>
+              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Cost-Depreciation Method</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSectionMaximized(!isSectionMaximized)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-success/20 hover:text-success hover:border-success/40 transition-all text-[8px] font-black uppercase tracking-widest text-white/70"
+            >
+              {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
+            </button>
+            <div className="flex items-center gap-1.5 rounded-xl border border-success/20 bg-success/5 px-3 py-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"></span>
+              <span className="text-[9px] font-black uppercase tracking-[0.14em] text-success">Verified Audit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-8 space-y-8">
+        <section className="space-y-4">
+          <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-white">Appraisal Step Calculation Audit</h3>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Step 1 */}
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Base Property Valuation</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Property Price</p>
+                  <p className="text-2xl font-black text-sky-400 font-mono leading-none">{fmt(property_price)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-white/55">Valuation Base:</p>
+                <p className="font-mono text-white/80 leading-relaxed">
+                  Derived rate: {fmtRate(derived_rate_per_sqft)}/sqft × {area_sqft} sqft salable area
+                </p>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Land Share Value (UDS)</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Land Value</p>
+                  <p className="text-2xl font-black text-warning font-mono leading-none">{fmt(land_value)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-warning/55">Formula & Inputs:</p>
+                <p className="font-mono text-warning/90 leading-relaxed">
+                  {audit_trail?.land_value_formula || `Land Cost = ${uds_sqft} UDS × ${fmtRate(rate_of_plot_per_sqft)}/sqft`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Building Reproduction Cost</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Reproduction Cost</p>
+                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(construction_cost)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-teal-400/55">Formula & Inputs:</p>
+                <p className="font-mono text-teal-400/90 leading-relaxed font-bold">
+                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmt(property_price)} − ${fmt(land_value)}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Physical Depreciation</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Depreciated Amount</p>
+                  <p className="text-2xl font-black text-red-400 font-mono leading-none">-{fmt(depreciation_amount)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-2">
+                <div>
+                  <p className="font-semibold text-red-400/55">Rate Formula:</p>
+                  <p className="font-mono text-red-400/80 leading-relaxed">{audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}</p>
+                </div>
+                <div className="border-t border-white/5 pt-1.5">
+                  <p className="font-semibold text-red-400/55">Calculation:</p>
+                  <p className="font-mono text-red-400/90 font-bold leading-relaxed">
+                    {fmt(construction_cost)} × {(depreciation_rate * 100).toFixed(2)}% = {fmt(depreciation_amount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Hero Section */}
+        <section className="relative">
+          <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
+          
+          <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
+            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Property Value</span>
+            
+            <div className="space-y-1">
+              <h1 className="font-mono text-5xl font-black text-white drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
+                {fmt(final_property_value)}
+              </h1>
+              <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
+                Depreciated Structure Value + Intact Land Share Value
+              </p>
+            </div>
+
+            <div className="border-t border-success/10 pt-4 max-w-lg mx-auto">
+              <p className="text-[9px] font-mono text-white/55 leading-relaxed">
+                Appraisal Audit Trail:<br />
+                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(property_price)} − ${fmt(depreciation_amount)} = ${fmt(final_property_value)}`}</span>
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+
+  if (isSectionMaximized && typeof document !== "undefined") {
+    return createPortal(
+      <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl p-4 md:p-8 flex items-center justify-center animate-in fade-in duration-300">
+        <div className="w-full h-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+          {DashboardContent}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return DashboardContent;
+}
 
 export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, backendUrl = "http://localhost:8000", factorialData: externalFactorialData }) {
   const [messages, setMessages] = useState([]);
@@ -1561,6 +1867,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   const [pipelineDone, setPipelineDone] = useState(false);
   const [currentStage, setCurrentStage] = useState("Stage 0: Initialization");
 
+  // Cost Approach States
+  const [costInputsSchema, setCostInputsSchema] = useState(null);
+  const [costInputsValues, setCostInputsValues] = useState({});
+  const [costCalculationData, setCostCalculationData] = useState(null);
+  const [isCostCalculating, setIsCostCalculating] = useState(false);
+
   // Special Factorial Analysis State
   const [showSpecialForm, setShowSpecialForm] = useState(false);
   const [specialSubjectName, setSpecialSubjectName] = useState("Lodha Altamount");
@@ -1573,6 +1885,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
   const markersRef = useRef([]);
+  const subjectDataRef = useRef(null);
 
   const selectedComparablePayload = () => {
     if (!comparableData) return [];
@@ -1581,6 +1894,122 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
   const handleCalculateRate = (factData) => {
     submitFactorialAnalysis(factData || factorialData, subjectData, selectedComparablePayload());
+  };
+
+  const handleCostCalculate = async () => {
+    if (isCostCalculating || !subjectData || !factorialAnalysisData) return;
+
+    setIsCostCalculating(true);
+    setStreamingNote("Sending inputs to Cost Approach Engine...");
+
+    const derivedRate = factorialAnalysisData.subject_final_rate || 0;
+    const areaSqft = subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || 1000;
+
+    const payload = {
+      derived_rate_per_sqft: Number(derivedRate),
+      area_sqft: Number(areaSqft),
+      property_type: subjectData.property_type || "apartment",
+      net_plot_area_sqft: Number(costInputsValues.net_plot_area_sqft || 0),
+      rate_of_plot_per_sqft: Number(costInputsValues.rate_of_plot_per_sqft || 0),
+      uds_sqft: costInputsValues.uds_sqft !== undefined && costInputsValues.uds_sqft !== "" ? Number(costInputsValues.uds_sqft) : null,
+      total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
+      age_of_property: Number(costInputsValues.age_of_property || 0),
+    };
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Run Cost Approach calculation. Net Plot Area: ${payload.net_plot_area_sqft} sqft, Land Rate: ₹${payload.rate_of_plot_per_sqft}/sqft, UDS: ${payload.uds_sqft || 'N/A'} sqft, Economic Life: ${payload.total_life_of_building} yrs, Age: ${payload.age_of_property} yrs.`, meta: "Now" },
+      { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
+    ]);
+
+    try {
+      const response = await fetch(`${backendUrl}/cost_calculation_stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Cost calculation failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "cost_calculation_start") summary = event.content?.message || "Running Cost Approach calculations...";
+          else if (event.type === "cost_calculation_result") summary = `🛡️ Cost Approach calculated.`;
+          else if (event.type === "cost_calculation_done") summary = "Cost Approach calculation complete.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+
+          if (event.type === "cost_calculation_result") {
+            setCostCalculationData(event.content);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "cost calculation results",
+                  cost_calculation_data: event.content,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "cost_calculation_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "cost calculation done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Cost calculation error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsCostCalculating(false);
+      setStreamingNote("");
+    }
   };
 
   useEffect(() => {
@@ -1613,6 +2042,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setCleanedData(null);
     setFactorialData(null);
     setFactorialAnalysisData(null);
+    setCostInputsSchema(null);
+    setCostInputsValues({});
+    setCostCalculationData(null);
+    setIsCostCalculating(false);
     setPipelineDone(false);
     setCurrentStage("Stage 0: Initialization");
     markersRef.current = [];
@@ -2381,19 +2814,52 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
             const coords = ents?.coordinates;
 
             // Store subject data for later use in listing fetch
-            setSubjectData({
+            const subjectObj = {
+              ...ents,
               project_name: ents?.project_name || "Subject Property",
               location_name: ents?.location_name || "",
               country: ents?.country || "India",
               currency: ents?.currency || "INR",
               property_type: ents?.property_type || "apartment",
+              recommended_approach: ents?.recommended_approach || "market",
               lat: coords?.lat || 0,
               lng: coords?.lng || 0,
-            });
+            };
+            setSubjectData(subjectObj);
+            subjectDataRef.current = subjectObj;
 
             if (coords?.lat && coords?.lng && !isNaN(Number(coords.lat)) && !isNaN(Number(coords.lng)) && Number(coords.lat) !== 0 && Number(coords.lng) !== 0) {
               // useEffect will handle marker update
             }
+          }
+
+          if (event.type === "cost_inputs_required") {
+            setCostInputsSchema(event.content);
+            const defaults = {};
+            event.content.inputs?.forEach(inp => {
+              let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
+              if (inp.field === "total_life_of_building") {
+                val = 60;
+              }
+              const sData = subjectDataRef.current;
+              if (sData) {
+                if (inp.field === "age_of_property") {
+                  const extractedAge = sData.age_of_property ?? sData.age_years ?? sData.age ?? sData.age_of_building;
+                  if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
+                } else if (inp.field === "uds_sqft") {
+                  const extractedUds = sData.uds_sqft ?? sData.uds ?? sData.undivided_share;
+                  if (extractedUds != null && extractedUds !== "") val = Number(extractedUds);
+                } else if (inp.field === "net_plot_area_sqft") {
+                  const extractedPlot = sData.net_plot_area_sqft ?? sData.plot_area_sqft ?? sData.net_plot_area ?? sData.plot_area;
+                  if (extractedPlot != null && extractedPlot !== "") val = Number(extractedPlot);
+                } else if (inp.field === "total_life_of_building") {
+                  const extractedLife = sData.total_life_of_building ?? sData.economic_life ?? sData.building_life;
+                  if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
+                }
+              }
+              defaults[inp.field] = val;
+            });
+            setCostInputsValues(defaults);
           }
 
           if (event.type === "clarification_needed") {
@@ -2601,6 +3067,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     if (!approachChoiceNeeded) return;
     const approach = confirmed ? approachChoiceNeeded.recommended_approach : alternative;
     setApproachChoiceNeeded(null);
+    setSubjectData(prev => prev ? { ...prev, recommended_approach: approach } : { recommended_approach: approach });
     submitQuestion(`${currentQuestion}. Proceed with the ${approach} approach.`, true, `Proceeding with ${approach} approach`);
   };
 
@@ -2885,7 +3352,27 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       />
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} />}
+                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
+                  {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
+                  
+                  {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
+                    <>
+                      {costCalculationData ? (
+                        <CostResultCard data={costCalculationData} subjectData={subjectData} />
+                      ) : (
+                        costInputsSchema && (
+                          <CostInputsForm
+                            schema={costInputsSchema}
+                            values={costInputsValues}
+                            onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
+                            onSubmit={handleCostCalculate}
+                            isCalculating={isCostCalculating}
+                            subjectData={subjectData}
+                          />
+                        )
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -3060,13 +3547,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                           }
                           className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
                         >
-                          <option value="" disabled>Select {schema.label}...</option>
+                          <option value="" disabled className="bg-bg-card text-text-primary">Select {schema.label}...</option>
                           {schema.options?.map(opt => {
                             const isObj = typeof opt === 'object';
                             const optValue = isObj ? opt.value : opt;
                             const optLabel = isObj ? opt.label : humanizeFieldName(opt);
                             return (
-                              <option key={optValue} value={optValue} className="bg-bg-dark">{optLabel}</option>
+                              <option key={optValue} value={optValue} className="bg-bg-card text-text-primary">{optLabel}</option>
                             );
                           })}
                         </select>
@@ -3157,9 +3644,16 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       }
                       className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning"
                     >
-                      <option value="" disabled>Select approach...</option>
-                      <option key="market" value="market" className="bg-bg-dark">Market Approach</option>
-                      <option key="cost" value="cost" disabled className="bg-bg-dark opacity-50">Cost Approach (Coming Soon)</option>
+                      <option value="" disabled className="bg-bg-card text-text-primary">Select approach...</option>
+                      <option key="market" value="market" className="bg-bg-card text-text-primary">Market Approach</option>
+                      <option 
+                        key="cost" 
+                        value="cost" 
+                        className="bg-bg-card text-text-primary"
+                        disabled={subjectData?.property_type === "plot"}
+                      >
+                        Cost Approach {subjectData?.property_type === "plot" ? " (Locked for Plots)" : ""}
+                      </option>
                     </select>
                   </label>
                   <button
