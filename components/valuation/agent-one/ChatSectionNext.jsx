@@ -11,6 +11,7 @@ const QUICK_PROMPTS = [
 ];
 
 const PLACEHOLDER_MAP = {
+  project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
@@ -123,7 +124,7 @@ function ComparisonModal({ projects, onClose }) {
                 <div className="space-y-4">
                   <div className="flex justify-between items-end border-b border-border/50 pb-2">
                     <span className="text-xs text-text-dim">Median Rate</span>
-                    <span className="text-lg font-bold text-accent-light">{"\u20B9"}{p.median_rate.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-accent-light">{formatPrice(p.median_rate, p.currency || "INR")}</span>
                   </div>
 
                   <div className="flex justify-between items-center bg-bg-deep/50 rounded-xl p-3">
@@ -141,11 +142,34 @@ function ComparisonModal({ projects, onClose }) {
 }
 
 // ── Comparable Table with Checkboxes ─────────────────────────────
+const INITIAL_COMPARABLE_RADIUS_KM = 2;
+
+function getComparableDistanceKm(comp) {
+  const rawDistance = comp?.distance_from_subject_km;
+  if (rawDistance === null || rawDistance === undefined || rawDistance === "") return null;
+  const distance = Number(String(rawDistance).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(distance) ? distance : null;
+}
+
 function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showAllComparables, setShowAllComparables] = useState(false);
+
   if (!comparables || comparables.length === 0) return null;
 
-  const allSelected = comparables.every((_, i) => selectedComps?.has(i));
+  const indexedComparables = comparables.map((comp, originalIndex) => ({
+    comp,
+    originalIndex,
+    distanceKm: getComparableDistanceKm(comp),
+  }));
+  const nearbyComparables = indexedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
+  const visibleComparables = showAllComparables ? indexedComparables : nearbyComparables;
+  const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
+  const hasHiddenComparables = hiddenComparableCount > 0;
+  const visibleResultLabel = showAllComparables
+    ? `${comparables.length} results`
+    : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
+  const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
@@ -159,9 +183,9 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   checked={allSelected}
                   onChange={() => {
                     if (allSelected) {
-                      comparables.forEach((_, i) => onToggle?.(i, false));
+                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
                     } else {
-                      comparables.forEach((_, i) => onToggle?.(i, true));
+                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
                     }
                   }}
                   className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
@@ -172,20 +196,22 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <th className="px-3 py-2.5 font-semibold">Location</th>
             <th className="px-3 py-2.5 font-semibold">Country</th>
             <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
             <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
             <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
             <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
             <th className="px-3 py-2.5 font-semibold">Reason</th>
+            <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
             <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
           </tr>
         </thead>
         <tbody>
-          {comparables.map((comp, i) => {
-            const isChecked = selectedComps?.has(i);
+          {visibleComparables.map(({ comp, originalIndex }) => {
+            const isChecked = selectedComps?.has(originalIndex);
             return (
               <tr
-                key={`${comp.project_name}-${i}`}
+                key={`${comp.project_name}-${originalIndex}`}
                 className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
               >
                 {selectable && (
@@ -193,7 +219,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     <input
                       type="checkbox"
                       checked={isChecked || false}
-                      onChange={() => onToggle?.(i, !isChecked)}
+                      onChange={() => onToggle?.(originalIndex, !isChecked)}
                       className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
                     />
                   </td>
@@ -206,11 +232,35 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     {comp.property_type || "—"}
                   </span>
                 </td>
+                <td className="px-3 py-2.5">
+                  <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                    {comp.project_category || "—"}
+                  </span>
+                </td>
                 <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
                 <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
                 <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                <td className="px-3 py-2.5 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className={`text-[11px] font-bold ${
+                      (comp.location_certainty_score || 0) >= 0.9 ? "text-success" :
+                      (comp.location_certainty_score || 0) >= 0.7 ? "text-warning" : "text-danger"
+                    }`}>
+                      {comp.location_certainty_score ? (comp.location_certainty_score * 100).toFixed(0) + "%" : "—"}
+                    </span>
+                    <div className="w-12 h-1 bg-border rounded-full overflow-hidden mt-0.5">
+                      <div 
+                        className={`h-full ${
+                          (comp.location_certainty_score || 0) >= 0.9 ? "bg-success" :
+                          (comp.location_certainty_score || 0) >= 0.7 ? "bg-warning" : "bg-danger"
+                        }`}
+                        style={{ width: `${(comp.location_certainty_score || 1) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
                 <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                   {comp.source_url ? (
                     <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
@@ -223,6 +273,26 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           })}
         </tbody>
       </table>
+      {visibleComparables.length === 0 && (
+        <div className="px-4 py-6 text-center text-xs text-text-dim">
+          No comparable projects found within {INITIAL_COMPARABLE_RADIUS_KM} km.
+          {hasHiddenComparables ? " Use Show more to view farther projects." : ""}
+        </div>
+      )}
+      {hasHiddenComparables && (
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-bg-input/40 px-4 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim">
+            {showAllComparables ? "Showing all comparable projects" : `${hiddenComparableCount} farther project(s) hidden`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAllComparables((prev) => !prev)}
+            className="rounded-lg border border-[#fb923c]/35 bg-[#fb923c]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fb923c] transition hover:border-[#fb923c] hover:bg-[#fb923c]/15"
+          >
+            {showAllComparables ? `Show within ${INITIAL_COMPARABLE_RADIUS_KM} km` : "Show more"}
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -234,7 +304,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{comparables.length} results</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
@@ -256,7 +326,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Comparable Projects Detail</h3>
-                  <p className="text-[10px] text-text-dim">{comparables.length} results found in vicinity</p>
+                  <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
               <button
@@ -310,6 +380,7 @@ function ListingTable({ listings }) {
             )}
           </td>
           <td className="px-3 py-2 text-text-secondary">{lst.property_type || "—"}</td>
+          <td className="px-3 py-2 text-text-secondary">{lst.project_category || "—"}</td>
           <td className="px-3 py-2 text-text-secondary">{lst.listing_type || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary">{lst.bhk || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.currency || "—"}</td>
@@ -348,6 +419,7 @@ function ListingTable({ listings }) {
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <th className="px-3 py-2.5 font-semibold">Project</th>
             <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
             <th className="px-3 py-2.5 font-semibold">List Type</th>
             <th className="px-3 py-2.5 font-semibold text-center">BHK</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
@@ -424,26 +496,40 @@ function ListingTable({ listings }) {
 }
 
 // ── Helper: Format Price based on Currency ───────────────────
-function formatPrice(value, currency) {
-  if (!value) return "—";
-  const isIndian = currency === "INR" || currency === "\u20B9" || (!currency && value > 100000);
+function formatPrice(value, currency = "INR") {
+  if (!value && value !== 0) return "—";
+
+  const curr = currency === "\u20B9" ? "INR" : (currency || "INR");
+  const isIndian = curr === "INR";
 
   if (isIndian) {
-    if (value >= 10000000) return `${(value / 10000000).toFixed(2)} Cr`;
-    if (value >= 100000) return `${(value / 100000).toFixed(2)} Lac`;
-    return value.toLocaleString();
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(2)} Lac`;
+    return `₹${Number(value).toLocaleString('en-IN')}`;
   }
 
-  // Standard International formatting
-  if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return value.toLocaleString();
+  // International formatting
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: curr,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch (e) {
+    return `${curr} ${Number(value).toLocaleString()}`;
+  }
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings }) {
+function CleanedTable({ listings, onRecalculate }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [fsiGlobal, setFsiGlobal] = useState("");
+  const [ccGlobal, setCcGlobal] = useState("");
+  const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
   if (!listings || listings.length === 0) return null;
+
+  // Detect if this is a plot property based on enriched data
+  const isPlot = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
@@ -457,6 +543,17 @@ function CleanedTable({ listings }) {
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
+            
+            {isPlot && (
+              <>
+                <th className="px-3 py-2.5 font-semibold text-center text-accent">Plot FSI</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Const. Cost</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
+                <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
+              </>
+            )}
+
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
@@ -485,6 +582,97 @@ function CleanedTable({ listings }) {
                   ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
                   : "—"}
               </td>
+
+              {isPlot && (
+                <>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_low ?? (lst.plot_fsi_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_high ?? (lst.plot_fsi_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_low ?? (lst.plot_construction_cost_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_high ?? (lst.plot_construction_cost_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                    {lst.plot_derived_rate_per_sqft 
+                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}` 
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                    {lst.plot_derived_rate_range 
+                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}` 
+                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                      {lst.plot_derived_by || "llm"}
+                    </span>
+                  </td>
+                </>
+              )}
+
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
@@ -506,7 +694,9 @@ function CleanedTable({ listings }) {
         <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Cleaned & Normalized Data</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
+              {isPlot ? "Cleaned & Plot Valuation Data" : "Cleaned & Normalized Data"}
+            </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
@@ -519,6 +709,43 @@ function CleanedTable({ listings }) {
             </div>
           </div>
         </div>
+        
+        {isPlot && onRecalculate && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+            <input 
+              type="number" 
+              step="0.1"
+              placeholder="FSI" 
+              value={fsiGlobal} 
+              onChange={e => setFsiGlobal(e.target.value)} 
+              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+            />
+            <input 
+              type="number" 
+              placeholder="CC (₹/sqft)" 
+              value={ccGlobal} 
+              onChange={e => setCcGlobal(e.target.value)} 
+              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+            />
+            <div className="h-4 w-px bg-border mx-2" />
+            <button 
+              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+              className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+            >
+              Apply All & Recalculate
+            </button>
+            {Object.keys(rowOverrides).length > 0 && (
+              <button 
+                onClick={() => setRowOverrides({})}
+                className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+              >
+                Reset Edits
+              </button>
+            )}
+          </div>
+        )}
+
         {tableContent}
       </div>
 
@@ -529,7 +756,34 @@ function CleanedTable({ listings }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Normalized Listing Data</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
+                    {isPlot ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="FSI" 
+                      value={fsiGlobal} 
+                      onChange={e => setFsiGlobal(e.target.value)} 
+                      className="w-24 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="CC (₹/sqft)" 
+                      value={ccGlobal} 
+                      onChange={e => setCcGlobal(e.target.value)} 
+                      className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+                    />
+                    <div className="h-4 w-px bg-border mx-2" />
+                    <button 
+                      onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                      className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                    >
+                      Apply All & Recalculate
+                    </button>
+                  </div>
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
               </div>
@@ -540,8 +794,9 @@ function CleanedTable({ listings }) {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar flex flex-col gap-4">
+
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden bg-bg-card flex-1">
                 {tableContent}
               </div>
             </div>
@@ -554,7 +809,7 @@ function CleanedTable({ listings }) {
 }
 
 // ── Factorial Rate Summary Table ─────────────────────────────────
-function FactorialTable({ data }) {
+function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canCalculateRate = true }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState(new Set());
   const [showComparison, setShowComparison] = useState(false);
@@ -590,6 +845,7 @@ function FactorialTable({ data }) {
             <th className="px-4 py-3 font-semibold text-right">Avg Rate</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Lower</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Upper</th>
+            <th className="px-4 py-3 font-semibold text-center">Rate Source</th>
           </tr>
         </thead>
         <tbody>
@@ -686,6 +942,17 @@ function FactorialTable({ data }) {
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {row.rate_derived_from === "micromarket" ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                        Micromarket
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                        Listing
+                      </span>
+                    )}
+                  </td>
                 </tr>
               </Fragment>
             );
@@ -717,6 +984,21 @@ function FactorialTable({ data }) {
           </div>
         </div>
         {tableContent}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent-light">Ready For Final Rate</p>
+          <p className="mt-1 text-xs text-text-dim">Review the Comparable Project Metrics and map factors, then calculate the saleable-area rate.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCalculateRate}
+          disabled={!canCalculateRate || isCalculatingRate}
+          className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isCalculatingRate ? "Calculating..." : "Calculate Rate"}
+        </button>
       </div>
 
       {showComparison && (
@@ -855,17 +1137,30 @@ function FactoringResultCard({ data, area_unit }) {
 
   const fmtRate = (val) => val ? "\u20B9" + Number(val).toLocaleString() : "—";
   const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
+  const rateBasis = "Saleable Area";
+  const rateUnitLabel = `${area_unit || "sqft"} ${rateBasis.toLowerCase()}`;
   const adjColor = (val) => {
     const n = Number(val);
     if (n > 0) return "text-green-400";
     if (n < 0) return "text-red-400";
     return "text-text-dim";
   };
+  const factorLabel = (factor) => {
+    if (factor.toLowerCase().startsWith("cbd")) {
+      return factor.replace(/cbd/i, "CBD").replace(/_/g, " ").replace(/\b\w/g, (c, i) => i === 0 && c.toLowerCase() === 'c' ? c.toUpperCase() : c.toUpperCase());
+    }
+    return factor.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+  const factorEntries = Object.entries(valuation_details?.factor_breakdown || {});
+  const totalAdjustment = Number(valuation_details?.total_net_adjustment || 0);
+  const adjustmentMultiplier = 1 + totalAdjustment / 100;
+  const baseRateRange = valuation_details?.base_rate_range;
+  const derivedRateRange = valuation_details?.derived_rate_range || subject_rate_range;
 
   const renderFactorTable = (factor, data, isFull = false) => {
     const subjectRow = data.projects?.find(p => p.role === "SUBJECT" || p.name.toLowerCase().includes("subject"));
     const compRows = data.projects?.filter(p => p !== subjectRow) || [];
-    
+
     return (
       <div className={`overflow-hidden ${isFull ? "rounded-none" : "rounded-2xl border border-white/5 bg-black/40"}`}>
         <table className="w-full text-left text-[10px]">
@@ -937,7 +1232,7 @@ function FactoringResultCard({ data, area_unit }) {
               <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Ready Market Adjustment Report</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setIsSectionMaximized(!isSectionMaximized)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all text-[8px] font-black uppercase tracking-widest"
           >
@@ -947,96 +1242,251 @@ function FactoringResultCard({ data, area_unit }) {
       </div>
 
       <div className="p-8 space-y-10">
-        {/* FACTORING SUMMARY TABLE */}
+        {/* FACTORING SUMMARY TABLE — Enhanced */}
         <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-lg">📊</span>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Market Adjustment Factors</h3>
+          {/* Section Header */}
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-9 w-9 items-center justify-center">
+                <div className="absolute inset-0 rounded-xl bg-accent/20 blur-sm"></div>
+                <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-accent/30 bg-accent/15 text-base">⚖️</span>
+              </div>
+              <div>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-white">Market Adjustment Factors</h3>
+                <p className="mt-0.5 text-[9px] font-semibold text-text-dim uppercase tracking-widest">Subject position vs. comparable market evidence</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
+                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">Confidence</span>
+                <span className={`text-[10px] font-black ${confidence === 'High' ? 'text-green-400' :
+                  confidence === 'Low' ? 'text-red-400' : 'text-amber-400'
+                  }`}>{confidence || "Medium"}</span>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5">
+                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">{factorEntries.length} factors</span>
+              </div>
+            </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/5 bg-black/20">
-            <table className="w-full text-left text-[11px]">
-              <thead>
-                <tr className="bg-white/[0.03] border-b border-white/10 text-text-dim uppercase tracking-widest text-[9px] font-black">
-                  <th className="px-6 py-4">Dimension</th>
-                  <th className="px-6 py-4 text-right">Adjustment</th>
-                  <th className="px-6 py-4 text-center">Audit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {valuation_details?.factor_breakdown && Object.keys(valuation_details.factor_breakdown).map((factor) => (
-                  <tr key={factor} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-4 font-bold text-text-secondary capitalize flex items-center gap-3">
-                      <div className="h-1 w-1 rounded-full bg-accent/40"></div>
-                      {factor.replace("_", " ")}
-                    </td>
-                    <td className={`px-6 py-4 text-right font-mono font-black text-sm ${adjColor(valuation_details.net_impacts?.[factor])}`}>
-                      {fmtPct(valuation_details.net_impacts?.[factor])}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button 
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.03] to-black/30 shadow-xl">
+            {/* Column Headers */}
+            <div className="grid grid-cols-[2fr_3fr_80px_120px_56px] border-b border-white/[0.06] bg-white/[0.03] px-2">
+              {["Factor", "Subject vs Market", "Weight", "Net Impact", ""].map((h, i) => (
+                <div key={i} className={`px-3 py-3 text-[8px] font-black uppercase tracking-[0.18em] text-white/30 ${i >= 2 ? 'text-right' : ''} ${i === 4 ? 'text-center' : ''}`}>{h}</div>
+              ))}
+            </div>
+
+            {/* Factor Rows */}
+            <div className="divide-y divide-white/[0.04]">
+              {factorEntries.map(([factor, breakdown], rowIdx) => {
+                const impact = Number(valuation_details?.net_impacts?.[factor] || 0);
+                const weight = valuation_details?.attribute_weights?.[factor];
+                const isPos = impact > 0;
+                const isNeg = impact < 0;
+                const barWidth = Math.min(Math.abs(impact) * 6, 100);
+
+                return (
+                  <div
+                    key={factor}
+                    className={`grid grid-cols-[2fr_3fr_80px_120px_56px] items-center px-2 transition-all duration-200 hover:bg-white/[0.025] ${rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.012]'
+                      }`}
+                  >
+                    {/* Factor Name */}
+                    <div className="flex items-center gap-2.5 px-3 py-4">
+                      <div className={`h-9 w-[3px] rounded-full flex-shrink-0 ${isPos ? 'bg-gradient-to-b from-green-400 to-green-600' :
+                        isNeg ? 'bg-gradient-to-b from-red-400 to-red-600' :
+                          'bg-gradient-to-b from-white/20 to-white/5'
+                        }`}></div>
+                      <div>
+                        <p className="text-[11px] font-black text-white/90 leading-tight">{factorLabel(factor)}</p>
+                        <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-white/25">
+                          {breakdown?.projects?.length || 0} observations
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Subject vs Avg */}
+                    <div className="px-3 py-4">
+                      <p className="text-[10px] leading-[1.6] text-white/50 line-clamp-2">
+                        {breakdown?.subject_vs_avg || "Comparable evidence reviewed."}
+                      </p>
+                    </div>
+
+                    {/* Weight */}
+                    <div className="px-3 py-4 text-right">
+                      <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-bold text-white/50">
+                        {weight != null ? Number(weight).toFixed(2) : "—"}
+                      </span>
+                    </div>
+
+                    {/* Net Impact — bar + value */}
+                    <div className="px-3 py-4">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-[13px] font-black font-mono ${isPos ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-white/30'
+                          }`}>
+                          {fmtPct(impact)}
+                        </span>
+                        <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${isPos ? 'bg-gradient-to-r from-green-600 to-green-400' :
+                              isNeg ? 'bg-gradient-to-r from-red-600 to-red-400' :
+                                'bg-white/20'
+                              }`}
+                            style={{ width: `${barWidth}%`, marginLeft: isNeg ? 'auto' : undefined }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Audit Button */}
+                    <div className="flex items-center justify-center px-2 py-4">
+                      <button
                         onClick={() => setMaximizedFactor(factor)}
-                        className="h-7 w-7 rounded-lg border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all flex items-center justify-center mx-auto"
+                        className="group flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[10px] transition-all duration-200 hover:border-accent/50 hover:bg-accent/15 hover:shadow-[0_0_12px_rgba(167,139,250,0.2)]"
+                        title={`Audit ${factorLabel(factor)}`}
                       >
-                        🔍
+                        <span className="group-hover:scale-110 transition-transform">🔍</span>
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-accent/10 font-black text-white border-t border-accent/20">
-                  <td className="px-6 py-6 uppercase tracking-[0.2em] text-accent text-[9px]">Total Correction Factor</td>
-                  <td className={`px-6 py-6 text-right font-mono text-xl ${adjColor(valuation_details?.total_net_adjustment)}`}>
-                    {fmtPct(valuation_details?.total_net_adjustment)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer — Total Correction */}
+            <div className={`flex items-center justify-between border-t px-5 py-4 ${totalAdjustment >= 0
+              ? 'border-green-500/20 bg-gradient-to-r from-green-500/[0.08] to-transparent'
+              : 'border-red-500/20 bg-gradient-to-r from-red-500/[0.08] to-transparent'
+              }`}>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-black uppercase tracking-[0.22em] text-white/40">Total Correction Factor</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[8px] font-bold text-white/30">{factorEntries.length} factors applied</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-2xl font-black font-mono ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>{fmtPct(totalAdjustment)}</span>
+                <span className={`rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${totalAdjustment >= 0
+                  ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                  : 'bg-red-500/15 text-red-400 border border-red-500/20'
+                  }`}>{totalAdjustment >= 0 ? 'Premium' : 'Discount'}</span>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* VALUATION FORMULA & FINAL RATE */}
+        {/* EXECUTIVE VALUATION DERIVATION — Enhanced */}
         <section className="pt-4">
-          <div className="relative group mx-auto max-w-3xl">
-            <div className="absolute -inset-1 bg-gradient-to-r from-accent to-[#818cf8] rounded-[2.5rem] blur-2xl opacity-10"></div>
-            <div className="relative bg-[#0f172a] rounded-[2.5rem] p-12 border border-white/10 text-center shadow-xl">
-              <div className="mb-10">
-                <span className="text-[8px] font-black uppercase tracking-[0.6em] text-text-dim mb-8 block">Executive Valuation Derivation</span>
-                <div className="flex items-center justify-center gap-4 font-mono text-base text-text-secondary">
-                  <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-[8px] block mb-1 opacity-40 uppercase tracking-widest font-sans font-black text-white/50">Base Rate</span>
-                    {fmtRate(valuation_details?.base_rate)}
+          <div className="relative mx-auto">
+            {/* Ambient glow */}
+            <div className="pointer-events-none absolute -inset-3 rounded-[3rem] bg-gradient-to-br from-accent/20 via-[#818cf8]/10 to-transparent blur-3xl opacity-60"></div>
+
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-b from-[#13182e] to-[#0c1020] shadow-2xl">
+
+              {/* Section label bar */}
+              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-8 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="absolute inset-0 rounded-lg bg-accent/30 blur"></div>
+                    <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 border border-accent/30 text-sm">🎯</span>
                   </div>
-                  <span className="text-2xl text-accent-light opacity-50">×</span>
-                  <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-[8px] block mb-1 opacity-40 uppercase tracking-widest font-sans font-black text-white/50">Adjustment</span>
-                    (1 {Number(valuation_details?.total_net_adjustment) >= 0 ? "+" : "-"} {Math.abs(valuation_details?.total_net_adjustment / 100).toFixed(3)})
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.5em] text-white/40">Executive Valuation Derivation</p>
                   </div>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400"></span>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Derived</span>
                 </div>
               </div>
 
-              <div className="mb-10">
-                <div className="flex items-baseline justify-center gap-3">
-                  <span className="text-6xl font-black text-white tracking-tighter drop-shadow-[0_0_20px_rgba(167,139,250,0.3)]">{fmtRate(subject_final_rate)}</span>
-                  <span className="text-xl font-bold text-text-dim opacity-50">/ {area_unit}</span>
+              {/* Formula row */}
+              <div className="flex flex-wrap items-stretch justify-center gap-0 border-b border-white/[0.05] px-8 py-8">
+                {/* Base Rate block */}
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03] px-8 py-5 min-w-[140px]">
+                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/30">Base Rate</p>
+                  <p className="font-mono text-xl font-black text-white/80">{fmtRate(valuation_details?.base_rate)}</p>
+                  <p className="mt-1 text-[8px] text-white/20">/ {rateUnitLabel}</p>
+                </div>
+
+                {/* Operator */}
+                <div className="flex items-center px-5">
+                  <span className="text-3xl font-black text-accent/50">×</span>
+                </div>
+
+                {/* Adjustment multiplier block */}
+                <div className={`flex flex-col items-center justify-center rounded-2xl border px-8 py-5 min-w-[160px] ${totalAdjustment >= 0
+                  ? 'border-green-500/20 bg-green-500/[0.05]'
+                  : 'border-red-500/20 bg-red-500/[0.05]'
+                  }`}>
+                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/30">Multiplier</p>
+                  <p className={`font-mono text-xl font-black ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                    {(1 + totalAdjustment / 100).toFixed(4)}
+                  </p>
+                  <p className={`mt-1 text-[9px] font-bold ${totalAdjustment >= 0 ? 'text-green-400/50' : 'text-red-400/50'
+                    }`}>(1 {totalAdjustment >= 0 ? '+' : ''}{(totalAdjustment / 100).toFixed(4)})</p>
+                </div>
+
+                {/* Equals */}
+                <div className="flex items-center px-5">
+                  <span className="text-3xl font-black text-white/20">=</span>
+                </div>
+
+                {/* Final Rate block — hero */}
+                <div className="relative flex flex-col items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-b from-accent/10 to-accent/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(167,139,250,0.12)]">
+                  <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-accent/20 to-transparent opacity-40"></div>
+                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-accent/60">Final Rate</p>
+                  <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.5)]">{fmtRate(subject_final_rate)}</p>
+                  <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-accent/40">/ {rateUnitLabel}</p>
                 </div>
               </div>
 
-              {subject_rate_range && (
-                <div className="pt-8 border-t border-white/5 flex items-center justify-center gap-10">
-                  <div className="text-center">
-                    <p className="text-[8px] uppercase tracking-[0.2em] text-text-dim mb-1 font-black">Market Low</p>
-                    <span className="text-sm font-black text-white font-mono opacity-80">{fmtRate(subject_rate_range.low)}</span>
+              {/* Market Range gauge */}
+              {subject_rate_range && (() => {
+                const low = Number(subject_rate_range.low || 0);
+                const high = Number(subject_rate_range.high || 1);
+                const final = Number(subject_final_rate || 0);
+                const pct = high > low ? Math.min(100, Math.max(0, ((final - low) / (high - low)) * 100)) : 50;
+                return (
+                  <div className="px-8 py-6">
+                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-white/25">Market Rate Positioning</p>
+                    <div className="relative">
+                      {/* Track */}
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-red-500/30 via-amber-400/30 to-green-500/30">
+                        {/* Fill */}
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-red-400/60 via-amber-400/70 to-green-400/80 transition-all duration-1000"
+                          style={{ width: `${pct}%` }}
+                        ></div>
+                      </div>
+                      {/* Thumb */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
+                        style={{ left: `${pct}%` }}
+                      >
+                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-[#13182e] shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-red-400/60">Market Low</p>
+                        <p className="font-mono text-xs font-black text-white/50">{fmtRate(low)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[7px] font-black uppercase tracking-widest text-accent/50">Subject Rate</p>
+                        <p className="font-mono text-[11px] font-black text-accent">{fmtRate(final)}</p>
+                        <p className="text-[7px] text-white/20 mt-0.5">{pct.toFixed(0)}th percentile</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-green-400/60">Market High</p>
+                        <p className="font-mono text-xs font-black text-white/50">{fmtRate(high)}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-10 w-px bg-white/10"></div>
-                  <div className="text-center">
-                    <p className="text-[8px] uppercase tracking-[0.2em] text-text-dim mb-1 font-black">Market High</p>
-                    <span className="text-sm font-black text-white font-mono opacity-80">{fmtRate(subject_rate_range.high)}</span>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </section>
@@ -1115,9 +1565,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [specialCompName, setSpecialCompName] = useState("Rustomjee Crown");
   const [specialCompLat, setSpecialCompLat] = useState("19.018");
   const [specialCompLng, setSpecialCompLng] = useState("72.827");
+
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
   const markersRef = useRef([]);
+
+  const selectedComparablePayload = () => {
+    if (!comparableData) return [];
+    return Array.from(selectedComps).map((i) => comparableData[i]).filter(Boolean);
+  };
+
+  const handleCalculateRate = (factData) => {
+    submitFactorialAnalysis(factData || factorialData, subjectData, selectedComparablePayload());
+  };
 
   useEffect(() => {
     setFactorialData(externalFactorialData);
@@ -1460,12 +1920,134 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   };
 
 
+  // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
+  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
+    if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
+    
+    setIsCleaningStreaming(true);
+    setStreamingNote("Recalculating plot rates with overrides...");
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Recalculate plot rates with manual adjustments.`, meta: "Now" },
+      { role: "assistant", content: "Applying user overrides and recalculating...", meta: "Live" },
+    ]);
+
+    try {
+      const payload = {
+        cleaned_listings: cleanedData,
+        subject: subjectData,
+        property_type: subjectData.property_type || "plot",
+        overrides: rowOverrides,
+      };
+      if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
+      if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
+
+      const response = await fetch(`${backendUrl}/recalculate_plot_rates_stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Recalculate request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let newCleanedListings = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "recalculate_start") summary = event.content || "Recalculating plot rates...";
+          else if (event.type === "recalculate_results") {
+            summary = `Recalculation ready — ${event.content?.listings?.length || 0} listings.`;
+            newCleanedListings = event.content.listings;
+          }
+          else if (event.type === "recalculate_done") summary = "Plot rate recalculation complete.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+
+          if (event.type === "recalculate_results" && event.content?.listings) {
+            setCleanedData(event.content.listings);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "cleaning results",
+                  cleaned_listings: event.content.listings,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "recalculate_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "recalculation done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+      
+      if (newCleanedListings) {
+         setFactorialData(null);
+         setFactorialAnalysisData(null);
+      }
+
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Recalculate error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsCleaningStreaming(false);
+      setStreamingNote("");
+    }
+  };
+
+
   // ── Proceed to Factorial Table (Step 4) ────────────────────────
   const submitFactorial = async () => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isFactorialStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
-    const lastFactorDataRef = { current: null };
 
     setIsFactorialStreaming(true);
     setStreamingNote("Computing factorial rate table...");
@@ -1485,8 +2067,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           cleaned_listings: cleanedData,
           subject: subjectData,
           comparables: selected,
-          currency: subjectData.currency || "INR",
-          area_unit: "sqft",
+          currency: subjectData.currency,
+          area_unit: subjectData.area_unit || "sqft",
         }),
       });
 
@@ -1522,7 +2104,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
-            lastFactorDataRef.current = event.content;
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -1572,10 +2153,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     } finally {
       setIsFactorialStreaming(false);
       setStreamingNote("");
-      // Automatically trigger Step 5: LLM Factorial Analysis if we have the results
-      if (lastFactorDataRef.current) {
-        submitFactorialAnalysis(lastFactorDataRef.current, subjectData, selected);
-      }
     }
   };
 
@@ -1586,10 +2163,24 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setStreamingNote("Sending factorial data to LLM for adjustment analysis...");
     setCurrentStage("Stage 5: LLM Factorial Analysis");
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
-    ]);
+    setMessages((prev) => {
+      const existingIndex = prev.findIndex(m =>
+        m.meta === "factorial analysis results" ||
+        m.meta === "factorial analysis done" ||
+        m.meta === "factorial analysis start" ||
+        m.content === "Running LLM Factoring..."
+      );
+
+      if (existingIndex !== -1) {
+        const next = [...prev];
+        next[existingIndex] = { role: "assistant", content: "Running LLM Factoring...", meta: "Live" };
+        return next;
+      }
+      return [
+        ...prev,
+        { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
+      ];
+    });
 
     try {
       const response = await fetch(apiUrl("/factorial_analysis_stream"), {
@@ -1664,10 +2255,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+              if (targetIndex !== -1) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: "factorial analysis results",
@@ -1681,10 +2272,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "factorial_analysis_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+              if (targetIndex !== -1 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "factorial analysis done",
@@ -1698,9 +2289,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+        if (targetIndex !== -1) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `LLM Factoring error: ${error.message}`,
             meta: "Error",
@@ -1846,8 +2438,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
 
+            // Determine property type to decide if project_name should be shown
+            const propType = ents?.property_type;
+            const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
+
             const fields = Object.entries(ents)
-              .filter(([k, v]) => v !== null && v !== "" && typeof v !== 'object' && !ignoreKeys.includes(k) && !k.startsWith("_"))
+              .filter(([k, v]) => {
+                if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
+                if (v === null || v === "" || typeof v === 'object') return false;
+                // Hide project_name for plot types (not applicable)
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                return true;
+              })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
 
             if (ents.coordinates && typeof ents.coordinates === 'object') {
@@ -1867,8 +2469,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
-            // Pre-select all comparables by default
-            setSelectedComps(new Set(comps.map((_, i) => i)));
+            // Pre-select only comparables within the initial radius by default
+            const initialSelected = comps
+              .map((comp, i) => {
+                const dist = getComparableDistanceKm(comp);
+                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
+                  return i;
+                }
+                return -1;
+              })
+              .filter((i) => i !== -1);
+            setSelectedComps(new Set(initialSelected));
           }
 
           if (event.type === "done") {
@@ -1995,7 +2606,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     onClear?.();
     setMessages([]);
     clearInteractiveState();
-    const lastFactorDataRef = { current: null };
 
     // Create the subject and comparables data
     const subj = {
@@ -2072,8 +2682,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           cleaned_listings: mockCleaned,
           subject: subj,
           comparables: comps,
-          currency: "INR",
-          area_unit: "sqft",
+          currency: subj.currency,
+          area_unit: subj.area_unit || "sqft",
         }),
       });
 
@@ -2108,7 +2718,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
-            lastFactorDataRef.current = event.content;
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -2158,10 +2767,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     } finally {
       setIsFactorialStreaming(false);
       setStreamingNote("");
-      // Automatically trigger Step 5: LLM Factorial Analysis for special flow too
-      if (lastFactorDataRef.current) {
-        submitFactorialAnalysis(lastFactorDataRef.current, subj, comps);
-      }
     }
   };
 
@@ -2265,10 +2870,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     />
                   )}
                   {message.listings && <ListingTable listings={message.listings} />}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
-                      <FactorialTable data={message.factorial_data} />
+                      <FactorialTable
+                        data={message.factorial_data}
+                        onCalculateRate={() => handleCalculateRate(message.factorial_data)}
+                        isCalculatingRate={isFactorialAnalysisStreaming}
+                        canCalculateRate={Boolean(subjectData && selectedComparablePayload().length > 0)}
+                      />
                     </div>
                   )}
                   {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} />}

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap, LayersControl, Circle, Polygon, Polyline } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 
