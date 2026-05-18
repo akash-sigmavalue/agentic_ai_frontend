@@ -543,9 +543,9 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
             
-            {hasPlotData && (
+            {showPlotControls && (
               <>
-                {showPlotControls && <th className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>}
+                <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
                 <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
                 <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
                 <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
@@ -581,12 +581,10 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
                   : "—"}
               </td>
 
-              {hasPlotData && (
+              {showPlotControls && (
                 <>
-                  {showPlotControls && (
-                    <>
-                    <td className="px-3 py-2 text-center">
-                      <div className="flex flex-col items-center gap-1">
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
                       <div className="flex items-center gap-1">
                         <span className="text-[8px] opacity-40 uppercase">Low</span>
                         <input
@@ -655,8 +653,6 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
                       </div>
                     </div>
                   </td>
-                  </>
-                  )}
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {lst.plot_derived_rate_per_sqft 
                       ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}` 
