@@ -1993,7 +1993,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   role: "assistant",
                   content: summary,
                   meta: "cleaning results",
-                  cleaned_listings: event.content.listings,
+                  cleaned_listings: event.content.listings, 
                 };
               }
               return next;
