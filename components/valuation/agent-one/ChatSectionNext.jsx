@@ -523,7 +523,7 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
 
   // Detect if we have plot data and if the subject itself is a plot
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
-  const isPlotSubject = subjectPropertyType?.toLowerCase() === "plot";
+  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase());
 
   // Only show the FSI/CC overrides if we have plot data AND the subject is a plot
   const showPlotControls = hasPlotData && isPlotSubject;
