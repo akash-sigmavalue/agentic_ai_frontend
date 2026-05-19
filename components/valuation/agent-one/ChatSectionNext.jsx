@@ -1121,7 +1121,7 @@ function ValuationResult({ data, currency = "INR" }) {
 
 
 // ── Factoring Result Card (Step 5) ──────────────────────────────
-function FactoringResultCard({ data, area_unit }) {
+function FactoringResultCard({ data, area_unit, subjectData }) {
   const [maximizedFactor, setMaximizedFactor] = useState(null);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
@@ -1137,6 +1137,36 @@ function FactoringResultCard({ data, area_unit }) {
 
   const fmtRate = (val) => val ? "\u20B9" + Number(val).toLocaleString() : "—";
   const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
+  
+  const fmtValue = (val) => {
+    if (!val) return "—";
+    if (val >= 10000000) return "\u20B9" + (val / 10000000).toFixed(2) + " Cr";
+    if (val >= 100000) return "\u20B9" + (val / 100000).toFixed(2) + " Lac";
+    return "\u20B9" + Number(val).toLocaleString();
+  };
+
+  const finalRate = Number(subject_final_rate) || 0;
+  const carpetArea = Number(subjectData?.carpet_area_sqft || 0);
+  const builtupArea = Number(subjectData?.builtup_area_sqft || 0);
+  const superBuiltupArea = Number(subjectData?.super_builtup_area_sqft || subjectData?.super_built_up_area_sqft || subjectData?.super_built_up_area || 0);
+  const plotArea = Number(subjectData?.plot_area_sqft || 0);
+  const generalArea = Number(subjectData?.area_sqft || 0);
+
+  let saleableArea = 0;
+  if (carpetArea > 0) {
+    saleableArea = Math.round(carpetArea * 1.25);
+  } else if (builtupArea > 0) {
+    saleableArea = Math.round(builtupArea * 1.10);
+  } else if (superBuiltupArea > 0) {
+    saleableArea = superBuiltupArea;
+  } else if (plotArea > 0) {
+    saleableArea = plotArea;
+  } else if (generalArea > 0) {
+    saleableArea = generalArea;
+  }
+
+  const propertyValue = finalRate * saleableArea;
+
   const rateBasis = "Saleable Area";
   const rateUnitLabel = `${area_unit || "sqft"} ${rateBasis.toLowerCase()}`;
   const adjColor = (val) => {
@@ -1441,6 +1471,23 @@ function FactoringResultCard({ data, area_unit }) {
                   <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.5)]">{fmtRate(subject_final_rate)}</p>
                   <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-accent/40">/ {rateUnitLabel}</p>
                 </div>
+
+                {propertyValue > 0 && (
+                  <>
+                    {/* Operator */}
+                    <div className="flex items-center px-5">
+                      <span className="text-3xl font-black text-white/20">×</span>
+                    </div>
+
+                    {/* Property Value block */}
+                    <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
+                      <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-green-500/20 to-transparent opacity-40"></div>
+                      <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-green-400/60">Property Value</p>
+                      <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmtValue(propertyValue)}</p>
+                      <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Market Range gauge */}
@@ -2378,6 +2425,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
             // Store subject data for later use in listing fetch
             setSubjectData({
+              ...ents,
               project_name: ents?.project_name || "Subject Property",
               location_name: ents?.location_name || "",
               country: ents?.country || "India",
@@ -2881,7 +2929,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       />
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} />}
+                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
                 </div>
               </div>
             ))}
