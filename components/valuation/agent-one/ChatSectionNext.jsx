@@ -1943,7 +1943,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
       if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
 
-      const response = await fetch(`${apiUrl}/recalculate_plot_rates_stream`, {
+      const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
