@@ -1095,9 +1095,9 @@ function ValuationResult({ data, currency = "INR" }) {
               onChange={(e) => setConfLevel(e.target.value)}
               className="rounded-lg border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-2 py-1 text-xs font-bold text-[#10b981] outline-none cursor-pointer hover:bg-[rgba(16,185,129,0.15)] transition"
             >
-              <option value="90" className="bg-bg-card text-text-primary">90%</option>
-              <option value="95" className="bg-bg-card text-text-primary">95%</option>
-              <option value="99" className="bg-bg-card text-text-primary">99%</option>
+              <option value="90" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>90%</option>
+              <option value="95" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>95%</option>
+              <option value="99" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>99%</option>
             </select>
           </div>
         </div>
@@ -1597,19 +1597,25 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
       <div className="grid gap-5 md:grid-cols-2">
         {schema.inputs?.map((inp) => {
           let label = inp.label;
-          let placeholder = inp.default || 0;
-          if (inp.field === "uds_sqft") {
-            label = "UDS area in sqft";
+          let placeholder = inp.placeholder || inp.default || 0;
+          if (inp.field === "construction_rate_per_sqft") {
+            const sym = getCurrencySymbol(subjectData?.currency);
+            label = `Construction Rate per sqft (${sym})`;
           } else if (inp.field === "total_life_of_building") {
             label = "Economic Life (Years)";
             placeholder = 60;
           } else if (inp.field === "age_of_property") {
             label = "Age of Property (Years)";
-          } else if (inp.field === "net_plot_area_sqft") {
-            label = "Net Plot Area (sqft)";
-          } else if (inp.field === "rate_of_plot_per_sqft") {
-            const sym = getCurrencySymbol(subjectData?.currency);
-            label = `Land Rate per sqft (${sym})`;
+          }
+
+          let helpText = inp.help;
+          if (inp.field === "construction_rate_per_sqft") {
+            const propType = (subjectData?.property_type || "").toLowerCase();
+            if (propType === "apartment" || propType === "retail" || propType === "commercial_office") {
+              helpText = "Remark: Please enter construction cost per sqft on Salable Area.";
+            } else if (propType === "villa") {
+              helpText = "Remark: Please enter construction cost per sqft on Built-up Area.";
+            }
           }
 
           return (
@@ -1624,6 +1630,9 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
                 placeholder={`e.g. ${placeholder}`}
                 className="rounded-xl border border-border bg-white/[0.03] px-3.5 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/[0.05]"
               />
+              {helpText && (
+                <span className="pl-1 text-[9px] text-warning/80 font-semibold leading-relaxed">{helpText}</span>
+              )}
             </label>
           );
         })}
@@ -1647,13 +1656,12 @@ function CostResultCard({ data, subjectData }) {
 
   const derived_rate_per_sqft = data.inputs?.derived_rate_per_sqft;
   const area_sqft = data.inputs?.area_sqft;
-  const uds_sqft = data.inputs?.uds_sqft;
-  const rate_of_plot_per_sqft = data.inputs?.rate_of_plot_per_sqft;
+  const area_label = data.inputs?.area_label || data.area_label || "Area";
+  const construction_rate_per_sqft = data.inputs?.construction_rate_per_sqft;
   const age_of_property = data.inputs?.age_of_property;
   const total_life_of_building = data.inputs?.total_life_of_building;
 
   const property_price = data.calculations?.property_price;
-  const land_value = data.calculations?.land_cost;
   const construction_cost = data.calculations?.construction_cost;
   const depreciation_rate = (data.calculations?.depreciation_rate_pct || 0) / 100;
   const depreciation_amount = data.calculations?.depreciated_construction_cost;
@@ -1662,10 +1670,11 @@ function CostResultCard({ data, subjectData }) {
   const property_type = data.property_type;
 
   const audit_trail = {
-    land_value_formula: data.formula_audit?.step_2,
-    construction_cost_formula: data.formula_audit?.step_3,
-    depreciation_formula: data.formula_audit?.step_4,
-    final_value_formula: data.formula_audit?.step_6,
+    property_price_formula: data.formula_audit?.step_1,
+    construction_cost_formula: data.formula_audit?.step_2,
+    depreciation_formula: data.formula_audit?.step_3,
+    depreciated_cost_formula: data.formula_audit?.step_4,
+    final_value_formula: data.formula_audit?.step_5,
   };
 
   const currencyCode = subjectData?.currency || "INR";
@@ -1735,16 +1744,16 @@ function CostResultCard({ data, subjectData }) {
             {/* Step 2 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Land Share Value (UDS)</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Replacement Construction Cost</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Land Value</p>
-                  <p className="text-2xl font-black text-warning font-mono leading-none">{fmt(land_value)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Construction Cost</p>
+                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(construction_cost)}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-warning/55">Formula & Inputs:</p>
-                <p className="font-mono text-warning/90 leading-relaxed">
-                  {audit_trail?.land_value_formula || `Land Cost = ${uds_sqft} UDS × ${fmtRate(rate_of_plot_per_sqft)}/sqft`}
+                <p className="font-semibold text-teal-400/55">Formula & Inputs:</p>
+                <p className="font-mono text-teal-400/90 leading-relaxed font-bold">
+                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${area_sqft} sqft (${area_label})`}
                 </p>
               </div>
             </div>
@@ -1752,16 +1761,16 @@ function CostResultCard({ data, subjectData }) {
             {/* Step 3 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Building Reproduction Cost</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Straight-Line Depreciation Rate</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Reproduction Cost</p>
-                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(construction_cost)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Depreciation %</p>
+                  <p className="text-2xl font-black text-warning font-mono leading-none">{(depreciation_rate * 100).toFixed(2)}%</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-teal-400/55">Formula & Inputs:</p>
-                <p className="font-mono text-teal-400/90 leading-relaxed font-bold">
-                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmt(property_price)} − ${fmt(land_value)}`}
+                <p className="font-semibold text-warning/55">Formula:</p>
+                <p className="font-mono text-warning/90 leading-relaxed">
+                  {audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}
                 </p>
               </div>
             </div>
@@ -1769,15 +1778,14 @@ function CostResultCard({ data, subjectData }) {
             {/* Step 4 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Physical Depreciation</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Construction Value</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Depreciated Amount</p>
-                  <p className="text-2xl font-black text-red-400 font-mono leading-none">-{fmt(depreciation_amount)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Amount Deducted</p>
+                  <p className="text-2xl font-black text-red-400 font-mono leading-none">−{fmt(depreciation_amount)}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-2">
                 <div>
-                  <p className="font-semibold text-red-400/55">Rate Formula:</p>
                   <p className="font-mono text-red-400/80 leading-relaxed">{audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}</p>
                 </div>
                 <div className="border-t border-white/5 pt-1.5">
@@ -1803,7 +1811,7 @@ function CostResultCard({ data, subjectData }) {
                 {fmt(final_property_value)}
               </h1>
               <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
-                Depreciated Structure Value + Intact Land Share Value
+                Market Value − Depreciated Construction Cost
               </p>
             </div>
 
@@ -1909,16 +1917,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
       derived_rate_per_sqft: Number(derivedRate),
       area_sqft: Number(areaSqft),
       property_type: subjectData.property_type || "apartment",
-      net_plot_area_sqft: Number(costInputsValues.net_plot_area_sqft || 0),
-      rate_of_plot_per_sqft: Number(costInputsValues.rate_of_plot_per_sqft || 0),
-      uds_sqft: costInputsValues.uds_sqft !== undefined && costInputsValues.uds_sqft !== "" ? Number(costInputsValues.uds_sqft) : null,
+      construction_rate_per_sqft: Number(costInputsValues.construction_rate_per_sqft || 0),
       total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
       age_of_property: Number(costInputsValues.age_of_property || 0),
     };
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Run Cost Approach calculation. Net Plot Area: ${payload.net_plot_area_sqft} sqft, Land Rate: ₹${payload.rate_of_plot_per_sqft}/sqft, UDS: ${payload.uds_sqft || 'N/A'} sqft, Economic Life: ${payload.total_life_of_building} yrs, Age: ${payload.age_of_property} yrs.`, meta: "Now" },
+      { role: "user", content: `Run Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Age: ${payload.age_of_property} yrs, Economic Life: ${payload.total_life_of_building} yrs.`, meta: "Now" },
       { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
     ]);
 
@@ -2846,11 +2852,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                 if (inp.field === "age_of_property") {
                   const extractedAge = sData.age_of_property ?? sData.age_years ?? sData.age ?? sData.age_of_building;
                   if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
-                } else if (inp.field === "uds_sqft") {
-                  const extractedUds = sData.uds_sqft ?? sData.uds ?? sData.undivided_share;
+                } else if (inp.field === "construction_rate_per_sqft") {
+                  const extractedUds = sData.construction_rate_per_sqft ?? sData.construction_rate ?? sData.build_rate;
                   if (extractedUds != null && extractedUds !== "") val = Number(extractedUds);
-                } else if (inp.field === "net_plot_area_sqft") {
-                  const extractedPlot = sData.net_plot_area_sqft ?? sData.plot_area_sqft ?? sData.net_plot_area ?? sData.plot_area;
+                } else if (inp.field === "age_of_property") {
+                  const extractedPlot = sData.age_of_property ?? sData.age ?? sData.building_age;
                   if (extractedPlot != null && extractedPlot !== "") val = Number(extractedPlot);
                 } else if (inp.field === "total_life_of_building") {
                   const extractedLife = sData.total_life_of_building ?? sData.economic_life ?? sData.building_life;
@@ -2872,7 +2878,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
             setClarificationPrompt(event.content?.question || event.content?.message || "");
             setClarificationFields(schemas);
-            setClarificationValues(Object.fromEntries(schemas.map((s) => [s.field, s.default || ""])));
+            setClarificationValues(Object.fromEntries(schemas.map((s) => {
+              let val = s.default || "";
+              if (s.field === "property_type" && val) {
+                const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === val);
+                if (!hasOpt) val = "";
+              }
+              return [s.field, val];
+            })));
           }
 
           if (event.type === "map_confirmation") {
@@ -3358,7 +3371,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
                     <>
                       {costCalculationData ? (
-                        <CostResultCard data={costCalculationData} subjectData={subjectData} />
+                        <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
+                            ✅
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
+                            <p className="text-[9px] text-text-dim mt-0.5">Please review the complete step-by-step appraisal report card appended below.</p>
+                          </div>
+                        </div>
                       ) : (
                         costInputsSchema && (
                           <CostInputsForm
@@ -3547,13 +3568,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                           }
                           className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
                         >
-                          <option value="" disabled className="bg-bg-card text-text-primary">Select {schema.label}...</option>
+                          <option value="" disabled style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Select {schema.label}...</option>
                           {schema.options?.map(opt => {
                             const isObj = typeof opt === 'object';
                             const optValue = isObj ? opt.value : opt;
                             const optLabel = isObj ? opt.label : humanizeFieldName(opt);
                             return (
-                              <option key={optValue} value={optValue} className="bg-bg-card text-text-primary">{optLabel}</option>
+                              <option key={optValue} value={optValue} style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>{optLabel}</option>
                             );
                           })}
                         </select>
@@ -3644,12 +3665,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       }
                       className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning"
                     >
-                      <option value="" disabled className="bg-bg-card text-text-primary">Select approach...</option>
-                      <option key="market" value="market" className="bg-bg-card text-text-primary">Market Approach</option>
+                      <option value="" disabled style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Select approach...</option>
+                      <option key="market" value="market" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Market Approach</option>
                       <option 
                         key="cost" 
                         value="cost" 
-                        className="bg-bg-card text-text-primary"
+                        style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
                         disabled={subjectData?.property_type === "plot"}
                       >
                         Cost Approach {subjectData?.property_type === "plot" ? " (Locked for Plots)" : ""}
