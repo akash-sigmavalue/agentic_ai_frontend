@@ -243,15 +243,13 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
                 <td className="px-3 py-2.5 text-center">
                   {comp.location_certainty ? (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                      comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                    }`}>
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                      }`}>
                       {comp.location_certainty}
                     </span>
                   ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                      comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                    }`}>
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                      }`}>
                       {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
                     </span>
                   ) : "—")}
@@ -526,7 +524,7 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
   // Detect if we have plot data and if the subject itself is a plot
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
   const isPlotSubject = subjectPropertyType?.toLowerCase() === "plot";
-  
+
   // Only show the FSI/CC overrides if we have plot data AND the subject is a plot
   const showPlotControls = hasPlotData && isPlotSubject;
 
@@ -542,7 +540,7 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
-            
+
             {showPlotControls && (
               <>
                 <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
@@ -654,13 +652,13 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                    {lst.plot_derived_rate_per_sqft 
-                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}` 
+                    {lst.plot_derived_rate_per_sqft
+                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
                       : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                    {lst.plot_derived_rate_range 
-                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}` 
+                    {lst.plot_derived_rate_range
+                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`
                       : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -707,34 +705,34 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
             </div>
           </div>
         </div>
-        
+
         {showPlotControls && onRecalculate && (
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
-            <input 
-              type="number" 
+            <input
+              type="number"
               step="0.1"
-              placeholder="FSI" 
-              value={fsiGlobal} 
-              onChange={e => setFsiGlobal(e.target.value)} 
-              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+              placeholder="FSI"
+              value={fsiGlobal}
+              onChange={e => setFsiGlobal(e.target.value)}
+              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
             />
-            <input 
-              type="number" 
-              placeholder="CC (₹/sqft)" 
-              value={ccGlobal} 
-              onChange={e => setCcGlobal(e.target.value)} 
-              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
+            <input
+              type="number"
+              placeholder="CC (₹/sqft)"
+              value={ccGlobal}
+              onChange={e => setCcGlobal(e.target.value)}
+              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
             />
             <div className="h-4 w-px bg-border mx-2" />
-            <button 
+            <button
               onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
               className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
             >
               Apply All & Recalculate
             </button>
             {Object.keys(rowOverrides).length > 0 && (
-              <button 
+              <button
                 onClick={() => setRowOverrides({})}
                 className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
               >
@@ -758,31 +756,31 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
                     {hasPlotData ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
                   </h3>
                   {showPlotControls && onRecalculate && (
-                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
-                    <input 
-                      type="number" 
-                      step="0.1"
-                      placeholder="FSI" 
-                      value={fsiGlobal} 
-                      onChange={e => setFsiGlobal(e.target.value)} 
-                      className="w-24 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
-                    />
-                    <input 
-                      type="number" 
-                      placeholder="CC (₹/sqft)" 
-                      value={ccGlobal} 
-                      onChange={e => setCcGlobal(e.target.value)} 
-                      className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]" 
-                    />
-                    <div className="h-4 w-px bg-border mx-2" />
-                    <button 
-                      onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
-                      className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
-                    >
-                      Apply All & Recalculate
-                    </button>
-                  </div>
+                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="FSI"
+                        value={fsiGlobal}
+                        onChange={e => setFsiGlobal(e.target.value)}
+                        className="w-24 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                      />
+                      <input
+                        type="number"
+                        placeholder="CC (₹/sqft)"
+                        value={ccGlobal}
+                        onChange={e => setCcGlobal(e.target.value)}
+                        className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                      />
+                      <div className="h-4 w-px bg-border mx-2" />
+                      <button
+                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                        className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                      >
+                        Apply All & Recalculate
+                      </button>
+                    </div>
                   )}
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
@@ -1121,7 +1119,7 @@ function ValuationResult({ data, currency = "INR" }) {
 
 
 // ── Factoring Result Card (Step 5) ──────────────────────────────
-function FactoringResultCard({ data, area_unit, subjectData }) {
+function FactoringResultCard({ data, area_unit, subjectData, messages }) {
   const [maximizedFactor, setMaximizedFactor] = useState(null);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
@@ -1137,13 +1135,108 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
   const fmtRate = (val) => val ? "\u20B9" + Number(val).toLocaleString() : "—";
   const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
-  
+
   const fmtValue = (val) => {
     if (!val) return "—";
     if (val >= 10000000) return "\u20B9" + (val / 10000000).toFixed(2) + " Cr";
     if (val >= 100000) return "\u20B9" + (val / 100000).toFixed(2) + " Lac";
     return "\u20B9" + Number(val).toLocaleString();
   };
+
+  // Compute data-driven loading factors dynamically based on listings in messages
+  const getLoadingFactors = () => {
+    const subjectProject = subjectData?.project_name;
+    if (!subjectProject || !messages || messages.length === 0) {
+      return { carpetFactor: 1.25, builtupFactor: 1.10 };
+    }
+
+    // 1. Gather all listings from the message history
+    let allListings = [];
+    for (const msg of messages) {
+      if (msg.cleaned_listings) {
+        allListings = [...allListings, ...msg.cleaned_listings];
+      }
+      if (msg.listings) {
+        allListings = [...allListings, ...msg.listings];
+      }
+    }
+
+    // 2. Filter listings for the subject project that are relevant for valuation
+    const projListings = allListings.filter(lst => {
+      const projName = lst.cleaned_match_project || lst.project_name || "";
+      return projName.toLowerCase().trim() === subjectProject.toLowerCase().trim();
+    });
+
+    if (projListings.length === 0) {
+      return { carpetFactor: 1.25, builtupFactor: 1.10 };
+    }
+
+    // 3. Separate by area type
+    const carpetListings = projListings.filter(lst => (lst.cleaned_area_type || lst.area_type || "").toLowerCase() === "carpet");
+    const sbuaListings = projListings.filter(lst => (lst.cleaned_area_type || lst.area_type || "").toLowerCase() === "super_built_up");
+    const builtupListings = projListings.filter(lst => ["built_up", "builtup"].includes((lst.cleaned_area_type || lst.area_type || "").toLowerCase()));
+
+    // Helper to calculate median rate
+    const getMedianRate = (subset) => {
+      const rates = subset
+        .map(lst => {
+          const price = Number(lst.cleaned_price_value || lst.price_value || 0);
+          const area = Number(lst.cleaned_area_sqft || lst.area_sqft || 0);
+          return area > 0 ? price / area : null;
+        })
+        .filter(rate => rate !== null && !isNaN(rate) && rate > 0);
+
+      if (rates.length === 0) return null;
+      rates.sort((a, b) => a - b);
+      const mid = Math.floor(rates.length / 2);
+      return rates.length % 2 !== 0 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
+    };
+
+    let carpetFactor = 1.25;
+    let builtupFactor = 1.10;
+
+    // We need at least 3 SBUA listings to establish a base SBUA rate
+    if (sbuaListings.length >= 3) {
+      const medianSbuaRate = getMedianRate(sbuaListings);
+      if (medianSbuaRate && medianSbuaRate > 0) {
+        // Carpet to SBUA
+        if (carpetListings.length >= 3) {
+          const medianCarpetRate = getMedianRate(carpetListings);
+          if (medianCarpetRate) {
+            const cFactor = medianCarpetRate / medianSbuaRate;
+            if (cFactor >= 1.1 && cFactor <= 1.5) {
+              carpetFactor = Number(cFactor.toFixed(3));
+            }
+          }
+        }
+        // Builtup to SBUA
+        if (builtupListings.length >= 3) {
+          const medianBuiltupRate = getMedianRate(builtupListings);
+          if (medianBuiltupRate) {
+            const bFactor = medianBuiltupRate / medianSbuaRate;
+            if (bFactor >= 1.05 && bFactor <= 1.3) {
+              builtupFactor = Number(bFactor.toFixed(3));
+            }
+          }
+        }
+      }
+    }
+
+    // Check if any listing has an explicit factor set from the backend
+    const convertedListing = projListings.find(lst =>
+      (lst.cleaned_area_type || lst.area_type || "").toLowerCase() === "carpet" &&
+      lst.conversion_factor_used &&
+      Number(lst.conversion_factor_used) > 1.0 &&
+      Number(lst.conversion_factor_used) !== 1.25
+    );
+    if (convertedListing) {
+      carpetFactor = Number(convertedListing.conversion_factor_used);
+    }
+
+    return { carpetFactor, builtupFactor };
+  };
+
+  const { carpetFactor, builtupFactor } = getLoadingFactors();
 
   const finalRate = Number(subject_final_rate) || 0;
   const carpetArea = Number(subjectData?.carpet_area_sqft || 0);
@@ -1154,9 +1247,9 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
   let saleableArea = 0;
   if (carpetArea > 0) {
-    saleableArea = Math.round(carpetArea * 1.25);
+    saleableArea = Math.round(carpetArea * carpetFactor);
   } else if (builtupArea > 0) {
-    saleableArea = Math.round(builtupArea * 1.10);
+    saleableArea = Math.round(builtupArea * builtupFactor);
   } else if (superBuiltupArea > 0) {
     saleableArea = superBuiltupArea;
   } else if (plotArea > 0) {
@@ -1970,7 +2063,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
   const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
-    
+
     setIsCleaningStreaming(true);
     setStreamingNote("Recalculating plot rates with overrides...");
 
@@ -2064,10 +2157,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           }
         }
       }
-      
+
       if (newCleanedListings) {
-         setFactorialData(null);
-         setFactorialAnalysisData(null);
+        setFactorialData(null);
+        setFactorialAnalysisData(null);
       }
 
     } catch (error) {
@@ -2929,7 +3022,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       />
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
+                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} messages={messages} />}
                 </div>
               </div>
             ))}
