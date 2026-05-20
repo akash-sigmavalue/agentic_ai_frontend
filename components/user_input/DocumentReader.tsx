@@ -222,7 +222,7 @@ function StepperPipelineGraph({
 }
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [question, setQuestion] = useState("");
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [askResult, setAskResult] = useState<AskResult | null>(null);
@@ -243,8 +243,8 @@ export default function Home() {
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) {
-      setError("Choose a PDF or DOCX file first.");
+    if (files.length === 0) {
+      setError("Choose at least one PDF or DOCX file first.");
       return;
     }
 
@@ -256,7 +256,9 @@ export default function Home() {
     setTotalDuration(null);
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((f) => {
+      formData.append("files", f);
+    });
 
     try {
       const response = await uploadDocumentRequest(formData);
@@ -273,9 +275,8 @@ export default function Home() {
     }
   }
 
-  async function askQuestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!question.trim()) {
+  async function handleAsk(questionText: string) {
+    if (!questionText.trim()) {
       setError("Enter a question.");
       return;
     }
@@ -292,7 +293,7 @@ export default function Home() {
       setStageDurations((prev) => ({ ...prev, start: retrieveStartedAt - totalStartedAt }));
       setActiveNode("retrieve");
 
-      const response = await askQuestionStreamRequest(question);
+      const response = await askQuestionStreamRequest(questionText);
 
       if (!response.ok) {
         throw new Error(await parseApiError(response));
@@ -308,9 +309,8 @@ export default function Home() {
 
       setActiveNode("generate");
       let fullAnswer = "";
-      let checkStartedAt: number | null = null;
 
-      setAskResult({ answer: "", chunks: [], token_usage: { input: 0, output: 0 }, verified: false });
+      setAskResult({ answer: "", chunks: [], token_usage: { input: 0, output: 0 }, verified: false, suggested_questions: [] });
 
       let buffer = "";
       let completed = false;
@@ -361,6 +361,7 @@ export default function Home() {
                   chunks: data.chunks,
                   token_usage: data.token_usage,
                   verified: Boolean(data.verified),
+                  suggested_questions: data.suggested_questions || [],
                 });
                 const completedAt = performance.now();
                 setStageDurations((prev) => ({
@@ -401,6 +402,16 @@ export default function Home() {
     }
   }
 
+  async function askQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await handleAsk(question);
+  }
+
+  const onSelectSuggestedQuestion = (suggestedQ: string) => {
+    setQuestion(suggestedQ);
+    handleAsk(suggestedQ);
+  };
+
   return (
     <main className="w-min(320px, calc(100vw - 32px)) max-w-[1220px] mx-auto px-4 pb-8 pt-28" style={{width: 'min(1220px, calc(100vw - 32px))'}}>
       {/* Topbar */}
@@ -437,20 +448,33 @@ export default function Home() {
         {/* Sidebar Panel */}
         <aside className="border border-[#d8dee8] rounded-lg bg-[#e4d6d6] shadow-[0_18px_45px_rgba(22,32,51,0.08)] p-5">
           <form onSubmit={uploadDocument} className="grid gap-[14px]">
-            <label htmlFor="document" className="text-[#344054] text-xs font-bold">Document</label>
+            <label htmlFor="document" className="text-[#344054] text-xs font-bold">Documents</label>
             <input
               id="document"
               type="file"
               accept=".pdf,.docx"
+              multiple
               className="w-full border-2 border-dashed border-[#c2cada] rounded-lg bg-[#f8fafc] text-[#172033] cursor-pointer p-3 hover:border-[#1f5eff] hover:bg-[#f3f6ff]"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
+              onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
             />
+            {files.length > 0 && (
+              <div className="text-xs text-[#0a0a0a] font-semibold mt-1">
+                Selected:
+                <ul className="list-disc pl-4 mt-1 space-y-1">
+                  {files.map((f, i) => (
+                    <li key={i} className="truncate max-w-[280px]">
+                      {f.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button 
               type="submit" 
-              disabled={busy === "upload"}
+              disabled={busy === "upload" || files.length === 0}
               className="min-h-[42px] border border-[#1f5eff] rounded-lg bg-[#1f5eff] text-white font-bold px-[18px] cursor-pointer transition-all hover:enabled:bg-[#174bd2] hover:enabled:border-[#174bd2] hover:enabled:shadow-[0_8px_18px_rgba(31,94,255,0.22)] disabled:bg-[#e5eaf2] disabled:border-[#d7dee9] disabled:text-[#7a8597] disabled:cursor-not-allowed"
             >
-              {busy === "upload" ? "Processing..." : "Process document"}
+              {busy === "upload" ? "Processing..." : "Process documents"}
             </button>
           </form>
 
@@ -520,6 +544,26 @@ export default function Home() {
                   <MarkdownAnswer content={askResult.answer} />
                 </div>
               </article>
+
+              {askResult.suggested_questions && askResult.suggested_questions.length > 0 ? (
+                <section className="mt-5" aria-label="Suggested follow-up questions">
+                  <h3 className="m-0 mb-3 text-[#101828] text-sm font-bold uppercase tracking-wider text-[#475467]">
+                    Suggested Questions
+                  </h3>
+                  <div className="flex flex-wrap gap-2.5">
+                    {askResult.suggested_questions.map((suggestedQ, index) => (
+                      <button
+                        key={index}
+                        onClick={() => onSelectSuggestedQuestion(suggestedQ)}
+                        disabled={busy === "ask"}
+                        className="rounded-full border border-[#d1e9ff] bg-[#f5faff] text-[#174bd2] text-[13px] font-semibold px-4 py-2 hover:bg-[#e0f0ff] hover:border-[#b2ddff] transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-left max-w-full"
+                      >
+                        {suggestedQ}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {answerImages.length ? (
                 <section className="mt-5" aria-label="Visual references">

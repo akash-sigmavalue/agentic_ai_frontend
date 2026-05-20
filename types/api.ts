@@ -311,4 +311,5 @@ export type AskResult = {
   chunks: Chunk[];
   token_usage: TokenUsage;
   verified?: boolean;
+  suggested_questions?: string[];
 };
