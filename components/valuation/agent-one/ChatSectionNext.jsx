@@ -170,12 +170,20 @@ function getComparableDistanceKm(comp) {
 function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showAllComparables, setShowAllComparables] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
 
   if (!comparables || comparables.length === 0) return null;
 
-  const indexedComparables = comparables.map((comp, originalIndex) => ({
+  // Detect whether mixed sources exist
+  const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
+
+  const filteredComparables = sourceFilter === "all"
+    ? comparables
+    : comparables.filter(c => (c.data_source || "Web") === sourceFilter);
+
+  const indexedComparables = filteredComparables.map((comp, originalIndex) => ({
     comp,
-    originalIndex,
+    originalIndex: comparables.indexOf(comp), // keep original indices for selection
     distanceKm: getComparableDistanceKm(comp),
   }));
   const nearbyComparables = indexedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
@@ -183,7 +191,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
   const hasHiddenComparables = hiddenComparableCount > 0;
   const visibleResultLabel = showAllComparables
-    ? `${comparables.length} results`
+    ? `${filteredComparables.length} results`
     : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
   const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
 
@@ -220,6 +228,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             <th className="px-3 py-2.5 font-semibold">Reason</th>
             <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
             <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
+            <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
           </tr>
         </thead>
         <tbody>
@@ -278,6 +287,13 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     </a>
                   ) : "—"}
                 </td>
+                <td className="px-3 py-2.5">
+                  {comp.data_source === "Internal DB" ? (
+                    <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -310,9 +326,26 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
         <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
+            {hasMixedSources && (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                {["all", "Web", "Internal DB"].map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setSourceFilter(opt)}
+                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${
+                      sourceFilter === opt
+                        ? "bg-[#fb923c] text-bg-deep shadow"
+                        : "text-text-dim hover:text-text-primary"
+                    }`}
+                  >
+                    {opt === "all" ? "All Sources" : opt}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -331,7 +364,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
       {isMaximized && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-border bg-bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4 flex-wrap">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
@@ -339,6 +372,23 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
+              {hasMixedSources && (
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                  {["all", "Web", "Internal DB"].map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setSourceFilter(opt)}
+                      className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${
+                        sourceFilter === opt
+                          ? "bg-[#fb923c] text-bg-deep shadow"
+                          : "text-text-dim hover:text-text-primary"
+                      }`}
+                    >
+                      {opt === "all" ? "All Sources" : opt}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -1873,6 +1923,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [extractionVerification, setExtractionVerification] = useState(null);
   const [comparableData, setComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
+  const [dbNoResults, setDbNoResults] = useState(false);
   const [subjectData, setSubjectData] = useState(null);
   const [listingData, setListingData] = useState(null);
   const [isListingStreaming, setIsListingStreaming] = useState(false);
@@ -2053,6 +2104,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setExtractionVerification(null);
     setComparableData(null);
     setSelectedComps(new Set());
+    setDbNoResults(false);
     setSubjectData(null);
     setListingData(null);
     setCleanedData(null);
@@ -2784,7 +2836,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setIsStreaming(true);
 
     try {
-      const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}`), {
+      const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}&comparable_source=both`), {
         signal: abortRef.current.signal,
       });
 
@@ -2975,6 +3027,21 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             setSelectedComps(new Set(initialSelected));
           }
 
+          if (event.type === "db_comparable_status") {
+            if (event.content?.status === "no_results" || event.content?.status === "error") {
+              setDbNoResults(true);
+              // Also stamp it onto the current last message so the flag survives the 'done' meta overwrite
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0) {
+                  next[lastIndex] = { ...next[lastIndex], db_no_results: true };
+                }
+                return next;
+              });
+            }
+          }
+
           if (event.type === "done") {
             setPipelineDone(true);
           }
@@ -2987,12 +3054,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const next = [...prev];
               const lastIndex = next.length - 1;
               if (lastIndex >= 0) {
-                next[lastIndex] = {
+              next[lastIndex] = {
                   ...next[lastIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type.replaceAll("_", " "),
                   ...(event.type === "comparable_results" ? { comparables: event.content?.comparables || null } : {}),
+                  // Preserve db_no_results flag across meta overwrites
+                  db_no_results: next[lastIndex]?.db_no_results || false,
                 };
               }
               return next;
@@ -3362,6 +3431,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       onToggle={handleCompToggle}
                       selectable={pipelineDone && !isListingStreaming && !listingData}
                     />
+                  )}
+                  {/* DB found nothing but web results exist — amber warning */}
+                  {message.db_no_results && message.comparables && (
+                    <div className="mt-2 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <span className="text-lg">🗄️</span>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Internal DB</p>
+                        <p className="text-[10px] text-text-dim mt-0.5">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
+                      </div>
+                    </div>
+                  )}
+                  {/* DB found nothing AND no web comparables either */}
+                  {message.db_no_results && !message.comparables && (
+                    <div className="mt-2 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <span className="text-xl">🗄️</span>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Project Found in DB</p>
+                        <p className="text-[10px] text-text-dim mt-0.5">The internal database returned no matching projects for this location and property type.</p>
+                      </div>
+                    </div>
                   )}
                   {message.listings && <ListingTable listings={message.listings} />}
                   {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
