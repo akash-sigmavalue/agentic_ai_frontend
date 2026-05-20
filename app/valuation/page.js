@@ -127,11 +127,10 @@ export default function HomePage() {
               onMarkersUpdate={(m) => {
                 setMarkers(m);
               }}
-              backendUrl="http://localhost:8000"
               factorialData={factorialData}
             />
             <WorkflowSection events={events} />
-            <MapSection markers={markers} factorialData={factorialData} onDensityUpdate={setDensityUpdates} onAmenityUpdate={setAmenityUpdates} onRoadUpdate={setRoadUpdates} backendUrl="http://localhost:8000" />
+            <MapSection markers={markers} factorialData={factorialData} onDensityUpdate={setDensityUpdates} onAmenityUpdate={setAmenityUpdates} onRoadUpdate={setRoadUpdates} />
           </section>
         </div>
       </div>

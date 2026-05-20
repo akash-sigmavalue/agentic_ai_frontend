@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
+import { apiUrl } from "@/lib/api-client";
 
 const QUICK_PROMPTS = [
   "Value a 2BHK flat in Hiranandani Gardens, Powai, Mumbai. 1100 sqft, 5 years old, floor 15/25, West facing",
@@ -1230,11 +1231,10 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   };
 
   const DashboardContent = (
-    <div className={`mt-8 rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-      isSectionMaximized
+    <div className={`mt-8 rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
         ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
         : "overflow-hidden"
-    }`}>
+      }`}>
       {/* Detail Modal */}
       {maximizedFactor && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-bg-deep/95 p-4 md:p-12 backdrop-blur-xl animate-in fade-in duration-300">
@@ -1544,7 +1544,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
                   <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
                   <span className="text-[9px] font-black uppercase tracking-[0.4em] text-accent/70">Final Market Approach Property Value</span>
-                  
+
                   <div className="space-y-1">
                     <h1 className="font-mono text-4xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
                       {fmt(calculatedValue)}
@@ -1700,11 +1700,10 @@ function CostResultCard({ data, subjectData }) {
   const fmtRate = (val) => val != null ? formatter.format(Number(val)) : "—";
 
   const DashboardContent = (
-    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-      isSectionMaximized
+    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
         ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
         : "overflow-hidden"
-    }`}>
+      }`}>
       {/* Header */}
       <div className="border-b border-white/5 bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
         <div className="flex items-center justify-between">
@@ -1733,7 +1732,7 @@ function CostResultCard({ data, subjectData }) {
       <div className="p-8 space-y-8">
         <section className="space-y-4">
           <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-white">Appraisal Step Calculation Audit</h3>
-          
+
           <div className="grid gap-4 md:grid-cols-2">
             {/* Step 1 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
@@ -1813,10 +1812,10 @@ function CostResultCard({ data, subjectData }) {
         {/* Hero Section */}
         <section className="relative">
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
-          
+
           <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
             <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Property Value</span>
-            
+
             <div className="space-y-1">
               <h1 className="font-mono text-5xl font-black text-white drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
                 {fmt(final_property_value)}
@@ -1852,7 +1851,7 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, backendUrl = "http://localhost:8000", factorialData: externalFactorialData }) {
+export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1940,7 +1939,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/cost_calculation_stream`, {
+      const response = await fetch(apiUrl("/cost_calculation_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -2132,7 +2131,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/listing_stream`, {
+      const response = await fetch(apiUrl("/listing_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2257,7 +2256,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/cleaning_stream`, {
+      const response = await fetch(apiUrl("/cleaning_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2397,7 +2396,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
       if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
       if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
 
-      const response = await fetch(`${backendUrl}/recalculate_plot_rates_stream`, {
+      const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -2514,7 +2513,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2637,7 +2636,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     });
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_analysis_stream`, {
+      const response = await fetch(apiUrl("/factorial_analysis_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2785,7 +2784,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setIsStreaming(true);
 
     try {
-      const response = await fetch(`${backendUrl}/ask_stream?question=${encodeURIComponent(trimmed)}`, {
+      const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}`), {
         signal: abortRef.current.signal,
       });
 
@@ -3170,7 +3169,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3378,7 +3377,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   )}
                   {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
                   {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
-                  
+
                   {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
                     <>
                       {costCalculationData ? (
@@ -3678,9 +3677,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                     >
                       <option value="" disabled style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Select approach...</option>
                       <option key="market" value="market" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Market Approach</option>
-                      <option 
-                        key="cost" 
-                        value="cost" 
+                      <option
+                        key="cost"
+                        value="cost"
                         style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
                         disabled={subjectData?.property_type === "plot"}
                       >

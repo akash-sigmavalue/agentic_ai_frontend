@@ -1,4 +1,8 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
+).replace(/\/$/, '');
 
 export const API_ROUTES = {
   authRegister: '/auth/register',
@@ -17,4 +21,44 @@ export const CONNECTOR_API_ROUTES = {
   gmailTokenTest: '/debug/gmail-token-test',
 } as const;
 
-export const apiUrl = (route: string) => `${API_BASE_URL}${route}`;
+export const apiUrl = (route: string) =>
+  `${API_BASE_URL}${route.startsWith('/') ? route : `/${route}`}`;
+
+export async function apiRequest(path: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers || {});
+  const isFormData = options.body instanceof FormData;
+
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return fetch(apiUrl(path), {
+    ...options,
+    headers,
+  });
+}
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await apiRequest(path, options);
+
+  if (!response.ok) {
+    let message = `API failed with status ${response.status}`;
+    try {
+      const data = await response.json();
+      message = data?.detail || data?.message || message;
+    } catch {
+      const text = await response.text().catch(() => '');
+      message = text || message;
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
+}
