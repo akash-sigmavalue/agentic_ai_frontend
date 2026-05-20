@@ -1477,7 +1477,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                   <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-accent/40">/ {rateUnitLabel}</p>
                 </div>
 
-                {propertyValue > 0 && (
+                {calculatedValue > 0 && (
                   <>
                     {/* Operator */}
                     <div className="flex items-center px-5">
@@ -1488,7 +1488,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                     <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
                       <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-green-500/20 to-transparent opacity-40"></div>
                       <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-green-400/60">Property Value</p>
-                      <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmtValue(propertyValue)}</p>
+                      <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
                       <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
                     </div>
                   </>

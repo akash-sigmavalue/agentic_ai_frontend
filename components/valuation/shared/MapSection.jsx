@@ -105,27 +105,40 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   const map = useMap();
 
   useEffect(() => {
+    let timer;
     if (markers.length > 0 && radius) {
-      const bounds = L.latLngBounds(
-        markers.map(m => [Number(m.lat), Number(m.lng)])
-      );
+      const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
+      if (validMarkers.length > 0) {
+        const bounds = L.latLngBounds(
+          validMarkers.map(m => [Number(m.lat), Number(m.lng)])
+        );
 
-      const latOffset = radius / 111320;
+        const latOffset = radius / 111320;
 
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
 
-      const lngOffsetSW = radius / (111320 * Math.cos(sw.lat * Math.PI / 180));
-      const lngOffsetNE = radius / (111320 * Math.cos(ne.lat * Math.PI / 180));
+        const lngOffsetSW = radius / (111320 * Math.cos(sw.lat * Math.PI / 180));
+        const lngOffsetNE = radius / (111320 * Math.cos(ne.lat * Math.PI / 180));
 
-      const newSW = L.latLng(sw.lat - latOffset, sw.lng - lngOffsetSW);
-      const newNE = L.latLng(ne.lat + latOffset, ne.lng + lngOffsetNE);
+        const newSW = L.latLng(sw.lat - latOffset, sw.lng - lngOffsetSW);
+        const newNE = L.latLng(ne.lat + latOffset, ne.lng + lngOffsetNE);
 
-      const paddedBounds = L.latLngBounds(newSW, newNE);
+        const paddedBounds = L.latLngBounds(newSW, newNE);
 
-      map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
-      setTimeout(() => map.invalidateSize(), 200);
+        if (map && typeof map.fitBounds === 'function') {
+          map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
+          timer = setTimeout(() => {
+            if (map && map._container && typeof map.invalidateSize === 'function') {
+              map.invalidateSize();
+            }
+          }, 200);
+        }
+      }
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [markers, radius, mapMode, map]);
 
   return null;
@@ -280,13 +293,33 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
     if (markers.length === 0) return;
     setIsFetchingRoads(true);
     try {
-      const queries = markers.map(m => `way["highway"](around:${roadRadius},${m.lat},${m.lng});`).join('');
+      const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
+      if (validMarkers.length === 0) {
+        setIsFetchingRoads(false);
+        return;
+      }
+      const queries = validMarkers.map(m => `way["highway"](around:${roadRadius},${Number(m.lat)},${Number(m.lng)});`).join('');
       const overpassQuery = `[out:json][timeout:25];(${queries});out geom qt;`;
 
       const res = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
-        body: overpassQuery
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`
       });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Overpass API returned HTTP ${res.status}: ${errText.slice(0, 150)}`);
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        const text = await res.text();
+        throw new Error(`Overpass API returned non-JSON content: ${text.slice(0, 150)}`);
+      }
+
       const data = await res.json();
 
       const newRoads = [];
