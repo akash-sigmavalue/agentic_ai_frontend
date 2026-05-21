@@ -410,12 +410,34 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
 }
 
 // ── Listing Table ────────────────────────────────────────────────
-function ListingTable({ listings }) {
+function ListingTable({ listings, dbTransactions }) {
   const [isMaximized, setIsMaximized] = useState(false);
-  if (!listings || listings.length === 0) return null;
 
-  const subjectListings = listings.filter((l) => l.is_subject);
-  const compListings = listings.filter((l) => !l.is_subject);
+  // Map internal DB transactions into listing row shape
+  const dbRows = (dbTransactions || []).map(t => ({
+    project_name:     t.project_name,
+    property_type:    t.property_type_raw || t.property_type,
+    project_category: t.property_type,
+    listing_type:     t.transaction_category,
+    bhk:              t.unit_configuration,
+    currency:         t.currency,
+    price:            t.agreement_price,
+    price_per_sqft:   t.price_per_sqft,
+    area_sqft:        t.area_sqft,
+    area_type:        t.area_type || "Carpet Area",
+    is_subject:       t.is_subject || false,
+    floor:            t.floor_number,
+    total_floors:     null,
+    location:         t.location_name,
+    source_url:       null,
+    _is_db:           true,   // flag to render source badge
+  }));
+
+  const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
+  if (allEmpty) return null;
+
+  const subjectListings = (listings || []).filter((l) => l.is_subject);
+  const compListings    = (listings || []).filter((l) => !l.is_subject);
 
   const renderRows = (rows, label) => (
     <>
@@ -461,7 +483,9 @@ function ListingTable({ listings }) {
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.total_floors || "—"}</td>
           <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{lst.location || "—"}</td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
-            {lst.source_url ? (
+            {lst._is_db ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+            ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
               </a>
@@ -497,6 +521,7 @@ function ListingTable({ listings }) {
         <tbody>
           {renderRows(subjectListings, "Subject Property")}
           {renderRows(compListings, "Comparable Projects")}
+          {dbRows.length > 0 && renderRows(dbRows, "Internal DB Transactions")}
         </tbody>
       </table>
     </div>
@@ -510,7 +535,7 @@ function ListingTable({ listings }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm">📊</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Listing Data Fetched</span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} listings</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{(listings || []).length} web + {dbRows.length} db records</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-cyan-400 hover:text-cyan-400"
@@ -546,6 +571,104 @@ function ListingTable({ listings }) {
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
                 {tableContent}
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ── Transaction Table (Internal DB) ─────────────────────────────────────────
+function TransactionTable({ transactions }) {
+  const [isMaximized, setIsMaximized] = useState(false);
+  if (!transactions || transactions.length === 0) return null;
+
+  const tableContent = (
+    <div className="overflow-x-auto custom-scrollbar">
+      <table className="w-full text-left text-xs">
+        <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+            <th className="px-3 py-2.5 font-semibold">Project</th>
+            <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
+            <th className="px-3 py-2.5 font-semibold">List Type</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Price/Sqft</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Area (Sqft)</th>
+            <th className="px-3 py-2.5 font-semibold">Area Type</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
+            <th className="px-3 py-2.5 font-semibold">Location</th>
+            <th className="px-3 py-2.5 font-semibold">Source</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Net Carpet (SQM)</th>
+            <th className="px-3 py-2.5 font-semibold">Country</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map((t, i) => (
+            <tr key={i} className="border-b border-border/50 transition hover:bg-[rgba(52,211,153,0.04)]">
+              <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">{t.project_name || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.property_type_raw || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.property_type || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.transaction_category || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary">{t.currency || "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{t.agreement_price ?? "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-accent-light whitespace-nowrap">{t.price_per_sqft ?? "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">{t.area_sqft ?? "—"}</td>
+              <td className="px-3 py-2 text-text-dim">{t.area_type || "Carpet Area"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-dim">{t.floor_number ?? "—"}</td>
+              <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{t.location_name || "—"}</td>
+              <td className="px-3 py-2">
+                <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                  Internal DB
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right font-mono text-text-dim">{t.net_carpet_area_sq_m ?? "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.country_name || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="mt-3 overflow-hidden rounded-2xl border border-emerald-500/25 bg-bg-card shadow-panel transition-all duration-300">
+        <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Internal DB Transactions</span>
+            <div className="ml-auto flex items-center gap-3">
+              <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
+              <button
+                onClick={() => setIsMaximized(true)}
+                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-emerald-400 hover:text-emerald-400"
+                title="Maximize Table"
+              >⛶</button>
+            </div>
+          </div>
+        </div>
+        {tableContent}
+      </div>
+
+      {isMaximized && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-emerald-500/30 bg-bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Internal DB Transactions</h3>
+                  <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden">{tableContent}</div>
             </div>
           </div>
         </div>,
@@ -1926,6 +2049,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [dbNoResults, setDbNoResults] = useState(false);
   const [subjectData, setSubjectData] = useState(null);
   const [listingData, setListingData] = useState(null);
+  const [dbTransactions, setDbTransactions] = useState([]); // transactions from Internal DB comparables
   const [isListingStreaming, setIsListingStreaming] = useState(false);
   const [cleanedData, setCleanedData] = useState(null);
   const [isCleaningStreaming, setIsCleaningStreaming] = useState(false);
@@ -2107,6 +2231,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setDbNoResults(false);
     setSubjectData(null);
     setListingData(null);
+    setDbTransactions([]);
     setCleanedData(null);
     setFactorialData(null);
     setFactorialAnalysisData(null);
@@ -2172,116 +2297,228 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
+    // Split by source
+    const dbComps  = selected.filter(c => (c.data_source || "Web") === "Internal DB");
+    const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
+
+    // If subject project exists in internal DB, also fetch its transactions
+    const subjectDbProject = subjectData?.subject_db_project || null;
+
     setIsListingStreaming(true);
-    setStreamingNote("Starting listing search pipeline...");
+    setStreamingNote("Starting listing fetch pipeline...");
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
 
+    const totalDbFetches = dbComps.length + (subjectDbProject ? 1 : 0);
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — fetch listings.`, meta: "Now" },
+      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`, meta: "Now" },
       { role: "assistant", content: "Running listing pipeline...", meta: "Live" },
     ]);
 
     try {
-      const response = await fetch(apiUrl("/listing_stream"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectData,
-          selected_comparables: selected,
-          property_type: subjectData.property_type || "apartment",
-        }),
-      });
+      // ── 1. Fetch transactions for each Internal DB comparable ──────────
+      const allDbTransactions = [];
+      for (const comp of dbComps) {
+        const projId = comp.project_id || comp.id || comp.project_name;
+        const propType = comp.property_type || subjectData.property_type || "apartment";
+        if (!projId) continue;
 
-      if (!response.ok || !response.body) {
-        throw new Error(`Listing request failed with status ${response.status}`);
+        setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        try {
+          const res = await fetch(apiUrl("/transaction_stream"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              project_id: String(projId),
+              property_type: propType,
+              project_name: comp.project_name || "",
+            }),
+          });
+          if (!res.ok || !res.body) continue;
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const chunks = buf.split("\n\n");
+            buf = chunks.pop() || "";
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const ev = JSON.parse(chunk.slice(6));
+              onEvent?.(ev);
+              if (ev.type === "transaction_results") {
+                allDbTransactions.push(...(ev.content?.transactions || []));
+                setStreamingNote(`✅ Got ${ev.content?.total || 0} transactions for "${comp.project_name}"`);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("DB transaction fetch failed for", comp.project_name, e);
+        }
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() || "";
-
-        for (const chunk of chunks) {
-          if (!chunk.startsWith("data: ")) continue;
-          const event = JSON.parse(chunk.slice(6));
-
-          onEvent?.(event);
-          const summary = summarizeEvent(event);
-          setStreamingNote(summary);
-
-          if (event.type === "listing_results") {
-            const listings = event.content?.listings || [];
-            const newUsage = event.content?.token_usage || {};
-            const total = newUsage.total_tokens || 0;
-            const model = newUsage.model || "gpt-4o-mini";
-
-            setListingData(listings);
-            setTokenStats((prev) => {
-              const next = { ...prev };
-              next.total_tokens += total;
-              if (!next.model_breakdown[model]) {
-                next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-              }
-              next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-              next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-              next.model_breakdown[model].total += total;
-
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
-              next.cost_usd = (next.cost_usd || 0) + addedCost;
-              return next;
+      // Also fetch subject's own DB transactions if it was found in the internal DB
+      if (subjectDbProject) {
+        const projId = subjectDbProject.project_id || subjectDbProject.id || subjectDbProject.project_name;
+        const propType = subjectDbProject.property_type || subjectData.property_type || "apartment";
+        if (projId) {
+          setStreamingNote(`🗄️ Fetching DB transactions for subject "${subjectDbProject.project_name}"...`);
+          try {
+            const res = await fetch(apiUrl("/transaction_stream"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                project_id: String(projId),
+                property_type: propType,
+                project_name: subjectDbProject.project_name || "",
+              }),
             });
-
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: "listing results",
-                  listings: listings,
-                };
+            if (res.ok && res.body) {
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = "";
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const chunks = buf.split("\n\n");
+                buf = chunks.pop() || "";
+                for (const chunk of chunks) {
+                  if (!chunk.startsWith("data: ")) continue;
+                  const ev = JSON.parse(chunk.slice(6));
+                  onEvent?.(ev);
+                  if (ev.type === "transaction_results") {
+                    // Mark subject transactions with is_subject flag
+                    const subjectTx = (ev.content?.transactions || []).map(t => ({ ...t, is_subject: true }));
+                    allDbTransactions.push(...subjectTx);
+                    setStreamingNote(`✅ Got ${ev.content?.total || 0} subject transactions from Internal DB`);
+                  }
+                }
               }
-              return next;
-            });
-          }
-
-          if (event.type === "listing_done" || event.type === "error") {
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].listings) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: event.type === "error" ? "error" : "listing done",
-                };
-              }
-              return next;
-            });
+            }
+          } catch (e) {
+            console.warn("DB transaction fetch failed for subject", subjectDbProject.project_name, e);
           }
         }
       }
+
+      // Store DB transactions and stamp on the message
+      if (allDbTransactions.length > 0) {
+        setDbTransactions(allDbTransactions);
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0) {
+            next[lastIndex] = {
+              ...next[lastIndex],
+              db_transactions: allDbTransactions,
+            };
+          }
+          return next;
+        });
+      }
+
+      // ── 2. Fetch web listings for Web comparables ──────────────────────
+      if (webComps.length > 0) {
+        setStreamingNote(`🌐 Fetching web listings for ${webComps.length} web comparable(s)...`);
+        const response = await fetch(apiUrl("/listing_stream"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: subjectData,
+            selected_comparables: webComps,
+            property_type: subjectData.property_type || "apartment",
+          }),
+        });
+
+        if (response.ok && response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop() || "";
+
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const event = JSON.parse(chunk.slice(6));
+              onEvent?.(event);
+              const summary = summarizeEvent(event);
+              setStreamingNote(summary);
+
+              if (event.type === "listing_results") {
+                const listings = event.content?.listings || [];
+                const newUsage = event.content?.token_usage || {};
+                const total = newUsage.total_tokens || 0;
+                const model = newUsage.model || "gpt-4o-mini";
+                setListingData(listings);
+                setTokenStats((prev) => {
+                  const next = { ...prev };
+                  next.total_tokens += total;
+                  if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
+                  next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
+                  next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
+                  next.model_breakdown[model].total += total;
+                  next.cost_usd = (next.cost_usd || 0) + ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
+                  return next;
+                });
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0) {
+                    next[lastIndex] = {
+                      ...next[lastIndex],
+                      role: "assistant",
+                      content: summary,
+                      meta: "listing results",
+                      listings,
+                      // Preserve any DB transactions stamped in the same message
+                      db_transactions: next[lastIndex].db_transactions || [],
+                    };
+                  }
+                  return next;
+                });
+              }
+
+              if (event.type === "listing_done" || event.type === "error") {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0 && !next[lastIndex].listings) {
+                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                  }
+                  return next;
+                });
+              }
+            }
+          }
+        }
+      } else if (allDbTransactions.length > 0) {
+        // Only DB comparables were selected — update meta
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0) {
+            next[lastIndex] = { ...next[lastIndex], role: "assistant", content: `✅ Fetched ${allDbTransactions.length} transaction(s) from Internal DB.`, meta: "listing results" };
+          }
+          return next;
+        });
+        // Set listingData to empty array so the "Proceed to Cleaning" CTA appears
+        setListingData([]);
+      }
+
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
         if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            role: "assistant",
-            content: `Listing fetch error: ${error.message}`,
-            meta: "Error",
-          };
+          next[next.length - 1] = { ...next[next.length - 1], role: "assistant", content: `Listing fetch error: ${error.message}`, meta: "Error" };
         }
         return next;
       });
@@ -3014,6 +3251,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
+            // Store subject's DB entry (if found) for listing fetch
+            const subjectDbProject = event.content?.subject_db_project || null;
+            if (subjectDbProject) {
+              setSubjectData(prev => prev ? { ...prev, subject_db_project: subjectDbProject } : prev);
+              subjectDataRef.current = subjectDataRef.current
+                ? { ...subjectDataRef.current, subject_db_project: subjectDbProject }
+                : subjectDataRef.current;
+            }
             // Pre-select only comparables within the initial radius by default
             const initialSelected = comps
               .map((comp, i) => {
@@ -3452,7 +3697,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       </div>
                     </div>
                   )}
-                  {message.listings && <ListingTable listings={message.listings} />}
+                  {(message.listings || message.db_transactions) && (
+                    <ListingTable
+                      listings={message.listings || []}
+                      dbTransactions={message.db_transactions || []}
+                    />
+                  )}
                   {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
@@ -3514,7 +3764,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
       <div className="border-t border-border bg-bg-card px-4 py-3 backdrop-blur">
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && !cleanedData && !factorialData && !isListingStreaming && (
+        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(34,211,238,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
             <div className="border-b border-[rgba(34,211,238,0.16)] bg-[rgba(34,211,238,0.06)] px-4 py-3">
               <div className="flex items-start gap-3">
