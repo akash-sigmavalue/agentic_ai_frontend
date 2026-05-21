@@ -704,11 +704,13 @@ function formatPrice(value, currency = "INR") {
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
+function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
   const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
+  const [activeTab, setActiveTab] = useState("valid"); // "valid" | "outliers" | "dropped"
+
   if (!listings || listings.length === 0) return null;
 
   // Detect if we have plot data and if the subject itself is a plot
@@ -718,10 +720,21 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
   // Only show the FSI/CC overrides if we have plot data AND the subject is a plot
   const showPlotControls = hasPlotData && isPlotSubject;
 
+  // Determine which rows to display based on active tab
+  const displayedListings = activeTab === "valid" ? listings : activeTab === "outliers" ? reviewListings : droppedListings;
+  const showReasonColumn = activeTab === "outliers" || activeTab === "dropped";
+
+  // Helper: extract reason for drop/outlier
+  const getRowReason = (lst) => {
+    if (activeTab === "outliers") return "Statistical outlier (IQR)";
+    if (lst.is_duplicate) return "Duplicate listing";
+    return lst.cleaned_irrelevance_reason || lst.irrelevance_reason || "Not relevant for valuation";
+  };
+
   const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+    <div className={`overflow-x-auto overflow-y-auto custom-scrollbar ${isMaximized ? '' : 'max-h-[500px]'}`}>
+      <table className="w-full text-left text-xs relative">
+        <thead className="sticky top-0 z-[11] bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <th className="px-3 py-2.5 font-semibold">Matched Project</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
@@ -743,12 +756,20 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Source</th>
             <th className="px-3 py-2.5 font-semibold">Flag</th>
+            {showReasonColumn && <th className="px-3 py-2.5 font-semibold">Reason</th>}
           </tr>
         </thead>
         <tbody>
-          {listings.map((lst, i) => (
-            <tr key={i} className="border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)]">
+          {displayedListings.length === 0 ? (
+            <tr>
+              <td colSpan={99} className="px-4 py-8 text-center text-sm text-text-dim">
+                {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
+              </td>
+            </tr>
+          ) : displayedListings.map((lst, i) => (
+            <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
               <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                 {lst.cleaned_match_project || lst.project_name || "—"}
               </td>
@@ -862,11 +883,21 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
+              <td className="px-3 py-2 text-center">
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                  {lst.source || "Web"}
+                </span>
+              </td>
               <td className="px-3 py-2">
                 <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
                   {lst.stat_flag || "ok"}
                 </span>
               </td>
+              {showReasonColumn && (
+                <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
+                  {getRowReason(lst)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -894,6 +925,28 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* ── Tab Bar ────────────────────────────────────── */}
+        <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2">
+          <button
+            onClick={() => setActiveTab("valid")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ✅ Valid ({listings.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("outliers")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ⚠️ Outliers ({reviewListings.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("dropped")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ❌ Dropped ({droppedListings.length})
+          </button>
         </div>
 
         {showPlotControls && onRecalculate && (
@@ -982,10 +1035,35 @@ function CleanedTable({ listings, onRecalculate, subjectPropertyType }) {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 custom-scrollbar flex flex-col gap-4">
+            <div className="flex-1 overflow-hidden flex flex-col">
 
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden bg-bg-card flex-1">
-                {tableContent}
+              {/* ── Tab Bar (maximized) ────────────────────── */}
+              <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2 shrink-0">
+                <button
+                  onClick={() => setActiveTab("valid")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ✅ Valid ({listings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("outliers")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ⚠️ Outliers ({reviewListings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("dropped")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ❌ Dropped ({droppedListings.length})
+                </button>
+              </div>
+
+              {/* ── Table (full-width, scrollable) ─────────── */}
+              <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+                <div className="w-full border border-border rounded-2xl overflow-hidden bg-bg-card">
+                  {tableContent}
+                </div>
               </div>
             </div>
           </div>
@@ -2530,9 +2608,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
   // ── Proceed to Data Cleaning (Step 3) ──────────────────────────
   const submitCleaning = async () => {
-    if (!listingData || listingData.length === 0 || !subjectData || isCleaningStreaming) return;
+    // Trigger if we have web listings OR db transactions (or both)
+    const hasWebListings = listingData && listingData.length > 0;
+    const hasDbTx = dbTransactions && dbTransactions.length > 0;
+    if ((!hasWebListings && !hasDbTx) || !subjectData || isCleaningStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
+    const webCount = (listingData || []).length;
+    const dbCount  = dbTransactions.length;
 
     setIsCleaningStreaming(true);
     setStreamingNote("Starting data cleaning pipeline...");
@@ -2540,19 +2623,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed to clean and normalize ${listingData.length} raw listings.`, meta: "Now" },
+      {
+        role: "user",
+        content: `Proceed to clean ${webCount} web listing(s) and merge with ${dbCount} Internal DB transaction(s).`,
+        meta: "Now",
+      },
       { role: "assistant", content: "Running smart data cleaning pipeline...", meta: "Live" },
     ]);
+
 
     try {
       const response = await fetch(apiUrl("/cleaning_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          listings: listingData,
+          listings: listingData || [],          // web listings only — cleaning applies here
           subject: subjectData,
           comparables: selected,
           property_type: subjectData.property_type || "apartment",
+          db_transactions: dbTransactions,      // passed through as-is, merged after cleaning
         }),
       });
 
@@ -2580,7 +2669,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           let summary = "Pipeline update received.";
           if (event.type === "cleaning_start") summary = event.content?.message || "Starting data cleaning...";
           else if (event.type === "cleaning_progress") summary = `🧹 Cleaning: ${event.content?.detail || event.content?.stage}`;
-          else if (event.type === "cleaning_results") summary = `✅ Cleaning complete: ${event.content?.cleaned_listings?.length || 0} valid listings remaining.`;
+          else if (event.type === "cleaning_results") {
+            const webCnt = event.content?.web_count ?? (event.content?.cleaned_listings?.length || 0);
+            const dbCnt  = event.content?.db_count  ?? 0;
+            summary = `✅ Cleaning complete: ${webCnt} web listing(s) + ${dbCnt} Internal DB transaction(s) merged.`;
+          }
           else if (event.type === "cleaning_done") summary = "Data cleaning pipeline finished.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
@@ -2588,6 +2681,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "cleaning_results") {
             const cleanedListings = event.content?.cleaned_listings || [];
+            const reviewListings = event.content?.review_listings || [];
+            const droppedListings = event.content?.dropped_listings || [];
             const auditStats = event.content?.audit_stats || {};
             const newUsage = auditStats.token_usage || {};
             const total = newUsage.total_tokens || 0;
@@ -2619,6 +2714,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   content: summary,
                   meta: "cleaning results",
                   cleaned_listings: cleanedListings,
+                  review_listings: reviewListings,
+                  dropped_listings: droppedListings,
                 };
               }
               return next;
@@ -3703,7 +3800,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       dbTransactions={message.db_transactions || []}
                     />
                   )}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
                       <FactorialTable
@@ -3800,7 +3897,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         )}
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-        {listingData && listingData.length > 0 && !cleanedData && !isCleaningStreaming && (
+        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,146,60,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
             <div className="border-b border-[rgba(251,146,60,0.16)] bg-[rgba(251,146,60,0.06)] px-4 py-3">
               <div className="flex items-start gap-3">
@@ -3812,7 +3909,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     Step 3 — Clean Raw Listings
                   </p>
                   <p className="mt-1 text-sm text-text-secondary">
-                    {listingData.length} raw listings found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                    {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
                   </p>
                 </div>
               </div>
