@@ -1590,6 +1590,50 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 );
               })()}
 
+              {subject_rate_range && area > 0 && (() => {
+                const lowVal = Number(subject_rate_range.low || 0) * area;
+                const highVal = Number(subject_rate_range.high || 1) * area;
+                const finalVal = Number(subject_final_rate || 0) * area;
+                const pct = highVal > lowVal ? Math.min(100, Math.max(0, ((finalVal - lowVal) / (highVal - lowVal)) * 100)) : 50;
+                return (
+                  <div className="px-8 py-6 border-t border-white/5 bg-white/[0.01]">
+                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-white/25">Market Value Positioning</p>
+                    <div className="relative">
+                      {/* Track */}
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-red-500/30 via-amber-400/30 to-green-500/30">
+                        {/* Fill */}
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-red-400/60 via-amber-400/70 to-green-400/80 transition-all duration-1000"
+                          style={{ width: `${pct}%` }}
+                        ></div>
+                      </div>
+                      {/* Thumb */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
+                        style={{ left: `${pct}%` }}
+                      >
+                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-[#13182e] shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-red-400/60">Value Low</p>
+                        <p className="font-mono text-xs font-black text-white/50">{fmt(lowVal)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[7px] font-black uppercase tracking-[0.14em] text-accent/50">Subject Value</p>
+                        <p className="font-mono text-[11px] font-black text-accent">{fmt(finalVal)}</p>
+                        <p className="text-[7px] text-white/20 mt-0.5">{pct.toFixed(0)}th percentile</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-green-400/60">Value High</p>
+                        <p className="font-mono text-xs font-black text-white/50">{fmt(highVal)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {area > 0 && (
                 <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
                   <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
