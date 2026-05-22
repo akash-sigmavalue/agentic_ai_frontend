@@ -1079,6 +1079,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
   const [isMaximized, setIsMaximized] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState(new Set());
   const [showComparison, setShowComparison] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState(new Set());
 
   if (!data || !data.table || data.table.length === 0) return null;
 
@@ -1117,6 +1118,9 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
         <tbody>
           {data.table.map((row, i) => {
             console.log("Factorial Row:", row);
+            const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
+            const isExpanded = expandedProjects.has(i);
+            
             return (
               <Fragment key={`fact-${i}`}>
                 <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
@@ -1134,10 +1138,27 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                     />
                   </td>
                   <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
-                    {row.project_name || "—"}
-                    {row.is_subject && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {hasSubRows && (
+                        <button
+                          onClick={() => {
+                            const next = new Set(expandedProjects);
+                            if (isExpanded) next.delete(i);
+                            else next.add(i);
+                            setExpandedProjects(next);
+                          }}
+                          className="text-text-dim hover:text-text-primary p-0.5 rounded hover:bg-white/5 transition"
+                        >
+                          <span className={`inline-block w-3 text-center text-[8px] transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                            ▶
+                          </span>
+                        </button>
+                      )}
+                      <span>{row.project_name || "—"}</span>
+                      {row.is_subject && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-[11px] font-bold text-[#c4b5fd]">{row.listing_count}</span>
@@ -1213,6 +1234,14 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
                         Micromarket
                       </span>
+                    ) : row.rate_derived_from === "mixed" ? (
+                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
+                        Web + DB
+                      </span>
+                    ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
+                      <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
+                        Internal DB
+                      </span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
                         Listing
@@ -1220,6 +1249,44 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                     )}
                   </td>
                 </tr>
+                {isExpanded && hasSubRows && row.sub_rows.map((sub, subIdx) => {
+                  const isSubDb = sub.rate_derived_from === "internal_db";
+                  return (
+                    <tr 
+                      key={`fact-${i}-sub-${subIdx}`} 
+                      className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
+                    >
+                      <td className="px-4 py-2"></td>
+                      <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
+                        <span className="text-border">└─</span>
+                        <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-[10px] font-semibold text-text-dim">
+                          {sub.listing_count}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.avg_rate)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_lower)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_upper)}</td>
+                      <td className="px-4 py-2 text-center">
+                        {isSubDb ? (
+                          <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
+                            Internal DB
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
+                            Listing
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </Fragment>
             );
           })}
@@ -1341,9 +1408,9 @@ function ValuationResult({ data, currency = "INR" }) {
               onChange={(e) => setConfLevel(e.target.value)}
               className="rounded-lg border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-2 py-1 text-xs font-bold text-[#10b981] outline-none cursor-pointer hover:bg-[rgba(16,185,129,0.15)] transition"
             >
-              <option value="90" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>90%</option>
-              <option value="95" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>95%</option>
-              <option value="99" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>99%</option>
+              <option value="90" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>90%</option>
+              <option value="95" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>95%</option>
+              <option value="99" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>99%</option>
             </select>
           </div>
         </div>
@@ -1445,10 +1512,10 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
     const compRows = data.projects?.filter(p => p !== subjectRow) || [];
 
     return (
-      <div className={`overflow-hidden ${isFull ? "rounded-none" : "rounded-2xl border border-white/5 bg-black/40"}`}>
+      <div className={`overflow-hidden ${isFull ? "rounded-none" : "rounded-2xl border border-border-soft bg-bg-dark/40"}`}>
         <table className="w-full text-left text-[10px]">
           <thead>
-            <tr className="bg-white/[0.05] border-b border-white/10 text-text-dim uppercase tracking-widest font-black">
+            <tr className="bg-bg-input border-b border-border-soft text-text-dim uppercase tracking-widest font-black">
               <th className="px-6 py-4">Project Entity</th>
               <th className="px-6 py-4 text-center">Value</th>
               <th className="px-6 py-4">Interpretation</th>
@@ -1458,17 +1525,17 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           <tbody>
             {subjectRow && (
               <tr className="bg-accent/10 border-b border-accent/20">
-                <td className="px-6 py-4 text-white font-black flex items-center gap-3">
+                <td className="px-6 py-4 text-text-primary font-black flex items-center gap-3">
                   {subjectRow.name}
                   <span className="text-[8px] px-1.5 py-0.5 rounded bg-accent text-bg-deep font-black uppercase">Subject</span>
                 </td>
-                <td className="px-6 py-4 text-center text-white font-bold">{subjectRow.value}</td>
+                <td className="px-6 py-4 text-center text-text-primary font-bold">{subjectRow.value}</td>
                 <td className="px-6 py-4 text-text-secondary italic font-medium">{subjectRow.interpretation}</td>
                 <td className="px-6 py-4 text-right text-[8px] font-black text-accent-light opacity-50 uppercase">Base</td>
               </tr>
             )}
             {compRows.map((p, i) => (
-              <tr key={i} className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02]">
+              <tr key={i} className="border-b border-border-dim last:border-0 hover:bg-bg-input/50">
                 <td className="px-6 py-4 text-text-secondary font-bold">{p.name}</td>
                 <td className="px-6 py-4 text-center text-text-dim font-mono">{p.value}</td>
                 <td className="px-6 py-4 text-text-dim italic opacity-70 max-w-xs">{p.interpretation}</td>
@@ -1482,23 +1549,23 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   };
 
   const DashboardContent = (
-    <div className={`mt-8 rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
+    <div className={`mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
         ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
         : "overflow-hidden"
       }`}>
       {/* Detail Modal */}
       {maximizedFactor && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-bg-deep/95 p-4 md:p-12 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[3rem] border border-white/10 bg-[#0f172a] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-10 py-8">
+          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[3rem] border border-border-soft bg-bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border-soft bg-bg-input px-10 py-8">
               <div className="flex items-center gap-5">
                 <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent text-2xl border border-accent/20">📊</span>
                 <div>
-                  <h3 className="text-xl font-black uppercase tracking-[0.2em] text-white">Factor Audit: {maximizedFactor.replace("_", " ")}</h3>
+                  <h3 className="text-xl font-black uppercase tracking-[0.2em] text-text-primary">Factor Audit: {maximizedFactor.replace("_", " ")}</h3>
                   <p className="text-[10px] text-text-dim uppercase tracking-widest mt-1">Detailed comparison & adjustment logic</p>
                 </div>
               </div>
-              <button onClick={() => setMaximizedFactor(null)} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 hover:bg-red-500/20 hover:text-red-400 text-3xl transition-all">×</button>
+              <button onClick={() => setMaximizedFactor(null)} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border-soft hover:bg-red-500/20 hover:text-red-400 text-3xl transition-all">×</button>
             </div>
             <div className="flex-1 overflow-auto p-10 custom-scrollbar">
               {renderFactorTable(maximizedFactor, valuation_details.factor_breakdown[maximizedFactor], true)}
@@ -1509,18 +1576,18 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
       )}
 
       {/* Header */}
-      <div className="border-b border-white/5 bg-gradient-to-r from-accent/10 to-transparent px-8 py-6">
+      <div className="border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
             <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Professional Appraisal Summary</h2>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Professional Appraisal Summary</h2>
               <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Ready Market Adjustment Report</p>
             </div>
           </div>
           <button
             onClick={() => setIsSectionMaximized(!isSectionMaximized)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all text-[8px] font-black uppercase tracking-widest"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all text-[8px] font-black uppercase tracking-widest"
           >
             {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
           </button>
@@ -1538,34 +1605,34 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-accent/30 bg-accent/15 text-base">⚖️</span>
               </div>
               <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-white">Market Adjustment Factors</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-text-primary">Market Adjustment Factors</h3>
                 <p className="mt-0.5 text-[9px] font-semibold text-text-dim uppercase tracking-widest">Subject position vs. comparable market evidence</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5">
+              <div className="flex items-center gap-1.5 rounded-xl border border-border-soft bg-bg-input px-3 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
                 <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">Confidence</span>
                 <span className={`text-[10px] font-black ${confidence === 'High' ? 'text-green-400' :
                   confidence === 'Low' ? 'text-red-400' : 'text-amber-400'
                   }`}>{confidence || "Medium"}</span>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5">
+              <div className="rounded-xl border border-border-soft bg-bg-input px-3 py-1.5">
                 <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">{factorEntries.length} factors</span>
               </div>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.03] to-black/30 shadow-xl">
+          <div className="overflow-hidden rounded-2xl border border-border-soft bg-bg-card/40 shadow-xl">
             {/* Column Headers */}
-            <div className="grid grid-cols-[2fr_3fr_80px_120px_56px] border-b border-white/[0.06] bg-white/[0.03] px-2">
+            <div className="grid grid-cols-[2fr_3fr_80px_120px_56px] border-b border-border-soft bg-bg-input px-2">
               {["Factor", "Subject vs Market", "Weight", "Net Impact", ""].map((h, i) => (
-                <div key={i} className={`px-3 py-3 text-[8px] font-black uppercase tracking-[0.18em] text-white/30 ${i >= 2 ? 'text-right' : ''} ${i === 4 ? 'text-center' : ''}`}>{h}</div>
+                <div key={i} className={`px-3 py-3 text-[8px] font-black uppercase tracking-[0.18em] text-text-dim ${i >= 2 ? 'text-right' : ''} ${i === 4 ? 'text-center' : ''}`}>{h}</div>
               ))}
             </div>
 
             {/* Factor Rows */}
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-border-dim">
               {factorEntries.map(([factor, breakdown], rowIdx) => {
                 const impact = Number(valuation_details?.net_impacts?.[factor] || 0);
                 const weight = valuation_details?.attribute_weights?.[factor];
@@ -1576,18 +1643,18 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 return (
                   <div
                     key={factor}
-                    className={`grid grid-cols-[2fr_3fr_80px_120px_56px] items-center px-2 transition-all duration-200 hover:bg-white/[0.025] ${rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.012]'
+                    className={`grid grid-cols-[2fr_3fr_80px_120px_56px] items-center px-2 transition-all duration-200 hover:bg-bg-input/35 ${rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-bg-input/10'
                       }`}
                   >
                     {/* Factor Name */}
                     <div className="flex items-center gap-2.5 px-3 py-4">
                       <div className={`h-9 w-[3px] rounded-full flex-shrink-0 ${isPos ? 'bg-gradient-to-b from-green-400 to-green-600' :
                         isNeg ? 'bg-gradient-to-b from-red-400 to-red-600' :
-                          'bg-gradient-to-b from-white/20 to-white/5'
+                          'bg-gradient-to-b from-text-dim/40 to-text-dim/10'
                         }`}></div>
                       <div>
-                        <p className="text-[11px] font-black text-white/90 leading-tight">{factorLabel(factor)}</p>
-                        <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-white/25">
+                        <p className="text-[11px] font-black text-text-primary leading-tight">{factorLabel(factor)}</p>
+                        <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-text-dim">
                           {breakdown?.projects?.length || 0} observations
                         </p>
                       </div>
@@ -1595,14 +1662,14 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
                     {/* Subject vs Avg */}
                     <div className="px-3 py-4">
-                      <p className="text-[10px] leading-[1.6] text-white/50 line-clamp-2">
+                      <p className="text-[10px] leading-[1.6] text-text-secondary line-clamp-2">
                         {breakdown?.subject_vs_avg || "Comparable evidence reviewed."}
                       </p>
                     </div>
 
                     {/* Weight */}
                     <div className="px-3 py-4 text-right">
-                      <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-bold text-white/50">
+                      <span className="rounded-md border border-border-soft bg-bg-input px-2 py-0.5 font-mono text-[10px] font-bold text-text-secondary">
                         {weight != null ? Number(weight).toFixed(2) : "—"}
                       </span>
                     </div>
@@ -1610,15 +1677,15 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                     {/* Net Impact — bar + value */}
                     <div className="px-3 py-4">
                       <div className="flex flex-col items-end gap-1">
-                        <span className={`text-[13px] font-black font-mono ${isPos ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-white/30'
+                        <span className={`text-[13px] font-black font-mono ${isPos ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-text-dim'
                           }`}>
                           {fmtPct(impact)}
                         </span>
-                        <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                        <div className="h-1 w-full rounded-full bg-border-soft overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-700 ${isPos ? 'bg-gradient-to-r from-green-600 to-green-400' :
                               isNeg ? 'bg-gradient-to-r from-red-600 to-red-400' :
-                                'bg-white/20'
+                                'bg-text-dim/40'
                               }`}
                             style={{ width: `${barWidth}%`, marginLeft: isNeg ? 'auto' : undefined }}
                           ></div>
@@ -1630,7 +1697,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                     <div className="flex items-center justify-center px-2 py-4">
                       <button
                         onClick={() => setMaximizedFactor(factor)}
-                        className="group flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[10px] transition-all duration-200 hover:border-accent/50 hover:bg-accent/15 hover:shadow-[0_0_12px_rgba(167,139,250,0.2)]"
+                        className="group flex h-7 w-7 items-center justify-center rounded-lg border border-border-soft bg-bg-input text-[10px] transition-all duration-200 hover:border-accent/50 hover:bg-accent/15 hover:shadow-[0_0_12px_rgba(167,139,250,0.2)]"
                         title={`Audit ${factorLabel(factor)}`}
                       >
                         <span className="group-hover:scale-110 transition-transform">🔍</span>
@@ -1647,8 +1714,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
               : 'border-red-500/20 bg-gradient-to-r from-red-500/[0.08] to-transparent'
               }`}>
               <div className="flex items-center gap-3">
-                <span className="text-[9px] font-black uppercase tracking-[0.22em] text-white/40">Total Correction Factor</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[8px] font-bold text-white/30">{factorEntries.length} factors applied</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.22em] text-text-dim">Total Correction Factor</span>
+                <span className="rounded-full border border-border-soft bg-bg-input px-2 py-0.5 text-[8px] font-bold text-text-dim">{factorEntries.length} factors applied</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-2xl font-black font-mono ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
@@ -1668,32 +1735,32 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
             {/* Ambient glow */}
             <div className="pointer-events-none absolute -inset-3 rounded-[3rem] bg-gradient-to-br from-accent/20 via-[#818cf8]/10 to-transparent blur-3xl opacity-60"></div>
 
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-b from-[#13182e] to-[#0c1020] shadow-2xl">
+            <div className="relative overflow-hidden rounded-[2rem] border border-border-soft bg-bg-card shadow-2xl">
 
               {/* Section label bar */}
-              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-8 py-4">
+              <div className="flex items-center justify-between border-b border-border-soft bg-bg-input px-8 py-4">
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className="absolute inset-0 rounded-lg bg-accent/30 blur"></div>
                     <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 border border-accent/30 text-sm">🎯</span>
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.5em] text-white/40">Executive Valuation Derivation</p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.5em] text-text-dim">Executive Valuation Derivation</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
+                <div className="flex items-center gap-1.5 rounded-lg border border-border-soft bg-bg-input px-3 py-1.5">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400"></span>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Derived</span>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Derived</span>
                 </div>
               </div>
 
               {/* Formula row */}
-              <div className="flex flex-wrap items-stretch justify-center gap-0 border-b border-white/[0.05] px-8 py-8">
+              <div className="flex flex-wrap items-stretch justify-center gap-0 border-b border-border-soft px-8 py-8">
                 {/* Base Rate block */}
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03] px-8 py-5 min-w-[140px]">
-                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/30">Base Rate</p>
-                  <p className="font-mono text-xl font-black text-white/80">{fmtRate(valuation_details?.base_rate)}</p>
-                  <p className="mt-1 text-[8px] text-white/20">/ {rateUnitLabel}</p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-border-soft bg-bg-input px-8 py-5 min-w-[140px]">
+                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Base Rate</p>
+                  <p className="font-mono text-xl font-black text-text-primary">{fmtRate(valuation_details?.base_rate)}</p>
+                  <p className="mt-1 text-[8px] text-text-dim">/ {rateUnitLabel}</p>
                 </div>
 
                 {/* Operator */}
@@ -1706,7 +1773,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                   ? 'border-green-500/20 bg-green-500/[0.05]'
                   : 'border-red-500/20 bg-red-500/[0.05]'
                   }`}>
-                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-white/30">Multiplier</p>
+                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Multiplier</p>
                   <p className={`font-mono text-xl font-black ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
                     }`}>
                     {(1 + totalAdjustment / 100).toFixed(4)}
@@ -1717,14 +1784,14 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
                 {/* Equals */}
                 <div className="flex items-center px-5">
-                  <span className="text-3xl font-black text-white/20">=</span>
+                  <span className="text-3xl font-black text-text-dim">=</span>
                 </div>
 
                 {/* Final Rate block — hero */}
                 <div className="relative flex flex-col items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-b from-accent/10 to-accent/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(167,139,250,0.12)]">
                   <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-accent/20 to-transparent opacity-40"></div>
                   <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-accent/60">Final Rate</p>
-                  <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.5)]">{fmtRate(subject_final_rate)}</p>
+                  <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.5)]">{fmtRate(subject_final_rate)}</p>
                   <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-accent/40">/ {rateUnitLabel}</p>
                 </div>
 
@@ -1732,14 +1799,14 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                   <>
                     {/* Operator */}
                     <div className="flex items-center px-5">
-                      <span className="text-3xl font-black text-white/20">×</span>
+                      <span className="text-3xl font-black text-text-dim">×</span>
                     </div>
 
                     {/* Property Value block */}
                     <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
                       <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-green-500/20 to-transparent opacity-40"></div>
                       <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-green-400/60">Property Value</p>
-                      <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
+                      <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
                       <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
                     </div>
                   </>
@@ -1754,7 +1821,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 const pct = high > low ? Math.min(100, Math.max(0, ((final - low) / (high - low)) * 100)) : 50;
                 return (
                   <div className="px-8 py-6">
-                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-white/25">Market Rate Positioning</p>
+                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Market Rate Positioning</p>
                     <div className="relative">
                       {/* Track */}
                       <div className="h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-red-500/30 via-amber-400/30 to-green-500/30">
@@ -1769,22 +1836,22 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                         className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
                         style={{ left: `${pct}%` }}
                       >
-                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-[#13182e] shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
+                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-bg-dark shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="text-left">
                         <p className="text-[8px] font-black uppercase tracking-widest text-red-400/60">Market Low</p>
-                        <p className="font-mono text-xs font-black text-white/50">{fmtRate(low)}</p>
+                        <p className="font-mono text-xs font-black text-text-secondary">{fmtRate(low)}</p>
                       </div>
                       <div className="text-center">
                         <p className="text-[7px] font-black uppercase tracking-[0.14em] text-accent/50">Subject Rate</p>
                         <p className="font-mono text-[11px] font-black text-accent">{fmtRate(final)}</p>
-                        <p className="text-[7px] text-white/20 mt-0.5">{pct.toFixed(0)}th percentile</p>
+                        <p className="text-[7px] text-text-dim mt-0.5">{pct.toFixed(0)}th percentile</p>
                       </div>
                       <div className="text-right">
                         <p className="text-[8px] font-black uppercase tracking-widest text-green-400/60">Market High</p>
-                        <p className="font-mono text-xs font-black text-white/50">{fmtRate(high)}</p>
+                        <p className="font-mono text-xs font-black text-text-secondary">{fmtRate(high)}</p>
                       </div>
                     </div>
                   </div>
@@ -1792,12 +1859,12 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
               })()}
 
               {area > 0 && (
-                <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
+                <div className="relative border-t border-border-soft bg-bg-input/20 p-8 text-center space-y-3">
                   <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
                   <span className="text-[9px] font-black uppercase tracking-[0.4em] text-accent/70">Final Market Approach Property Value</span>
 
                   <div className="space-y-1">
-                    <h1 className="font-mono text-4xl font-black text-white drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
+                    <h1 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
                       {fmt(calculatedValue)}
                     </h1>
                     <p className="text-[9px] text-accent/60 font-semibold uppercase tracking-widest">
@@ -1814,10 +1881,10 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           <section className="pt-2">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-lg">🧾</span>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">ReAct Reasoning Report</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-text-primary">ReAct Reasoning Report</h3>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+            <div className="overflow-hidden rounded-2xl border border-border-soft bg-bg-input">
               <pre className="max-h-[720px] overflow-auto whitespace-pre-wrap break-words p-6 text-[11px] leading-6 text-text-secondary custom-scrollbar">{raw_markdown_report}</pre>
             </div>
           </section>
@@ -1845,13 +1912,13 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
   if (!schema) return null;
 
   return (
-    <div className="mt-8 overflow-hidden rounded-[2rem] border border-warning/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="mt-8 overflow-hidden rounded-[2rem] border border-warning/30 bg-bg-card shadow-2xl backdrop-blur-3xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/20 text-warning text-xl border border-warning/30">
           🏗️
         </div>
         <div>
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Parameters</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Cost Approach Parameters</h3>
           <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest font-bold opacity-50">Please enter cost-specific details for subject project</p>
         </div>
       </div>
@@ -1890,7 +1957,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
                 value={values[inp.field] !== undefined ? values[inp.field] : ""}
                 onChange={(e) => onChange(inp.field, e.target.value)}
                 placeholder={`e.g. ${placeholder}`}
-                className="rounded-xl border border-border bg-white/[0.03] px-3.5 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/[0.05]"
+                className="rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/[0.05]"
               />
               {helpText && (
                 <span className="pl-1 text-[9px] text-warning/80 font-semibold leading-relaxed">{helpText}</span>
@@ -1951,24 +2018,24 @@ function CostResultCard({ data, subjectData }) {
   const fmtRate = (val) => val != null ? formatter.format(Number(val)) : "—";
 
   const DashboardContent = (
-    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-[#0f172a]/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
+    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-bg-card/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
         ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
         : "overflow-hidden"
       }`}>
       {/* Header */}
-      <div className="border-b border-white/5 bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
+      <div className="border-b border-border-soft bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
             <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Valuation Appraisal</h2>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Cost Approach Valuation Appraisal</h2>
               <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Cost-Depreciation Method</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSectionMaximized(!isSectionMaximized)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-success/20 hover:text-success hover:border-success/40 transition-all text-[8px] font-black uppercase tracking-widest text-white/70"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-success/20 hover:text-success hover:border-success/40 transition-all text-[8px] font-black uppercase tracking-widest text-text-secondary"
             >
               {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
             </button>
@@ -1982,11 +2049,11 @@ function CostResultCard({ data, subjectData }) {
 
       <div className="p-8 space-y-8">
         <section className="space-y-4">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-white">Appraisal Step Calculation Audit</h3>
+          <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-text-primary">Appraisal Step Calculation Audit</h3>
 
           <div className="grid gap-4 md:grid-cols-2">
             {/* Step 1 */}
-            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Base Property Valuation</span>
                 <div className="mt-2 space-y-0.5">
@@ -2003,55 +2070,55 @@ function CostResultCard({ data, subjectData }) {
             </div>
 
             {/* Step 2 */}
-            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Replacement Construction Cost</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Construction Cost</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-dim">Construction Cost</p>
                   <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(construction_cost)}</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-teal-400/55">Formula & Inputs:</p>
-                <p className="font-mono text-teal-400/90 leading-relaxed font-bold">
+              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-text-secondary">Formula & Inputs:</p>
+                <p className="font-mono text-text-primary leading-relaxed font-bold">
                   {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${area_sqft} sqft (${area_label})`}
                 </p>
               </div>
             </div>
 
             {/* Step 3 */}
-            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Straight-Line Depreciation Rate</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Depreciation %</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-dim">Depreciation %</p>
                   <p className="text-2xl font-black text-warning font-mono leading-none">{(depreciation_rate * 100).toFixed(2)}%</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-warning/55">Formula:</p>
-                <p className="font-mono text-warning/90 leading-relaxed">
+              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-text-secondary">Formula:</p>
+                <p className="font-mono text-text-primary leading-relaxed">
                   {audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}
                 </p>
               </div>
             </div>
 
             {/* Step 4 */}
-            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Construction Value</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Amount Deducted</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-dim">Amount Deducted</p>
                   <p className="text-2xl font-black text-red-400 font-mono leading-none">−{fmt(depreciation_amount)}</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-2">
+              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-2">
                 <div>
-                  <p className="font-mono text-red-400/80 leading-relaxed">{audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}</p>
+                  <p className="font-mono text-red-400 leading-relaxed">{audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}</p>
                 </div>
-                <div className="border-t border-white/5 pt-1.5">
-                  <p className="font-semibold text-red-400/55">Calculation:</p>
-                  <p className="font-mono text-red-400/90 font-bold leading-relaxed">
+                <div className="border-t border-border-soft pt-1.5">
+                  <p className="font-semibold text-text-secondary">Calculation:</p>
+                  <p className="font-mono text-text-primary font-bold leading-relaxed">
                     {fmt(construction_cost)} × {(depreciation_rate * 100).toFixed(2)}% = {fmt(depreciation_amount)}
                   </p>
                 </div>
@@ -2064,11 +2131,11 @@ function CostResultCard({ data, subjectData }) {
         <section className="relative">
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
+          <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-success/15 to-success/[0.03] p-8 text-center space-y-4 shadow-2xl">
             <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Property Value</span>
 
             <div className="space-y-1">
-              <h1 className="font-mono text-5xl font-black text-white drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
+              <h1 className="font-mono text-5xl font-black text-text-primary drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
                 {fmt(final_property_value)}
               </h1>
               <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
@@ -2076,10 +2143,10 @@ function CostResultCard({ data, subjectData }) {
               </p>
             </div>
 
-            <div className="border-t border-success/10 pt-4 max-w-lg mx-auto">
-              <p className="text-[9px] font-mono text-white/55 leading-relaxed">
+            <div className="border-t border-success/20 pt-4 max-w-lg mx-auto">
+              <p className="text-[9px] font-mono text-text-secondary leading-relaxed">
                 Appraisal Audit Trail:<br />
-                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(property_price)} − ${fmt(depreciation_amount)} = ${fmt(final_property_value)}`}</span>
+                <span className="text-text-primary font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(property_price)} − ${fmt(depreciation_amount)} = ${fmt(final_property_value)}`}</span>
               </p>
             </div>
           </div>
@@ -2359,9 +2426,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           lat: Number(c.map_search_lat),
           lng: Number(c.map_search_lng),
           label: c.project_name || "Comparable",
-          source: "comparable"
+          source: "comparable",
+          data_source: c.data_source || "Web"
         }));
-      allMarkers = [...allMarkers, ...toolMarkers];
+
+      // Deduplicate comparables by label (project name), prioritizing Web source coordinate
+      const seen = new Map();
+      for (const m of toolMarkers) {
+        const name = (m.label || "").toLowerCase().trim();
+        const existing = seen.get(name);
+        if (!existing) {
+          seen.set(name, m);
+        } else {
+          const currentIsWeb = String(m.data_source).toLowerCase() === "web";
+          const existingIsWeb = String(existing.data_source).toLowerCase() === "web";
+          if (currentIsWeb && !existingIsWeb) {
+            seen.set(name, m);
+          }
+        }
+      }
+      allMarkers = [...allMarkers, ...Array.from(seen.values())];
     }
 
 
@@ -4014,13 +4098,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                           }
                           className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
                         >
-                          <option value="" disabled style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Select {schema.label}...</option>
+                          <option value="" disabled style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>Select {schema.label}...</option>
                           {schema.options?.map(opt => {
                             const isObj = typeof opt === 'object';
                             const optValue = isObj ? opt.value : opt;
                             const optLabel = isObj ? opt.label : humanizeFieldName(opt);
                             return (
-                              <option key={optValue} value={optValue} style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>{optLabel}</option>
+                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>{optLabel}</option>
                             );
                           })}
                         </select>

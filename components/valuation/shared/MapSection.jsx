@@ -456,10 +456,27 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   const availableProjects = useMemo(() => {
     if (!factorialData?.table) return markers;
     // Map markers to only those present in the factorial table
-    return markers.filter(m => {
+    const mapped = markers.filter(m => {
       const name = m.label || m.project_name;
       return factorialData.table.some(p => p.project_name === name);
     });
+
+    // Deduplicate by project name, prioritizing "Web" data_source
+    const seen = new Map();
+    for (const m of mapped) {
+      const name = (m.label || m.project_name || "").toLowerCase().trim();
+      const existing = seen.get(name);
+      if (!existing) {
+        seen.set(name, m);
+      } else {
+        const currentIsWeb = String(m.data_source || m.source_url ? "Web" : "DB").toLowerCase() === "web";
+        const existingIsWeb = String(existing.data_source || existing.source_url ? "Web" : "DB").toLowerCase() === "web";
+        if (currentIsWeb && !existingIsWeb) {
+          seen.set(name, m);
+        }
+      }
+    }
+    return Array.from(seen.values());
   }, [markers, factorialData]);
 
   const displayedProjects = useMemo(() => {
@@ -732,10 +749,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 onChange={(e) => setMapMode(e.target.value)}
                 className="w-full rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-accent"
               >
-                <option className="bg-bg-card text-text-primary" value="amenity">Amenities Layout</option>
-                <option className="bg-bg-card text-text-primary" value="density">Built-Up Density & Congestion</option>
-                <option className="bg-bg-card text-text-primary" value="roads">Road Infrastructure</option>
-                <option className="bg-bg-card text-text-primary" value="cbd">CBD Proximity</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="amenity">Amenities Layout</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="density">Built-Up Density & Congestion</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="roads">Road Infrastructure</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="cbd">CBD Proximity</option>
               </select>
             </div>
 
