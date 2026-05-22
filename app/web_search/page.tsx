@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
+import { apiUrl } from '@/lib/api-client';
 import "./web_search.css"
 
 type Message = {
@@ -32,37 +33,6 @@ type Message = {
   };
 };
 
-type SearchResultSource = {
-  url: string;
-  title: string;
-  time_ago?: string;
-  source_trust?: number;
-  trust_score?: number;
-  verification_status?: string;
-};
-
-type TokenUsage = {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-  total_cost?: number;
-};
-
-type StreamEvent = {
-  type: 'status' | 'chunk' | 'error' | 'done';
-  content?: string;
-  sources?: Message['sources'];
-  result?: {
-    analysis?: string;
-    timestamp?: string;
-    results?: SearchResultSource[];
-    accuracy?: Message['accuracy'];
-    token_usage?: TokenUsage;
-    discovery_token_usage?: TokenUsage;
-  };
-};
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
 export default function Home() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -103,11 +73,8 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`);
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Backend returned HTTP ${response.status}`);
-      }
+      const response = await fetch(apiUrl(`/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`));
+
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -127,7 +94,7 @@ export default function Home() {
 
           if (chunk.startsWith('data: ')) {
             try {
-              const data = JSON.parse(chunk.slice(6)) as StreamEvent;
+              const data = JSON.parse(chunk.slice(6));
 
               setMessages(prev => prev.map(msg => {
                 if (msg.id === assistantMessageId) {
@@ -180,23 +147,16 @@ export default function Home() {
           boundary = buffer.indexOf('\n\n');
         }
       }
-      setMessages(prev => prev.map(msg =>
-        msg.id === assistantMessageId && msg.isStreaming
-          ? { ...msg, status: msg.content ? '' : 'No streamed answer was returned by the backend.', isStreaming: false }
-          : msg
-      ));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown network error';
+    } catch (error: any) {
       setMessages(prev => prev.map(msg =>
         msg.id === assistantMessageId
-          ? { ...msg, status: '❌ Network Error: ' + message, isStreaming: false }
+          ? { ...msg, status: '❌ Network Error: ' + error.message, isStreaming: false }
           : msg
       ));
     } finally {
       setIsLoading(false);
     }
   };
-   
 
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 pt-20 font-sans text-slate-200 selection:bg-cyan-500/30">
