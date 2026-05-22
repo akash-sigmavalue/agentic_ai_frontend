@@ -244,7 +244,7 @@ export default function Home() {
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) {
-      setError("Choose at least one PDF or DOCX file first.");
+      setError("Choose at least one PDF, DOCX or Image file first.");
       return;
     }
 
@@ -426,7 +426,7 @@ export default function Home() {
           <div>
             <h1 className="m-0 text-[30px] font-white tracking-tight leading-[1.2] mb-2">User Input Data Agent</h1>
             <p className="m-0 max-w-[680px] text-[15px] leading-[1.55]">
-              Upload a PDF or DOCX, then ask questions against hybrid FAISS and BM25 retrieval.
+              Upload a PDF, DOCX or Image, then ask questions against hybrid FAISS and BM25 retrieval.
             </p>
           </div>
         </div>
@@ -452,7 +452,7 @@ export default function Home() {
             <input
               id="document"
               type="file"
-              accept=".pdf,.docx"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
               multiple
               className="w-full border-2 border-dashed border-[#c2cada] rounded-lg bg-[#f8fafc] text-[#172033] cursor-pointer p-3 hover:border-[#1f5eff] hover:bg-[#f3f6ff]"
               onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
