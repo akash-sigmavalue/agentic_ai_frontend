@@ -1219,8 +1219,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   const rate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || 0);
   const calculatedValue = rate * area;
-  const rateBasis = "Saleable Area";
-  const rateUnitLabel = `${area_unit || "sqft"} ${rateBasis.toLowerCase()}`;
+  const isCostApproach = String(subjectData?.recommended_approach || "").toLowerCase() === "cost";
+  const rateUnitLabel = isCostApproach ? (area_unit || "sqft") : `${area_unit || "sqft"} saleable area`;
   const adjColor = (val) => {
     const n = Number(val);
     if (n > 0) return "text-green-400";
