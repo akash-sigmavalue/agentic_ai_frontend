@@ -1535,13 +1535,13 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                     </div>
 
                     {/* Property Value block */}
-                    <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
+                    {/* <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
                       <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-green-500/20 to-transparent opacity-40"></div>
                       <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-green-400/60">Property Value</p>
                       <p className="font-mono text-3xl font-black text-white drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
                       <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
-                    </div>
-                  </>
+                    </div> */}
+                  </>   
                 )}
               </div>
 
@@ -1590,7 +1590,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 );
               })()}
 
-              {subject_rate_range && area > 0 && (() => {
+              {subject_rate_range && area > 0 && subjectData?.recommended_approach !== "cost" && (() => {
                 const lowVal = Number(subject_rate_range.low || 0) * area;
                 const highVal = Number(subject_rate_range.high || 1) * area;
                 const finalVal = Number(subject_final_rate || 0) * area;
@@ -1634,7 +1634,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 );
               })()}
 
-              {area > 0 && (
+              {area > 0 && subjectData?.recommended_approach !== "cost" && (
                 <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
                   <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
                   <span className="text-[9px] font-black uppercase tracking-[0.4em] text-accent/70">Final Market Approach Property Value</span>
@@ -1759,23 +1759,23 @@ function CostResultCard({ data, subjectData }) {
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
 
-  const derived_rate_per_sqft = data.inputs?.derived_rate_per_sqft;
-  const area_sqft = data.inputs?.area_sqft;
-  const area_label = data.inputs?.area_label || data.area_label || "Area";
+  const derived_plot_rate_per_sqft = data.inputs?.derived_plot_rate_per_sqft;
+  const plot_area_sqft = data.inputs?.plot_area_sqft;
+  const builtup_area_sqft = data.inputs?.builtup_area_sqft;
   const construction_rate_per_sqft = data.inputs?.construction_rate_per_sqft;
   const age_of_property = data.inputs?.age_of_property;
   const total_life_of_building = data.inputs?.total_life_of_building;
 
-  const property_price = data.calculations?.property_price;
+  const land_value = data.calculations?.land_value;
   const construction_cost = data.calculations?.construction_cost;
   const depreciation_rate = (data.calculations?.depreciation_rate_pct || 0) / 100;
-  const depreciation_amount = data.calculations?.depreciated_construction_cost;
+  const depreciated_building_value = data.calculations?.depreciated_building_value;
 
   const final_property_value = data.result?.cost_value;
   const property_type = data.property_type;
 
   const audit_trail = {
-    property_price_formula: data.formula_audit?.step_1,
+    land_value_formula: data.formula_audit?.step_1,
     construction_cost_formula: data.formula_audit?.step_2,
     depreciation_formula: data.formula_audit?.step_3,
     depreciated_cost_formula: data.formula_audit?.step_4,
@@ -1805,7 +1805,7 @@ function CostResultCard({ data, subjectData }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
             <div>
               <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Valuation Appraisal</h2>
-              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Cost-Depreciation Method</p>
+              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Land + Depreciated Structure Method</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1831,16 +1831,16 @@ function CostResultCard({ data, subjectData }) {
             {/* Step 1 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Base Property Valuation</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Land component Valuation</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Property Price</p>
-                  <p className="text-2xl font-black text-sky-400 font-mono leading-none">{fmt(property_price)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Land Value</p>
+                  <p className="text-2xl font-black text-sky-400 font-mono leading-none">{fmt(land_value)}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
                 <p className="font-semibold text-white/55">Valuation Base:</p>
-                <p className="font-mono text-white/80 leading-relaxed">
-                  Derived rate: {fmtRate(derived_rate_per_sqft)}/sqft × {area_sqft} sqft salable area
+                <p className="font-mono text-white/80 leading-relaxed font-bold">
+                  {audit_trail?.land_value_formula || `Land Value = ${fmtRate(derived_plot_rate_per_sqft)}/sqft × ${plot_area_sqft} sqft (Plot Area)`}
                 </p>
               </div>
             </div>
@@ -1851,13 +1851,13 @@ function CostResultCard({ data, subjectData }) {
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Replacement Construction Cost</span>
                 <div className="mt-2 space-y-0.5">
                   <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Construction Cost</p>
-                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(construction_cost)}</p>
+                  <p className="text-2xl font-black text-amber-400 font-mono leading-none">{fmt(construction_cost)}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-teal-400/55">Formula & Inputs:</p>
-                <p className="font-mono text-teal-400/90 leading-relaxed font-bold">
-                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${area_sqft} sqft (${area_label})`}
+                <p className="font-semibold text-amber-400/55">Formula & Inputs:</p>
+                <p className="font-mono text-amber-400/90 leading-relaxed font-bold">
+                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${builtup_area_sqft} sqft (Built-up Area)`}
                 </p>
               </div>
             </div>
@@ -1882,20 +1882,16 @@ function CostResultCard({ data, subjectData }) {
             {/* Step 4 */}
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between">
               <div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Construction Value</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Structure Value</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Amount Deducted</p>
-                  <p className="text-2xl font-black text-red-400 font-mono leading-none">−{fmt(depreciation_amount)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Structure Value</p>
+                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(depreciated_building_value)}</p>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-2">
                 <div>
-                  <p className="font-mono text-red-400/80 leading-relaxed">{audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}</p>
-                </div>
-                <div className="border-t border-white/5 pt-1.5">
-                  <p className="font-semibold text-red-400/55">Calculation:</p>
-                  <p className="font-mono text-red-400/90 font-bold leading-relaxed">
-                    {fmt(construction_cost)} × {(depreciation_rate * 100).toFixed(2)}% = {fmt(depreciation_amount)}
+                  <p className="font-mono text-teal-400/80 leading-relaxed font-bold">
+                    {audit_trail?.depreciated_cost_formula || `Depreciated Value = ${fmt(construction_cost)} × (100% − ${(depreciation_rate * 100).toFixed(2)}%) = ${fmt(depreciated_building_value)}`}
                   </p>
                 </div>
               </div>
@@ -1908,21 +1904,21 @@ function CostResultCard({ data, subjectData }) {
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
 
           <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
-            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Property Value</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Villa Value</span>
 
             <div className="space-y-1">
               <h1 className="font-mono text-5xl font-black text-white drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
                 {fmt(final_property_value)}
               </h1>
               <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
-                Market Value − Depreciated Construction Cost
+                Land Value + Depreciated Structure Value
               </p>
             </div>
 
             <div className="border-t border-success/10 pt-4 max-w-lg mx-auto">
               <p className="text-[9px] font-mono text-white/55 leading-relaxed">
                 Appraisal Audit Trail:<br />
-                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(property_price)} − ${fmt(depreciation_amount)} = ${fmt(final_property_value)}`}</span>
+                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(land_value)} (Land) + ${fmt(depreciated_building_value)} (Structure) = ${fmt(final_property_value)}`}</span>
               </p>
             </div>
           </div>
@@ -2013,23 +2009,30 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (isCostCalculating || !subjectData || !factorialAnalysisData) return;
 
     setIsCostCalculating(true);
-    setStreamingNote("Sending inputs to Cost Approach Engine...");
+    setStreamingNote("Sending inputs to Traditional Cost Approach Engine...");
 
     const derivedRate = factorialAnalysisData.subject_final_rate || 0;
-    const areaSqft = subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || 1000;
+    const plotArea = subjectData?.plot_area_sqft || 0;
+    const builtupArea = subjectData?.builtup_area_sqft || 0;
+    const ageYears = subjectData?.age_years || 0;
 
     const payload = {
-      derived_rate_per_sqft: Number(derivedRate),
-      area_sqft: Number(areaSqft),
-      property_type: subjectData.property_type || "apartment",
+      derived_plot_rate_per_sqft: Number(derivedRate),
+      plot_area_sqft: Number(plotArea),
+      builtup_area_sqft: Number(builtupArea),
+      property_type: "villa",
       construction_rate_per_sqft: Number(costInputsValues.construction_rate_per_sqft || 0),
       total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
-      age_of_property: Number(costInputsValues.age_of_property || 0),
+      age_of_property: Number(ageYears),
     };
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Run Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Age: ${payload.age_of_property} yrs, Economic Life: ${payload.total_life_of_building} yrs.`, meta: "Now" },
+      {
+        role: "user",
+        content: `Run Traditional Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Economic Life: ${payload.total_life_of_building} yrs. Plot Area: ${payload.plot_area_sqft} sqft, Built-up Area: ${payload.builtup_area_sqft} sqft, Age: ${payload.age_of_property} yrs.`,
+        meta: "Now"
+      },
       { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
     ]);
 
@@ -3814,9 +3817,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                         key="cost"
                         value="cost"
                         style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
-                        disabled={subjectData?.property_type === "plot"}
+                        disabled={subjectData?.property_type !== "villa"}
                       >
-                        Cost Approach {subjectData?.property_type === "plot" ? " (Locked for Plots)" : ""}
+                        Cost Approach {subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
                       </option>
                     </select>
                   </label>
