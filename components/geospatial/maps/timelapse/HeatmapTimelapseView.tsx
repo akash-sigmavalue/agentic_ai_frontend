@@ -2,15 +2,56 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
-import { GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import Map, { NavigationControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { AlertTriangle, Building2, Loader2, LocateFixed, Maximize2, Minimize2, Pause, Play, RefreshCcw, RotateCcw } from 'lucide-react';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { setOptions as setGoogleMapsOptions, importLibrary as importGoogleLibrary } from '@googlemaps/js-api-loader';
 import { fetchHeatmapTimelapse } from '@/lib/dashboard/geospatial/sampleMaps';
 import { HeatmapTimelapseRequest, HeatmapTimelapseResponse } from '@/lib/dashboard/geospatial/types';
 
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+
+export interface RuntimeHeatmapHub {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  rates: number[];
+  rawByFrame: Record<string, Record<string, unknown>>;
+}
+
+interface HeatmapTimelapseViewProps {
+  initialPlaceName?: string;
+  initialRadius?: number;
+  initialCityForApi?: string;
+  focusPoints?: Array<{ name?: string | null; lat: number; lng: number }>;
+  fastMode?: boolean;
+  maxBuildingsPerLocation?: number;
+  maxTotalBuildings?: number;
+  runtimeHubs?: RuntimeHeatmapHub[];
+  runtimeDates?: string[];
+  metricLabel?: string;
+  autoLoad?: boolean;
+}
+
+interface HeatmapFeatureProperties {
+  height_render?: number | string;
+  interpolated_rates?: number[];
+  runtime_metric_source?: string;
+  [key: string]: unknown;
+}
+
+type HeatmapFeature = Feature<Geometry, HeatmapFeatureProperties>;
+type TooltipObject = RuntimeHeatmapHub | HeatmapFeature;
+
+function getFeatureRing(feature: HeatmapFeature): number[][] | undefined {
+  const geometry = feature.geometry;
+  if (geometry.type === 'Polygon') return geometry.coordinates[0] as number[][];
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates[0]?.[0] as number[][] | undefined;
+  return undefined;
+}
 
 function normalizeErrorMessage(message: string): string {
   try {
@@ -42,21 +83,135 @@ function interpolateColor(color1: number[], color2: number[], factor: number) {
 function getHeatmapColor(value: number): [number, number, number, number] {
   value = Math.max(0, Math.min(1, value));
   
-  if (value >= 1) return [HEATMAP_COLORS[HEATMAP_COLORS.length - 1][0], HEATMAP_COLORS[HEATMAP_COLORS.length - 1][1], HEATMAP_COLORS[HEATMAP_COLORS.length - 1][2], 220];
-  if (value <= 0) return [HEATMAP_COLORS[0][0], HEATMAP_COLORS[0][1], HEATMAP_COLORS[0][2], 220];
+  if (value >= 1) return [HEATMAP_COLORS[HEATMAP_COLORS.length - 1][0], HEATMAP_COLORS[HEATMAP_COLORS.length - 1][1], HEATMAP_COLORS[HEATMAP_COLORS.length - 1][2], 255];
+  if (value <= 0) return [HEATMAP_COLORS[0][0], HEATMAP_COLORS[0][1], HEATMAP_COLORS[0][2], 255];
   
   const scaled = value * (HEATMAP_COLORS.length - 1);
   const index = Math.floor(scaled);
   const factor = scaled - index;
   
   const color = interpolateColor(HEATMAP_COLORS[index], HEATMAP_COLORS[index + 1], factor);
-  return [color[0], color[1], color[2], 220];
+  return [color[0], color[1], color[2], 255];
 }
 
-export default function HeatmapTimelapseView() {
-  const [placeName, setPlaceName] = useState('Kalyani Nagar, Pune, Maharashtra, India');
-  const [radius, setRadius] = useState(500);
-  const [cityForApi, setCityForApi] = useState('Pune');
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const earthRadiusKm = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateRuntimeIdw(
+  targetLat: number,
+  targetLng: number,
+  hubs: RuntimeHeatmapHub[],
+  dateIndex: number,
+): number {
+  let numerator = 0;
+  let denominator = 0;
+  for (const hub of hubs) {
+    const value = hub.rates[dateIndex];
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const distance = haversineKm(targetLat, targetLng, hub.lat, hub.lng);
+    if (distance < 0.01) return value;
+    const weight = 1 / distance ** 2;
+    numerator += weight * value;
+    denominator += weight;
+  }
+  return denominator ? numerator / denominator : 0;
+}
+
+function applyRuntimeHubs(
+  response: HeatmapTimelapseResponse,
+  runtimeHubs: RuntimeHeatmapHub[],
+  runtimeDates: string[],
+): HeatmapTimelapseResponse {
+  if (runtimeHubs.length === 0 || runtimeDates.length === 0) return response;
+
+  const baseGeojson = response.geojson as unknown as FeatureCollection<Geometry, HeatmapFeatureProperties>;
+  const features = (Array.isArray(baseGeojson.features) ? baseGeojson.features : []) as HeatmapFeature[];
+  const geojson: FeatureCollection<Geometry, HeatmapFeatureProperties> = {
+    ...baseGeojson,
+    features: features.map((feature) => {
+      const coordinates = getFeatureRing(feature);
+      if (!Array.isArray(coordinates) || coordinates.length === 0) return feature;
+
+      const lng = coordinates.reduce((sum: number, coord: number[]) => sum + Number(coord[0] || 0), 0) / coordinates.length;
+      const lat = coordinates.reduce((sum: number, coord: number[]) => sum + Number(coord[1] || 0), 0) / coordinates.length;
+      const interpolatedRates = runtimeDates.map((_, index) => calculateRuntimeIdw(lat, lng, runtimeHubs, index));
+
+      return {
+        ...feature,
+        properties: {
+          ...(feature.properties || {}),
+          interpolated_rates: interpolatedRates,
+          runtime_metric_source: 'module_2_output',
+        },
+      };
+    }),
+  };
+
+  const allRates = runtimeHubs.flatMap((hub) => hub.rates).filter((value) => Number.isFinite(value) && value > 0);
+  return {
+    ...response,
+    dates: runtimeDates,
+    geojson: geojson as unknown as HeatmapTimelapseResponse['geojson'],
+    hubs: runtimeHubs.map((hub) => ({
+      name: hub.name,
+      lat: hub.lat,
+      lng: hub.lng,
+      rates: hub.rates,
+    })),
+    summary: {
+      ...response.summary,
+      global_min_rate: allRates.length ? Math.min(...allRates) : response.summary.global_min_rate,
+      global_max_rate: allRates.length ? Math.max(...allRates) : response.summary.global_max_rate,
+    },
+  };
+}
+
+function getRuntimeTooltipRows(raw: Record<string, unknown> | undefined) {
+  if (!raw) return '';
+  const tooltipFields =
+    typeof raw.tooltip_data === 'object' && raw.tooltip_data !== null
+      ? (raw.tooltip_data as Record<string, unknown>).fields
+      : undefined;
+  const rawFields =
+    typeof raw.raw_fields === 'object' && raw.raw_fields !== null
+      ? (raw.raw_fields as Record<string, unknown>)
+      : undefined;
+  const source =
+    tooltipFields && typeof tooltipFields === 'object'
+      ? (tooltipFields as Record<string, unknown>)
+      : rawFields || raw;
+  return Object.entries(source)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .slice(0, 8)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join('\n');
+}
+
+export default function HeatmapTimelapseView({
+  initialPlaceName = 'Kalyani Nagar, Pune, Maharashtra, India',
+  initialRadius = 500,
+  initialCityForApi = 'Pune',
+  focusPoints = [],
+  fastMode = false,
+  maxBuildingsPerLocation,
+  maxTotalBuildings,
+  runtimeHubs = [],
+  runtimeDates = [],
+  metricLabel = 'Rate',
+  autoLoad = false,
+}: HeatmapTimelapseViewProps) {
+  const [placeName, setPlaceName] = useState(initialPlaceName);
+  const [radius, setRadius] = useState(initialRadius);
+  const [cityForApi] = useState(initialCityForApi);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +230,6 @@ export default function HeatmapTimelapseView() {
   });
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const formRef = useRef({ placeName, radius, cityForApi });
-  formRef.current = { placeName, radius, cityForApi };
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -100,9 +253,8 @@ export default function HeatmapTimelapseView() {
   }, []);
 
   const loadMap = useCallback(async () => {
-    const { placeName: place, radius: rad, cityForApi: city } = formRef.current;
-    const trimmedPlace = place.trim();
-    const safeRadius = Number.isFinite(rad) ? Math.round(rad) : 500;
+    const trimmedPlace = placeName.trim();
+    const safeRadius = Number.isFinite(radius) ? Math.round(radius) : 500;
 
     if (trimmedPlace.length < 2) {
       setError('Search location is required (min 2 characters).');
@@ -120,20 +272,32 @@ export default function HeatmapTimelapseView() {
       const payload: HeatmapTimelapseRequest = {
         place_name: trimmedPlace,
         radius_m: safeRadius,
-        city_for_api: city || null,
+        city_for_api: cityForApi || null,
+        focus_points: focusPoints.length > 0 ? focusPoints : undefined,
+        fast_mode: fastMode,
+        max_buildings_per_location: maxBuildingsPerLocation,
+        max_total_buildings: maxTotalBuildings,
       };
       
       const response = await fetchHeatmapTimelapse(payload);
-      setData(response);
+      const runtimeResponse = applyRuntimeHubs(response, runtimeHubs, runtimeDates);
+      setData(runtimeResponse);
       setDateIndex(0);
       setIsPlaying(false);
       
       // Auto-center map on first hub or feature if available, simplified for phase 2
-      if (response.hubs && response.hubs.length > 0) {
+      if (focusPoints.length > 1) {
         setViewState((prev) => ({
           ...prev,
-          longitude: response.hubs[0].lng,
-          latitude: response.hubs[0].lat,
+          longitude: focusPoints.reduce((sum, point) => sum + point.lng, 0) / focusPoints.length,
+          latitude: focusPoints.reduce((sum, point) => sum + point.lat, 0) / focusPoints.length,
+          zoom: 12.8,
+        }));
+      } else if (runtimeResponse.hubs && runtimeResponse.hubs.length > 0) {
+        setViewState((prev) => ({
+          ...prev,
+          longitude: runtimeResponse.hubs[0].lng,
+          latitude: runtimeResponse.hubs[0].lat,
           zoom: 14.5
         }));
       }
@@ -144,7 +308,25 @@ export default function HeatmapTimelapseView() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [
+    cityForApi,
+    fastMode,
+    focusPoints,
+    maxBuildingsPerLocation,
+    maxTotalBuildings,
+    placeName,
+    radius,
+    runtimeDates,
+    runtimeHubs,
+  ]);
+
+  useEffect(() => {
+    if (!autoLoad) return;
+    const timer = window.setTimeout(() => {
+      void loadMap();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [autoLoad, loadMap]);
 
   const ANIMATION_MS = 900;
 
@@ -162,39 +344,41 @@ export default function HeatmapTimelapseView() {
     return () => window.clearInterval(timer);
   }, [data?.dates.length, isPlaying]);
 
-  // Base layer rendering (Phase 2: just grey buildings)
+  // Per-timestep min/max from interpolated rates — excludes zero (no-data).
+  const metricScale = useMemo(() => {
+    const min = data?.summary.global_min_rate ?? 0;
+    const rawMax = data?.summary.global_max_rate ?? 1;
+    return { min, max: rawMax === min ? min + 1 : rawMax };
+  }, [data?.summary.global_min_rate, data?.summary.global_max_rate]);
+
+  // Base layer rendering
   const layers = useMemo(() => {
     if (!data || !data.geojson) return [];
 
-    const buildingLayer = new GeoJsonLayer({
+    const buildingLayer = new GeoJsonLayer<HeatmapFeatureProperties>({
       id: 'heatmap-buildings',
-      data: data.geojson as any,
+      data: data.geojson as unknown as FeatureCollection<Geometry, HeatmapFeatureProperties>,
       extruded: true,
       filled: true,
       stroked: true,
       wireframe: true,
       getLineColor: [100, 100, 100, 100],
       lineWidthMinPixels: 1,
-      // Extrude based on the assigned height
-      getElevation: (feature: any) => Number(feature.properties?.height_render ?? 15),
+      getElevation: (feature: HeatmapFeature) => Number(feature.properties?.height_render ?? 15),
       
-      // Map the calculated rate to a color gradient
-      getFillColor: (feature: any) => {
+      // Colour based on per-timestep normalised rate
+      getFillColor: (feature: HeatmapFeature) => {
         const rates = feature.properties?.interpolated_rates;
-        if (!rates || rates.length === 0) return [180, 180, 180, 200]; // Fallback if no data
+        if (!rates || rates.length === 0) return [180, 180, 180, 255];
 
-        // Phase 4: Dynamic coloring based on dateIndex
         const currentRate = rates[dateIndex];
-        if (currentRate === undefined || currentRate === null) return [180, 180, 180, 200];
+        if (!currentRate || currentRate <= 0) return [180, 180, 180, 255];
 
-        const min = data.summary.global_min_rate;
-        const max = data.summary.global_max_rate;
-        const normalized = (currentRate - min) / (max - min || 1);
-        
+        const normalized = (currentRate - metricScale.min) / (metricScale.max - metricScale.min || 1);
         return getHeatmapColor(normalized);
       },
       updateTriggers: {
-        getFillColor: [dateIndex],
+        getFillColor: [dateIndex, metricScale],
       },
       transitions: {
         getFillColor: { duration: 700 },
@@ -205,8 +389,35 @@ export default function HeatmapTimelapseView() {
       material: { ambient: 0.4, diffuse: 0.8, shininess: 0, specularColor: [0, 0, 0] },
     });
 
-    return [buildingLayer];
-  }, [data, dateIndex]);
+    const runtimeHubLayer = new ScatterplotLayer<RuntimeHeatmapHub>({
+      id: 'runtime-module2-hubs',
+      data: runtimeHubs,
+      getPosition: (hub) => [hub.lng, hub.lat],
+      getRadius: (hub) => {
+        const value = hub.rates[dateIndex] || 0;
+        const normalized = (value - metricScale.min) / (metricScale.max - metricScale.min || 1);
+        return 45 + Math.max(0, Math.min(1, normalized)) * 95;
+      },
+      radiusUnits: 'meters',
+      getFillColor: (hub) => {
+        const value = hub.rates[dateIndex] || 0;
+        const normalized = (value - metricScale.min) / (metricScale.max - metricScale.min || 1);
+        return getHeatmapColor(normalized);
+      },
+      getLineColor: [15, 23, 42, 255],
+      lineWidthMinPixels: 2,
+      stroked: true,
+      filled: true,
+      opacity: 1,
+      pickable: true,
+      updateTriggers: {
+        getRadius: [dateIndex, metricScale],
+        getFillColor: [dateIndex, metricScale],
+      },
+    });
+
+    return runtimeHubs.length > 0 ? [buildingLayer, runtimeHubLayer] : [buildingLayer];
+  }, [data, dateIndex, metricScale, runtimeHubs]);
 
   return (
     <div className={`flex flex-col bg-slate-50 overflow-y-auto overflow-x-hidden ${isFullscreen ? 'fixed inset-0 z-[9999] h-screen' : 'h-full'}`}>
@@ -260,9 +471,9 @@ export default function HeatmapTimelapseView() {
           <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.dates.length ?? '...'}</p>
         </div>
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Analysis Scale (sq.m.)</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{metricLabel} Range</p>
           <p className="mt-2 text-lg font-extrabold text-slate-900">
-            {data ? `₹${data.summary.global_min_rate.toLocaleString()} - ₹${data.summary.global_max_rate.toLocaleString()}` : '...'}
+            {data ? `₹${Math.round(metricScale.min).toLocaleString()} - ₹${Math.round(metricScale.max).toLocaleString()}` : '...'}
           </p>
         </div>
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
@@ -339,6 +550,31 @@ export default function HeatmapTimelapseView() {
             layers={layers}
             viewState={viewState}
             onViewStateChange={({ viewState: nextViewState }) => setViewState(nextViewState as typeof viewState)}
+            getTooltip={({ object }: { object?: TooltipObject }) => {
+              if (!object) return null;
+              if ('name' in object && Array.isArray(object.rates)) {
+                const hub = object as RuntimeHeatmapHub;
+                const frame = data.dates[dateIndex] || runtimeDates[dateIndex] || 'Current';
+                const value = hub.rates[dateIndex];
+                const rawRows = getRuntimeTooltipRows(hub.rawByFrame[frame]);
+                return {
+                  text: `${hub.name}\n${frame}\n${metricLabel}: ${
+                    Number.isFinite(value) ? Math.round(value).toLocaleString() : 'N/A'
+                  }${rawRows ? `\n\n${rawRows}` : ''}`,
+                };
+              }
+              const rates = 'properties' in object ? object.properties?.interpolated_rates : undefined;
+              if (Array.isArray(rates)) {
+                const value = rates[dateIndex];
+                const source = runtimeHubs.length > 0 ? 'Module 2 runtime hubs' : 'Backend heatmap hubs';
+                return {
+                  text: `Interpolated building value\n${data.dates[dateIndex] || 'Current'}\n${metricLabel}: ${
+                    Number.isFinite(value) ? Math.round(value).toLocaleString() : 'N/A'
+                  }\nSource: ${source}`,
+                };
+              }
+              return null;
+            }}
             style={{ position: 'absolute', inset: '0px' }}
           >
             <Map mapLib={import('maplibre-gl')} mapStyle={DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
@@ -368,6 +604,9 @@ export default function HeatmapTimelapseView() {
                 <Building2 className="h-3.5 w-3.5" />
                 {data.summary.overture_building_count} extrusions rendered
               </span>
+              {runtimeHubs.length > 0 ? (
+                <span>{runtimeHubs.length} Module 2 hubs</span>
+              ) : null}
             </div>
           </div>
         )}

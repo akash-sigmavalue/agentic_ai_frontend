@@ -23,8 +23,6 @@ export const SAMPLE_MAP_OPTIONS = [
   { value: '3d', label: '3D Maps' },
   { value: '3d-timelapse', label: '3D map - timelapse' },
   { value: 'visualization', label: 'Spatial Analysis' },
-  { value: 'project_rate_growth_timelapse', label: 'Project Timelapse - Rate + Growth Velocity' },
-  { value: 'location_rate_volume_timelapse', label: 'Location Timelapse - Rate Heatmap + Volume Pulse' },
   { value: 'heatmap-timelapse', label: 'Heatmap - Timelapse' },
 ] as const;
 

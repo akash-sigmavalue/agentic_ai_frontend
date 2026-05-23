@@ -14,8 +14,7 @@ import type { FloorRateCell, MarkerData, ThreeDMapTimelapseRequest, ThreeDMapTim
 const FLOOR_HEIGHT = 3.0;
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const ANIMATION_MS = 900;
-const MIN_RATE_SQMT = 65000;
-const MAX_RATE_SQMT = 140000;
+// Rate scale is now dynamic — driven by data.summary.global_min_rate / global_max_rate
 
 interface BuildingFeatureProperties {
   height_render?: number | string;
@@ -24,6 +23,8 @@ interface BuildingFeatureProperties {
   num_floors?: number | string | null;
   floor_rates_by_date?: Array<Array<number | null> | null> | null;
   floor_rates_enriched?: Array<Array<FloorRateCell> | null> | null;
+  min_rate?: number;
+  max_rate?: number;
 }
 
 interface FloorLayerRow {
@@ -212,6 +213,29 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
     return () => window.clearInterval(timer);
   }, [data?.dates.length, isPlaying]);
 
+  // Per-timestep min/max: only non-zero rates; recomputed per dateIndex.
+  const stepStats = useMemo(() => {
+    if (!data) return { min: 0, max: 1 };
+    const fc = data.geojson as FeatureCollection<Geometry, BuildingFeatureProperties>;
+    const customFeats = (fc.features as BuildingFeature[]).filter((f) => f.properties?.is_custom === true);
+    let mn = Infinity;
+    let mx = -Infinity;
+    for (const feat of customFeats) {
+      const monthRates = feat.properties?.floor_rates_by_date?.[dateIndex];
+      if (!Array.isArray(monthRates)) continue;
+      for (const r of monthRates) {
+        if (r != null && r > 0) {
+          if (r < mn) mn = r;
+          if (r > mx) mx = r;
+        }
+      }
+    }
+    return {
+      min: mn === Infinity  ? (data.summary.global_min_rate || 0) : mn,
+      max: mx === -Infinity ? (data.summary.global_max_rate || 1) : mx,
+    };
+  }, [data, dateIndex]);
+
   const layers = useMemo(() => {
     if (!data) return [];
     const dates = data.dates;
@@ -219,6 +243,8 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
     const globalMin = data.summary.global_min_rate;
     const globalMax = data.summary.global_max_rate;
     const rateRange = globalMax - globalMin || 1;
+    const stepMin = stepStats.min;
+    const stepRange = stepStats.max - stepStats.min || 1;
 
     const featureCollection = data.geojson as FeatureCollection<Geometry, BuildingFeatureProperties>;
     const features = featureCollection.features as BuildingFeature[];
@@ -282,11 +308,16 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
         const source = enrichedCell?.source ?? (rate != null ? 'actual' : 'no_data');
         const note = enrichedCell?.note ?? '';
 
-        const normalizedRate = rate == null ? 0 : Math.max(0, Math.min(1, (Number(rate) - MIN_RATE_SQMT) / (MAX_RATE_SQMT - MIN_RATE_SQMT)));
+        // Treat rate=0 same as null — missing/corrupt data
+        const rateNum = rate == null ? null : Number(rate);
+        const effectiveRate = (rateNum != null && rateNum > 0) ? rateNum : null;
+        const normalizedRate = effectiveRate == null
+          ? 0
+          : Math.max(0, Math.min(1, (effectiveRate - stepMin) / stepRange));
 
         // Map confidence to fill color opacity
         let fillColor: [number, number, number, number];
-        if (source === 'no_data' || rate == null) {
+        if (source === 'no_data' || effectiveRate == null) {
           // Transparent fill, outline only
           fillColor = [200, 200, 200, 0];
         } else {
@@ -307,7 +338,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
                   name,
                   totalFloors,
                   baseZ,
-                  rateDisplay: rate == null ? '?' : `₹${Number(rate).toLocaleString()}/sq.m.`,
+                  rateDisplay: effectiveRate == null ? '?' : `₹${effectiveRate.toLocaleString()}/sq.m.`,
                   dateLabel: currentDateLabel,
                   fillColor,
                   confidence,
@@ -346,7 +377,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
     finalLayers.push(markerLayer, ...floorLayers);
 
     return finalLayers;
-  }, [data, dateIndex, showUnmatched]);
+  }, [data, dateIndex, showUnmatched, stepStats]);
 
   const tooltip = ({ object }: { object?: TooltipObject }) => {
     if (!object) return null;
@@ -461,7 +492,9 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Analysis Scale (sq.m.)</p>
           <p className="mt-2 text-lg font-extrabold text-slate-900">
-            {data ? `₹${MIN_RATE_SQMT.toLocaleString()} - ₹${MAX_RATE_SQMT.toLocaleString()}` : '...'}
+            {data
+              ? `₹${Math.round(stepStats.min).toLocaleString()} – ₹${Math.round(stepStats.max).toLocaleString()}`
+              : '...'}
           </p>
         </div>
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">

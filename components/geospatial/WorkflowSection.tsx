@@ -45,7 +45,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { WorkflowData } from '../lib/types';
+import type { WorkflowData } from '@/lib/dashboard/geospatial/types';
 
 interface WorkflowSectionProps {
   data: WorkflowData | null;
@@ -102,6 +102,7 @@ const agentLayers: AgentLayer[] = [
     soft: 'from-blue-500/10 to-cyan-500/10',
     agents: [
       { name: 'Land/GIS', icon: MapPinned , href: '/?tab=2d_map'},
+      { name: "Visualization Agent", icon: MapPinned, href: '/visualization_agent' },      
       { name: 'Valuation', icon: BarChart3, href: '/valuation' },
       { name: 'Market Research', icon: Search },
       { name: 'Physical AI', icon: Bot },

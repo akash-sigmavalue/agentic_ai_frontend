@@ -6,7 +6,7 @@ import { Send, Bot, User, Loader2, Maximize2, Square, Trash2 } from 'lucide-reac
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '../lib/types';
+import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '@/lib/dashboard/geospatial/types';
 
 interface ChatSectionProps {
   onAiResponse?: (content: string) => void;
