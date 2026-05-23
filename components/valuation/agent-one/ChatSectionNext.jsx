@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, Fragment } from "react";
+import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { apiUrl } from "@/lib/api-client";
 
@@ -41,6 +41,150 @@ const getCurrencySymbol = (currencyCode) => {
     return currencyCode || "₹";
   }
 };
+
+function ReActReasoningReport({ report }) {
+  const renderedLines = useMemo(() => {
+    if (!report) return [];
+    
+    const lines = report.split('\n');
+    return lines.map((line) => {
+      let trimmed = line.trim();
+      if (!trimmed) {
+        return { type: 'empty', content: '' };
+      }
+      
+      // Clean up markdown hashes & asterisks
+      trimmed = trimmed.replace(/^#+\s*/, "");
+      trimmed = trimmed.replace(/^\*\*+\s*/, "").replace(/\s*\*\*+$/, "");
+      trimmed = trimmed.replaceAll("**", "");
+
+      const upper = trimmed.toUpperCase();
+      
+      // 1. Stage Header Match
+      if (upper.startsWith('STAGE ')) {
+        return {
+          type: 'stage-header',
+          content: trimmed
+        };
+      }
+      
+      // 2. Step Header Match
+      if (upper.startsWith('STEP ')) {
+        return {
+          type: 'step-header',
+          content: trimmed
+        };
+      }
+      
+      // 3. Keyword matches
+      const keywords = ['THOUGHT:', 'ACTION:', 'OBSERVATION:', 'CRITIQUE:', 'REVISE:'];
+      for (const kw of keywords) {
+        if (upper.startsWith(kw)) {
+          return {
+            type: kw.toLowerCase().slice(0, -1),
+            label: trimmed.substring(0, kw.length),
+            value: trimmed.substring(kw.length).trim()
+          };
+        }
+      }
+      
+      // 4. Bullet points
+      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+        return {
+          type: 'bullet',
+          content: trimmed.substring(1).trim()
+        };
+      }
+      
+      // 5. Default line
+      return {
+        type: 'text',
+        content: trimmed
+      };
+    });
+  }, [report]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel p-6">
+      <div className="max-h-[720px] overflow-y-auto custom-scrollbar space-y-3.5 font-mono text-[11px] leading-relaxed pr-2">
+        {renderedLines.map((line, idx) => {
+          switch (line.type) {
+            case 'empty':
+              return <div key={idx} className="h-1" />;
+              
+            case 'stage-header':
+              return (
+                <div key={idx} className="border-b border-border/60 pb-2 pt-4 first:pt-0">
+                  <h4 className="text-accent text-[12px] font-black tracking-wider uppercase">
+                    {line.content}
+                  </h4>
+                </div>
+              );
+              
+            case 'step-header':
+              return (
+                <div key={idx} className="pt-2">
+                  <h5 className="text-text-primary text-[11px] font-bold tracking-wide uppercase">
+                    {line.content}
+                  </h5>
+                </div>
+              );
+              
+            case 'thought':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-dim italic">
+                  <span className="text-accent-purple font-bold not-italic">{line.label}</span> {line.value}
+                </div>
+              );
+              
+            case 'action':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent/40 text-text-secondary">
+                  <span className="text-accent font-bold">{line.label}</span> <code className="bg-bg-deep/40 px-1 py-0.5 rounded text-accent-light">{line.value}</code>
+                </div>
+              );
+              
+            case 'observation':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-success/40 text-text-secondary">
+                  <span className="text-success font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+              
+            case 'critique':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-warning/40 text-text-secondary">
+                  <span className="text-warning font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+              
+            case 'revise':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-secondary">
+                  <span className="text-accent-purple font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+              
+            case 'bullet':
+              return (
+                <div key={idx} className="pl-8 flex items-start gap-2 text-text-muted">
+                  <span className="text-accent-light select-none">•</span>
+                  <span>{line.content}</span>
+                </div>
+              );
+              
+            default:
+              return (
+                <div key={idx} className="text-text-secondary pl-3.5">
+                  {line.content}
+                </div>
+              );
+          }
+        })}
+      </div>
+    </div>
+  );
+}
 
 function summarizeEvent(event) {
   if (typeof event.content === "string") return event.content;
@@ -195,110 +339,112 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
     : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
   const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            {selectable && (
-              <th className="px-3 py-2.5 font-semibold">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => {
-                    if (allSelected) {
-                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
-                    } else {
-                      visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
-                    }
-                  }}
-                  className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
-                />
-              </th>
-            )}
-            <th className="px-3 py-2.5 font-semibold">Project Name</th>
-            <th className="px-3 py-2.5 font-semibold">Location</th>
-            <th className="px-3 py-2.5 font-semibold">Country</th>
-            <th className="px-3 py-2.5 font-semibold">Type</th>
-            <th className="px-3 py-2.5 font-semibold">Property Category</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
-            <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
-            <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
-            <th className="px-3 py-2.5 font-semibold">Status</th>
-            <th className="px-3 py-2.5 font-semibold">Reason</th>
-            <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
-            <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
-            <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visibleComparables.map(({ comp, originalIndex }) => {
-            const isChecked = selectedComps?.has(originalIndex);
-            return (
-              <tr
-                key={`${comp.project_name}-${originalIndex}`}
-                className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
-              >
-                {selectable && (
-                  <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={isChecked || false}
-                      onChange={() => onToggle?.(originalIndex, !isChecked)}
-                      className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
-                    />
-                  </td>
-                )}
-                <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary">{comp.country || "—"}</td>
-                <td className="px-3 py-2.5">
-                  <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
-                    {comp.property_type || "—"}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
-                    {comp.project_category || "—"}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
-                <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
-                <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
-                <td className="px-3 py-2.5 text-center">
-                  {comp.location_certainty ? (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                      }`}>
-                      {comp.location_certainty}
-                    </span>
-                  ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                      }`}>
-                      {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
-                    </span>
-                  ) : "—")}
-                </td>
-                <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
-                  {comp.source_url ? (
-                    <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
-                      {comp.source_url}
-                    </a>
-                  ) : "—"}
-                </td>
-                <td className="px-3 py-2.5">
-                  {comp.data_source === "Internal DB" ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
+  const renderTable = (maxHeightClass = "") => (
+    <div className="relative">
+      <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              {selectable && (
+                <th className="px-3 py-2.5 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => {
+                      if (allSelected) {
+                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
+                      } else {
+                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
+                      }
+                    }}
+                    className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
+                  />
+                </th>
+              )}
+              <th className="px-3 py-2.5 font-semibold">Project Name</th>
+              <th className="px-3 py-2.5 font-semibold">Location</th>
+              <th className="px-3 py-2.5 font-semibold">Country</th>
+              <th className="px-3 py-2.5 font-semibold">Type</th>
+              <th className="px-3 py-2.5 font-semibold">Property Category</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
+              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
+              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
+              <th className="px-3 py-2.5 font-semibold">Status</th>
+              <th className="px-3 py-2.5 font-semibold">Reason</th>
+              <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleComparables.map(({ comp, originalIndex }) => {
+              const isChecked = selectedComps?.has(originalIndex);
+              return (
+                <tr
+                  key={`${comp.project_name}-${originalIndex}`}
+                  className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
+                >
+                  {selectable && (
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked || false}
+                        onChange={() => onToggle?.(originalIndex, !isChecked)}
+                        className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
+                      />
+                    </td>
                   )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary">{comp.country || "—"}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                      {comp.property_type || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                      {comp.project_category || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                  <td className="px-3 py-2.5 text-center">
+                    {comp.location_certainty ? (
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                        }`}>
+                        {comp.location_certainty}
+                      </span>
+                    ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                        }`}>
+                        {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
+                      </span>
+                    ) : "—")}
+                  </td>
+                  <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
+                    {comp.source_url ? (
+                      <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
+                        {comp.source_url}
+                      </a>
+                    ) : "—"}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {comp.data_source === "Internal DB" ? (
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {visibleComparables.length === 0 && (
         <div className="px-4 py-6 text-center text-xs text-text-dim">
           No comparable projects found within {INITIAL_COMPARABLE_RADIUS_KM} km.
@@ -358,7 +504,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
@@ -398,7 +544,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
-                {tableContent}
+                {renderTable("")}
               </div>
             </div>
           </div>
@@ -496,8 +642,8 @@ function ListingTable({ listings, dbTransactions }) {
     </>
   );
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
+  const renderTable = (maxHeightClass = "") => (
+    <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
@@ -546,7 +692,7 @@ function ListingTable({ listings, dbTransactions }) {
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
@@ -569,7 +715,7 @@ function ListingTable({ listings, dbTransactions }) {
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
-                {tableContent}
+                {renderTable("")}
               </div>
             </div>
           </div>
@@ -1095,8 +1241,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
 
   const fmt = (v) => (!v && v !== 0) ? "—" : formatter.format(v);
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
+  const renderTable = (maxHeightClass = "") => (
+    <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
@@ -1117,7 +1263,6 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
         </thead>
         <tbody>
           {data.table.map((row, i) => {
-            console.log("Factorial Row:", row);
             const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
             const isExpanded = expandedProjects.has(i);
             
@@ -1316,7 +1461,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3">
@@ -1354,7 +1499,9 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
               <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden">{tableContent}</div>
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
+                {renderTable("")}
+              </div>
             </div>
           </div>
         </div>, document.body
@@ -1879,14 +2026,11 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
         {raw_markdown_report && (
           <section className="pt-2">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-3">
               <span className="text-lg">🧾</span>
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-text-primary">ReAct Reasoning Report</h3>
             </div>
-
-            <div className="overflow-hidden rounded-2xl border border-border-soft bg-bg-input">
-              <pre className="max-h-[720px] overflow-auto whitespace-pre-wrap break-words p-6 text-[11px] leading-6 text-text-secondary custom-scrollbar">{raw_markdown_report}</pre>
-            </div>
+            <ReActReasoningReport report={raw_markdown_report} />
           </section>
         )}
       </div>

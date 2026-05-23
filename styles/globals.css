@@ -10,6 +10,32 @@
   
   --color-accent-blue: #4f46e5;
   --color-accent-violet: #7c3aed;
+
+  /* Custom Theme Mappings for Valuation & Data Retrieval Views */
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-card: var(--bg-card);
+  --color-bg-input: var(--bg-input);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-header: var(--bg-header);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+
+  --color-border: var(--border-soft);
+  --color-border-soft: var(--border-soft);
+  --color-border-dim: var(--border-dim);
+  --color-border-glow: var(--border-glow);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-purple: var(--accent-purple);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 }
 
 @layer base {
