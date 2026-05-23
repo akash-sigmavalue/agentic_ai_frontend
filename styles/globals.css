@@ -40,13 +40,32 @@
     --radius: 0.5rem;
   }
 
+  html {
+    font-size: 16.5px !important;
+  }
+
   body {
     background-color: var(--panel-bg-soft);
     color: #0f172a;
     overflow-x: hidden;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 15.5px !important;
   }
 }
+
+/* Global Font Scaling and Readability Overrides */
+.text-\[8px\], [class*="text-[8px]"] { font-size: 10.5px !important; }
+.text-\[9px\], [class*="text-[9px]"] { font-size: 11.5px !important; }
+.text-\[10px\], [class*="text-[10px]"] { font-size: 12.5px !important; }
+.text-\[11px\], [class*="text-[11px]"] { font-size: 13.5px !important; }
+.text-\[12px\], [class*="text-[12px]"] { font-size: 14.5px !important; }
+.text-xs, [class*="text-xs"] { font-size: 13.5px !important; }
+.text-sm, [class*="text-sm"] { font-size: 15.5px !important; }
+.text-base, [class*="text-base"] { font-size: 17.5px !important; }
+.text-lg, [class*="text-lg"] { font-size: 19.5px !important; }
+.text-xl, [class*="text-xl"] { font-size: 22px !important; }
+.text-2xl, [class*="text-2xl"] { font-size: 26px !important; }
+.text-3xl, [class*="text-3xl"] { font-size: 32px !important; }
 
 @layer utilities {
   .glass {

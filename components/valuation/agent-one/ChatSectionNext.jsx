@@ -3981,7 +3981,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         )}
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
+        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,146,60,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
             <div className="border-b border-[rgba(251,146,60,0.16)] bg-[rgba(251,146,60,0.06)] px-4 py-3">
               <div className="flex items-start gap-3">
