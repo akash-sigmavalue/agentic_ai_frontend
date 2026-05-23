@@ -36,7 +36,7 @@ const CircleDyn = dynamic(() => import('react-leaflet').then((m) => m.Circle), {
 import AmenitiesOverlayLogic from './overlays/AmenitiesOverlay';
 import MetroCorridorLogic from './overlays/MetroCorridor';
 import RoadWidthLogic, { RoadWidthRef } from './overlays/RoadWidth';
-import { API_BASE } from '@/lib/dashboard/geospatial/api';
+import { apiUrl } from '@/lib/api-client';
 
 // ── Configuration ──────────────────────────────────────────
 const CITY_CENTERS: Record<string, [number, number]> = {
@@ -261,7 +261,7 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
   useEffect(() => {
     if (activeSection !== 'Price Momentum' && activeSection !== 'Rate Analysis') return;
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
-    fetch(`${API_BASE}/map-overlays/villages-for-city?city_id=${cityId}`)
+    fetch(apiUrl(`/map-overlays/villages-for-city?city_id=${cityId}`))
       .then((r) => r.json())
       .then((data) => { if (activeSection === 'Price Momentum') setVillagesList(data.villages || []); else setRateVillagesList(data.villages || []); })
       .catch(() => {});
@@ -269,13 +269,13 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
 
   const handlePriceFetch = useCallback(async () => {
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
-    try { let url = `${API_BASE}/map-overlays/price-momentum?city_id=${cityId}`; if (selectedVillage !== 'All') url += `&village_name=${encodeURIComponent(selectedVillage)}`; const r = await fetch(url); const data = await r.json(); setPriceData(Array.isArray(data) ? data : []); } catch { setPriceData([]); }
+    try { let url = apiUrl(`/map-overlays/price-momentum?city_id=${cityId}`); if (selectedVillage !== 'All') url += `&village_name=${encodeURIComponent(selectedVillage)}`; const r = await fetch(url); const data = await r.json(); setPriceData(Array.isArray(data) ? data : []); } catch { setPriceData([]); }
   }, [selectedCity, selectedVillage]);
 
   const handleRateFetch = useCallback(async () => {
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
     setRateLoading(true);
-    try { let url = `${API_BASE}/map-overlays/price-momentum?city_id=${cityId}`; if (rateSelectedVillage !== 'All') url += `&village_name=${encodeURIComponent(rateSelectedVillage)}`; const r = await fetch(url); const data = await r.json(); setRateData(Array.isArray(data) ? data : []); } catch { setRateData([]); }
+    try { let url = apiUrl(`/map-overlays/price-momentum?city_id=${cityId}`); if (rateSelectedVillage !== 'All') url += `&village_name=${encodeURIComponent(rateSelectedVillage)}`; const r = await fetch(url); const data = await r.json(); setRateData(Array.isArray(data) ? data : []); } catch { setRateData([]); }
     finally { setRateLoading(false); }
   }, [selectedCity, rateSelectedVillage]);
 

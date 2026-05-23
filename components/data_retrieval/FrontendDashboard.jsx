@@ -5,10 +5,11 @@ import ChatSection from "./ChatSection";
 import MapSection from "./MapSection";
 import ThemeToggle from "./ThemeToggle";
 import WorkflowSection from "./WorkflowSection";
+import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 
 export default function FrontendDashboard() {
   const apiBaseUrl = useMemo(
-    () => (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, ""),
+    () => API_BASE_URL,
     [],
   );
 
@@ -255,7 +256,7 @@ export default function FrontendDashboard() {
       params.set("session_id", sessionId);
     }
 
-    const source = new EventSource(`${apiBaseUrl}/ask_stream_data_retrieval?${params.toString()}`);
+    const source = new EventSource(apiUrl(`/ask_stream_data_retrieval?${params.toString()}`));
     eventSourceRef.current = source;
 
     source.onmessage = (message) => {
