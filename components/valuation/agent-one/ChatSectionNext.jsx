@@ -860,11 +860,13 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   if (!listings || listings.length === 0) return null;
 
   // Detect if we have plot data and if the subject itself is a plot
+  // Detect if the subject itself is a plot or villa
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
-  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase());
+  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase()?.trim());
+  const isVillaSubject = subjectPropertyType?.toLowerCase()?.trim() === "villa";
 
-  // Only show the FSI/CC overrides if we have plot data AND the subject is a plot
-  const showPlotControls = hasPlotData && isPlotSubject;
+  // Always show the FSI/CC overrides if the subject is a plot or villa
+  const showPlotControls = isPlotSubject;
 
   // Determine which rows to display based on active tab
   const displayedListings = activeTab === "valid" ? listings : activeTab === "outliers" ? reviewListings : droppedListings;
@@ -893,8 +895,8 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             {showPlotControls && (
               <>
                 <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">Plot Derived Rate / Sqft</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent">Plot Rate Range</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{isVillaSubject ? "Villa Derived Rate / Sqft" : "Plot Derived Rate / Sqft"}</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">{isVillaSubject ? "Villa Rate Range" : "Plot Rate Range"}</th>
                 <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
               </>
             )}
@@ -1058,7 +1060,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
-              {hasPlotData ? "Cleaned & Plot Valuation Data" : "Cleaned & Normalized Data"}
+              {hasPlotData ? `Cleaned & ${isVillaSubject ? "Villa" : "Plot"} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
@@ -1142,7 +1144,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
-                    {hasPlotData ? "Normalized Listing & Plot Data" : "Normalized Listing Data"}
+                    {hasPlotData ? `Normalized Listing & ${isVillaSubject ? "Villa" : "Plot"} Data` : "Normalized Listing Data"}
                   </h3>
                   {showPlotControls && onRecalculate && (
                     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
