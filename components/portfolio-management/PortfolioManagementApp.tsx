@@ -1495,6 +1495,23 @@ export default function PortfolioManagementApp() {
   const greenButton = `${primaryButton} bg-green-600 hover:bg-green-700`;
   const softButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-slate-100 px-4 py-[11px] font-bold text-slate-700 hover:bg-slate-200 max-[640px]:w-full';
   const redSoftButton = `${softButton} bg-red-50 text-red-600 hover:bg-red-100`;
+  const fieldInputClass = 'grid gap-[7px]';
+  const textInputClass = 'w-full rounded-[14px] border border-slate-300 px-[13px] py-[11px] outline-none focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)] disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500';
+  const pillClass = (type) => `inline-flex w-fit items-center justify-center gap-1 rounded-full border px-[9px] py-1 text-[11px] font-extrabold not-italic ${
+    type === 'raw' ? 'border-blue-200 bg-blue-50 text-blue-700' : type === 'derived' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-green-200 bg-green-50 text-emerald-700'
+  }`;
+  const recordsTable = 'w-full min-w-[950px] border-collapse text-left text-sm';
+  const recordsTh = 'whitespace-nowrap bg-slate-50 px-4 py-[15px] font-extrabold text-slate-500';
+  const recordsTd = 'whitespace-nowrap border-t border-[#eef2f7] px-4 py-[15px]';
+  const modalBackdrop = 'fixed inset-0 z-[9999] grid place-items-center bg-slate-900/40 p-6';
+  const modalPanel = 'max-h-[90vh] w-[min(880px,94vw)] overflow-auto rounded-3xl border border-gray-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.25)]';
+  const modalHeader = 'mb-[18px] flex items-start justify-between gap-4 border-b border-[#eef0f3] pb-4';
+  const mappingTable = 'w-full border-collapse text-[13px]';
+  const mappingTh = 'sticky top-0 z-[1] border-b border-gray-200 bg-slate-50 p-[11px] text-left text-slate-700';
+  const mappingTd = 'border-b border-[#eef0f3] px-[11px] py-2.5 align-middle';
+  const auditButtonClass = (status) => `inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-[5px] text-[11px] font-bold ${
+    status === 'computed' ? 'border-blue-100 bg-blue-50 text-blue-700' : status === 'verified' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : status === 'mismatch' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'
+  }`;
 
   if (!sections.length) {
     return (
@@ -1511,7 +1528,7 @@ export default function PortfolioManagementApp() {
   }
 
   return (
-    <div className="portfolioShell">
+    <div className="mx-auto grid max-w-[1800px] grid-cols-[380px_minmax(0,1fr)] gap-5 p-6 max-[1200px]:grid-cols-1 max-[640px]:p-3.5">
       <PortfolioChatSection />
 
       <div className="min-w-0">
@@ -1531,7 +1548,7 @@ export default function PortfolioManagementApp() {
         )}
       </div>
 
-      {dashboardSaveMessage && <div className="saveNotice"><RefreshCw size={15} /> {dashboardSaveMessage}</div>}
+      {dashboardSaveMessage && <div className="mx-6 mb-4 mt-[-8px] inline-flex items-center gap-2 rounded-[14px] border border-green-200 bg-emerald-50 px-3.5 py-2.5 font-bold text-emerald-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"><RefreshCw size={15} /> {dashboardSaveMessage}</div>}
 
       <main className="grid grid-cols-[340px_minmax(0,1fr)] gap-4 max-[1100px]:grid-cols-1">
         <aside className={`${cardClass} sticky top-3.5 max-h-[calc(100vh-28px)] self-start overflow-auto p-3 max-[1100px]:static max-[1100px]:max-h-none`}>
@@ -1595,9 +1612,9 @@ export default function PortfolioManagementApp() {
               <div className="flex min-w-[290px] items-center gap-2.5 rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5 max-[1100px]:w-full max-[1100px]:min-w-0"><Search size={16} /><input className="w-full border-0 bg-transparent outline-0" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search field..." /></div>
             </div>
             <div className="overflow-x-auto rounded-[18px] border border-slate-100">
-              <table>
+              <table className={recordsTable}>
                 <thead>
-                  <tr>{selectedSection.fields.slice(0, 10).map((field) => <th key={field.id}>{field.name}</th>)}</tr>
+                  <tr>{selectedSection.fields.slice(0, 10).map((field) => <th className={recordsTh} key={field.id}>{field.name}</th>)}</tr>
                 </thead>
                 <tbody>
                   {selectedSection.records.map((record, index) => {
@@ -1606,8 +1623,8 @@ export default function PortfolioManagementApp() {
                       selectedSection.fields
                     );
                     return (
-                    <tr key={index} onClick={() => setSelectedRecordIndex(index)} className={index === selectedRecordIndex ? 'selected' : ''}>
-                      {selectedSection.fields.slice(0, 10).map((field) => <td key={field.id}>{displayRecord[field.name] ?? ''}</td>)}
+                    <tr key={index} onClick={() => setSelectedRecordIndex(index)} className={`cursor-pointer hover:bg-slate-50 ${index === selectedRecordIndex ? 'bg-blue-50' : ''}`}>
+                      {selectedSection.fields.slice(0, 10).map((field) => <td className={recordsTd} key={field.id}>{displayRecord[field.name] ?? ''}</td>)}
                     </tr>
                   );
                   })}
@@ -1616,16 +1633,16 @@ export default function PortfolioManagementApp() {
             </div>
           </div>
 
-          <div className="card editPanel">
-            <div className="editorHead">
+          <div className={`${cardClass} p-5`}>
+            <div className="mb-[18px] flex items-start justify-between gap-3">
               <div>
-                <h3>Edit Fields</h3>
-                <p>Selected Record: <b>{selectedRecord?.[selectedSection.fields[0]?.name] || `Record ${selectedRecordIndex + 1}`}</b>. System fields are locked. Derived fields are auto-computed/validated.</p>
+                <h3 className="text-2xl tracking-[-0.03em]">Edit Fields</h3>
+                <p className="mt-1.5 text-slate-500">Selected Record: <b>{selectedRecord?.[selectedSection.fields[0]?.name] || `Record ${selectedRecordIndex + 1}`}</b>. System fields are locked. Derived fields are auto-computed/validated.</p>
               </div>
-              <button className="soft" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={16} /> Go Top</button>
+              <button className={softButton} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={16} /> Go Top</button>
             </div>
 
-            <div className="formGrid">
+            <div className="grid grid-cols-[repeat(4,minmax(180px,1fr))] gap-x-5 gap-y-4 max-[1100px]:grid-cols-1">
               {filteredFields.map((field) => {
                 const meta = fieldTypeMeta[field.type];
                 const Icon = meta.icon;
@@ -1638,14 +1655,14 @@ export default function PortfolioManagementApp() {
                 const isAppreciationDepreciation = selectedSection?.name === '6. Financial Value' && field.name === 'Appreciation/Depreciation (%)';
                 const derivedAudit = derivedAuditForField(selectedRecord, field);
                 return (
-                  <label key={field.id} className="fieldInput">
-                    <div className="labelLine">
+                  <label key={field.id} className={fieldInputClass}>
+                    <div className="flex items-center justify-between gap-2 text-[13px] font-bold text-slate-500">
                       <span>{field.name}</span>
-                      <div className="labelActions">
+                      <div className="flex items-center gap-2">
                         {isDocumentSection && field.name !== 'Asset ID' && (
-                          <label className="docUploadMiniBtn" title="Upload document">
+                          <label className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" title="Upload document">
                             <Plus size={12} /> Upload
-                            <input
+                            <input className="hidden"
                               type="file"
                               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                               onChange={(e) => handleDocumentFieldUpload(field.name, e.target.files?.[0])}
@@ -1655,7 +1672,7 @@ export default function PortfolioManagementApp() {
                         {selectedRecord?.[`${field.name}__file`] && (
                           <button
                             type="button"
-                            className="docUploadedIcon"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-green-200 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
                             title={`Download ${selectedRecord[`${field.name}__file`]?.name || 'document'}`}
                             onClick={() => downloadDocumentFieldFile(field.name)}
                           >
@@ -1663,24 +1680,25 @@ export default function PortfolioManagementApp() {
                           </button>
                         )}
                         {field.type === 'derived' && (
-                          <button type="button" className="infoMiniBtn" onClick={() => setRevenueInfoOpen(field.name)} title="Meaning and computation">
+                          <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700" onClick={() => setRevenueInfoOpen(field.name)} title="Meaning and computation">
                             <Info size={12} /> i
                           </button>
                         )}
                         {derivedAudit && (
-                          <button type="button" className={`derivedAuditBtn ${derivedAudit.status}`} title={derivedAuditTitle(derivedAudit)}>
+                          <button type="button" className={auditButtonClass(derivedAudit.status)} title={derivedAuditTitle(derivedAudit)}>
                             <Info size={12} /> {derivedAudit.status}
                           </button>
                         )}
                         {isCurrentMarketValue && (
-                          <button type="button" className="agentMiniBtn" onClick={() => setValuationAgentOpen(true)}>
+                          <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" onClick={() => setValuationAgentOpen(true)}>
                             <Sparkles size={12} /> Valuation Agent
                           </button>
                         )}
-                        <em className={`pill ${field.type}`}><Icon size={12} /> {meta.label}</em>
+                        <em className={pillClass(field.type)}><Icon size={12} /> {meta.label}</em>
                       </div>
                     </div>
                     <input
+                      className={textInputClass}
                       type={(isValuationDate || isExpectedSaleDate || isAcquisitionDate || isLeaseDate) ? 'date' : 'text'}
                       value={selectedRecord[field.name] ?? ''}
                       onChange={(e) => updateRecordValue(field.name, e.target.value)}
@@ -1688,7 +1706,7 @@ export default function PortfolioManagementApp() {
                       placeholder={field.type === 'system' ? 'Auto-generated' : field.type === 'derived' ? 'Auto-computed' : 'Enter value'}
                     />
                     {isDocumentSection && selectedRecord?.[`${field.name}__file`] && (
-                      <button type="button" className="docFileName docFileDownload" onClick={() => downloadDocumentFieldFile(field.name)}>
+                      <button type="button" className="mt-[7px] inline-flex cursor-pointer items-center gap-[5px] border-0 bg-transparent p-0 text-xs font-bold text-emerald-700 hover:underline" onClick={() => downloadDocumentFieldFile(field.name)}>
                         <Paperclip size={12} /> {selectedRecord[`${field.name}__file`]?.name} <Download size={12} />
                       </button>
                     )}
@@ -1697,68 +1715,68 @@ export default function PortfolioManagementApp() {
               })}
             </div>
 
-            <div className="sectionSaveBar">
+            <div className="mt-[18px] flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3.5">
               <div>
-                <b>Save section changes</b>
-                <span>Save all edited fields in this section and refresh linked Dashboard values.</span>
+                <b className="mb-1 block text-green-950">Save section changes</b>
+                <span className="text-[13px] text-green-800">Save all edited fields in this section and refresh linked Dashboard values.</span>
               </div>
-              <button className="primary green" onClick={saveCurrentSectionFields}><Save size={16} /> Save Section</button>
+              <button className={greenButton} onClick={saveCurrentSectionFields}><Save size={16} /> Save Section</button>
             </div>
-            {sectionSaveMessage && <div className="sectionSaveNotice">{sectionSaveMessage}</div>}
+            {sectionSaveMessage && <div className="mt-2.5 rounded-xl border border-green-200 bg-emerald-50 px-3 py-2.5 font-bold text-emerald-700">{sectionSaveMessage}</div>}
           </div>
 
-          <div className="card editor">
-            <div className="editorHead">
+          <div className={`${cardClass} border-slate-300 p-5`}>
+            <div className="mb-[18px] flex items-start justify-between gap-3">
               <div>
-                <h3>Add & Edit Field</h3>
-                <p>Configure fields for this section. Category can be Raw, Derived, or System.</p>
+                <h3 className="text-2xl tracking-[-0.03em]">Add & Edit Field</h3>
+                <p className="mt-1.5 text-slate-500">Configure fields for this section. Category can be Raw, Derived, or System.</p>
               </div>
-              {fieldDraft.id && <button className="soft" onClick={resetFieldDraft}><X size={14} /> Clear</button>}
+              {fieldDraft.id && <button className={softButton} onClick={resetFieldDraft}><X size={14} /> Clear</button>}
             </div>
 
-            <div className="fieldChips">
+            <div className="mb-[18px] grid grid-cols-3 gap-[9px] max-[1100px]:grid-cols-1">
               {selectedSection.fields.map((field) => {
                 const meta = fieldTypeMeta[field.type];
                 return (
-                  <div className="fieldChip" key={field.id}>
-                    <button onClick={() => setFieldDraft(field)}>
+                  <div className="flex items-center justify-between gap-2 rounded-[18px] border border-slate-200 bg-slate-50 p-2" key={field.id}>
+                    <button className="grid flex-1 gap-1.5 bg-transparent text-left" onClick={() => setFieldDraft(field)}>
                       <b>{field.name}</b>
-                      <span className={`pill ${field.type}`}>{meta.label}</span>
+                      <span className={pillClass(field.type)}>{meta.label}</span>
                     </button>
-                    <button onClick={() => deleteField(field.id)}><Trash2 size={15} /></button>
+                    <button className="rounded-xl bg-transparent p-2 text-red-500 hover:bg-white" onClick={() => deleteField(field.id)}><Trash2 size={15} /></button>
                   </div>
                 );
               })}
             </div>
 
-            <div className="editorGrid">
-              <label>Field name<input value={fieldDraft.name} onChange={(e) => setFieldDraft({ ...fieldDraft, name: e.target.value })} placeholder="Example: Current market value" /></label>
-              <label>Field category
-                <select value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value, description: fieldTypeMeta[e.target.value].note })}>
+            <div className="grid grid-cols-[1.1fr_170px_1.4fr_auto] items-end gap-3 max-[1100px]:grid-cols-1">
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase tracking-[0.05em] text-slate-500">Field name<input className={`${textInputClass} text-sm font-medium normal-case tracking-normal text-slate-900`} value={fieldDraft.name} onChange={(e) => setFieldDraft({ ...fieldDraft, name: e.target.value })} placeholder="Example: Current market value" /></label>
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase tracking-[0.05em] text-slate-500">Field category
+                <select className={`${textInputClass} text-sm font-medium normal-case tracking-normal text-slate-900`} value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value, description: fieldTypeMeta[e.target.value].note })}>
                   <option value="raw">Raw Field</option>
                   <option value="derived">Derived Field</option>
                   <option value="system">System Field</option>
                 </select>
               </label>
-              <label>Description / rule<input value={fieldDraft.description} onChange={(e) => setFieldDraft({ ...fieldDraft, description: e.target.value })} placeholder="Example: Calculated using market value and loan amount" /></label>
-              <button className="primary" onClick={saveField}><Save size={16} /> {fieldDraft.id ? 'Update' : 'Add'}</button>
+              <label className="grid gap-1.5 text-xs font-extrabold uppercase tracking-[0.05em] text-slate-500">Description / rule<input className={`${textInputClass} text-sm font-medium normal-case tracking-normal text-slate-900`} value={fieldDraft.description} onChange={(e) => setFieldDraft({ ...fieldDraft, description: e.target.value })} placeholder="Example: Calculated using market value and loan amount" /></label>
+              <button className={primaryButton} onClick={saveField}><Save size={16} /> {fieldDraft.id ? 'Update' : 'Add'}</button>
             </div>
           </div>
         </section>
 
 
       {agentListOpen && (
-        <div className="sarBackdrop" onClick={() => setAgentListOpen(false)}>
-          <div className="sarPanel agentListPanel" onClick={(e) => e.stopPropagation()}>
-            <div className="sarHeader">
+        <div className={modalBackdrop} onClick={() => setAgentListOpen(false)}>
+          <div className={`${modalPanel} w-[min(620px,94vw)]`} onClick={(e) => e.stopPropagation()}>
+            <div className={modalHeader}>
               <div>
-                <h3>Choose Agent</h3>
-                <p>Select an agent to open SAR UI panel.</p>
+                <h3 className="mb-2 mt-0">Choose Agent</h3>
+                <p className="m-0 text-slate-600">Select an agent to open SAR UI panel.</p>
               </div>
-              <button className="soft" onClick={() => setAgentListOpen(false)}><X size={14} /> Close</button>
+              <button className={softButton} onClick={() => setAgentListOpen(false)}><X size={14} /> Close</button>
             </div>
 
-            <div className="agentListGrid">
+            <div className="grid grid-cols-1 gap-3">
               {[
                 'Valuation Agent',
                 'Feasibility Agent',
@@ -1768,7 +1786,7 @@ export default function PortfolioManagementApp() {
               ].map((agentName) => (
                 <button
                   key={agentName}
-                  className="agentListItem"
+                  className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left font-extrabold text-slate-900 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-50 hover:text-violet-700"
                   onClick={() => {
                     setSelectedAgentName(agentName);
                     setValuationAgentPrompt(agentRegistry[agentName]?.prompt || `Run ${agentName} analysis for the selected asset/section.`);
@@ -1788,22 +1806,23 @@ export default function PortfolioManagementApp() {
       )}
 
       {valuationAgentOpen && (
-        <div className="sarBackdrop" onClick={() => setValuationAgentOpen(false)}>
-          <div className="sarPanel" onClick={(e) => e.stopPropagation()}>
-            <div className="sarHeader">
+        <div className={modalBackdrop} onClick={() => setValuationAgentOpen(false)}>
+          <div className={modalPanel} onClick={(e) => e.stopPropagation()}>
+            <div className={modalHeader}>
               <div>
-                <h3>Relevant Agent: {selectedAgentName}</h3>
-                <p><b>Purpose:</b> {selectedAgentConfig.purpose}</p>
+                <h3 className="mb-2 mt-0">Relevant Agent: {selectedAgentName}</h3>
+                <p className="m-0 text-slate-600"><b>Purpose:</b> {selectedAgentConfig.purpose}</p>
               </div>
-              <button className="soft" onClick={() => setValuationAgentOpen(false)}><X size={14} /> Close</button>
+              <button className={softButton} onClick={() => setValuationAgentOpen(false)}><X size={14} /> Close</button>
             </div>
 
 
-            <div className="agentPropertySearchBox">
-              <label>Search Property</label>
-              <div className="search propertySearchInput">
+            <div className="mb-4 rounded-[18px] border border-gray-200 bg-slate-50 p-3.5">
+              <label className="mb-2 block font-extrabold text-slate-700">Search Property</label>
+              <div className="flex items-center gap-2.5 rounded-[18px] border border-slate-200 bg-white px-3 py-2.5">
                 <Search size={16} />
                 <input
+                  className="w-full border-0 bg-transparent outline-0 focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
                   value={agentPropertySearch}
                   onChange={(e) => {
                     setAgentPropertySearch(e.target.value);
@@ -1814,11 +1833,11 @@ export default function PortfolioManagementApp() {
               </div>
 
               {agentPropertySearch && (
-                <div className="propertySearchResults">
+                <div className="mt-2.5 grid max-h-60 gap-2 overflow-auto">
                   {filteredAgentProperties.length ? filteredAgentProperties.map((property) => (
                     <button
                       key={property.assetId}
-                      className={`propertyResultItem ${selectedAgentProperty?.assetId === property.assetId ? 'selected' : ''}`}
+                      className={`grid cursor-pointer grid-cols-[90px_1fr] gap-x-2.5 gap-y-1 rounded-[14px] border bg-white px-3 py-[11px] text-left [&_b]:text-blue-700 [&_small]:col-start-2 [&_small]:text-slate-500 [&_span]:font-bold [&_span]:text-slate-900 hover:border-violet-600 hover:bg-violet-50 ${selectedAgentProperty?.assetId === property.assetId ? 'border-violet-600 bg-violet-50' : 'border-gray-200'}`}
                       onClick={() => {
                         setSelectedAgentProperty(property);
                         setAgentPropertySearch(`${property.assetId} - ${property.propertyName}`);
@@ -1829,52 +1848,49 @@ export default function PortfolioManagementApp() {
                       <small>{property.micromarket} {property.city ? `• ${property.city}` : ''}</small>
                     </button>
                   )) : (
-                    <div className="noPropertyResult">No matching property found.</div>
+                    <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-3 text-slate-500">No matching property found.</div>
                   )}
                 </div>
               )}
 
               {selectedAgentProperty && (
-                <div className="selectedPropertyCard">
+                <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700 [&_span]:text-emerald-800">
                   <b>Selected Property:</b> {selectedAgentProperty.assetId} — {selectedAgentProperty.propertyName}
                   <span>{selectedAgentProperty.micromarket} {selectedAgentProperty.city ? `• ${selectedAgentProperty.city}` : ''}</span>
                 </div>
               )}
             </div>
 
-            <div className="sarPrompt">
-              <label>User Prompt</label>
+            <div>
+              <label className="mb-2 block font-bold">User Prompt</label>
               <textarea
+                className="min-h-24 w-full resize-y rounded-[14px] border border-gray-200 p-3 outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
                 value={valuationAgentPrompt}
                 onChange={(e) => setValuationAgentPrompt(e.target.value)}
                 placeholder="Ask valuation question here..."
               />
             </div>
 
-            <div className="sarQuickActions">
-              <button>Compare Values</button>
-              <button>Check Market Trend</button>
-              <button>Validate LTV</button>
-              <button>Find Red Flags</button>
-              <button>Suggest Action</button>
-              <button>Create Report</button>
-              <button>Add to Workflow</button>
+            <div className="my-[18px] flex flex-wrap gap-2.5">
+              {['Compare Values', 'Check Market Trend', 'Validate LTV', 'Find Red Flags', 'Suggest Action', 'Create Report', 'Add to Workflow'].map((action) => (
+                <button className="cursor-pointer rounded-full border border-blue-100 bg-blue-50 px-3 py-[9px] font-semibold text-blue-700" key={action}>{action}</button>
+              ))}
             </div>
 
             {selectedAgentProperty && (
-              <div className="agentContextNote">
+              <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700">
                 Agent will run analysis for selected property: <b>{selectedAgentProperty.assetId}</b> — {selectedAgentProperty.propertyName}
               </div>
             )}
 
-            <div className="sarOutput">
-              <h4>Agent Output</h4>
-              <ul>
-                <li><b>Summary:</b> {selectedAgentConfig.output.summary}</li>
-                <li><b>Calculations:</b> {selectedAgentConfig.output.calculations}</li>
-                <li><b>Red flags:</b> {selectedAgentConfig.output.redFlags}</li>
-                <li><b>Recommendations:</b> {selectedAgentConfig.output.recommendations}</li>
-                <li><b>Report-ready note:</b> {selectedAgentConfig.output.reportNote}</li>
+            <div className="rounded-[18px] border border-gray-200 bg-slate-50 p-4">
+              <h4 className="mb-2.5 mt-0">Agent Output</h4>
+              <ul className="m-0 pl-5">
+                <li className="mb-2"><b>Summary:</b> {selectedAgentConfig.output.summary}</li>
+                <li className="mb-2"><b>Calculations:</b> {selectedAgentConfig.output.calculations}</li>
+                <li className="mb-2"><b>Red flags:</b> {selectedAgentConfig.output.redFlags}</li>
+                <li className="mb-2"><b>Recommendations:</b> {selectedAgentConfig.output.recommendations}</li>
+                <li className="mb-2"><b>Report-ready note:</b> {selectedAgentConfig.output.reportNote}</li>
               </ul>
             </div>
           </div>
@@ -1883,36 +1899,36 @@ export default function PortfolioManagementApp() {
 
 
       {revenueInfoOpen && (
-        <div className="sarBackdrop" onClick={() => setRevenueInfoOpen(null)}>
-          <div className="sarPanel revenueInfoPanel" onClick={(e) => e.stopPropagation()}>
-            <div className="sarHeader">
+        <div className={modalBackdrop} onClick={() => setRevenueInfoOpen(null)}>
+          <div className={`${modalPanel} w-[min(980px,94vw)]`} onClick={(e) => e.stopPropagation()}>
+            <div className={modalHeader}>
               <div>
-                <h3>Derived Field Info</h3>
-                <p><b>Field:</b> {revenueInfoOpen}</p>
+                <h3 className="mb-2 mt-0">Derived Field Info</h3>
+                <p className="m-0 text-slate-600"><b>Field:</b> {revenueInfoOpen}</p>
               </div>
-              <button className="soft" onClick={() => setRevenueInfoOpen(null)}><X size={14} /> Close</button>
+              <button className={softButton} onClick={() => setRevenueInfoOpen(null)}><X size={14} /> Close</button>
             </div>
 
-            <table className="infoTable">
+            <table className="mt-2 w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th>Meaning</th>
-                  <th>How it is conceptually computed</th>
-                  <th>Formula used in computation</th>
+                  <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Meaning</th>
+                  <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">How it is conceptually computed</th>
+                  <th className="min-w-[260px] border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Formula used in computation</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.meaning || 'Derived field used for portfolio analysis.'}</td>
-                  <td>{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.concept || 'Conceptually computed from related raw fields and business rules.'}</td>
-                  <td>{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.formula || (derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.computed || 'Formula defined in system logic.'}</td>
+                  <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.meaning || 'Derived field used for portfolio analysis.'}</td>
+                  <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.concept || 'Conceptually computed from related raw fields and business rules.'}</td>
+                  <td className="min-w-[260px] border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.formula || (derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.computed || 'Formula defined in system logic.'}</td>
                 </tr>
               </tbody>
             </table>
 
-            <div className="infoFullTableWrap">
+            <div className="mt-5 [&_h4]:mb-2.5 [&_h4]:mt-0">
               <h4>All Derived Fields — Meaning, Concept and Formula</h4>
-              <table className="infoTable">
+              <table className="mt-2 w-full border-collapse text-sm [&_td]:border [&_td]:border-gray-200 [&_td]:p-3 [&_td]:align-top [&_td]:text-slate-600 [&_th]:border [&_th]:border-gray-200 [&_th]:bg-slate-50 [&_th]:p-3 [&_th]:text-left [&_th]:text-slate-700 [&_td:nth-child(3)]:min-w-[260px] [&_th:nth-child(3)]:min-w-[260px]">
                 <thead>
                   <tr>
                     <th>Field</th>
@@ -1939,54 +1955,54 @@ export default function PortfolioManagementApp() {
 
 
       {excelUploadOpen && (
-        <div className="sarBackdrop" onClick={() => setExcelUploadOpen(false)}>
-          <div className="sarPanel uploadPanel" onClick={(e) => e.stopPropagation()}>
-            <div className="sarHeader">
+        <div className={modalBackdrop} onClick={() => setExcelUploadOpen(false)}>
+          <div className={`${modalPanel} w-[min(1100px,96vw)]`} onClick={(e) => e.stopPropagation()}>
+            <div className={modalHeader}>
               <div>
-                <h3>{uploadMode === 'global' ? 'Upload File: Map to All Sections' : `Upload Data: ${selectedSection?.name}`}</h3>
-                <p>
+                <h3 className="mb-2 mt-0">{uploadMode === 'global' ? 'Upload File: Map to All Sections' : `Upload Data: ${selectedSection?.name}`}</h3>
+                <p className="m-0 text-slate-600">
                   {uploadMode === 'global'
                     ? 'Upload Excel/CSV once. The software will map columns to fields across all sections and autopopulate section-wise data.'
                     : 'Upload Excel/CSV, map Excel columns to software fields, and autopopulate records in this section.'}
                 </p>
               </div>
-              <button className="soft" onClick={() => setExcelUploadOpen(false)}><X size={14} /> Close</button>
+              <button className={softButton} onClick={() => setExcelUploadOpen(false)}><X size={14} /> Close</button>
             </div>
 
-            <div className="uploadSteps">
-              {uploadMode === 'section' && <button className="soft" onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Download Template</button>}
-              <label className="primary blue uploadLabel">
+            <div className="mb-4 flex flex-wrap gap-3">
+              {uploadMode === 'section' && <button className={softButton} onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Download Template</button>}
+              <label className={`${blueButton} cursor-pointer`}>
                 <Upload size={16} /> Upload Excel / CSV
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelFile} />
+                <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelFile} />
               </label>
             </div>
 
-            {uploadMessage && <div className="uploadMessage"><CheckCircle2 size={16} /> {uploadMessage}</div>}
+            {uploadMessage && <div className="my-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700"><CheckCircle2 size={16} /> {uploadMessage}</div>}
 
             {uploadMode === 'global' && !!Object.keys(excelWorkbookData).length && (
               <>
-                <div className="mappingHead">
-                  <h4>Global Field-Column Mapping</h4>
-                  <p>Each section is mapped automatically. You can revise any mapping before autopopulating all sections.</p>
+                <div className="mt-[18px]">
+                  <h4 className="mb-1.5 mt-0">Global Field-Column Mapping</h4>
+                  <p className="m-0 text-[13px] text-slate-500">Each section is mapped automatically. You can revise any mapping before autopopulating all sections.</p>
                 </div>
 
-                <div className="globalMappingList">
+                <div className="mt-3.5 grid max-h-[58vh] gap-4 overflow-auto pr-1.5">
                   {sections.filter((section) => section.name !== '1. Dashboard').map((section) => {
                     const rowsForSection = findRowsForSectionFromWorkbook(excelWorkbookData, section);
                     const columnsForSection = Object.keys(rowsForSection[0] || {});
                     const mappingForSection = globalColumnMappings[section.id] || {};
                     return (
-                      <div className="globalMappingSection" key={section.id}>
-                        <h4>{section.name}</h4>
-                        <p>{rowsForSection.length ? `${rowsForSection.length} row(s) detected for this section.` : 'No matching sheet/columns detected for this section.'}</p>
-                        <div className="mappingTableWrap">
-                          <table className="mappingTable">
+                      <div className="rounded-[18px] border border-gray-200 bg-white p-3.5" key={section.id}>
+                        <h4 className="mb-1.5 mt-0 text-slate-900">{section.name}</h4>
+                        <p className="mb-2.5 mt-0 text-[13px] text-slate-500">{rowsForSection.length ? `${rowsForSection.length} row(s) detected for this section.` : 'No matching sheet/columns detected for this section.'}</p>
+                        <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
+                          <table className={mappingTable}>
                             <thead>
                               <tr>
-                                <th>Software Field</th>
-                                <th>Field Type</th>
-                                <th>Excel Column</th>
-                                <th>Sample Value</th>
+                                <th className={mappingTh}>Software Field</th>
+                                <th className={mappingTh}>Field Type</th>
+                                <th className={mappingTh}>Excel Column</th>
+                                <th className={mappingTh}>Sample Value</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1995,17 +2011,17 @@ export default function PortfolioManagementApp() {
                                 const sampleValue = mappedColumn && rowsForSection[0] ? rowsForSection[0][mappedColumn] : '';
                                 return (
                                   <tr key={field.id}>
-                                    <td><b>{field.name}</b></td>
-                                    <td><span className={`pill ${field.type}`}>{fieldTypeMeta[field.type]?.label}</span></td>
-                                    <td>
-                                      <select value={mappedColumn} onChange={(e) => updateGlobalColumnMapping(section.id, field.name, e.target.value)}>
+                                    <td className={mappingTd}><b>{field.name}</b></td>
+                                    <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
+                                    <td className={mappingTd}>
+                                      <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateGlobalColumnMapping(section.id, field.name, e.target.value)}>
                                         <option value="">-- Ignore / Not mapped --</option>
                                         {columnsForSection.map((column) => (
                                           <option key={column} value={column}>{column}</option>
                                         ))}
                                       </select>
                                     </td>
-                                    <td>{String(sampleValue ?? '').slice(0, 80)}</td>
+                                    <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
                                   </tr>
                                 );
                               })}
@@ -2017,30 +2033,30 @@ export default function PortfolioManagementApp() {
                   })}
                 </div>
 
-                <div className="modalActions">
-                  <button className="primary blue" onClick={() => applyGlobalExcelMapping(excelWorkbookData, globalColumnMappings)}>
+                <div className="mt-4 flex flex-wrap justify-end gap-2.5">
+                  <button className={blueButton} onClick={() => applyGlobalExcelMapping(excelWorkbookData, globalColumnMappings)}>
                     <Columns3 size={16} /> Autopopulate All Sections
                   </button>
-                  <button className="soft" onClick={() => { setExcelWorkbookData({}); setGlobalColumnMappings({}); setExcelRows([]); setExcelColumns([]); }}>Clear Upload</button>
+                  <button className={softButton} onClick={() => { setExcelWorkbookData({}); setGlobalColumnMappings({}); setExcelRows([]); setExcelColumns([]); }}>Clear Upload</button>
                 </div>
               </>
             )}
 
             {uploadMode === 'section' && !!excelColumns.length && (
               <>
-                <div className="mappingHead">
-                  <h4>Field-Column Mapping</h4>
-                  <p>Left side shows software fields. Right side selects matching Excel column.</p>
+                <div className="mt-[18px]">
+                  <h4 className="mb-1.5 mt-0">Field-Column Mapping</h4>
+                  <p className="m-0 text-[13px] text-slate-500">Left side shows software fields. Right side selects matching Excel column.</p>
                 </div>
 
-                <div className="mappingTableWrap">
-                  <table className="mappingTable">
+                <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
+                  <table className={mappingTable}>
                     <thead>
                       <tr>
-                        <th>Software Field</th>
-                        <th>Field Type</th>
-                        <th>Excel Column</th>
-                        <th>Sample Value</th>
+                        <th className={mappingTh}>Software Field</th>
+                        <th className={mappingTh}>Field Type</th>
+                        <th className={mappingTh}>Excel Column</th>
+                        <th className={mappingTh}>Sample Value</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2049,17 +2065,17 @@ export default function PortfolioManagementApp() {
                         const sampleValue = mappedColumn && excelRows[0] ? excelRows[0][mappedColumn] : '';
                         return (
                           <tr key={field.id}>
-                            <td><b>{field.name}</b></td>
-                            <td><span className={`pill ${field.type}`}>{fieldTypeMeta[field.type]?.label}</span></td>
-                            <td>
-                              <select value={mappedColumn} onChange={(e) => updateColumnMapping(field.name, e.target.value)}>
+                            <td className={mappingTd}><b>{field.name}</b></td>
+                            <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
+                            <td className={mappingTd}>
+                              <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateColumnMapping(field.name, e.target.value)}>
                                 <option value="">-- Ignore / Not mapped --</option>
                                 {excelColumns.map((column) => (
                                   <option key={column} value={column}>{column}</option>
                                 ))}
                               </select>
                             </td>
-                            <td>{String(sampleValue ?? '').slice(0, 80)}</td>
+                            <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
                           </tr>
                         );
                       })}
@@ -2067,9 +2083,9 @@ export default function PortfolioManagementApp() {
                   </table>
                 </div>
 
-                <div className="modalActions">
-                  <button className="primary blue" onClick={applyExcelMapping}><Columns3 size={16} /> Apply Mapping & Autopopulate</button>
-                  <button className="soft" onClick={() => { setExcelColumns([]); setExcelRows([]); setColumnMapping({}); }}>Clear Upload</button>
+                <div className="mt-4 flex flex-wrap justify-end gap-2.5">
+                  <button className={blueButton} onClick={applyExcelMapping}><Columns3 size={16} /> Apply Mapping & Autopopulate</button>
+                  <button className={softButton} onClick={() => { setExcelColumns([]); setExcelRows([]); setColumnMapping({}); }}>Clear Upload</button>
                 </div>
               </>
             )}
