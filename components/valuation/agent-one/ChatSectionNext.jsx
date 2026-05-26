@@ -317,7 +317,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
 
   if (!comparables || comparables.length === 0) return null;
-
+  
   // Detect whether mixed sources exist
   const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
 
@@ -372,6 +372,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
               <th className="px-3 py-2.5 font-semibold">Status</th>
               <th className="px-3 py-2.5 font-semibold">Reason</th>
               <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
+              <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-[#a78bfa]">Confidence</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-[#a78bfa]">Confidence Reasoning</th>
               <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
               <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
             </tr>
@@ -424,6 +426,31 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
                       </span>
                     ) : "—")}
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    {comp.confidence_score != null ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={`text-[14px] font-black font-mono leading-none ${
+                          comp.confidence_score >= 80 ? 'text-green-400' :
+                          comp.confidence_score >= 60 ? 'text-amber-400' :
+                          comp.confidence_score >= 40 ? 'text-orange-400' : 'text-red-400'
+                        }`}>{comp.confidence_score}</span>
+                        <span className={`mt-0.5 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border ${
+                          comp.confidence_tier === 'High'     ? 'bg-green-500/20  text-green-400  border-green-500/30'  :
+                          comp.confidence_tier === 'Medium'   ? 'bg-amber-500/20  text-amber-400  border-amber-500/30'  :
+                          comp.confidence_tier === 'Low'      ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                                                                'bg-red-500/20    text-red-400    border-red-500/30'
+                        }`}>{comp.confidence_tier || '—'}</span>
+                      </div>
+                    ) : <span className="text-text-dim">—</span>}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-text-secondary text-[11px] truncate max-w-[220px] cursor-help"
+                    title={comp.confidence_reasoning || ''}
+                  >
+                    {comp.confidence_reasoning
+                      ? <span className="italic opacity-80">{comp.confidence_reasoning}</span>
+                      : <span className="text-text-dim">—</span>}
                   </td>
                   <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                     {comp.source_url ? (
