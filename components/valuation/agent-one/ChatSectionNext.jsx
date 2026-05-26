@@ -575,6 +575,7 @@ function ListingTable({ listings, dbTransactions }) {
     floor:            t.floor_number,
     total_floors:     null,
     location:         t.location_name,
+    transaction_date: t.transaction_date,
     source_url:       null,
     _is_db:           true,   // flag to render source badge
   }));
@@ -628,6 +629,7 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.floor || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.total_floors || "—"}</td>
           <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{lst.location || "—"}</td>
+          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
               <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
@@ -661,6 +663,7 @@ function ListingTable({ listings, dbTransactions }) {
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Location</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
             <th className="px-3 py-2.5 font-semibold">Source</th>
           </tr>
         </thead>
@@ -747,6 +750,7 @@ function TransactionTable({ transactions }) {
             <th className="px-3 py-2.5 font-semibold">Area Type</th>
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold">Location</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
             <th className="px-3 py-2.5 font-semibold">Source</th>
             <th className="px-3 py-2.5 font-semibold text-right">Net Carpet (SQM)</th>
             <th className="px-3 py-2.5 font-semibold">Country</th>
@@ -766,6 +770,7 @@ function TransactionTable({ transactions }) {
               <td className="px-3 py-2 text-text-dim">{t.area_type || "Carpet Area"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{t.floor_number ?? "—"}</td>
               <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{t.location_name || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
                   Internal DB
@@ -849,6 +854,12 @@ function formatPrice(value, currency = "INR") {
   }
 }
 
+// ── Helper: Format Date ──────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  return String(dateStr).split(/[T ]/)[0];
+}
+
 // ── Cleaned Data Table ──────────────────────────────────────────
 function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType }) {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -902,6 +913,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
             <th className="px-3 py-2.5 font-semibold text-center">Source</th>
             <th className="px-3 py-2.5 font-semibold">Flag</th>
             {showReasonColumn && <th className="px-3 py-2.5 font-semibold">Reason</th>}
@@ -1029,6 +1041,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
               <td className="px-3 py-2 text-center">
                 <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
                   {lst.source || "Web"}
