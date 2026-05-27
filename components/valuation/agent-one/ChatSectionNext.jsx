@@ -45,21 +45,21 @@ const getCurrencySymbol = (currencyCode) => {
 function ReActReasoningReport({ report }) {
   const renderedLines = useMemo(() => {
     if (!report) return [];
-    
+
     const lines = report.split('\n');
     return lines.map((line) => {
       let trimmed = line.trim();
       if (!trimmed) {
         return { type: 'empty', content: '' };
       }
-      
+
       // Clean up markdown hashes & asterisks
       trimmed = trimmed.replace(/^#+\s*/, "");
       trimmed = trimmed.replace(/^\*\*+\s*/, "").replace(/\s*\*\*+$/, "");
       trimmed = trimmed.replaceAll("**", "");
 
       const upper = trimmed.toUpperCase();
-      
+
       // 1. Stage Header Match
       if (upper.startsWith('STAGE ')) {
         return {
@@ -67,7 +67,7 @@ function ReActReasoningReport({ report }) {
           content: trimmed
         };
       }
-      
+
       // 2. Step Header Match
       if (upper.startsWith('STEP ')) {
         return {
@@ -75,7 +75,7 @@ function ReActReasoningReport({ report }) {
           content: trimmed
         };
       }
-      
+
       // 3. Keyword matches
       const keywords = ['THOUGHT:', 'ACTION:', 'OBSERVATION:', 'CRITIQUE:', 'REVISE:'];
       for (const kw of keywords) {
@@ -87,7 +87,7 @@ function ReActReasoningReport({ report }) {
           };
         }
       }
-      
+
       // 4. Bullet points
       if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
         return {
@@ -95,7 +95,7 @@ function ReActReasoningReport({ report }) {
           content: trimmed.substring(1).trim()
         };
       }
-      
+
       // 5. Default line
       return {
         type: 'text',
@@ -111,7 +111,7 @@ function ReActReasoningReport({ report }) {
           switch (line.type) {
             case 'empty':
               return <div key={idx} className="h-1" />;
-              
+
             case 'stage-header':
               return (
                 <div key={idx} className="border-b border-border/60 pb-2 pt-4 first:pt-0">
@@ -120,7 +120,7 @@ function ReActReasoningReport({ report }) {
                   </h4>
                 </div>
               );
-              
+
             case 'step-header':
               return (
                 <div key={idx} className="pt-2">
@@ -129,42 +129,42 @@ function ReActReasoningReport({ report }) {
                   </h5>
                 </div>
               );
-              
+
             case 'thought':
               return (
                 <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-dim italic">
                   <span className="text-accent-purple font-bold not-italic">{line.label}</span> {line.value}
                 </div>
               );
-              
+
             case 'action':
               return (
                 <div key={idx} className="pl-3.5 border-l-2 border-accent/40 text-text-secondary">
                   <span className="text-accent font-bold">{line.label}</span> <code className="bg-bg-deep/40 px-1 py-0.5 rounded text-accent-light">{line.value}</code>
                 </div>
               );
-              
+
             case 'observation':
               return (
                 <div key={idx} className="pl-3.5 border-l-2 border-success/40 text-text-secondary">
                   <span className="text-success font-bold">{line.label}</span> {line.value}
                 </div>
               );
-              
+
             case 'critique':
               return (
                 <div key={idx} className="pl-3.5 border-l-2 border-warning/40 text-text-secondary">
                   <span className="text-warning font-bold">{line.label}</span> {line.value}
                 </div>
               );
-              
+
             case 'revise':
               return (
                 <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-secondary">
                   <span className="text-accent-purple font-bold">{line.label}</span> {line.value}
                 </div>
               );
-              
+
             case 'bullet':
               return (
                 <div key={idx} className="pl-8 flex items-start gap-2 text-text-muted">
@@ -172,7 +172,7 @@ function ReActReasoningReport({ report }) {
                   <span>{line.content}</span>
                 </div>
               );
-              
+
             default:
               return (
                 <div key={idx} className="text-text-secondary pl-3.5">
@@ -317,7 +317,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
 
   if (!comparables || comparables.length === 0) return null;
-  
+
   // Detect whether mixed sources exist
   const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
 
@@ -371,9 +371,9 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
               <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
               <th className="px-3 py-2.5 font-semibold">Status</th>
               <th className="px-3 py-2.5 font-semibold">Reason</th>
+              <th className="px-3 py-2.5 font-semibold text-center text-accent-light whitespace-nowrap">Confidence</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Confidence Reasoning</th>
               <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
-              <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap text-[#a78bfa]">Confidence</th>
-              <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-[#a78bfa]">Confidence Reasoning</th>
               <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
               <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
             </tr>
@@ -415,6 +415,39 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
                   <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
                   <td className="px-3 py-2.5 text-center">
+                    {comp.confidence_score !== undefined && comp.confidence_score !== null ? (() => {
+                      const score = comp.confidence_score;
+                      const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
+                      const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
+                        tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                        tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                        "bg-danger/20 text-danger border-danger/30";
+                      const fb = comp.factor_breakdown || {};
+                      const tooltip = [
+                        comp.confidence_reasoning || "",
+                        fb.location !== undefined ? `📍 Location: ${fb.location}` : "",
+                        fb.amenities !== undefined ? `🏊 Amenities: ${fb.amenities}` : "",
+                        fb.property_category !== undefined ? `🏷 Category: ${fb.property_category}` : "",
+                      ].filter(Boolean).join(" | ");
+                      return (
+                        <div className="group relative inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums ${tierColor}`}>
+                            {score}
+                          </span>
+                          <span className={`text-[8px] font-bold uppercase tracking-wider ${tierColor.split(" ")[1]}`}>
+                            {tier}
+                          </span>
+                        </div>
+                      );
+                    })() : <span className="text-text-dim text-[10px]">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[260px]">
+                    {comp.confidence_reasoning
+                      ? <p className="text-[10px] leading-relaxed text-text-secondary truncate" title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
+                      : <span className="text-text-dim text-[10px]">—</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
                     {comp.location_certainty ? (
                       <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
                         }`}>
@@ -426,31 +459,6 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
                       </span>
                     ) : "—")}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {comp.confidence_score != null ? (
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className={`text-[14px] font-black font-mono leading-none ${
-                          comp.confidence_score >= 80 ? 'text-green-400' :
-                          comp.confidence_score >= 60 ? 'text-amber-400' :
-                          comp.confidence_score >= 40 ? 'text-orange-400' : 'text-red-400'
-                        }`}>{comp.confidence_score}</span>
-                        <span className={`mt-0.5 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border ${
-                          comp.confidence_tier === 'High'     ? 'bg-green-500/20  text-green-400  border-green-500/30'  :
-                          comp.confidence_tier === 'Medium'   ? 'bg-amber-500/20  text-amber-400  border-amber-500/30'  :
-                          comp.confidence_tier === 'Low'      ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                                                                'bg-red-500/20    text-red-400    border-red-500/30'
-                        }`}>{comp.confidence_tier || '—'}</span>
-                      </div>
-                    ) : <span className="text-text-dim">—</span>}
-                  </td>
-                  <td
-                    className="px-3 py-2.5 text-text-secondary text-[11px] truncate max-w-[220px] cursor-help"
-                    title={comp.confidence_reasoning || ''}
-                  >
-                    {comp.confidence_reasoning
-                      ? <span className="italic opacity-80">{comp.confidence_reasoning}</span>
-                      : <span className="text-text-dim">—</span>}
                   </td>
                   <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                     {comp.source_url ? (
@@ -508,11 +516,10 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <button
                     key={opt}
                     onClick={() => setSourceFilter(opt)}
-                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${
-                      sourceFilter === opt
+                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
                         ? "bg-[#fb923c] text-bg-deep shadow"
                         : "text-text-dim hover:text-text-primary"
-                    }`}
+                      }`}
                   >
                     {opt === "all" ? "All Sources" : opt}
                   </button>
@@ -551,11 +558,10 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     <button
                       key={opt}
                       onClick={() => setSourceFilter(opt)}
-                      className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${
-                        sourceFilter === opt
+                      className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
                           ? "bg-[#fb923c] text-bg-deep shadow"
                           : "text-text-dim hover:text-text-primary"
-                      }`}
+                        }`}
                     >
                       {opt === "all" ? "All Sources" : opt}
                     </button>
@@ -588,29 +594,29 @@ function ListingTable({ listings, dbTransactions }) {
 
   // Map internal DB transactions into listing row shape
   const dbRows = (dbTransactions || []).map(t => ({
-    project_name:     t.project_name,
-    property_type:    t.property_type_raw || t.property_type,
+    project_name: t.project_name,
+    property_type: t.property_type_raw || t.property_type,
     project_category: t.property_type,
-    listing_type:     t.transaction_category,
-    bhk:              t.unit_configuration,
-    currency:         t.currency,
-    price:            t.agreement_price,
-    price_per_sqft:   t.price_per_sqft,
-    area_sqft:        t.area_sqft,
-    area_type:        t.area_type || "Carpet Area",
-    is_subject:       t.is_subject || false,
-    floor:            t.floor_number,
-    total_floors:     null,
-    location:         t.location_name,
-    source_url:       null,
-    _is_db:           true,   // flag to render source badge
+    listing_type: t.transaction_category,
+    bhk: t.unit_configuration,
+    currency: t.currency,
+    price: t.agreement_price,
+    price_per_sqft: t.price_per_sqft,
+    area_sqft: t.area_sqft,
+    area_type: t.area_type || "Carpet Area",
+    is_subject: t.is_subject || false,
+    floor: t.floor_number,
+    total_floors: null,
+    location: t.location_name,
+    source_url: null,
+    _is_db: true,   // flag to render source badge
   }));
 
   const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
   if (allEmpty) return null;
 
   const subjectListings = (listings || []).filter((l) => l.is_subject);
-  const compListings    = (listings || []).filter((l) => !l.is_subject);
+  const compListings = (listings || []).filter((l) => !l.is_subject);
 
   const renderRows = (rows, label) => (
     <>
@@ -1294,7 +1300,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
           {data.table.map((row, i) => {
             const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
             const isExpanded = expandedProjects.has(i);
-            
+
             return (
               <Fragment key={`fact-${i}`}>
                 <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
@@ -1426,8 +1432,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                 {isExpanded && hasSubRows && row.sub_rows.map((sub, subIdx) => {
                   const isSubDb = sub.rate_derived_from === "internal_db";
                   return (
-                    <tr 
-                      key={`fact-${i}-sub-${subIdx}`} 
+                    <tr
+                      key={`fact-${i}-sub-${subIdx}`}
                       className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
                     >
                       <td className="px-4 py-2"></td>
@@ -1726,8 +1732,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
   const DashboardContent = (
     <div className={`mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
-        ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
-        : "overflow-hidden"
+      ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
+      : "overflow-hidden"
       }`}>
       {/* Detail Modal */}
       {maximizedFactor && typeof document !== "undefined" && createPortal(
@@ -1985,7 +1991,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                       <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
                       <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
                     </div> */}
-                  </>   
+                  </>
                 )}
               </div>
 
@@ -2236,8 +2242,8 @@ function CostResultCard({ data, subjectData }) {
 
   const DashboardContent = (
     <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-bg-card/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
-        ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
-        : "overflow-hidden"
+      ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
+      : "overflow-hidden"
       }`}>
       {/* Header */}
       <div className="border-b border-border-soft bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
@@ -2680,7 +2686,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
     // Split by source
-    const dbComps  = selected.filter(c => (c.data_source || "Web") === "Internal DB");
+    const dbComps = selected.filter(c => (c.data_source || "Web") === "Internal DB");
     const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
 
     // If subject project exists in internal DB, also fetch its transactions
@@ -2919,7 +2925,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
     const webCount = (listingData || []).length;
-    const dbCount  = dbTransactions.length;
+    const dbCount = dbTransactions.length;
 
     setIsCleaningStreaming(true);
     setStreamingNote("Starting data cleaning pipeline...");
@@ -2975,7 +2981,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           else if (event.type === "cleaning_progress") summary = `🧹 Cleaning: ${event.content?.detail || event.content?.stage}`;
           else if (event.type === "cleaning_results") {
             const webCnt = event.content?.web_count ?? (event.content?.cleaned_listings?.length || 0);
-            const dbCnt  = event.content?.db_count  ?? 0;
+            const dbCnt = event.content?.db_count ?? 0;
             summary = `✅ Cleaning complete: ${webCnt} web listing(s) + ${dbCnt} Internal DB transaction(s) merged.`;
           }
           else if (event.type === "cleaning_done") summary = "Data cleaning pipeline finished.";
@@ -3700,7 +3706,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const next = [...prev];
               const lastIndex = next.length - 1;
               if (lastIndex >= 0) {
-              next[lastIndex] = {
+                next[lastIndex] = {
                   ...next[lastIndex],
                   role: "assistant",
                   content: summary,
