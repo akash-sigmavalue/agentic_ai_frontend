@@ -1610,503 +1610,344 @@ function ValuationResult({ data, currency = "INR" }) {
     </div>
   );
 }
+// ── Amenity Cell Chips ────────────────────────────────────────────────────────
+function AmenityCellChips({ summary, isSubject }) {
+  if (!summary || summary === "—") return <span className="text-text-dim text-[9px]">—</span>;
+  const chips = summary
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => {
+      const parts = s.split(":");
+      return { label: parts[0]?.trim(), count: parts[1]?.trim() };
+    })
+    .filter(c => c.label && c.count && c.count !== "0");
+  if (!chips.length) return <span className="text-text-dim text-[9px]">{summary}</span>;
+  return (
+    <div className="flex flex-wrap justify-center gap-1 py-0.5">
+      {chips.map((c, i) => (
+        <span key={i} className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[8px] font-bold border ${isSubject ? "border-green-500/25 bg-green-500/10 text-green-400" : "border-blue-500/20 bg-blue-500/[0.07] text-blue-300"}`}>
+          <span className="opacity-70">{c.label}</span>
+          <span className="font-black">{c.count}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
-
+// ── CBD Cell ──────────────────────────────────────────────────────────────────
+function CbdCell({ km, name, isSubject }) {
+  if (km == null && !name) return <span className="text-text-dim text-[9px]">—</span>;
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      {name && (
+        <span className={`text-[8px] font-bold leading-tight text-center max-w-[120px] ${isSubject ? "text-green-400/80" : "text-blue-300/80"}`}>
+          {name}
+        </span>
+      )}
+      {km != null && (
+        <span className="font-mono text-[9px] text-text-dim font-bold">{Number(km).toFixed(1)} km</span>
+      )}
+    </div>
+  );
+}
 
 function FactoringResultCard({ data, area_unit, subjectData }) {
-  const [maximizedFactor, setMaximizedFactor] = useState(null);
+  const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
 
   const {
-    methodology,
+    comparable_factoring_table = [],
+    blending = {},
     subject_final_rate,
     subject_rate_range,
-    valuation_details,
     confidence,
     raw_markdown_report,
+    reconciliation_note,
   } = data;
 
   const currencyCode = subjectData?.currency || "INR";
   const locale = currencyCode === "INR" ? "en-IN" : "en-US";
-  const formatter = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 0,
-  });
-  const formatterDec = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2,
-  });
-
-  const fmtRate = (val) => val ? formatter.format(Number(val)) : "—";
-  const fmt = (val) => val ? formatterDec.format(Number(val)) : "—";
-  const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
-
-  const rate = Number(subject_final_rate || 0);
-  const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || 0);
-  const calculatedValue = rate * area;
-  const isCostApproach = String(subjectData?.recommended_approach || "").toLowerCase() === "cost";
-  const rateUnitLabel = isCostApproach ? (area_unit || "sqft") : `${area_unit || "sqft"} saleable area`;
-  const adjColor = (val) => {
-    const n = Number(val);
+  const formatter = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode, maximumFractionDigits: 0 });
+  const fmtRate = (v) => v != null ? formatter.format(Number(v)) : "—";
+  const fmtPct = (v) => {
+    if (v == null) return "—";
+    const n = Number(v) * 100;
+    return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+  };
+  const adjColor = (v) => {
+    if (v == null) return "text-text-dim";
+    const n = Number(v);
     if (n > 0) return "text-green-400";
     if (n < 0) return "text-red-400";
     return "text-text-dim";
   };
-  const factorLabel = (factor) => {
-    if (factor.toLowerCase().startsWith("cbd")) {
-      return factor.replace(/cbd/i, "CBD").replace(/_/g, " ").replace(/\b\w/g, (c, i) => i === 0 && c.toLowerCase() === 'c' ? c.toUpperCase() : c.toUpperCase());
-    }
-    return factor.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  };
-  const factorEntries = Object.entries(valuation_details?.factor_breakdown || {});
-  const totalAdjustment = Number(valuation_details?.total_net_adjustment || 0);
-  const adjustmentMultiplier = 1 + totalAdjustment / 100;
-  const baseRateRange = valuation_details?.base_rate_range;
-  const derivedRateRange = valuation_details?.derived_rate_range || subject_rate_range;
 
-  const renderFactorTable = (factor, data, isFull = false) => {
-    const subjectRow = data.projects?.find(p => p.role === "SUBJECT" || p.name.toLowerCase().includes("subject"));
-    const compRows = data.projects?.filter(p => p !== subjectRow) || [];
+  const subjectRow = comparable_factoring_table.find(r => r.role === "SUBJECT");
+  const compRows   = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
+  const finalRate  = Number(subject_final_rate || 0);
+  const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
 
-    return (
-      <div className={`overflow-hidden ${isFull ? "rounded-none" : "rounded-2xl border border-border-soft bg-bg-dark/40"}`}>
-        <table className="w-full text-left text-[10px]">
-          <thead>
-            <tr className="bg-bg-input border-b border-border-soft text-text-dim uppercase tracking-widest font-black">
-              <th className="px-6 py-4">Project Entity</th>
-              <th className="px-6 py-4 text-center">Value</th>
-              <th className="px-6 py-4">Interpretation</th>
-              <th className="px-6 py-4 text-right">Adj.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subjectRow && (
-              <tr className="bg-accent/10 border-b border-accent/20">
-                <td className="px-6 py-4 text-text-primary font-black flex items-center gap-3">
-                  {subjectRow.name}
-                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-accent text-bg-deep font-black uppercase">Subject</span>
-                </td>
-                <td className="px-6 py-4 text-center text-text-primary font-bold">{subjectRow.value}</td>
-                <td className="px-6 py-4 text-text-secondary italic font-medium">{subjectRow.interpretation}</td>
-                <td className="px-6 py-4 text-right text-[8px] font-black text-accent-light opacity-50 uppercase">Base</td>
-              </tr>
-            )}
-            {compRows.map((p, i) => (
-              <tr key={i} className="border-b border-border-dim last:border-0 hover:bg-bg-input/50">
-                <td className="px-6 py-4 text-text-secondary font-bold">{p.name}</td>
-                <td className="px-6 py-4 text-center text-text-dim font-mono">{p.value}</td>
-                <td className="px-6 py-4 text-text-dim italic opacity-70 max-w-xs">{p.interpretation}</td>
-                <td className={`px-6 py-4 text-right font-mono font-black ${adjColor(p.adjustment)}`}>{fmtPct(p.adjustment)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const DashboardContent = (
-    <div className={`mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
-        ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-accent/30 custom-scrollbar"
-        : "overflow-hidden"
-      }`}>
-      {/* Detail Modal */}
-      {maximizedFactor && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-bg-deep/95 p-4 md:p-12 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[3rem] border border-border-soft bg-bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border-soft bg-bg-input px-10 py-8">
-              <div className="flex items-center gap-5">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent text-2xl border border-accent/20">📊</span>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-[0.2em] text-text-primary">Factor Audit: {maximizedFactor.replace("_", " ")}</h3>
-                  <p className="text-[10px] text-text-dim uppercase tracking-widest mt-1">Detailed comparison & adjustment logic</p>
-                </div>
-              </div>
-              <button onClick={() => setMaximizedFactor(null)} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border-soft hover:bg-red-500/20 hover:text-red-400 text-3xl transition-all">×</button>
-            </div>
-            <div className="flex-1 overflow-auto p-10 custom-scrollbar">
-              {renderFactorTable(maximizedFactor, valuation_details.factor_breakdown[maximizedFactor], true)}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+  const MainContent = (
+    <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
 
       {/* Header */}
-      <div className="border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
-            <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Professional Appraisal Summary</h2>
-              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Ready Market Adjustment Report</p>
-            </div>
+      <div className="border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-8 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
+          <div>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</h2>
+            <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
           </div>
-          <button
-            onClick={() => setIsSectionMaximized(!isSectionMaximized)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all text-[8px] font-black uppercase tracking-widest"
-          >
-            {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
+        </div>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" : confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>
+            <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }}></span>
+            {confidence || "Medium"} Confidence
+          </div>
+          <button onClick={() => setIsSectionMaximized(!isSectionMaximized)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-soft bg-bg-input hover:bg-accent/20 hover:text-accent transition-all text-[8px] font-black uppercase tracking-widest">
+            {isSectionMaximized ? "Collapse" : "⛶ Expand"}
           </button>
         </div>
       </div>
 
       <div className="p-8 space-y-10">
-        {/* FACTORING SUMMARY TABLE — Enhanced */}
+
+        {/* ── COMPARABLE FACTORING TABLE ─────────────────────────────── */}
         <section>
-          {/* Section Header */}
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-9 w-9 items-center justify-center">
-                <div className="absolute inset-0 rounded-xl bg-accent/20 blur-sm"></div>
-                <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-accent/30 bg-accent/15 text-base">⚖️</span>
-              </div>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-text-primary">Market Adjustment Factors</h3>
-                <p className="mt-0.5 text-[9px] font-semibold text-text-dim uppercase tracking-widest">Subject position vs. comparable market evidence</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 rounded-xl border border-border-soft bg-bg-input px-3 py-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
-                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">Confidence</span>
-                <span className={`text-[10px] font-black ${confidence === 'High' ? 'text-green-400' :
-                  confidence === 'Low' ? 'text-red-400' : 'text-amber-400'
-                  }`}>{confidence || "Medium"}</span>
-              </div>
-              <div className="rounded-xl border border-border-soft bg-bg-input px-3 py-1.5">
-                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-text-dim">{factorEntries.length} factors</span>
-              </div>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">Per-Comparable Factor Adjustment Table</h3>
+              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-border-soft bg-bg-card/40 shadow-xl">
-            {/* Column Headers */}
-            <div className="grid grid-cols-[2fr_3fr_80px_120px_56px] border-b border-border-soft bg-bg-input px-2">
-              {["Factor", "Subject vs Market", "Weight", "Net Impact", ""].map((h, i) => (
-                <div key={i} className={`px-3 py-3 text-[8px] font-black uppercase tracking-[0.18em] text-text-dim ${i >= 2 ? 'text-right' : ''} ${i === 4 ? 'text-center' : ''}`}>{h}</div>
+          <div className="overflow-x-auto rounded-2xl border border-border-soft shadow-xl">
+            <table className="w-full text-left text-[10px] min-w-[900px]">
+              <thead>
+                <tr className="bg-bg-input border-b border-border-soft text-text-dim uppercase tracking-widest font-black text-[8px]">
+                  <th className="px-5 py-3.5 min-w-[180px]">Project Name</th>
+                  <th className="px-4 py-3.5 text-center">Road Type</th>
+                  <th className="px-4 py-3.5 text-center min-w-[140px]">Amenity</th>
+                  <th className="px-4 py-3.5 text-center">Density Score</th>
+                  <th className="px-4 py-3.5 text-center">CBD (km)</th>
+                  <th className="px-4 py-3.5 text-right">Avg Rate</th>
+                  <th className="px-4 py-3.5 text-center">Factor</th>
+                  <th className="px-4 py-3.5 text-right min-w-[150px]">Net Factored Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Subject row */}
+                {subjectRow && (
+                  <tr className="bg-accent/10 border-b border-accent/20">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-text-primary text-[11px]">{subjectRow.project_name}</span>
+                        <span className="text-[7px] px-1.5 py-0.5 rounded bg-accent text-bg-deep font-black uppercase shrink-0">Subject</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-center font-mono font-bold text-accent">{subjectRow.road_type || "—"}</td>
+                    <td className="px-4 py-4 text-center">
+                      <AmenityCellChips summary={subjectRow.amenity_summary} isSubject />
+                    </td>
+                    <td className="px-4 py-4 text-center font-mono font-bold text-accent">{subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}</td>
+                    <td className="px-4 py-4 text-center">
+                      <CbdCell km={subjectRow.cbd_nearest_km} name={subjectRow.cbd_name} isSubject />
+                    </td>
+                    <td className="px-4 py-4 text-right font-mono font-bold text-green-400">{fmtRate(subjectRow.avg_rate)}</td>
+                    <td className="px-4 py-4 text-center text-[8px] font-black text-accent/50 uppercase">Base</td>
+                    <td className="px-4 py-4 text-right font-mono font-black text-green-400 text-[13px]">{fmtRate(subjectRow.avg_rate)}</td>
+                  </tr>
+                )}
+
+                {/* Comparable rows */}
+                {compRows.map((row, i) => {
+                  const totalF = row.total_factor != null ? Number(row.total_factor) : null;
+                  const factoredRate = row.factored_rate;
+                  return (
+                    <tr key={i} className="border-b border-border-dim hover:bg-bg-input/50 transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-text-dim">{row.road_type || "—"}</td>
+                      <td className="px-4 py-4 text-center">
+                        <AmenityCellChips summary={row.amenity_summary} />
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-text-dim">{row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}</td>
+                      <td className="px-4 py-4 text-center">
+                        <CbdCell km={row.cbd_nearest_km} name={row.cbd_name} />
+                      </td>
+                      <td className="px-4 py-4 text-right font-mono text-text-secondary">{fmtRate(row.avg_rate)}</td>
+                      <td className={`px-4 py-4 text-center font-mono font-black text-[12px] ${adjColor(totalF)}`}>
+                        {totalF != null ? (totalF >= 0 ? "+" : "") + (totalF * 100).toFixed(2) + "%" : "—"}
+                      </td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-[12px] text-blue-400">
+                        {fmtRate(factoredRate)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Factor breakdown legend */}
+          {compRows.some(r => r.factor_reasoning) && (
+            <div className="mt-4 space-y-2">
+              {compRows.filter(r => r.factor_reasoning).map((row, i) => (
+                <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
+                  
+                  {/* Attribute percentage chips */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
+                    <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_road > 0 ? "text-green-400" : row.factor_road < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Road: {row.factor_road != null ? (row.factor_road >= 0 ? "+" : "") + (row.factor_road * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_amenity > 0 ? "text-green-400" : row.factor_amenity < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Amenity: {row.factor_amenity != null ? (row.factor_amenity >= 0 ? "+" : "") + (row.factor_amenity * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_density > 0 ? "text-green-400" : row.factor_density < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Density: {row.factor_density != null ? (row.factor_density >= 0 ? "+" : "") + (row.factor_density * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_cbd > 0 ? "text-green-400" : row.factor_cbd < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      CBD: {row.factor_cbd != null ? (row.factor_cbd >= 0 ? "+" : "") + (row.factor_cbd * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-accent/15 border border-accent/25 font-mono text-[9px] font-black ${row.total_factor > 0 ? "text-green-400" : row.total_factor < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Total: {row.total_factor != null ? (row.total_factor >= 0 ? "+" : "") + (row.total_factor * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-text-secondary leading-relaxed">{row.factor_reasoning}</p>
+                </div>
               ))}
             </div>
-
-            {/* Factor Rows */}
-            <div className="divide-y divide-border-dim">
-              {factorEntries.map(([factor, breakdown], rowIdx) => {
-                const impact = Number(valuation_details?.net_impacts?.[factor] || 0);
-                const weight = valuation_details?.attribute_weights?.[factor];
-                const isPos = impact > 0;
-                const isNeg = impact < 0;
-                const barWidth = Math.min(Math.abs(impact) * 6, 100);
-
-                return (
-                  <div
-                    key={factor}
-                    className={`grid grid-cols-[2fr_3fr_80px_120px_56px] items-center px-2 transition-all duration-200 hover:bg-bg-input/35 ${rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-bg-input/10'
-                      }`}
-                  >
-                    {/* Factor Name */}
-                    <div className="flex items-center gap-2.5 px-3 py-4">
-                      <div className={`h-9 w-[3px] rounded-full flex-shrink-0 ${isPos ? 'bg-gradient-to-b from-green-400 to-green-600' :
-                        isNeg ? 'bg-gradient-to-b from-red-400 to-red-600' :
-                          'bg-gradient-to-b from-text-dim/40 to-text-dim/10'
-                        }`}></div>
-                      <div>
-                        <p className="text-[11px] font-black text-text-primary leading-tight">{factorLabel(factor)}</p>
-                        <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-text-dim">
-                          {breakdown?.projects?.length || 0} observations
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Subject vs Avg */}
-                    <div className="px-3 py-4">
-                      <p className="text-[10px] leading-[1.6] text-text-secondary line-clamp-2">
-                        {breakdown?.subject_vs_avg || "Comparable evidence reviewed."}
-                      </p>
-                    </div>
-
-                    {/* Weight */}
-                    <div className="px-3 py-4 text-right">
-                      <span className="rounded-md border border-border-soft bg-bg-input px-2 py-0.5 font-mono text-[10px] font-bold text-text-secondary">
-                        {weight != null ? Number(weight).toFixed(2) : "—"}
-                      </span>
-                    </div>
-
-                    {/* Net Impact — bar + value */}
-                    <div className="px-3 py-4">
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`text-[13px] font-black font-mono ${isPos ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-text-dim'
-                          }`}>
-                          {fmtPct(impact)}
-                        </span>
-                        <div className="h-1 w-full rounded-full bg-border-soft overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${isPos ? 'bg-gradient-to-r from-green-600 to-green-400' :
-                              isNeg ? 'bg-gradient-to-r from-red-600 to-red-400' :
-                                'bg-text-dim/40'
-                              }`}
-                            style={{ width: `${barWidth}%`, marginLeft: isNeg ? 'auto' : undefined }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Audit Button */}
-                    <div className="flex items-center justify-center px-2 py-4">
-                      <button
-                        onClick={() => setMaximizedFactor(factor)}
-                        className="group flex h-7 w-7 items-center justify-center rounded-lg border border-border-soft bg-bg-input text-[10px] transition-all duration-200 hover:border-accent/50 hover:bg-accent/15 hover:shadow-[0_0_12px_rgba(167,139,250,0.2)]"
-                        title={`Audit ${factorLabel(factor)}`}
-                      >
-                        <span className="group-hover:scale-110 transition-transform">🔍</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer — Total Correction */}
-            <div className={`flex items-center justify-between border-t px-5 py-4 ${totalAdjustment >= 0
-              ? 'border-green-500/20 bg-gradient-to-r from-green-500/[0.08] to-transparent'
-              : 'border-red-500/20 bg-gradient-to-r from-red-500/[0.08] to-transparent'
-              }`}>
-              <div className="flex items-center gap-3">
-                <span className="text-[9px] font-black uppercase tracking-[0.22em] text-text-dim">Total Correction Factor</span>
-                <span className="rounded-full border border-border-soft bg-bg-input px-2 py-0.5 text-[8px] font-bold text-text-dim">{factorEntries.length} factors applied</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-2xl font-black font-mono ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>{fmtPct(totalAdjustment)}</span>
-                <span className={`rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${totalAdjustment >= 0
-                  ? 'bg-green-500/15 text-green-400 border border-green-500/20'
-                  : 'bg-red-500/15 text-red-400 border border-red-500/20'
-                  }`}>{totalAdjustment >= 0 ? 'Premium' : 'Discount'}</span>
-              </div>
-            </div>
-          </div>
+          )}
         </section>
 
-        {/* EXECUTIVE VALUATION DERIVATION — Enhanced */}
-        <section className="pt-4">
-          <div className="relative mx-auto">
-            {/* Ambient glow */}
-            <div className="pointer-events-none absolute -inset-3 rounded-[3rem] bg-gradient-to-br from-accent/20 via-[#818cf8]/10 to-transparent blur-3xl opacity-60"></div>
+        {/* ── DERIVED RATE AND VALUE SUMMARY ─────────────────────────────── */}
+        {(() => {
+          const propType = (subjectData?.property_type || "").toLowerCase().trim();
+          let selectedArea = 0;
+          let areaLabel = "Area";
 
-            <div className="relative overflow-hidden rounded-[2rem] border border-border-soft bg-bg-card shadow-2xl">
+          if (["flat", "apartment", "shop", "retail", "office", "commercial_office"].includes(propType)) {
+            selectedArea = Number(subjectData?.salable_area_sqft || 0);
+            areaLabel = "Salable Area";
+          } else if (["villa", "house"].includes(propType)) {
+            selectedArea = Number(subjectData?.builtup_area_sqft || 0);
+            areaLabel = "Built-up Area";
+          } else if (["land", "plot"].includes(propType)) {
+            selectedArea = Number(subjectData?.plot_area_sqft || 0);
+            areaLabel = "Total Area";
+          } else {
+            // fallback: check in logical order
+            selectedArea = Number(subjectData?.salable_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || subjectData?.carpet_area_sqft || 0);
+            if (subjectData?.salable_area_sqft) areaLabel = "Salable Area";
+            else if (subjectData?.builtup_area_sqft) areaLabel = "Built-up Area";
+            else if (subjectData?.plot_area_sqft) areaLabel = "Total Area";
+            else if (subjectData?.carpet_area_sqft) areaLabel = "Carpet Area";
+          }
 
-              {/* Section label bar */}
-              <div className="flex items-center justify-between border-b border-border-soft bg-bg-input px-8 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="absolute inset-0 rounded-lg bg-accent/30 blur"></div>
-                    <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 border border-accent/30 text-sm">🎯</span>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.5em] text-text-dim">Executive Valuation Derivation</p>
-                  </div>
+          return (
+            <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
+              
+              <div className="flex-1 space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
+                <div className="flex items-baseline gap-1">
+                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)]">
+                    {fmtRate(finalRate)}
+                  </h2>
+                  <span className="text-xs text-text-dim font-bold">/ {area_unit || "sqft"}</span>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-lg border border-border-soft bg-bg-input px-3 py-1.5">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400"></span>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Derived</span>
-                </div>
-              </div>
-
-              {/* Formula row */}
-              <div className="flex flex-wrap items-stretch justify-center gap-0 border-b border-border-soft px-8 py-8">
-                {/* Base Rate block */}
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-border-soft bg-bg-input px-8 py-5 min-w-[140px]">
-                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Base Rate</p>
-                  <p className="font-mono text-xl font-black text-text-primary">{fmtRate(valuation_details?.base_rate)}</p>
-                  <p className="mt-1 text-[8px] text-text-dim">/ {rateUnitLabel}</p>
-                </div>
-
-                {/* Operator */}
-                <div className="flex items-center px-5">
-                  <span className="text-3xl font-black text-accent/50">×</span>
-                </div>
-
-                {/* Adjustment multiplier block */}
-                <div className={`flex flex-col items-center justify-center rounded-2xl border px-8 py-5 min-w-[160px] ${totalAdjustment >= 0
-                  ? 'border-green-500/20 bg-green-500/[0.05]'
-                  : 'border-red-500/20 bg-red-500/[0.05]'
-                  }`}>
-                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Multiplier</p>
-                  <p className={`font-mono text-xl font-black ${totalAdjustment >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                    {(1 + totalAdjustment / 100).toFixed(4)}
+                {selectedArea > 0 ? (
+                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider">
+                    Calculated on <span className="text-accent-light">{selectedArea.toLocaleString()} {area_unit || "sqft"}</span> of {areaLabel}
                   </p>
-                  <p className={`mt-1 text-[9px] font-bold ${totalAdjustment >= 0 ? 'text-green-400/50' : 'text-red-400/50'
-                    }`}>(1 {totalAdjustment >= 0 ? '+' : ''}{(totalAdjustment / 100).toFixed(4)})</p>
-                </div>
-
-                {/* Equals */}
-                <div className="flex items-center px-5">
-                  <span className="text-3xl font-black text-text-dim">=</span>
-                </div>
-
-                {/* Final Rate block — hero */}
-                <div className="relative flex flex-col items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-b from-accent/10 to-accent/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(167,139,250,0.12)]">
-                  <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-accent/20 to-transparent opacity-40"></div>
-                  <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-accent/60">Final Rate</p>
-                  <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.5)]">{fmtRate(subject_final_rate)}</p>
-                  <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-accent/40">/ {rateUnitLabel}</p>
-                </div>
-
-                {calculatedValue > 0 && (
-                  <>
-                    {/* Operator */}
-                    <div className="flex items-center px-5">
-                      <span className="text-3xl font-black text-text-dim">×</span>
-                    </div>
-
-                    {/* Property Value block */}
-                    {/* <div className="relative flex flex-col items-center justify-center rounded-2xl border border-green-500/25 bg-gradient-to-b from-green-500/10 to-green-500/[0.04] px-10 py-5 min-w-[180px] shadow-[0_0_30px_rgba(34,197,94,0.12)]">
-                      <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-green-500/20 to-transparent opacity-40"></div>
-                      <p className="mb-2 text-[8px] font-black uppercase tracking-[0.3em] text-green-400/60">Property Value</p>
-                      <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(34,197,94,0.5)]">{fmt(calculatedValue)}</p>
-                      <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wider text-green-400/40">On Saleable Area</p>
-                    </div> */}
-                  </>   
+                ) : (
+                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse">
+                    Please enter the {areaLabel} in subject details to view final valuation
+                  </p>
                 )}
               </div>
 
-              {/* Market Range gauge */}
-              {subject_rate_range && (() => {
-                const low = Number(subject_rate_range.low || 0);
-                const high = Number(subject_rate_range.high || 1);
-                const final = Number(subject_final_rate || 0);
-                const pct = high > low ? Math.min(100, Math.max(0, ((final - low) / (high - low)) * 100)) : 50;
-                return (
-                  <div className="px-8 py-6">
-                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-text-dim">Market Rate Positioning</p>
-                    <div className="relative">
-                      {/* Track */}
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-red-500/30 via-amber-400/30 to-green-500/30">
-                        {/* Fill */}
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-red-400/60 via-amber-400/70 to-green-400/80 transition-all duration-1000"
-                          style={{ width: `${pct}%` }}
-                        ></div>
-                      </div>
-                      {/* Thumb */}
-                      <div
-                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
-                        style={{ left: `${pct}%` }}
-                      >
-                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-bg-dark shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="text-left">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-red-400/60">Market Low</p>
-                        <p className="font-mono text-xs font-black text-text-secondary">{fmtRate(low)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[7px] font-black uppercase tracking-[0.14em] text-accent/50">Subject Rate</p>
-                        <p className="font-mono text-[11px] font-black text-accent">{fmtRate(final)}</p>
-                        <p className="text-[7px] text-text-dim mt-0.5">{pct.toFixed(0)}th percentile</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-green-400/60">Market High</p>
-                        <p className="font-mono text-xs font-black text-text-secondary">{fmtRate(high)}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {subject_rate_range && area > 0 && subjectData?.recommended_approach !== "cost" && (() => {
-                const lowVal = Number(subject_rate_range.low || 0) * area;
-                const highVal = Number(subject_rate_range.high || 1) * area;
-                const finalVal = Number(subject_final_rate || 0) * area;
-                const pct = highVal > lowVal ? Math.min(100, Math.max(0, ((finalVal - lowVal) / (highVal - lowVal)) * 100)) : 50;
-                return (
-                  <div className="px-8 py-6 border-t border-white/5 bg-white/[0.01]">
-                    <p className="mb-4 text-[8px] font-black uppercase tracking-[0.3em] text-white/25">Market Value Positioning</p>
-                    <div className="relative">
-                      {/* Track */}
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-gradient-to-r from-red-500/30 via-amber-400/30 to-green-500/30">
-                        {/* Fill */}
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-red-400/60 via-amber-400/70 to-green-400/80 transition-all duration-1000"
-                          style={{ width: `${pct}%` }}
-                        ></div>
-                      </div>
-                      {/* Thumb */}
-                      <div
-                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
-                        style={{ left: `${pct}%` }}
-                      >
-                        <div className="h-4 w-4 rounded-full border-2 border-accent bg-[#13182e] shadow-[0_0_10px_rgba(167,139,250,0.6)]"></div>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="text-left">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-red-400/60">Value Low</p>
-                        <p className="font-mono text-xs font-black text-white/50">{fmt(lowVal)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[7px] font-black uppercase tracking-[0.14em] text-accent/50">Subject Value</p>
-                        <p className="font-mono text-[11px] font-black text-accent">{fmt(finalVal)}</p>
-                        <p className="text-[7px] text-white/20 mt-0.5">{pct.toFixed(0)}th percentile</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-green-400/60">Value High</p>
-                        <p className="font-mono text-xs font-black text-white/50">{fmt(highVal)}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {area > 0 && subjectData?.recommended_approach !== "cost" && (
-                <div className="relative border-t border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent p-8 text-center space-y-3">
-                  <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-accent/20 to-transparent blur-2xl opacity-40"></div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-accent/70">Final Market Approach Property Value</span>
-
-                  <div className="space-y-1">
-                    <h1 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
-                      {fmt(calculatedValue)}
-                    </h1>
-                    <p className="text-[9px] text-accent/60 font-semibold uppercase tracking-widest">
-                      Derived Rate {fmtRate(rate)}/sqft × Subject Area {area.toLocaleString()} sqft
-                    </p>
-                  </div>
+              {selectedArea > 0 && (
+                <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80">Valuation Value</span>
+                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
+                    {formatter.format(finalRate * selectedArea)}
+                  </h2>
+                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest">
+                    {fmtRate(finalRate)}/{area_unit || "sqft"} × {selectedArea.toLocaleString()} {area_unit || "sqft"} ({areaLabel})
+                  </p>
                 </div>
               )}
-            </div>
-          </div>
-        </section>
+            </section>
+          );
+        })()}
 
+
+        {/* ── REASONING REPORT ──────────────────────────────────────── */}
         {raw_markdown_report && (
-          <section className="pt-2">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-lg">🧾</span>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-text-primary">ReAct Reasoning Report</h3>
-            </div>
-            <ReActReasoningReport report={raw_markdown_report} />
+          <section>
+            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
+              <span className="flex items-center gap-2">🧾 LLM Reasoning Report</span>
+              <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
+            </button>
+            {showReport && (
+              <div className="mt-3 rounded-xl border border-border-soft bg-bg-dark/40 p-4 overflow-auto max-h-[600px] custom-scrollbar animate-in fade-in duration-200">
+                <ReActReasoningReport report={raw_markdown_report} />
+              </div>
+            )}
           </section>
         )}
+
+        {reconciliation_note && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
+            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
+            <p className="text-[10px] text-text-secondary leading-relaxed">{reconciliation_note}</p>
+          </div>
+        )}
+
       </div>
     </div>
   );
 
   if (isSectionMaximized && typeof document !== "undefined") {
     return createPortal(
-      <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl p-4 md:p-8 flex items-center justify-center animate-in fade-in duration-300">
-        <div className="w-full h-full">
-          {DashboardContent}
+      <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl animate-in fade-in duration-300 flex flex-col">
+        {/* Sticky top bar with close button */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-border-soft bg-bg-card/80 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</p>
+              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsSectionMaximized(false)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim"
+          >
+            ✕ Collapse
+          </button>
+        </div>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          {MainContent}
         </div>
       </div>,
       document.body
     );
   }
 
-  return DashboardContent;
+  return MainContent;
 }
+
+
 
 // ── Cost Approach Inputs Form ────────────────────────────────────
 function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData }) {
