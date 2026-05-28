@@ -2708,7 +2708,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
                   next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
                   next.model_breakdown[model].total += total;
-                  next.cost_usd = (next.cost_usd || 0) + ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
+
+                  const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+                  const promptRate = isGpt4o ? 5.00 : 0.15;
+                  const completionRate = isGpt4o ? 15.00 : 0.60;
+                  const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
+                  next.cost_usd = (next.cost_usd || 0) + addedCost;
                   return next;
                 });
                 setMessages((prev) => {
@@ -2850,7 +2855,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             const auditStats = event.content?.audit_stats || {};
             const newUsage = auditStats.token_usage || {};
             const total = newUsage.total_tokens || 0;
-            const model = "gpt-4o-mini";
+            const model = newUsage.model || "gpt-4o-mini";
 
             setCleanedData(cleanedListings);
             setTokenStats((prev) => {
@@ -2863,7 +2868,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
               next.model_breakdown[model].total += total;
 
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
+              const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+              const promptRate = isGpt4o ? 5.00 : 0.15;
+              const completionRate = isGpt4o ? 15.00 : 0.60;
+              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
               next.cost_usd = (next.cost_usd || 0) + addedCost;
               return next;
             });
@@ -3244,8 +3252,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 next.model_breakdown[model].completion += (usage.completion_tokens || 0);
                 next.model_breakdown[model].total += total;
 
-                // Stage 5 cost (GPT-4o) - $5/1M input, $15/1M output
-                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * 5.00) + ((usage.completion_tokens || 0) / 1000000 * 15.00);
+                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+                const promptRate = isGpt4o ? 5.00 : 0.15;
+                const completionRate = isGpt4o ? 15.00 : 0.60;
+                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * promptRate) + ((usage.completion_tokens || 0) / 1000000 * completionRate);
                 next.cost_usd = (next.cost_usd || 0) + addedCost;
 
                 // Track current stage
