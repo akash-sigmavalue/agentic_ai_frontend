@@ -145,7 +145,7 @@ function StepperPipelineGraph({
   const nodes: { id: GraphNodeId; label: string; sub?: string }[] = [
     { id: "start", label: "Start", sub: "Document ready" },
     { id: "retrieve", label: "Retrieve", sub: "FAISS / BM25 / Rerank" },
-    { id: "generate", label: "Generate", sub: "gpt-4o-mini / temperature 0.2" },
+    { id: "generate", label: "Generate", sub: "gpt-4o-mini / temperature 0.1" },
     // { id: "check_answer", label: "Verify", sub: "Answer grounding / applicability check" },
     { id: "end", label: "Complete", sub: "Answer delivered" },
   ];
@@ -597,9 +597,16 @@ export default function Home() {
                         <span className="max-w-[70%] overflow-hidden text-[#174bd2] text-xs font-bold text-ellipsis whitespace-nowrap">
                           {chunk.source}
                         </span>
-                        <span className="border border-[#d8dee8] rounded-full bg-[#f8fafc] text-[#0a0a0a] text-xs font-bold px-2 py-0.5 whitespace-nowrap">
-                          Page {chunk.page_range || chunk.page}
-                        </span>
+                        <div className="flex gap-2">
+                          {chunk.confidence_score !== undefined && (
+                            <span className="border border-[#c9d7f5] rounded-full bg-[#eef4ff] text-[#174bd2] text-xs font-bold px-2 py-0.5 whitespace-nowrap">
+                              Score: {chunk.confidence_score}
+                            </span>
+                          )}
+                          <span className="border border-[#d8dee8] rounded-full bg-[#f8fafc] text-[#0a0a0a] text-xs font-bold px-2 py-0.5 whitespace-nowrap">
+                            Page {chunk.page_range || chunk.page}
+                          </span>
+                        </div>
                       </div>
                       {chunk.type === "image" && chunk.image_base64 ? (
                         <figure className="m-0">

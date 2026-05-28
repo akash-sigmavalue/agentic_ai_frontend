@@ -304,6 +304,7 @@ export type Chunk = {
   image_base64?: string;
   image_mime?: string;
   relevance_score?: number;
+  confidence_score?: number;
 };
 
 export type AskResult = {
