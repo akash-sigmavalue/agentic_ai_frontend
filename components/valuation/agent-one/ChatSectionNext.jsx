@@ -2663,102 +2663,92 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         });
       }
 
-      // ── 2. Fetch web listings for Web comparables ──────────────────────
-      if (webComps.length > 0) {
-        setStreamingNote(`🌐 Fetching web listings for ${webComps.length} web comparable(s)...`);
-        const response = await fetch(apiUrl("/listing_stream"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subject: subjectData,
-            selected_comparables: webComps,
-            property_type: subjectData.property_type || "apartment",
-          }),
-        });
+      // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
+      const webFetchNote = webComps.length > 0 
+        ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+        : `🌐 Fetching web listings for Subject Project...`;
+      setStreamingNote(webFetchNote);
 
-        if (response.ok && response.body) {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
+      const response = await fetch(apiUrl("/listing_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: subjectData,
+          selected_comparables: webComps,
+          property_type: subjectData.property_type || "apartment",
+        }),
+      });
 
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const chunks = buffer.split("\n\n");
-            buffer = chunks.pop() || "";
+      if (response.ok && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-            for (const chunk of chunks) {
-              if (!chunk.startsWith("data: ")) continue;
-              const event = JSON.parse(chunk.slice(6));
-              onEvent?.(event);
-              const summary = summarizeEvent(event);
-              setStreamingNote(summary);
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
 
-              if (event.type === "listing_results") {
-                const listings = event.content?.listings || [];
-                const newUsage = event.content?.token_usage || {};
-                const total = newUsage.total_tokens || 0;
-                const model = newUsage.model || "gpt-4o-mini";
-                setListingData(listings);
-                setTokenStats((prev) => {
-                  const next = { ...prev };
-                  next.total_tokens += total;
-                  if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-                  next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-                  next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-                  next.model_breakdown[model].total += total;
+          for (const chunk of chunks) {
+            if (!chunk.startsWith("data: ")) continue;
+            const event = JSON.parse(chunk.slice(6));
+            onEvent?.(event);
+            const summary = summarizeEvent(event);
+            setStreamingNote(summary);
 
-                  const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-                  const promptRate = isGpt4o ? 5.00 : 0.15;
-                  const completionRate = isGpt4o ? 15.00 : 0.60;
-                  const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
-                  next.cost_usd = (next.cost_usd || 0) + addedCost;
-                  return next;
-                });
-                setMessages((prev) => {
-                  const next = [...prev];
-                  const lastIndex = next.length - 1;
-                  if (lastIndex >= 0) {
-                    next[lastIndex] = {
-                      ...next[lastIndex],
-                      role: "assistant",
-                      content: summary,
-                      meta: "listing results",
-                      listings,
-                      // Preserve any DB transactions stamped in the same message
-                      db_transactions: next[lastIndex].db_transactions || [],
-                    };
-                  }
-                  return next;
-                });
-              }
+            if (event.type === "listing_results") {
+              const listings = event.content?.listings || [];
+              const newUsage = event.content?.token_usage || {};
+              const total = newUsage.total_tokens || 0;
+              const model = newUsage.model || "gpt-4o-mini";
+              setListingData(listings);
+              setTokenStats((prev) => {
+                const next = { ...prev };
+                next.total_tokens += total;
+                if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
+                next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
+                next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
+                next.model_breakdown[model].total += total;
 
-              if (event.type === "listing_done" || event.type === "error") {
-                setMessages((prev) => {
-                  const next = [...prev];
-                  const lastIndex = next.length - 1;
-                  if (lastIndex >= 0 && !next[lastIndex].listings) {
-                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
-                  }
-                  return next;
-                });
-              }
+                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+                const promptRate = isGpt4o ? 5.00 : 0.15;
+                const completionRate = isGpt4o ? 15.00 : 0.60;
+                const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
+                next.cost_usd = (next.cost_usd || 0) + addedCost;
+                return next;
+              });
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0) {
+                  next[lastIndex] = {
+                    ...next[lastIndex],
+                    role: "assistant",
+                    content: summary,
+                    meta: "listing results",
+                    listings,
+                    // Preserve any DB transactions stamped in the same message
+                    db_transactions: next[lastIndex].db_transactions || [],
+                  };
+                }
+                return next;
+              });
+            }
+
+            if (event.type === "listing_done" || event.type === "error") {
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0 && !next[lastIndex].listings) {
+                  next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                }
+                return next;
+              });
             }
           }
         }
-      } else if (allDbTransactions.length > 0) {
-        // Only DB comparables were selected — update meta
-        setMessages((prev) => {
-          const next = [...prev];
-          const lastIndex = next.length - 1;
-          if (lastIndex >= 0) {
-            next[lastIndex] = { ...next[lastIndex], role: "assistant", content: `✅ Fetched ${allDbTransactions.length} transaction(s) from Internal DB.`, meta: "listing results" };
-          }
-          return next;
-        });
-        // Set listingData to empty array so the "Proceed to Cleaning" CTA appears
-        setListingData([]);
       }
 
     } catch (error) {
