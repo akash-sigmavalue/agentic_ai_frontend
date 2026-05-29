@@ -21,6 +21,22 @@ export default function FrontendDashboard() {
     ],
     [],
   );
+  const pipelineOptions = useMemo(
+    () => [
+      { value: "v1", label: "Agent v1" },
+      { value: "v2", label: "Agent v2" },
+    ],
+    [],
+  );
+  const modelOptions = useMemo(
+    () => [
+      { value: "gpt-4o-mini", label: "GPT-4o mini" },
+      { value: "gpt-5.1", label: "GPT-5.1" },
+      { value: "deepseek.v3.2", label: "AWS Bedrock - DeepSeek V3.2" },
+      { value: "moonshotai.kimi-k2.5", label: "AWS Bedrock - Kimi K2.5" },
+    ],
+    [],
+  );
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -30,6 +46,8 @@ export default function FrontendDashboard() {
   const [tokenEvents, setTokenEvents] = useState([]);
   const [sessionId, setSessionId] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("auto");
+  const [selectedPipeline, setSelectedPipeline] = useState("v1");
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const [stageCards, setStageCards] = useState([]);
   const [clarificationState, setClarificationState] = useState({
     awaiting: false,
@@ -41,20 +59,40 @@ export default function FrontendDashboard() {
   const eventSourceRef = useRef(null);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("reai-session-id") || "";
-    const storedAgent = window.localStorage.getItem("reai-selected-agent") || "auto";
-    setSessionId(stored);
-    if (["auto", "transaction", "project"].includes(storedAgent)) {
-      setSelectedAgent(storedAgent);
-    }
+    queueMicrotask(() => {
+      const stored = window.localStorage.getItem("reai-session-id") || "";
+      const storedAgent = window.localStorage.getItem("reai-selected-agent") || "auto";
+      const storedPipeline = window.localStorage.getItem("reai-selected-pipeline") || "v1";
+      const storedModel = window.localStorage.getItem("reai-selected-v2-model") || "gpt-4o-mini";
+      setSessionId(stored);
+      if (["auto", "transaction", "project"].includes(storedAgent)) {
+        setSelectedAgent(storedAgent);
+      }
+      if (["v1", "v2"].includes(storedPipeline)) {
+        setSelectedPipeline(storedPipeline);
+      }
+      if (modelOptions.some((option) => option.value === storedModel)) {
+        setSelectedModel(storedModel);
+      }
+    });
     return () => {
       eventSourceRef.current?.close();
     };
-  }, []);
+  }, [modelOptions]);
 
   function handleAgentChange(nextAgent) {
     setSelectedAgent(nextAgent);
     window.localStorage.setItem("reai-selected-agent", nextAgent);
+  }
+
+  function handlePipelineChange(nextPipeline) {
+    setSelectedPipeline(nextPipeline);
+    window.localStorage.setItem("reai-selected-pipeline", nextPipeline);
+  }
+
+  function handleModelChange(nextModel) {
+    setSelectedModel(nextModel);
+    window.localStorage.setItem("reai-selected-v2-model", nextModel);
   }
 
   function resetRunState() {
@@ -161,6 +199,20 @@ export default function FrontendDashboard() {
   function buildSubmissionPayload() {
     const freeText = input.trim();
 
+    if (clarificationState.awaiting && selectedPipeline === "v2") {
+      if (!freeText) {
+        return null;
+      }
+      const originalQuery = clarificationState.meta?.original_query || "";
+      const requestText = originalQuery
+        ? `${originalQuery}\nClarification answer: ${freeText}`
+        : freeText;
+      return {
+        requestText,
+        displayText: freeText,
+      };
+    }
+
     if (!clarificationState.awaiting || clarificationState.meta?.clarification_type !== "space_filter") {
       return freeText ? { requestText: freeText, displayText: freeText } : null;
     }
@@ -249,14 +301,20 @@ export default function FrontendDashboard() {
     resetRunState();
 
     const params = new URLSearchParams({ question: submission.requestText });
-    if (selectedAgent !== "auto") {
+    if (selectedPipeline === "v1" && selectedAgent !== "auto") {
       params.set("selected_domain", selectedAgent);
     }
     if (sessionId) {
       params.set("session_id", sessionId);
     }
+    if (selectedPipeline === "v2") {
+      params.set("model", selectedModel);
+    }
 
-    const source = new EventSource(apiUrl(`/ask_stream_data_retrieval?${params.toString()}`));
+    const streamPath = selectedPipeline === "v2"
+      ? "/aks_stream_data_retrieval_agent_v2"
+      : "/ask_stream_data_retrieval";
+    const source = new EventSource(apiUrl(`${streamPath}?${params.toString()}`));
     eventSourceRef.current = source;
 
     source.onmessage = (message) => {
@@ -479,6 +537,28 @@ export default function FrontendDashboard() {
                 style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}
               >
                 <span className="font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
+                  Pipeline
+                </span>
+                <select
+                  value={selectedPipeline}
+                  onChange={(event) => handlePipelineChange(event.target.value)}
+                  className="cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                  style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
+                  aria-label="Select data retrieval pipeline"
+                  disabled={isStreaming}
+                >
+                  {pipelineOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)", opacity: selectedPipeline === "v2" ? 0.55 : 1 }}
+              >
+                <span className="font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
                   Agent
                 </span>
                 <select
@@ -487,6 +567,7 @@ export default function FrontendDashboard() {
                   className="cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
                   style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
                   aria-label="Select domain agent"
+                  disabled={isStreaming || selectedPipeline === "v2"}
                 >
                   {agentOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -495,9 +576,33 @@ export default function FrontendDashboard() {
                   ))}
                 </select>
               </label>
+              {selectedPipeline === "v2" ? (
+                <label
+                  className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                  style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}
+                >
+                  <span className="font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
+                    Model
+                  </span>
+                  <select
+                    value={selectedModel}
+                    onChange={(event) => handleModelChange(event.target.value)}
+                    className="max-w-[210px] cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                    style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
+                    aria-label="Select data retrieval agent v2 model"
+                    disabled={isStreaming}
+                  >
+                    {modelOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <div className="rounded-lg border px-3 py-2 font-mono text-xs" style={{ borderColor: "var(--border-soft)", background: "var(--bg-input)" }}>
                 <span style={{ color: "var(--text-dim)" }}>CORE:</span>{" "}
-                <span className="font-semibold" style={{ color: "var(--accent-light)" }}>FastAPI SSE</span>
+                <span className="font-semibold" style={{ color: "var(--accent-light)" }}>{selectedPipeline === "v2" ? "FastAPI SSE v2" : "FastAPI SSE"}</span>
               </div>
               <div className="hidden gap-1 md:flex">
                 {["TRX", "PRJ", "LST", "AMN"].map((label) => (
@@ -532,7 +637,7 @@ export default function FrontendDashboard() {
               }))
             }
             onClear={clearConversation}
-            backendLabel={apiBaseUrl}
+            backendLabel={`${apiBaseUrl} · ${selectedPipeline === "v2" ? "agent v2" : "agent v1"}`}
           />
           <WorkflowSection stageCards={stageCards} isGenerating={isStreaming} totalTokens={totalTokens} tokenEvents={tokenEvents} />
           <MapSection />
