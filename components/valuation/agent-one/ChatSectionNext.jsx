@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { apiUrl } from "@/lib/api-client";
+import {
+  MessageSquareCode,
+  Bot,
+  FileSearch,
+  Sparkles,
+  TrendingUp,
+  MapPin,
+  SlidersHorizontal,
+  ShieldCheck,
+  AlertTriangle,
+  Database,
+  CheckCircle
+} from "lucide-react";
 
 const QUICK_PROMPTS = [
   "Value a 2BHK flat in Hiranandani Gardens, Powai, Mumbai. 1100 sqft, 5 years old, floor 15/25, West facing",
@@ -196,28 +209,28 @@ function summarizeEvent(event) {
   if (event.type === "workflow") return "Agent 3 has compiled the execution workflow steps.";
   if (event.type === "comparable_search_progress") {
     const p = event.content;
-    return `🔍 Searching radius ${p?.radius_km}km — iteration ${p?.iteration}, ${p?.comps_so_far} comps found so far...`;
+    return `[SEARCH] Searching radius ${p?.radius_km}km — iteration ${p?.iteration}, ${p?.comps_so_far} comps found so far...`;
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    return `✅ Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
+    return `[SUCCESS] Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
     const p = event.content;
-    if (p?.status === "scraped") return `📄 ${p?.project}: ${p?.detail?.listings_found || 0} listings found`;
-    if (p?.status === "fallback") return `🔄 Running fallback search for ${p?.detail?.projects?.length || 0} projects...`;
-    return `📡 Listing pipeline: ${p?.status}`;
+    if (p?.status === "scraped") return `[SCRAPED] ${p?.project}: ${p?.detail?.listings_found || 0} listings found`;
+    if (p?.status === "fallback") return `[FALLBACK] Running fallback search for ${p?.detail?.projects?.length || 0} projects...`;
+    return `[PIPELINE] Listing pipeline: ${p?.status}`;
   }
   if (event.type === "listing_results") {
-    return `📊 Fetched ${event.content?.total_listings || 0} listings across ${event.content?.projects_processed || 0} projects.`;
+    return `[LISTINGS] Fetched ${event.content?.total_listings || 0} listings across ${event.content?.projects_processed || 0} projects.`;
   }
   if (event.type === "listing_done") return "Listing fetch completed.";
   if (event.type === "extraction_verification") return event.content?.message || "Please verify the extracted attributes.";
   if (event.type === "factorial_start") return event.content?.message || "Analyzing project metrics...";
   if (event.type === "factorial_results") {
     const t = event.content?.table || [];
-    return `📈 Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
+    return `[METRICS] Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
   }
   if (event.type === "factorial_done") return "Valuation analytics generated.";
   if (event.type === "done") return "Pipeline execution completed or artificially frozen.";
@@ -228,11 +241,6 @@ function summarizeEvent(event) {
 function humanizeFieldName(field) {
   return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
-
-
-
-
-
 
 // ── Road Type Badge ──────────────────────────────────────────────
 function RoadTypeBadge({ type }) {
@@ -739,7 +747,7 @@ function ListingTable({ listings, dbTransactions }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Listing Data Detail</h3>
-                  <p className="text-[10px] text-text-dim">{listings.length} total records found</p>
+                  <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
               <button
@@ -3842,28 +3850,27 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
 
   return (
-    <section className="panel-shell">
-      <div className="panel-header-shell">
+    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+      <div className="panel-header-shell border-b border-border/60">
         <div className="panel-title-shell">
-          <div className="icon-chip">💬</div>
-          <div>
-            <p className="panel-kicker">AI Assistant</p>
-            <h2 className="panel-heading">Chat With The LLM</h2>
+          <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
+            <MessageSquareCode className="h-5 w-5 text-accent" />
           </div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
-        <div className="panel-pill">{anyStreaming ? "LIVE" : "READY"}</div>
+        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-border bg-bg-card text-3xl shadow-panel">
-              🤖
+          <div className="flex h-full flex-col items-center justify-center text-center py-6">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
+              <Bot className="h-8 w-8 text-accent" />
             </div>
-            <h3 className="font-display text-base uppercase tracking-[0.14em] text-text-primary">
+            <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
               Start A Valuation Conversation
             </h3>
-            <p className="mt-2 max-w-xs text-sm text-text-secondary">
+            <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
               Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
             </p>
             <div className="mt-6 grid gap-3 w-full max-w-lg">
@@ -3872,16 +3879,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   key={prompt}
                   type="button"
                   onClick={() => submitQuestion(prompt)}
-                  className="rounded-2xl border border-border bg-bg-card px-4 py-3 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary"
+                  className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
                 >
                   {prompt}
                 </button>
               ))}
             </div>
 
-            <div className="mt-8 border-t border-border pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
+            <div className="mt-8 border-t border-border/50 pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-[11px] font-bold text-accent uppercase tracking-widest">⚡ Special Factorial Analysis</h4>
+                <h4 className="text-xs font-bold text-accent uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-accent animate-pulse" /> Special Factorial Analysis
+                </h4>
                 <button onClick={() => setShowSpecialForm(!showSpecialForm)} className="text-[10px] font-bold uppercase tracking-wider text-text-dim hover:text-white transition">
                   {showSpecialForm ? "Close" : "Setup Coordinates"}
                 </button>
@@ -3919,7 +3928,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 key={`${message.role}-${index}`}
                 className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
               >
-                <p className="mb-1 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
+                <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
                   {message.role === "user" ? "You" : `Assistant · ${message.meta}`}
                 </p>
                 <div
@@ -3940,21 +3949,21 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   )}
                   {/* DB found nothing but web results exist — amber warning */}
                   {message.db_no_results && message.comparables && (
-                    <div className="mt-2 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
-                      <span className="text-lg">🗄️</span>
+                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Internal DB</p>
-                        <p className="text-[10px] text-text-dim mt-0.5">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
+                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
                       </div>
                     </div>
                   )}
                   {/* DB found nothing AND no web comparables either */}
                   {message.db_no_results && !message.comparables && (
-                    <div className="mt-2 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
-                      <span className="text-xl">🗄️</span>
+                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <Database className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Project Found in DB</p>
-                        <p className="text-[10px] text-text-dim mt-0.5">The internal database returned no matching projects for this location and property type.</p>
+                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type.</p>
                       </div>
                     </div>
                   )}
@@ -3983,7 +3992,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       {costCalculationData ? (
                         <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
-                            ✅
+                            <CheckCircle className="h-4.5 w-4.5 text-success" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
@@ -4023,14 +4032,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         )}
       </div>
 
-      <div className="border-t border-border bg-bg-card px-4 py-3 backdrop-blur">
+      <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
         {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(34,211,238,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(34,211,238,0.16)] bg-[rgba(34,211,238,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(34,211,238,0.24)] bg-[rgba(34,211,238,0.12)] text-base font-semibold text-accent-light">
-                  📄
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                  <FileSearch className="h-5 w-5 text-accent-light" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
@@ -4052,7 +4061,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 type="button"
                 onClick={submitListingFetch}
                 disabled={selectedComps.size === 0}
-                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               >
                 Proceed to Next Step →
               </button>
@@ -4062,11 +4071,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
         {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,146,60,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(251,146,60,0.16)] bg-[rgba(251,146,60,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(251,146,60,0.24)] bg-[rgba(251,146,60,0.12)] text-base font-semibold text-[#fb923c]">
-                  🧹
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                  <Sparkles className="h-5 w-5 text-[#fb923c]" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
@@ -4085,7 +4094,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               <button
                 type="button"
                 onClick={submitCleaning}
-                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110"
+                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
               >
                 Start Data Cleaning →
               </button>
@@ -4095,11 +4104,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
         {/* ── Proceed to Factorial Table CTA ────────────────── */}
         {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(167,139,250,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(167,139,250,0.16)] bg-[rgba(167,139,250,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(167,139,250,0.24)] bg-[rgba(167,139,250,0.12)] text-base font-semibold text-[#a78bfa]">
-                  📈
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                  <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
@@ -4118,7 +4127,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               <button
                 type="button"
                 onClick={submitFactorial}
-                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110"
+                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
               >
                 Generate Factorial Table →
               </button>
@@ -4127,12 +4136,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         )}
 
         {(clarificationFields.length > 0 || mapConfirmation || approachChoiceNeeded || extractionVerification) && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,191,36,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(251,191,36,0.16)] bg-[rgba(251,191,36,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
+            <div className="border-b border-warning/15 bg-warning/5 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(251,191,36,0.24)] bg-[rgba(251,191,36,0.12)] text-base font-semibold text-warning">
-                    {mapConfirmation ? "◎" : approachChoiceNeeded ? "⚙️" : extractionVerification ? "✓" : "!"}
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
+                    {mapConfirmation ? (
+                      <MapPin className="h-5 w-5 text-warning" />
+                    ) : approachChoiceNeeded ? (
+                      <SlidersHorizontal className="h-5 w-5 text-warning" />
+                    ) : extractionVerification ? (
+                      <ShieldCheck className="h-5 w-5 text-warning" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-warning" />
+                    )}
                   </div>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
@@ -4152,7 +4169,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     setMapConfirmation(null);
                     setApproachChoiceNeeded(null);
                   }}
-                  className="text-sm text-text-dim transition hover:text-danger"
+                  className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
                 >
                   ×
                 </button>
@@ -4169,22 +4186,22 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       </span>
                       {schema.type === "select" ? (
                         <select
-                          value={clarificationValues[schema.field] || ""}
-                          onChange={(event) =>
-                            setClarificationValues((prev) => ({
-                              ...prev,
-                              [schema.field]: event.target.value,
-                            }))
-                          }
-                          className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                           value={clarificationValues[schema.field] || ""}
+                           onChange={(event) =>
+                             setClarificationValues((prev) => ({
+                               ...prev,
+                               [schema.field]: event.target.value,
+                             }))
+                           }
+                           className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
                         >
-                          <option value="" disabled style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>Select {schema.label}...</option>
+                          <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
                           {schema.options?.map(opt => {
                             const isObj = typeof opt === 'object';
                             const optValue = isObj ? opt.value : opt;
                             const optLabel = isObj ? opt.label : humanizeFieldName(opt);
                             return (
-                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>{optLabel}</option>
+                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>
                             );
                           })}
                         </select>
@@ -4206,7 +4223,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                               }
                             }}
                             placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-                            className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                           />
                           {schema.field === "age_years" && String(clarificationValues[schema.field]) === "0" && (
                             <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">
@@ -4243,7 +4260,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                         }))
                       }
                       placeholder={PLACEHOLDER_MAP.coordinates}
-                      className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                      className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
                   </label>
                   <button
@@ -4260,7 +4277,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   <button
                     type="button"
                     onClick={() => submitApproachChoice(true)}
-                    className="rounded-xl border border-warning bg-[rgba(251,191,36,0.1)] px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-[rgba(251,191,36,0.2)]"
+                    className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
                   >
                     Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach
                   </button>
@@ -4273,14 +4290,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       onChange={(e) =>
                         setClarificationValues({ ...clarificationValues, override_approach: e.target.value })
                       }
-                      className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning"
+                      className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
                     >
-                      <option value="" disabled style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Select approach...</option>
-                      <option key="market" value="market" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Market Approach</option>
+                      <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                      <option key="market" value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
                       <option
                         key="cost"
                         value="cost"
-                        style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
                         disabled={subjectData?.property_type !== "villa"}
                       >
                         Cost Approach {subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
@@ -4346,14 +4363,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
         {/* ── Token Breakdown UI ────────────────── */}
         {showTokenBreakdown && (
-          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-[rgba(15,23,42,0.8)] p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
               <div className="flex items-center gap-2">
-                <span className="text-lg">💎</span>
+                <Sparkles className="h-4 w-4 text-accent animate-pulse" />
                 <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
               </div>
               <div className="text-right">
-                <p className="text-[10px] uppercase tracking-widest text-text-dim">Estimated Cost</p>
+                <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
                 <p className="text-sm font-mono font-bold text-success">${tokenStats.cost_usd.toFixed(4)}</p>
                 {tokenStats.last_stage_tokens && (
                   <p className="text-[8px] text-accent-light font-bold mt-0.5">
@@ -4370,14 +4387,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   <p className="text-[11px] text-text-dim italic">No model data yet...</p>
                 ) : (
                   Object.entries(tokenStats.model_breakdown).map(([model, usage]) => (
-                    <div key={model} className="rounded-xl bg-white/5 p-2.5 border border-white/5">
+                    <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[11px] font-bold text-accent-light">{model}</span>
                         <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
                       </div>
                       <div className="flex gap-3">
                         <div className="flex-1">
-                          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-accent"
                               style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
@@ -4389,7 +4406,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                           </div>
                         </div>
                         <div className="flex-1">
-                          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-accent-purple"
                               style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
@@ -4409,7 +4426,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               <div className="space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
                 {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
-                  <div className="rounded-xl bg-white/5 p-3 text-center border border-dashed border-white/10">
+                  <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
                     <p className="text-[10px] text-text-dim">No tools called in this run.</p>
                   </div>
                 ) : (
@@ -4417,10 +4434,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs">🌐</span>
+                          <SlidersHorizontal className="h-4 w-4 text-accent" />
                           <div>
                             <p className="text-[10px] font-bold text-text-primary">{tool}</p>
-                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'call' : 'calls'}</p>
+                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -4432,9 +4449,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   ))
                 )}
 
-                <div className="mt-4 rounded-xl bg-bg-deep p-3 border border-white/5">
+                <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest text-text-dim">Efficiency</span>
+                    <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
                     <span className="text-[10px] font-bold text-success">Optimal</span>
                   </div>
                   <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
