@@ -469,6 +469,8 @@ export function buildGeneratedMapConfig(
       mapReady: Boolean(module2.map_readiness?.is_map_ready),
       needsGeoEnrichment: Boolean(module2.map_readiness?.needs_geo_enrichment),
     },
+    sourceModule1Intent: module1,
+    sourceModule2Output: module2,
     createdAt: new Date().toISOString(),
   };
 }

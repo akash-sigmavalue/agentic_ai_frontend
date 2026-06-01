@@ -55,6 +55,7 @@ export interface ThreeDMapRequest {
   include_debug_logs: boolean;
   fast_mode?: boolean;
   max_buildings?: number;
+  runtime_buildings?: Record<string, unknown>[];
 }
 
 export interface ThreeDMapLocation {
@@ -98,6 +99,7 @@ export interface ThreeDMapTimelapseRequest {
   include_debug_logs: boolean;
   fast_mode?: boolean;
   max_buildings?: number;
+  runtime_buildings?: Record<string, unknown>[];
 }
 
 export interface FloorRateCell {
@@ -138,6 +140,7 @@ export interface SpatialAnalysisRequest {
   subject_lat: number | null;
   subject_lon: number | null;
   use_subject: boolean;
+  radius_m?: number;
 }
 
 export interface SpatialAnalysisStats {

@@ -31,6 +31,7 @@ import {
   LineChart,
   MapPinned,
   Maximize2,
+  Minimize2,
   MonitorCog,
   Network,
   Plug,
@@ -42,12 +43,18 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { ExecutionPlanStep, Module1IntentOutput, Module2Output } from './types';
+import type {
+  ExecutionPlanStep,
+  Module1IntentOutput,
+  Module2Output,
+  VisualizationRetrievalState,
+} from './types';
 
 interface WorkflowSectionProps {
-  onToggle?: () => void;
-  isCollapsed?: boolean;
+  onToggleExpand?: () => void;
+  isExpanded?: boolean;
   moduleOutput?: Module1IntentOutput | null;
+  retrievalOutput?: VisualizationRetrievalState | null;
   onModule2Output?: (output: Module2Output | null) => void;
 }
 
@@ -295,9 +302,10 @@ function buildWorkflowGraph(moduleOutput?: Module1IntentOutput | null): {
 }
 
 const WorkflowSection: React.FC<WorkflowSectionProps> = ({
-  onToggle,
-  isCollapsed,
+  onToggleExpand,
+  isExpanded,
   moduleOutput,
+  retrievalOutput,
   onModule2Output,
 }) => {
   const router = useRouter();
@@ -314,7 +322,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   const ActiveAgentLayerIcon = activeAgentLayer.icon;
 
   return (
-    <div className={`workspace-panel flex h-full w-full flex-col bg-white rounded-[2rem] border border-slate-200/60 shadow-xl shadow-slate-200/20 overflow-hidden transition-all duration-500 ${isCollapsed ? 'opacity-80' : 'opacity-100'}`}>
+    <div className="workspace-panel flex h-full w-full flex-col bg-white rounded-[2rem] border border-slate-200/60 shadow-xl shadow-slate-200/20 overflow-hidden transition-all duration-500">
       <div className="workspace-panel-header grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-slate-100 bg-slate-50/50 px-6 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600 border border-violet-100">
@@ -375,17 +383,22 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
           
           <button 
-            onClick={onToggle}
+            onClick={onToggleExpand}
+            title={isExpanded ? 'Restore panel size' : 'Expand panel'}
             className="text-slate-400 hover:text-slate-600 transition-colors p-1"
           >
-            <Maximize2 className={`h-4 w-4 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
+            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
       <div className="workspace-canvas relative flex-1 bg-white overflow-hidden">
         {activeView === 'module2' ? (
-          <Module2Section moduleOutput={moduleOutput} onModule2Output={onModule2Output} />
+          <Module2Section
+            moduleOutput={moduleOutput}
+            retrievalOutput={retrievalOutput}
+            onModule2Output={onModule2Output}
+          />
         ) : (
           <>
         {isAgentsOpen && (

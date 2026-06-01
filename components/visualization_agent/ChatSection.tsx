@@ -5,18 +5,33 @@ import {
   Bot,
   Send,
   Maximize2,
-  Trash2,
+  Minimize2,
   User,
   Loader2,
   ChevronDown,
   X,
+  Database,
+  FileCode2,
+  Map as MapIcon,
 } from 'lucide-react';
-import type { ExecutionPlanStep, Module1IntentOutput } from './types';
+import type {
+  ExecutionPlanStep,
+  Module1IntentOutput,
+  Module7GenerationOutput,
+  RuntimeGeneratedMapOption,
+  VisualizationRetrievalResultSet,
+  VisualizationRetrievalState,
+  VisualizationRetrievalTokenEvent,
+} from './types';
 
 interface ChatSectionProps {
-  onToggle?: () => void;
-  isCollapsed?: boolean;
+  onToggleExpand?: () => void;
+  isExpanded?: boolean;
   onModuleOutput?: (output: Module1IntentOutput | null) => void;
+  onRetrievalOutput?: (output: VisualizationRetrievalState | null) => void;
+  runtimeGeneratedMaps?: RuntimeGeneratedMapOption[];
+  selectedInsightMapId?: string | null;
+  onInsightMapSelect?: (mapId: string) => void;
 }
 
 interface Message {
@@ -28,6 +43,9 @@ interface Message {
   cost?: Record<string, number>;
   ledgerRow?: TokenLedgerRow | null;
   elapsed?: number;
+  retrieval?: VisualizationRetrievalState;
+  insightOutput?: Module7GenerationOutput;
+  insightMapLabel?: string;
 }
 
 interface TokenLedgerRow {
@@ -57,8 +75,12 @@ const MODEL_PRICING: Record<string, { input: number; cached_input: number; outpu
   'gpt-5.4-mini': { input: 0.75, cached_input: 0.075, output: 4.5 },
 };
 const DEFAULT_MODEL = 'gpt-5.4-mini';
-const EXAMPLE_QUERY = 'Show residential sales density in Baner and Balewadi from 2021 to 2024.';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const EXAMPLE_QUERY = 'Show residential sales density in Akurdi and Pimple saudagar from 2021 to 2024.';
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8000'
+).replace(/\/$/, '');
 
 const TAB_NAMES = [
   'Structured Output',
@@ -70,12 +92,294 @@ const TAB_NAMES = [
   'Token Ledger',
 ];
 
-const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModuleOutput }) => {
+const RETRIEVAL_TABS = ['Data', 'SQL Query'];
+type ChatCategory = 'land-gis' | 'insight-generation' | 'workflow' | 'conversational';
+const CHAT_CATEGORIES: Array<{ value: ChatCategory; label: string; disabled?: boolean }> = [
+  { value: 'land-gis', label: 'Land / GIS' },
+  { value: 'insight-generation', label: 'Insight Generation' },
+  { value: 'workflow', label: 'Workflow (Coming Soon)', disabled: true },
+  { value: 'conversational', label: 'Conversational (Coming Soon)', disabled: true },
+];
+const DEFAULT_INSIGHT_QUERY = 'Generate insights for map';
+
+async function requestInsightGeneration(
+  map: RuntimeGeneratedMapOption,
+  question: string,
+  model: string,
+): Promise<Module7GenerationOutput> {
+  const context = map.insightContext;
+  const response = await fetch(`${API_BASE}/visualization-agent/module7/generate-insights`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      map_id: context.mapId,
+      map_label: context.mapLabel,
+      map_family: context.mapFamily,
+      map_source: context.mapSource,
+      plotted_data_json: context.plottedData,
+      module_1_intent_json: context.moduleOutput,
+      module_2_output_json: context.module2Output,
+      module_31_output_json: context.module31Output,
+      user_question: question,
+      model,
+    }),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(responseBody.detail || `Module 7 failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+function Module7ChatInsightPanel({ output, mapLabel }: { output: Module7GenerationOutput; mapLabel: string }) {
+  const insights = output.insight_output;
+  const findings = Array.isArray(insights.key_findings) ? insights.key_findings : [];
+  const spatialFindings = Array.isArray(insights.spatial_findings) ? insights.spatial_findings : [];
+  const actions = Array.isArray(insights.recommended_actions) ? insights.recommended_actions : [];
+  const caveats = Array.isArray(insights.caveats) ? insights.caveats : [];
+  const enrichment = output.spatial_enrichment;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">
+            Module 7 Spatial Insight Generation
+          </p>
+          <h3 className="mt-1 text-sm font-extrabold text-slate-950">
+            {insights.headline || `Insights for ${mapLabel}`}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {enrichment?.is_enriched ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-sky-700">
+              📍 {enrichment.osm_summary?.main_roads ?? 0} roads · {enrichment.osm_summary?.total_places ?? 0} places · {enrichment.point_count ?? 0} points
+            </span>
+          ) : null}
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-emerald-700">
+            {mapLabel}
+          </span>
+        </div>
+      </div>
+
+      {insights.executive_summary ? (
+        <p className="mt-3 text-xs font-semibold leading-5 text-slate-600">{insights.executive_summary}</p>
+      ) : null}
+
+      {findings.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Key Findings</p>
+          <div className="mt-2 grid gap-2">
+            {findings.map((finding, index) => (
+              <article key={`${finding.title || 'finding'}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs font-extrabold text-slate-900">{finding.title || `Finding ${index + 1}`}</p>
+                {finding.evidence ? <p className="mt-1 text-[11px] leading-4 text-slate-600">{finding.evidence}</p> : null}
+                {finding.business_implication ? (
+                  <p className="mt-2 text-[11px] font-semibold leading-4 text-emerald-700">{finding.business_implication}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {spatialFindings.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-sky-600">Spatial Findings</p>
+          <div className="mt-2 grid gap-2">
+            {spatialFindings.map((finding, index) => (
+              <article key={`spatial-${finding.title || 'sf'}-${index}`} className="rounded-lg border border-sky-100 bg-sky-50/60 p-3">
+                <p className="text-xs font-extrabold text-slate-900">{finding.title || `Spatial Finding ${index + 1}`}</p>
+                {finding.spatial_evidence ? (
+                  <p className="mt-1 text-[11px] leading-4 text-slate-600">{finding.spatial_evidence}</p>
+                ) : null}
+                {finding.metric_impact ? (
+                  <p className="mt-1 text-[11px] font-bold leading-4 text-sky-700">{finding.metric_impact}</p>
+                ) : null}
+                {finding.business_implication ? (
+                  <p className="mt-2 text-[11px] font-semibold leading-4 text-emerald-700">{finding.business_implication}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {enrichment?.is_enriched && enrichment.zone_distribution && Object.keys(enrichment.zone_distribution).length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Zone Distribution</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {Object.entries(enrichment.zone_distribution).map(([zone, count]) => (
+              <span
+                key={zone}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                  zone === 'Premium'
+                    ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                    : zone === 'High Value Residential'
+                      ? 'border border-blue-200 bg-blue-50 text-blue-700'
+                      : zone === 'Balanced'
+                        ? 'border border-green-200 bg-green-50 text-green-700'
+                        : 'border border-slate-200 bg-slate-50 text-slate-600'
+                }`}
+              >
+                {zone}: {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {actions.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Recommended Actions</p>
+          <div className="mt-2 space-y-1.5">
+            {actions.map((action, index) => (
+              <p key={`${action}-${index}`} className="text-xs font-semibold leading-5 text-slate-700">
+                {index + 1}. {action}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {caveats.length > 0 ? (
+        <details className="mt-4 text-xs text-slate-600">
+          <summary className="cursor-pointer select-none font-bold uppercase tracking-widest text-slate-500">
+            Caveats ({caveats.length})
+          </summary>
+          <div className="mt-2 space-y-1">
+            {caveats.map((caveat, index) => <p key={`${caveat}-${index}`}>{caveat}</p>)}
+          </div>
+        </details>
+      ) : null}
+
+      <details className="mt-4 rounded-lg border border-violet-100 bg-violet-50/70 px-3 py-2 text-[11px] text-violet-900">
+        <summary className="cursor-pointer select-none font-extrabold uppercase tracking-widest">
+          Module 7 Token Ledger - ${output.usage.total_cost_usd.toFixed(6)} / {output.usage.total_tokens.toLocaleString()} tokens
+        </summary>
+        <div className="mt-2 flex flex-wrap gap-4 font-semibold">
+          <span>LLM Calls: {output.usage.total_llm_calls}</span>
+          <span>Input: {output.usage.total_input_tokens.toLocaleString()}</span>
+          <span>Output: {output.usage.total_output_tokens.toLocaleString()}</span>
+          <span>Time: {output.processing_time_seconds.toFixed(2)}s</span>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function formatRetrievedCellValue(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function renderFormattedLine(line: string) {
+  return line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={`${part}-${index}`} className="rounded bg-slate-200 px-1 py-0.5 text-[12px] text-indigo-600">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+  });
+}
+
+function RetrievedDataTable({ resultSet, maxRows = 100 }: { resultSet?: VisualizationRetrievalResultSet; maxRows?: number }) {
+  const rows = Array.isArray(resultSet?.rows) ? resultSet.rows : [];
+  const columns =
+    Array.isArray(resultSet?.columns) && resultSet.columns.length > 0
+      ? resultSet.columns
+      : rows.length > 0
+        ? Object.keys(rows[0])
+        : [];
+
+  if (!columns.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm font-semibold text-slate-400">
+        No retrieved rows are available for this run.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+        <div>
+          <p className="text-xs font-extrabold text-slate-900">
+            {resultSet?.title || 'Retrieved Data'}
+          </p>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            {resultSet?.domain || 'data retrieval'} · {resultSet?.row_count ?? rows.length} rows
+          </p>
+        </div>
+        {rows.length > maxRows && (
+          <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
+            Showing {maxRows}
+          </span>
+        )}
+      </div>
+      <div className="max-h-[52vh] overflow-auto custom-scrollbar">
+        <table className="w-full min-w-max border-collapse text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-slate-100">
+            <tr>
+              {columns.map((column) => (
+                <th
+                  key={column}
+                  className="border-b border-slate-200 px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-600"
+                >
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, maxRows).map((row, rowIndex) => (
+              <tr key={`retrieved-row-${rowIndex}`} className="hover:bg-slate-50">
+                {columns.map((column) => (
+                  <td
+                    key={`${column}-${rowIndex}`}
+                    className="max-w-[260px] border-b border-slate-100 px-3 py-2 align-top text-slate-600"
+                  >
+                    <span className="block truncate" title={formatRetrievedCellValue(row?.[column])}>
+                      {formatRetrievedCellValue(row?.[column])}
+                    </span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const ChatSection: React.FC<ChatSectionProps> = ({
+  onToggleExpand,
+  isExpanded,
+  onModuleOutput,
+  onRetrievalOutput,
+  runtimeGeneratedMaps = [],
+  selectedInsightMapId = null,
+  onInsightMapSelect,
+}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [demoMode, setDemoMode] = useState(false);
+  const [chatCategory, setChatCategory] = useState<ChatCategory>('land-gis');
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
   const [totalCost, setTotalCost] = useState(0);
 
@@ -83,14 +387,40 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<Message | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [retrievalModalOpen, setRetrievalModalOpen] = useState(false);
+  const [retrievalModalData, setRetrievalModalData] = useState<VisualizationRetrievalState | null>(null);
+  const [activeRetrievalTab, setActiveRetrievalTab] = useState(0);
+  const [insightMapModalOpen, setInsightMapModalOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const retrievalSourcesRef = useRef<Map<string, EventSource>>(new Map());
+  const pendingRetrievalRef = useRef<Map<string, VisualizationRetrievalState>>(new Map());
+  const latestRetrievalMessageIdRef = useRef<string | null>(null);
+  const chatDraftsRef = useRef<Record<ChatCategory, string>>({
+    'land-gis': EXAMPLE_QUERY,
+    'insight-generation': DEFAULT_INSIGHT_QUERY,
+    workflow: '',
+    conversational: '',
+  });
   const selectedPricing = MODEL_PRICING[selectedModel];
+  const isLandGisChat = chatCategory === 'land-gis';
+  const isInsightChat = chatCategory === 'insight-generation';
+  const selectedInsightMap = runtimeGeneratedMaps.find((map) => map.id === selectedInsightMapId) || null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    const retrievalSources = retrievalSourcesRef.current;
+    const pendingRetrieval = pendingRetrievalRef.current;
+    return () => {
+      retrievalSources.forEach((source) => source.close());
+      retrievalSources.clear();
+      pendingRetrieval.clear();
+    };
+  }, []);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -99,9 +429,212 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
     ta.style.height = `${Math.min(ta.scrollHeight, 100)}px`;
   }, [input]);
 
+  const closeRetrievalSource = (messageId: string) => {
+    const existing = retrievalSourcesRef.current.get(messageId);
+    if (existing) {
+      existing.close();
+      retrievalSourcesRef.current.delete(messageId);
+    }
+  };
+
+  const updateRetrievalForMessage = (
+    messageId: string,
+    updater: Partial<VisualizationRetrievalState> | ((current: VisualizationRetrievalState) => VisualizationRetrievalState),
+  ) => {
+    const current = pendingRetrievalRef.current.get(messageId) || {
+      status: 'running',
+      tokenEvents: [],
+    };
+    const next =
+      typeof updater === 'function'
+        ? updater(current)
+        : {
+            ...current,
+            ...updater,
+            tokenEvents: updater.tokenEvents ?? current.tokenEvents ?? [],
+          };
+
+    pendingRetrievalRef.current.set(messageId, next);
+    if (latestRetrievalMessageIdRef.current === messageId) {
+      onRetrievalOutput?.(next);
+    }
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              retrieval: next,
+            }
+          : message,
+      ),
+    );
+  };
+
+  const startHiddenDataRetrieval = (query: string, messageId: string) => {
+    closeRetrievalSource(messageId);
+    updateRetrievalForMessage(messageId, {
+      status: 'running',
+      agentRoute: undefined,
+      retrievalIntent: undefined,
+      sqlQuery: undefined,
+      resultSet: undefined,
+      tokenEvents: [],
+      metrics: undefined,
+      error: undefined,
+    });
+
+    const params = new URLSearchParams({ question: query });
+    const storedSession = window.localStorage.getItem('visualization-data-retrieval-session-id') || '';
+    if (storedSession) {
+      params.set('session_id', storedSession);
+    }
+
+    const source = new EventSource(`${API_BASE}/ask_stream_data_retrieval?${params.toString()}`);
+    retrievalSourcesRef.current.set(messageId, source);
+
+    source.onmessage = (event) => {
+      let payload: { type?: string; content?: unknown; metrics?: Record<string, unknown> };
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      switch (payload.type) {
+        case 'session': {
+          const sessionId = (payload.content as { session_id?: string } | undefined)?.session_id;
+          if (sessionId) {
+            window.localStorage.setItem('visualization-data-retrieval-session-id', sessionId);
+          }
+          break;
+        }
+        case 'agent_route': {
+          const content = payload.content as { agent_route?: string } | undefined;
+          updateRetrievalForMessage(messageId, { agentRoute: content?.agent_route });
+          break;
+        }
+        case 'intent': {
+          updateRetrievalForMessage(messageId, {
+            retrievalIntent: (payload.content || {}) as Record<string, unknown>,
+          });
+          break;
+        }
+        case 'sql_query': {
+          updateRetrievalForMessage(messageId, {
+            sqlQuery: String(payload.content || ''),
+          });
+          break;
+        }
+        case 'result_set': {
+          updateRetrievalForMessage(messageId, {
+            resultSet: payload.content as VisualizationRetrievalResultSet,
+          });
+          break;
+        }
+        case 'token_usage': {
+          updateRetrievalForMessage(messageId, (current) => ({
+            ...current,
+            tokenEvents: [...(current.tokenEvents || []), payload.content as VisualizationRetrievalTokenEvent].slice(-16),
+          }));
+          break;
+        }
+        case 'error': {
+          updateRetrievalForMessage(messageId, {
+            error: typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content),
+          });
+          break;
+        }
+        case 'done': {
+          updateRetrievalForMessage(messageId, (current) => ({
+            ...current,
+            status: current.resultSet?.rows?.length ? 'success' : 'error',
+            metrics: payload.metrics,
+            error: current.resultSet?.rows?.length
+              ? current.error
+              : current.error || 'Data retrieval completed without a result set.',
+          }));
+          closeRetrievalSource(messageId);
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
+    source.onerror = () => {
+      updateRetrievalForMessage(messageId, (current) => {
+        if (current.status !== 'running') {
+          return current;
+        }
+        return {
+          ...current,
+          status: 'error',
+          error: current.error || 'Data retrieval stream closed before completion.',
+        };
+      });
+      closeRetrievalSource(messageId);
+    };
+  };
+
   const handleSend = async () => {
     const query = input.trim();
     if (!query || isLoading) return;
+    if (isInsightChat) {
+      if (!selectedInsightMap) {
+        setInsightMapModalOpen(true);
+        return;
+      }
+
+      const assistantId = (Date.now() + 1).toString();
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now().toString(), role: 'user', content: query },
+      ]);
+      setInput('');
+      chatDraftsRef.current['insight-generation'] = '';
+      setIsLoading(true);
+      try {
+        const output = await requestInsightGeneration(selectedInsightMap, query, selectedModel);
+        const ledgerRow: TokenLedgerRow = {
+          request_id: tokenLedger.length + 1,
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          model: selectedModel,
+          query_preview: `Insights: ${query}`.substring(0, 80),
+          input_tokens: output.usage.total_input_tokens,
+          cached_input_tokens: output.usage.total_cached_input_tokens,
+          output_tokens: output.usage.total_output_tokens,
+          total_tokens: output.usage.total_tokens,
+          total_cost_usd: output.usage.total_cost_usd,
+        };
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: assistantId,
+            role: 'assistant',
+            content: '',
+            insightOutput: output,
+            insightMapLabel: selectedInsightMap.label,
+            ledgerRow,
+          },
+        ]);
+        setTokenLedger((previous) => [...previous, ledgerRow]);
+        setTotalCost((previous) => previous + ledgerRow.total_cost_usd);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to generate map insights.';
+        setMessages((previous) => [
+          ...previous,
+          { id: assistantId, role: 'assistant', content: `**Error:** ${message}` },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    if (!isLandGisChat) return;
+
+    const assistantId = (Date.now() + 1).toString();
+    latestRetrievalMessageIdRef.current = assistantId;
+    onRetrievalOutput?.(null);
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -111,7 +644,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
 
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
+    chatDraftsRef.current['land-gis'] = '';
     setIsLoading(true);
+    startHiddenDataRetrieval(query, assistantId);
 
     try {
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
@@ -144,7 +679,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
       ].join('\n\n');
 
       const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantId,
         role: 'assistant',
         content: summary,
         intentOutput: data.intent_output,
@@ -152,6 +687,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
         cost: data.cost,
         ledgerRow: data.ledger_row,
         elapsed: data.elapsed_seconds,
+        retrieval: pendingRetrievalRef.current.get(assistantId),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -173,6 +709,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
         setTotalCost((prev) => prev + (newRow.total_cost_usd || 0));
       }
     } catch (error: unknown) {
+      closeRetrievalSource(assistantId);
+      pendingRetrievalRef.current.delete(assistantId);
       const message = error instanceof Error ? error.message : 'Something went wrong.';
       setMessages((prev) => [
         ...prev,
@@ -187,20 +725,30 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
     }
   };
 
-  const handleClear = () => {
-    setMessages([]);
-    setTokenLedger([]);
-    setTotalCost(0);
-    setModalData(null);
-    setModalOpen(false);
-    setActiveTab(0);
-    onModuleOutput?.(null);
-  };
-
   const openModal = (msg: Message) => {
     setModalData(msg);
     setActiveTab(0);
     setModalOpen(true);
+  };
+
+  const openRetrievalModal = (retrieval: VisualizationRetrievalState) => {
+    setRetrievalModalData(retrieval);
+    setActiveRetrievalTab(0);
+    setRetrievalModalOpen(true);
+  };
+
+  const handleCategoryChange = (nextCategory: ChatCategory) => {
+    chatDraftsRef.current[chatCategory] = input;
+    setChatCategory(nextCategory);
+    setInput(chatDraftsRef.current[nextCategory]);
+    if (nextCategory === 'insight-generation') {
+      setInsightMapModalOpen(true);
+    }
+  };
+
+  const handleSelectInsightMap = (mapId: string) => {
+    onInsightMapSelect?.(mapId);
+    setInsightMapModalOpen(false);
   };
 
   const totalInputTokens = tokenLedger.reduce((s, r) => s + r.input_tokens, 0);
@@ -210,7 +758,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
   return (
     <>
       <div
-        className={`workspace-panel flex h-full w-full flex-col bg-white rounded-[2rem] border border-slate-200/60 shadow-xl shadow-slate-200/20 overflow-hidden transition-all duration-500 ${isCollapsed ? 'opacity-80' : 'opacity-100'}`}
+        className="workspace-panel flex h-full w-full flex-col bg-white rounded-[2rem] border border-slate-200/60 shadow-xl shadow-slate-200/20 overflow-hidden transition-all duration-500"
       >
         {/* Header */}
         <div className="workspace-panel-header flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-5">
@@ -224,7 +772,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
               </h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                  Module 1
+                  {isInsightChat ? 'Module 7' : 'Module 1'}
                 </span>
                 <div className="h-1 w-1 rounded-full bg-emerald-500" />
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest leading-none">
@@ -235,23 +783,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
           </div>
 
           <div className="flex items-center gap-2">
-            {messages.length > 0 && (
-              <button
-                onClick={handleClear}
-                className="rounded-lg border border-slate-100 p-2 text-slate-400 transition-colors hover:text-slate-600"
-                title="Clear chat"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
             <button
-              onClick={onToggle}
+              onClick={onToggleExpand}
               className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-              title={isCollapsed ? 'Expand' : 'Collapse'}
+              title={isExpanded ? 'Restore panel size' : 'Expand panel'}
             >
-              <Maximize2
-                className={`h-4 w-4 transition-transform ${isCollapsed ? 'rotate-180' : ''}`}
-              />
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
         </div>
@@ -270,11 +807,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                 Visualization Agent
               </h3>
               <p className="mt-2.5 max-w-[240px] text-xs font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
-                MODULE 1 - INTENT FINALIZATION
+                {isInsightChat ? 'MODULE 7 - INSIGHT GENERATION' : 'MODULE 1 - INTENT FINALIZATION'}
               </p>
               <p className="mt-4 max-w-[280px] text-sm font-medium text-slate-500 leading-relaxed">
-                Enter a real estate visualization query to generate structured intent, map
-                requirements, and an execution plan.
+                {isInsightChat
+                  ? 'Select a generated map and ask for analysis grounded in its plotted data.'
+                  : 'Enter a real estate visualization query to generate structured intent, map requirements, and an execution plan.'}
               </p>
             </div>
           ) : (
@@ -285,7 +823,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                   className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                 >
                   <div
-                    className={`flex max-w-[85%] gap-3 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex gap-3 ${m.insightOutput ? 'w-full' : 'max-w-[85%]'} ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     <div
                       className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
@@ -301,38 +839,73 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      <div
-                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                          m.role === 'user'
-                            ? 'bg-indigo-600 text-white shadow-indigo-100'
-                            : 'border border-slate-100 bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        {m.role === 'user' ? (
+                    <div className={`flex min-w-0 flex-col gap-2 ${m.insightOutput ? 'flex-1' : ''}`}>
+                      {m.insightOutput ? (
+                        <Module7ChatInsightPanel
+                          output={m.insightOutput}
+                          mapLabel={m.insightMapLabel || 'Selected Map'}
+                        />
+                      ) : (
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                            m.role === 'user'
+                              ? 'bg-indigo-600 text-white shadow-indigo-100'
+                              : 'border border-slate-100 bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          {m.role === 'user' ? (
                           m.content
                         ) : (
                           <div className="space-y-1">
                             {m.content.split('\n\n').map((line, i) => (
-                              <p key={i} dangerouslySetInnerHTML={{
-                                __html: line
-                                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                  .replace(/`(.*?)`/g, '<code class="rounded bg-slate-200 px-1 py-0.5 text-[12px] text-indigo-600">$1</code>')
-                              }} />
+                              <p key={i}>{renderFormattedLine(line)}</p>
                             ))}
                           </div>
                         )}
-                      </div>
+                        </div>
+                      )}
 
-                      {/* Arrow button to open modal */}
+                      {/* Output actions */}
                       {m.role === 'assistant' && m.intentOutput && (
-                        <button
-                          onClick={() => openModal(m)}
-                          className="self-start flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-widest transition-all hover:bg-indigo-100 hover:shadow-sm"
-                        >
-                          <ChevronDown className="h-3 w-3" />
-                          View Full Output
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 self-start">
+                          <button
+                            onClick={() => openModal(m)}
+                            className="flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-widest transition-all hover:bg-indigo-100 hover:shadow-sm"
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                            View Full Output
+                          </button>
+
+                          {m.retrieval?.status === 'running' && (
+                            <button
+                              disabled
+                              className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest"
+                            >
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Retrieving Data
+                            </button>
+                          )}
+
+                          {Boolean(m.retrieval?.resultSet?.rows?.length) && m.retrieval?.sqlQuery && (
+                            <button
+                              onClick={() => openRetrievalModal(m.retrieval as VisualizationRetrievalState)}
+                              className="flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest transition-all hover:bg-emerald-100 hover:shadow-sm"
+                            >
+                              <Database className="h-3 w-3" />
+                              Display Retrieved Data
+                            </button>
+                          )}
+
+                          {m.retrieval?.status === 'error' && !m.retrieval?.resultSet?.rows?.length && (
+                            <button
+                              disabled
+                              title={m.retrieval.error || 'Data retrieval did not return rows.'}
+                              className="flex items-center gap-1.5 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-bold text-red-500 uppercase tracking-widest"
+                            >
+                              Retrieval Unavailable
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -348,7 +921,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                     <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
                       <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                        Finalizing intent...
+                        {isInsightChat ? 'Analyzing selected map...' : 'Finalizing intent...'}
                       </span>
                     </div>
                   </div>
@@ -384,23 +957,36 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
               ref={textareaRef}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                chatDraftsRef.current[chatCategory] = e.target.value;
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSend();
                 }
               }}
-              placeholder="Ask the Visualization Agent what to analyze or visualize..."
+              placeholder={
+                isLandGisChat
+                  ? 'Ask the Visualization Agent what to analyze or visualize...'
+                  : 'Ask for anything about insights from the loaded map...'
+              }
               disabled={isLoading}
               className="max-h-[100px] min-h-[22px] flex-1 resize-none bg-transparent px-4 py-2 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
             />
 
             <button
               onClick={handleSend}
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || (isInsightChat && !selectedInsightMap)}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-40"
-              title="Send message"
+              title={
+                isLandGisChat
+                  ? 'Send message'
+                  : selectedInsightMap
+                    ? 'Generate insights for the selected map'
+                    : 'Select a generated map to ask for insights'
+              }
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -408,6 +994,39 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                 <Send className="h-4.5 w-4.5" />
               )}
             </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <span>Category:</span>
+              <select
+                value={chatCategory}
+                onChange={(event) => handleCategoryChange(event.target.value as ChatCategory)}
+                className="bg-transparent text-[10px] font-bold uppercase tracking-widest text-slate-700 outline-none"
+                aria-label="Select chat category"
+              >
+                {CHAT_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value} disabled={category.disabled}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isLandGisChat ? (
+              <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
+                Module 1 + Retrieval Active
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setInsightMapModalOpen(true)}
+                className="flex max-w-[220px] items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-700 transition-colors hover:bg-emerald-100"
+                title="Select a generated map for insight generation"
+              >
+                <MapIcon className="h-3 w-3 shrink-0" />
+                <span className="truncate">{selectedInsightMap?.label || 'Select Generated Map'}</span>
+              </button>
+            )}
           </div>
 
           {/* Model selector */}
@@ -427,15 +1046,17 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                <input
-                  type="checkbox"
-                  checked={demoMode}
-                  onChange={(e) => setDemoMode(e.target.checked)}
-                  className="h-3 w-3 accent-indigo-600"
-                />
-                Demo mode
-              </label>
+              {isLandGisChat ? (
+                <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
+                  <input
+                    type="checkbox"
+                    checked={demoMode}
+                    onChange={(e) => setDemoMode(e.target.checked)}
+                    className="h-3 w-3 accent-indigo-600"
+                  />
+                  Demo mode
+                </label>
+              ) : null}
             </div>
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -450,6 +1071,76 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
           </div>
         </div>
       </div>
+
+      {insightMapModalOpen && (
+        <div className="workspace-modal fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="workspace-modal-card flex w-full max-w-xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="workspace-panel-header flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">
+                  Insight Generation
+                </p>
+                <h2 className="mt-1 text-base font-extrabold text-slate-900">
+                  Select a Generated Map
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInsightMapModalOpen(false)}
+                className="rounded-full bg-slate-100 p-2 text-slate-400 transition-colors hover:text-slate-600"
+                aria-label="Close generated map selection"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[55vh] overflow-y-auto bg-slate-50/60 p-5 custom-scrollbar">
+              {runtimeGeneratedMaps.length === 0 ? (
+                <div className="flex min-h-[170px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white px-6 text-center">
+                  <MapIcon className="h-7 w-7 text-slate-300" />
+                  <p className="mt-4 text-sm font-bold text-slate-700">
+                    No map generated yet for Insights
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-slate-400">
+                    Generate a map in Module 3.1 or Module 3 to continue.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {runtimeGeneratedMaps.map((map) => {
+                    const isSelected = map.id === selectedInsightMapId;
+                    return (
+                      <button
+                        type="button"
+                        key={map.id}
+                        onClick={() => handleSelectInsightMap(map.id)}
+                        className={`flex w-full items-start justify-between gap-4 rounded-lg border px-4 py-3 text-left transition-colors ${
+                          isSelected
+                            ? 'border-emerald-300 bg-emerald-50'
+                            : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/50'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-800">{map.label}</p>
+                          <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{map.title}</p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest text-indigo-600">
+                            Module {map.sourceModule}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                            {map.family}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== Full-screen popup modal ===== */}
       {modalOpen && modalData && (
@@ -688,6 +1379,70 @@ const ChatSection: React.FC<ChatSectionProps> = ({ onToggle, isCollapsed, onModu
                       Token ledger is empty. Demo mode calls are not counted.
                     </p>
                   )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Retrieved data popup modal ===== */}
+      {retrievalModalOpen && retrievalModalData && (
+        <div className="workspace-modal fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="workspace-modal-card h-[85vh] w-full max-w-6xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col">
+            <div className="workspace-panel-header flex items-center justify-between border-b border-slate-100 px-8 py-5 shrink-0">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
+                  Retrieved Data
+                </h2>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {retrievalModalData.agentRoute || retrievalModalData.resultSet?.domain || 'Data Retrieval Agent'}
+                  {retrievalModalData.metrics?.duration_seconds
+                    ? ` · ${String(retrievalModalData.metrics.duration_seconds)}s`
+                    : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => setRetrievalModalOpen(false)}
+                className="rounded-full bg-slate-100 p-2 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 border-b border-slate-100 px-8 py-2 overflow-x-auto shrink-0">
+              {RETRIEVAL_TABS.map((name, idx) => (
+                <button
+                  key={name}
+                  onClick={() => setActiveRetrievalTab(idx)}
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    activeRetrievalTab === idx
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
+                >
+                  {idx === 0 ? <Database className="h-3 w-3" /> : <FileCode2 className="h-3 w-3" />}
+                  {name}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/50">
+              {activeRetrievalTab === 0 && (
+                <RetrievedDataTable resultSet={retrievalModalData.resultSet} />
+              )}
+
+              {activeRetrievalTab === 1 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">Generated SQL Query</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Executed by the existing data retrieval agent pipeline
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.sqlQuery || 'No SQL query was returned for this run.'}
+                  </pre>
                 </div>
               )}
             </div>

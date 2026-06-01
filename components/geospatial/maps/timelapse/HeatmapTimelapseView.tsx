@@ -10,6 +10,7 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { setOptions as setGoogleMapsOptions, importLibrary as importGoogleLibrary } from '@googlemaps/js-api-loader';
 import { fetchHeatmapTimelapse } from '@/lib/dashboard/geospatial/sampleMaps';
 import { HeatmapTimelapseRequest, HeatmapTimelapseResponse } from '@/lib/dashboard/geospatial/types';
+import type { StyleSpecification } from 'maplibre-gl';
 
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
@@ -33,7 +34,14 @@ interface HeatmapTimelapseViewProps {
   runtimeHubs?: RuntimeHeatmapHub[];
   runtimeDates?: string[];
   metricLabel?: string;
+  mapStyle?: string | StyleSpecification;
+  basemapControls?: React.ReactNode;
   autoLoad?: boolean;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
 interface HeatmapFeatureProperties {
@@ -207,7 +215,10 @@ export default function HeatmapTimelapseView({
   runtimeHubs = [],
   runtimeDates = [],
   metricLabel = 'Rate',
+  mapStyle,
+  basemapControls,
   autoLoad = false,
+  onInsightDataReady,
 }: HeatmapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(initialPlaceName);
   const [radius, setRadius] = useState(initialRadius);
@@ -267,6 +278,7 @@ export default function HeatmapTimelapseView({
 
     setIsLoading(true);
     setError(null);
+    onInsightDataReady?.(null);
 
     try {
       const payload: HeatmapTimelapseRequest = {
@@ -282,6 +294,16 @@ export default function HeatmapTimelapseView({
       const response = await fetchHeatmapTimelapse(payload);
       const runtimeResponse = applyRuntimeHubs(response, runtimeHubs, runtimeDates);
       setData(runtimeResponse);
+      onInsightDataReady?.({
+        mapId: runtimeHubs.length > 0 ? 'runtime:heatmap-timelapse' : 'default:heatmap-timelapse',
+        mapLabel: runtimeHubs.length > 0 ? 'Generated Heatmap Timelapse' : 'Default Heatmap Timelapse',
+        plottedData: {
+          dates: runtimeResponse.dates,
+          hubs: runtimeResponse.hubs,
+          summary: runtimeResponse.summary,
+          metric_label: metricLabel,
+        },
+      });
       setDateIndex(0);
       setIsPlaying(false);
       
@@ -318,6 +340,8 @@ export default function HeatmapTimelapseView({
     radius,
     runtimeDates,
     runtimeHubs,
+    metricLabel,
+    onInsightDataReady,
   ]);
 
   useEffect(() => {
@@ -524,6 +548,7 @@ export default function HeatmapTimelapseView({
 
       {/* Map Container */}
       <div className="relative min-h-[500px] flex-[1.5] shrink-0">
+        {basemapControls}
         <button
           onClick={() => setIsFullscreen((prev) => !prev)}
           className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
@@ -577,7 +602,7 @@ export default function HeatmapTimelapseView({
             }}
             style={{ position: 'absolute', inset: '0px' }}
           >
-            <Map mapLib={import('maplibre-gl')} mapStyle={DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
+            <Map mapLib={import('maplibre-gl')} mapStyle={mapStyle || DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
               <NavigationControl position="top-right" />
             </Map>
           </DeckGL>

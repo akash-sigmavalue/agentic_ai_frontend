@@ -25,6 +25,7 @@ import type {
   Module2InputsConsidered,
   Module2Output,
   Module2StepSummary,
+  VisualizationRetrievalState,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -34,7 +35,7 @@ const DEFAULT_INPUTS: Module2InputsConsidered = {
   data_mapping: true,
   module_1_intent: true,
   retrieval_model_intent: true,
-  retrieval_sql_query: false,
+  retrieval_sql_query: true,
 };
 
 const TAB_CONFIG = [
@@ -192,10 +193,11 @@ function DataTable({ records, maxRows = 50 }: { records: Record<string, unknown>
 
 interface Module2SectionProps {
   moduleOutput?: Module1IntentOutput | null;
+  retrievalOutput?: VisualizationRetrievalState | null;
   onModule2Output?: (output: Module2Output | null) => void;
 }
 
-const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, onModule2Output }) => {
+const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, retrievalOutput = null, onModule2Output }) => {
   const [inputs, setInputs] = useState<Module2InputsConsidered>(DEFAULT_INPUTS);
   const [isLoading, setIsLoading] = useState(false);
   const [output, setOutput] = useState<Module2Output | null>(null);
@@ -214,6 +216,30 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, on
       return;
     }
 
+    const runtimeRows = retrievalOutput?.resultSet?.rows ?? [];
+    const runtimeRetrievalStarted = Boolean(retrievalOutput);
+    const runtimeRetrievalReady = retrievalOutput?.status === 'success' && runtimeRows.length > 0;
+
+    if (runtimeRetrievalStarted && !runtimeRetrievalReady) {
+      setError(
+        retrievalOutput?.status === 'running'
+          ? 'Data Retrieval Agent is still running under the hood. Please run Module 2 after retrieved data is ready.'
+          : retrievalOutput?.error || 'Data Retrieval Agent did not return usable rows for Module 2.',
+      );
+      onModule2Output?.(null);
+      return;
+    }
+
+    const runtimeIntent = retrievalOutput?.retrievalIntent;
+    const runtimeSql = retrievalOutput?.sqlQuery || '';
+    const requestInputs: Module2InputsConsidered = {
+      ...inputs,
+      retrieval_model_intent:
+        inputs.retrieval_model_intent && (runtimeRetrievalStarted ? Boolean(runtimeIntent) : true),
+      retrieval_sql_query:
+        inputs.retrieval_sql_query && (runtimeRetrievalStarted ? Boolean(runtimeSql) : true),
+    };
+
     setIsLoading(true);
     setError(null);
     try {
@@ -221,8 +247,11 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, on
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputs_considered: inputs,
+          inputs_considered: requestInputs,
           module_1_intent_json: inputs.module_1_intent ? moduleOutput : undefined,
+          retrieved_data_json: runtimeRetrievalReady ? runtimeRows : undefined,
+          retrieval_context_json: requestInputs.retrieval_model_intent ? runtimeIntent : undefined,
+          retrieval_sql_query: requestInputs.retrieval_sql_query ? runtimeSql : '',
         }),
       });
       if (!res.ok) {
@@ -239,7 +268,7 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, on
     } finally {
       setIsLoading(false);
     }
-  }, [inputs, moduleOutput, onModule2Output]);
+  }, [inputs, moduleOutput, onModule2Output, retrievalOutput]);
 
   const handleDownloadCsv = useCallback(() => {
     if (!output?.analysis_ready_dataset?.length) return;
@@ -264,6 +293,8 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, on
 
   const ledger = output?.debug_metadata?.llm_token_ledger;
   const stepSummaries = output?.debug_metadata?.step_summaries ?? [];
+  const runtimeRowsCount = retrievalOutput?.resultSet?.rows?.length ?? 0;
+  const runtimeRetrievalReady = retrievalOutput?.status === 'success' && runtimeRowsCount > 0;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -309,6 +340,24 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, on
           {inputs.module_1_intent && moduleOutput && (
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-600">
               Runtime Module 1 intent linked
+            </span>
+          )}
+
+          {retrievalOutput?.status === 'running' && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-600">
+              Data retrieval running
+            </span>
+          )}
+
+          {runtimeRetrievalReady && (
+            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-sky-600">
+              Runtime retrieval linked · {runtimeRowsCount} rows
+            </span>
+          )}
+
+          {retrievalOutput?.status === 'error' && (
+            <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-red-600">
+              Runtime retrieval unavailable
             </span>
           )}
 

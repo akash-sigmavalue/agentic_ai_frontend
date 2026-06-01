@@ -10,6 +10,7 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { setOptions as setGoogleMapsOptions, importLibrary as importGoogleLibrary } from '@googlemaps/js-api-loader';
 import { fetchThreeDMapTimelapse } from '@/lib/dashboard/geospatial/sampleMaps';
 import type { FloorRateCell, MarkerData, ThreeDMapTimelapseRequest, ThreeDMapTimelapseResponse } from '@/lib/dashboard/geospatial/types';
+import type { StyleSpecification } from 'maplibre-gl';
 
 const FLOOR_HEIGHT = 3.0;
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
@@ -25,10 +26,11 @@ interface BuildingFeatureProperties {
   floor_rates_enriched?: Array<Array<FloorRateCell> | null> | null;
   min_rate?: number;
   max_rate?: number;
+  runtime_has_floor_data?: boolean;
 }
 
 interface FloorLayerRow {
-  kind: 'floor';
+  kind: 'floor' | 'building_time';
   polygon: [number, number, number][];
   floor: number;
   name: string;
@@ -54,6 +56,22 @@ type TooltipObject = BuildingFeature | FloorLayerRow | MarkerLayerRow;
 
 interface ThreeDMapTimelapseViewProps {
   markers?: MarkerData[];
+  initialPlaceName?: string;
+  initialRadius?: number;
+  initialCityForApi?: string;
+  initialUseGeocoding?: boolean;
+  runtimeBuildings?: Record<string, unknown>[];
+  fastMode?: boolean;
+  maxBuildings?: number;
+  mapStyle?: string | StyleSpecification;
+  basemapControls?: React.ReactNode;
+  mapId?: string;
+  mapLabel?: string;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
 function rateToColor(normalizedValue: number): [number, number, number, number] {
@@ -92,13 +110,27 @@ function normalizeErrorMessage(message: string): string {
   return message;
 }
 
-export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimelapseViewProps) {
+export default function ThreeDMapTimelapseView({
+  markers = [],
+  initialPlaceName,
+  initialRadius,
+  initialCityForApi,
+  initialUseGeocoding,
+  runtimeBuildings,
+  fastMode,
+  maxBuildings,
+  mapStyle,
+  basemapControls,
+  mapId = 'default:3d-timelapse',
+  mapLabel = 'Default 3D Map Timelapse',
+  onInsightDataReady,
+}: ThreeDMapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(
-    markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India'
+    initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India'
   );
-  const [radius, setRadius] = useState(450);
-  const [useGeocoding, setUseGeocoding] = useState(false);
-  const [cityForApi, setCityForApi] = useState('Pune');
+  const [radius, setRadius] = useState(initialRadius || 450);
+  const [useGeocoding, setUseGeocoding] = useState(Boolean(initialUseGeocoding));
+  const [cityForApi, setCityForApi] = useState(initialCityForApi || 'Pune');
   const [dryRun, setDryRun] = useState(false);
   const [includeDebugLogs, setIncludeDebugLogs] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -118,7 +150,10 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef({ placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs });
-  formRef.current = { placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs };
+
+  useEffect(() => {
+    formRef.current = { placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs };
+  }, [cityForApi, dryRun, includeDebugLogs, placeName, radius, useGeocoding]);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -166,6 +201,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
 
     setIsLoading(true);
     setError(null);
+    onInsightDataReady?.(null);
 
     try {
       const payload: ThreeDMapTimelapseRequest = {
@@ -175,9 +211,23 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
         city_for_api: city || null,
         dry_run: dry,
         include_debug_logs: debug,
+        fast_mode: fastMode,
+        max_buildings: maxBuildings,
+        runtime_buildings: runtimeBuildings,
       };
       const response = await fetchThreeDMapTimelapse(payload);
       setData(response);
+      onInsightDataReady?.({
+        mapId,
+        mapLabel,
+        plottedData: {
+          location: response.location,
+          summary: response.summary,
+          dates: response.dates,
+          markers: response.excel_markers,
+          warnings: response.warnings,
+        },
+      });
       setDateIndex(0);
       setIsPlaying(false);
       setViewState({
@@ -193,7 +243,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fastMode, mapId, mapLabel, maxBuildings, onInsightDataReady, runtimeBuildings]);
 
   useEffect(() => {
     void loadMap();
@@ -250,6 +300,8 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
     const features = featureCollection.features as BuildingFeature[];
     const customFeatures = features.filter((f) => f.properties?.is_custom === true);
     const normalFeatures = features.filter((f) => f.properties?.is_custom !== true);
+    const noFloorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data === false);
+    const floorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data !== false);
 
     const normalLayer = new GeoJsonLayer<BuildingFeatureProperties>({
       id: 'timelapse-normal-buildings',
@@ -282,7 +334,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
       highlightColor: [255, 255, 255, 180],
     });
 
-    const floorLayers = customFeatures.flatMap((building) => {
+    const floorLayers = floorCustomFeatures.flatMap((building) => {
       const name = String(building.properties?.building_name || 'Custom Building');
       const totalFloors = Number(building.properties?.num_floors || 0);
       const floorRatesByDate = building.properties?.floor_rates_by_date;
@@ -372,9 +424,66 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
       });
     });
 
+    const noFloorLayers = noFloorCustomFeatures.flatMap((building) => {
+      const name = String(building.properties?.building_name || 'Runtime Building');
+      const floorRatesByDate = building.properties?.floor_rates_by_date;
+      const flatRates = floorRatesByDate?.[dateIndex];
+      const rate = Array.isArray(flatRates) ? flatRates.find((value): value is number => typeof value === 'number' && Number.isFinite(value)) ?? null : null;
+      const effectiveRate = rate != null && rate > 0 ? rate : null;
+      const normalizedRate = effectiveRate == null
+        ? 0
+        : Math.max(0, Math.min(1, (effectiveRate - stepMin) / stepRange));
+      const fillColor = effectiveRate == null ? [148, 163, 184, 230] as [number, number, number, number] : rateToColor(normalizedRate);
+      const polygon = getPolygonCoords(building, 0);
+      return [
+        new PolygonLayer<FloorLayerRow>({
+          id: `${name.replace(/[^a-zA-Z0-9]/g, '_')}_runtime_building_${dateIndex}`,
+          data: polygon.length
+            ? [
+                {
+                  kind: 'building_time',
+                  polygon,
+                  floor: 0,
+                  name,
+                  totalFloors: 0,
+                  baseZ: 0,
+                  rateDisplay: effectiveRate == null ? '?' : `₹${effectiveRate.toLocaleString()}/sq.m.`,
+                  dateLabel: currentDateLabel,
+                  fillColor,
+                  confidence: effectiveRate == null ? 0 : 1,
+                  source: effectiveRate == null ? 'no_data' : 'actual',
+                  note: '',
+                },
+              ]
+            : [],
+          getPolygon: (entry) => entry.polygon,
+          extruded: true,
+          filled: true,
+          stroked: true,
+          wireframe: true,
+          getLineColor: [0, 0, 0, 200],
+          lineWidthMinPixels: 1.5,
+          getElevation: () => Number(building.properties?.height_render ?? 15),
+          getFillColor: (entry) => entry.fillColor,
+          updateTriggers: {
+            getFillColor: [dateIndex],
+          },
+          transitions: {
+            getFillColor: {
+              duration: 700,
+            },
+          },
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 150],
+          material: { ambient: 0.35, diffuse: 0.75, shininess: 15, specularColor: [180, 180, 180] },
+        }),
+      ];
+    });
+
     const finalLayers = [];
     if (showUnmatched) finalLayers.push(normalLayer);
-    finalLayers.push(markerLayer, ...floorLayers);
+    finalLayers.push(markerLayer, ...noFloorLayers, ...floorLayers);
 
     return finalLayers;
   }, [data, dateIndex, showUnmatched, stepStats]);
@@ -386,6 +495,11 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
         html: `<div><strong>Excel Point:</strong> ${object.name}</div><div>Lat: ${object.lat.toFixed(6)}</div><div>Lng: ${object.lng.toFixed(6)}</div>`,
       };
     }
+    if ('kind' in object && object.kind === 'building_time') {
+      return {
+        html: `<div><strong>${object.name}</strong></div><div>Rate: ${object.rateDisplay}</div><div>Date: ${object.dateLabel}</div>`,
+      };
+    }
     if ('kind' in object && object.kind === 'floor') {
       const sourceLabel = object.source === 'actual' ? '' : `<div style="color:#888;font-size:11px">Source: ${object.source} (${Math.round(object.confidence * 100)}%)</div>`;
       const noteLabel = object.note ? `<div style="color:#aaa;font-size:10px">${object.note}</div>` : '';
@@ -394,6 +508,12 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
       };
     }
     if ('properties' in object && object.properties) {
+      if (object.properties.is_custom && object.properties.runtime_has_floor_data === false) {
+        const metric = object.properties.floor_rates_by_date?.[dateIndex]?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        return {
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : `₹${metric.toLocaleString()}/sq.m.`}</div><div>Date: ${currentDateLabel}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+        };
+      }
       return {
         html: `<div><strong>Overture Building</strong></div><div>Height: ${Number(object.properties.height_render || 0).toFixed(1)}m</div>`,
       };
@@ -545,6 +665,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
       ) : null}
 
       <div className="relative min-h-[400px] flex-[1.5] shrink-0">
+        {basemapControls}
         <button
           onClick={() => setIsFullscreen((prev) => !prev)}
           className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
@@ -587,7 +708,7 @@ export default function ThreeDMapTimelapseView({ markers = [] }: ThreeDMapTimela
             getTooltip={tooltip}
             style={{ position: 'absolute', inset: '0px' }}
           >
-            <Map mapLib={import('maplibre-gl')} mapStyle={DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
+            <Map mapLib={import('maplibre-gl')} mapStyle={mapStyle || DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
               <NavigationControl position="top-right" />
             </Map>
           </DeckGL>

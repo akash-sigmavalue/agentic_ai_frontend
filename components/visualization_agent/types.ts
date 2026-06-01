@@ -29,6 +29,34 @@ export interface Module1IntentOutput {
   [key: string]: unknown;
 }
 
+export interface VisualizationRetrievalResultSet {
+  domain?: string;
+  title?: string;
+  columns?: string[];
+  rows?: Record<string, unknown>[];
+  row_count?: number;
+}
+
+export interface VisualizationRetrievalTokenEvent {
+  stage?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  cumulative_total_tokens?: number;
+  cumulative_cost_usd?: number;
+}
+
+export interface VisualizationRetrievalState {
+  status: 'running' | 'success' | 'error';
+  agentRoute?: string;
+  retrievalIntent?: Record<string, unknown>;
+  sqlQuery?: string;
+  resultSet?: VisualizationRetrievalResultSet;
+  tokenEvents: VisualizationRetrievalTokenEvent[];
+  metrics?: Record<string, unknown>;
+  error?: string;
+}
+
 export interface Module2InputsConsidered {
   retrieved_data: boolean;
   data_mapping: boolean;
@@ -101,6 +129,25 @@ export type GeneratedMapFamily =
   | '3d-timelapse'
   | 'spatial-analysis'
   | 'heatmap-timelapse';
+
+export interface RuntimeGeneratedMapOption {
+  id: string;
+  label: string;
+  title: string;
+  sourceModule: '3.1' | '3';
+  family: GeneratedMapFamily;
+  mapType?: string;
+  insightContext: {
+    mapId: string;
+    mapLabel: string;
+    mapFamily: GeneratedMapFamily;
+    mapSource: 'generated';
+    plottedData: Record<string, unknown>;
+    moduleOutput?: Module1IntentOutput;
+    module2Output?: Module2Output;
+    module31Output?: Module31GenerationOutput;
+  };
+}
 
 export type GeneratedMapRenderer =
   | 'marker_map'
@@ -191,6 +238,8 @@ export interface GeneratedMapConfig {
     needsGeoEnrichment?: boolean;
   };
   module31?: Module31GenerationOutput;
+  sourceModule1Intent?: Module1IntentOutput;
+  sourceModule2Output?: Module2Output;
   createdAt: string;
 }
 
@@ -235,6 +284,144 @@ export interface Module31GenerationOutput {
   validator_output: Record<string, unknown>;
   final_renderer_spec: Record<string, unknown>;
   generated_code_artifact: Record<string, unknown>;
+  usage: Module31Usage;
+  cache_policy: string;
+}
+
+export interface Module31GenerationTarget {
+  requested_map_family?: GeneratedMapFamily;
+  requested_map_type?: string;
+}
+
+export type Module3LayerType =
+  | 'point_markers'
+  | 'solid_heat_circles'
+  | 'metric_columns'
+  | 'connection_path'
+  | 'building_extrusion';
+
+export interface Module3BlueprintLayer {
+  id: string;
+  type: Module3LayerType;
+  label: string;
+  visible: boolean;
+  encoding: {
+    scale: 'linear' | 'quantile';
+    size_min: number;
+    size_max: number;
+    palette: string[];
+  };
+}
+
+export interface Module3Blueprint {
+  title: string;
+  purpose: string;
+  renderer: 'maplibre_deckgl';
+  view_mode: '2d' | '3d';
+  layers: Module3BlueprintLayer[];
+  controls: Array<'legend' | 'timeline' | 'layer_toggle'>;
+  tooltip_fields: string[];
+  supporting_panels: Array<'metric_summary' | 'ranked_locations' | 'time_trend'>;
+  enrichment: {
+    overture_buildings: boolean;
+    radius_m: number;
+  };
+  rationale: string;
+}
+
+export interface Module3SceneRecord {
+  id: string;
+  lat: number;
+  lng: number;
+  geo_label: string;
+  metric_value: number | null;
+  time_frame?: string | null;
+  source_row: Record<string, unknown>;
+}
+
+export interface Module3GenerationOutput {
+  module_number: number;
+  module_name: string;
+  status: string;
+  processing_time_seconds: number;
+  input_summary: Record<string, unknown>;
+  blueprint: Module3Blueprint;
+  validation: {
+    is_valid: boolean;
+    execute_generated_code: boolean;
+    warnings?: string[];
+    bound_runtime_record_count: number;
+  };
+  scene_payload: {
+    records: Module3SceneRecord[];
+    field_mapping: Record<string, string | null>;
+    metric_domain: { min: number | null; max: number | null; count: number };
+    time_frames: string[];
+    center: { lat: number; lng: number };
+    bounds: { south: number; north: number; west: number; east: number };
+    enrichment: {
+      buildings_geojson: Record<string, unknown>;
+    };
+  };
+  enrichment_summary: {
+    requested: boolean;
+    source?: string | null;
+    feature_count: number;
+  };
+  usage: Module31Usage & {
+    context_optimization?: Record<string, unknown>;
+  };
+  cache_key: string;
+  cache_policy: string;
+}
+
+export interface Module7LoadedMapData {
+  mapId: string;
+  mapLabel: string;
+  mapFamily: GeneratedMapFamily;
+  plottedData: Record<string, unknown>;
+}
+
+export interface Module7InsightOutput {
+  headline?: string;
+  executive_summary?: string;
+  key_findings?: Array<{
+    title?: string;
+    evidence?: string;
+    business_implication?: string;
+  }>;
+  spatial_findings?: Array<{
+    title?: string;
+    spatial_evidence?: string;
+    metric_impact?: string;
+    business_implication?: string;
+  }>;
+  recommended_actions?: string[];
+  caveats?: string[];
+  [key: string]: unknown;
+}
+
+export interface Module7SpatialEnrichment {
+  is_enriched: boolean;
+  enrichment_source?: string;
+  osm_summary?: {
+    total_roads: number;
+    main_roads: number;
+    total_places: number;
+  };
+  point_count?: number;
+  zone_distribution?: Record<string, number>;
+}
+
+export interface Module7GenerationOutput {
+  module_number: number;
+  module_name: string;
+  status: string;
+  map_id: string;
+  map_source: 'generated' | 'default';
+  processing_time_seconds: number;
+  insight_output: Module7InsightOutput;
+  spatial_enrichment?: Module7SpatialEnrichment;
   usage: Module31Usage;
   cache_policy: string;
 }
