@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 function formatStageLabel(stage) {
   if (!stage) {
@@ -11,14 +12,42 @@ function formatStageLabel(stage) {
 
 function ClarificationSelect({ schema, value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState(null);
   const rootRef = useRef(null);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
   const placeholder = schema.placeholder || `Select ${schema.label}`;
   const options = Array.isArray(schema.options) ? schema.options : [];
   const selectedOption = options.find((option) => option.value === value);
 
+  const updateMenuPosition = useCallback(() => {
+    const button = buttonRef.current;
+    if (!button) {
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const viewportPadding = 12;
+    const estimatedMaxHeight = Math.min(260, Math.max(160, options.length * 42 + 10));
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openUpward = spaceBelow < Math.min(estimatedMaxHeight, 180) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(128, Math.min(estimatedMaxHeight, openUpward ? spaceAbove - 8 : spaceBelow - 8));
+
+    setMenuStyle({
+      left: rect.left,
+      top: openUpward ? rect.top - 8 : rect.bottom + 8,
+      width: rect.width,
+      maxHeight,
+      transform: openUpward ? "translateY(-100%)" : "none",
+    });
+  }, [options.length]);
+
   useEffect(() => {
     function handlePointerDown(event) {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
+      const clickedField = rootRef.current?.contains(event.target);
+      const clickedMenu = menuRef.current?.contains(event.target);
+      if (!clickedField && !clickedMenu) {
         setOpen(false);
       }
     }
@@ -26,9 +55,71 @@ function ClarificationSelect({ schema, value, onChange }) {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  const menu = open && menuStyle ? (
+    <ul
+      ref={menuRef}
+      role="listbox"
+      className="fixed z-[9999] overflow-y-auto rounded-2xl border py-1 shadow-2xl execution-flow-scroll"
+      style={{
+        ...menuStyle,
+        borderColor: "var(--border-soft)",
+        background: "var(--bg-deep)",
+      }}
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <li key={option.value} role="option" aria-selected={active}>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(schema.field, option.value);
+                setOpen(false);
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm transition"
+              style={{
+                color: "var(--text-primary)",
+                background: active
+                  ? "color-mix(in srgb, var(--accent) 18%, transparent)"
+                  : "transparent",
+              }}
+              onMouseEnter={(event) => {
+                if (!active) {
+                  event.currentTarget.style.background = "var(--bg-card-strong)";
+                }
+              }}
+              onMouseLeave={(event) => {
+                if (!active) {
+                  event.currentTarget.style.background = "transparent";
+                }
+              }}
+            >
+              {option.label}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  ) : null;
+
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -56,50 +147,7 @@ function ClarificationSelect({ schema, value, onChange }) {
         </svg>
       </button>
 
-      {open ? (
-        <ul
-          role="listbox"
-          className="absolute z-[80] mt-2 max-h-52 w-full overflow-y-auto rounded-2xl border py-1 shadow-2xl execution-flow-scroll"
-          style={{
-            borderColor: "var(--border-soft)",
-            background: "var(--bg-deep)",
-          }}
-        >
-          {options.map((option) => {
-            const active = option.value === value;
-            return (
-              <li key={option.value} role="option" aria-selected={active}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(schema.field, option.value);
-                    setOpen(false);
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm transition"
-                  style={{
-                    color: "var(--text-primary)",
-                    background: active
-                      ? "color-mix(in srgb, var(--accent) 18%, transparent)"
-                      : "transparent",
-                  }}
-                  onMouseEnter={(event) => {
-                    if (!active) {
-                      event.currentTarget.style.background = "var(--bg-card-strong)";
-                    }
-                  }}
-                  onMouseLeave={(event) => {
-                    if (!active) {
-                      event.currentTarget.style.background = "transparent";
-                    }
-                  }}
-                >
-                  {option.label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      {menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }
