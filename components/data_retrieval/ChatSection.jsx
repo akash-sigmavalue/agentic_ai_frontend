@@ -130,7 +130,7 @@ export default function ChatSection({
           <h2 className="m-0 text-[13px] font-semibold tracking-wide" style={{ color: "var(--text-primary)" }}>AI Assistant</h2>
           <p className="m-0 text-[10px]" style={{ color: "var(--text-muted)" }}>Live backend conversation</p>
         </div>
-        <small className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{backendLabel}</small>
+        {/* <small className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{backendLabel}</small> */}
       </div>
 
       <div className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5">
@@ -139,7 +139,7 @@ export default function ChatSection({
             <div className="flex h-14 w-14 items-center justify-center rounded-full text-2xl" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>🤖</div>
             <h3 className="m-0 text-[15px] font-semibold" style={{ color: "var(--text-secondary)" }}>How can I help you?</h3>
             <p className="m-0 max-w-[220px] text-xs leading-6" style={{ color: "var(--text-muted)" }}>
-              Ask a real-estate question and this panel will stream the answer from your FastAPI backend.
+              Ask a real-estate question and this panel will stream the answer.
             </p>
           </div>
         ) : (

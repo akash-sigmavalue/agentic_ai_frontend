@@ -6,25 +6,26 @@ const STORAGE_KEY = "reai-dashboard-column-widths";
 const MIN_LEFT = 300;
 const MIN_CENTER = 360;
 const MIN_RIGHT = 280;
-const DEFAULT_LEFT = 380;
-const DEFAULT_RIGHT = 360;
+// Set default width percentages: left 40%, center 30%, right 20%
+const DEFAULT_LEFT_PERCENT = 0.4;
+const DEFAULT_RIGHT_PERCENT = 0.2;
 
-function readStoredWidths() {
+function readStoredWidths(containerWidth) {
   if (typeof window === "undefined") {
-    return { left: DEFAULT_LEFT, right: DEFAULT_RIGHT };
+    return { left: Math.round(containerWidth * DEFAULT_LEFT_PERCENT), right: Math.round(containerWidth * DEFAULT_RIGHT_PERCENT) };
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { left: DEFAULT_LEFT, right: DEFAULT_RIGHT };
+      return { left: Math.round(containerWidth * DEFAULT_LEFT_PERCENT), right: Math.round(containerWidth * DEFAULT_RIGHT_PERCENT) };
     }
     const parsed = JSON.parse(raw);
     return {
-      left: Number(parsed.left) || DEFAULT_LEFT,
-      right: Number(parsed.right) || DEFAULT_RIGHT,
+      left: Number(parsed.left) || Math.round(containerWidth * DEFAULT_LEFT_PERCENT),
+      right: Number(parsed.right) || Math.round(containerWidth * DEFAULT_RIGHT_PERCENT),
     };
   } catch {
-    return { left: DEFAULT_LEFT, right: DEFAULT_RIGHT };
+    return { left: Math.round(containerWidth * DEFAULT_LEFT_PERCENT), right: Math.round(containerWidth * DEFAULT_RIGHT_PERCENT) };
   }
 }
 
@@ -47,12 +48,18 @@ function ResizeHandle({ onMouseDown, label }) {
 
 export default function ResizableDashboardLayout({ left, center, right }) {
   const containerRef = useRef(null);
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT);
-  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT);
+  const [leftWidth, setLeftWidth] = useState(null);
+  const [rightWidth, setRightWidth] = useState(null);
   const dragRef = useRef(null);
 
   useEffect(() => {
-    const stored = readStoredWidths();
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    const containerWidth = rect.width;
+    
+    const stored = readStoredWidths(containerWidth);
     setLeftWidth(stored.left);
     setRightWidth(stored.right);
   }, []);
@@ -103,7 +110,7 @@ export default function ResizableDashboardLayout({ left, center, right }) {
       ref={containerRef}
       className="mx-auto flex h-[calc(100vh-5.75rem)] w-full max-w-[1920px] min-h-0 gap-0 px-4 py-4 lg:px-6 lg:py-5"
     >
-      <div className="flex h-full min-h-0 min-w-0 shrink-0 flex-col" style={{ width: leftWidth }}>
+      <div className="flex h-full min-h-0 min-w-0 shrink-0 flex-col" style={{ width: leftWidth ? `${leftWidth}px` : "40%" }}>
         {left}
       </div>
 
@@ -113,7 +120,7 @@ export default function ResizableDashboardLayout({ left, center, right }) {
 
       <ResizeHandle onMouseDown={startDrag("right")} label="Resize visualization panel" />
 
-      <div className="flex h-full min-h-0 min-w-0 shrink-0 flex-col" style={{ width: rightWidth }}>
+      <div className="flex h-full min-h-0 min-w-0 shrink-0 flex-col" style={{ width: rightWidth ? `${rightWidth}px` : "20%" }}>
         {right}
       </div>
     </div>
