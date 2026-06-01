@@ -14,7 +14,9 @@ import {
   ShieldCheck,
   AlertTriangle,
   Database,
-  CheckCircle
+  CheckCircle,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -2270,6 +2272,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [mapConfirmation, setMapConfirmation] = useState(null);
   const [approachChoiceNeeded, setApproachChoiceNeeded] = useState(null);
   const [extractionVerification, setExtractionVerification] = useState(null);
+
+  // ── Stage 1 Gate Wizard ────────────────────────────────────────
+  const [gateActive, setGateActive] = useState(false);
+  const [gateStep, setGateStep] = useState(1);
+  const [gateMode, setGateMode] = useState(null);
+  const [gateAllFields, setGateAllFields] = useState([]);
+  const [gateValues, setGateValues] = useState({});
+  // ── Collapse states for all interactive panels ────────────────
+  const [gateCollapsed, setGateCollapsed] = useState(false);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [approachCollapsed, setApproachCollapsed] = useState(false);
+  const [ctaListingCollapsed, setCtaListingCollapsed] = useState(false);
+  const [ctaCleanCollapsed, setCtaCleanCollapsed] = useState(false);
+  const [ctaFactorialCollapsed, setCtaFactorialCollapsed] = useState(false);
   const [comparableData, setComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
   const [dbNoResults, setDbNoResults] = useState(false);
@@ -2474,6 +2490,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setIsCostCalculating(false);
     setPipelineDone(false);
     setCurrentStage("Stage 0: Initialization");
+    // Reset gate wizard
+    setGateActive(false);
+    setGateStep(1);
+    setGateMode(null);
+    setGateAllFields([]);
+    setGateValues({});
+    // Reset collapse states
+    setGateCollapsed(false);
+    setMapCollapsed(false);
+    setApproachCollapsed(false);
+    setCtaListingCollapsed(false);
+    setCtaCleanCollapsed(false);
+    setCtaFactorialCollapsed(false);
     markersRef.current = [];
     onMarkersUpdate?.([]);
   };
@@ -3318,6 +3347,134 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   };
 
 
+  const buildGateInitialValues = (schemas, currentSubjectData, currentMapConfirmation) => {
+    const sData = currentSubjectData || subjectDataRef.current || {};
+    const mapConf = currentMapConfirmation || mapConfirmation || null;
+    
+    const allExpectedFields = [
+      ...schemas.map(s => s.field),
+      "project_name",
+      "location_name",
+      "country",
+      "city",
+      "property_type",
+      "recommended_approach",
+      "lat",
+      "lng",
+      "coordinates",
+      "salable_area_sqft",
+      "carpet_area_sqft",
+      "builtup_area_sqft",
+      "plot_area_sqft",
+      "age_years",
+      "land_type",
+      "frontage",
+      "occupancy_status"
+    ];
+    
+    const initVals = {};
+    
+    // Fill defaults from schemas
+    schemas.forEach(s => {
+      let dVal = s.default;
+      if (s.field === "property_type" && dVal) {
+        const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === dVal);
+        if (!hasOpt) dVal = "";
+      }
+      if (dVal !== undefined && dVal !== null && dVal !== "") {
+        initVals[s.field] = dVal;
+      }
+    });
+    
+    // Autofill from sData (extracted from query)
+    allExpectedFields.forEach(field => {
+      if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
+        const valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        if (valFromData !== undefined && valFromData !== null && valFromData !== "") {
+          if (!(field === "project_name" && valFromData === "Subject Property")) {
+            if (field === "coordinates" && typeof valFromData === 'object') {
+              if (valFromData.lat && valFromData.lng) {
+                initVals[field] = `${valFromData.lat}, ${valFromData.lng}`;
+              }
+            } else if (typeof valFromData !== 'object') {
+              initVals[field] = valFromData;
+            }
+          }
+        }
+      }
+    });
+    
+    // Fallback/custom fields mapping
+    if (!initVals["lat"] || Number(initVals["lat"]) === 0) {
+      if (mapConf?.lat) {
+        initVals["lat"] = mapConf.lat;
+      } else if (sData.coordinates?.lat) {
+        initVals["lat"] = sData.coordinates.lat;
+      } else if (sData.lat) {
+        initVals["lat"] = sData.lat;
+      }
+    }
+    if (!initVals["lng"] || Number(initVals["lng"]) === 0) {
+      if (mapConf?.lng) {
+        initVals["lng"] = mapConf.lng;
+      } else if (sData.coordinates?.lng) {
+        initVals["lng"] = sData.coordinates.lng;
+      } else if (sData.lng) {
+        initVals["lng"] = sData.lng;
+      }
+    }
+    
+    if (!initVals["coordinates"]) {
+      if (initVals["lat"] && initVals["lng"]) {
+        initVals["coordinates"] = `${initVals["lat"]}, ${initVals["lng"]}`;
+      } else if (sData.coordinates) {
+        if (typeof sData.coordinates === 'string') {
+          initVals["coordinates"] = sData.coordinates;
+        } else if (typeof sData.coordinates === 'object' && sData.coordinates.lat && sData.coordinates.lng) {
+          initVals["coordinates"] = `${sData.coordinates.lat}, ${sData.coordinates.lng}`;
+        }
+      }
+    }
+
+    // Area fields fallback mapping
+    const propType = (gateValues["property_type"] || sData.property_type || "").toLowerCase().trim();
+    
+    const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
+    const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
+    const extractedCarpet = sData.carpet_area_sqft || sData.entities?.carpet_area_sqft || "";
+    const extractedPlot = sData.plot_area_sqft || sData.entities?.plot_area_sqft || "";
+
+    const primaryArea = extractedBuiltup || extractedSalable || extractedCarpet || extractedPlot;
+
+    if (primaryArea) {
+      if (propType === "villa") {
+        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || extractedCarpet || "";
+        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup/carpet for villa plot area
+      } else if (propType === "plot") {
+        initVals["plot_area_sqft"] = extractedPlot || primaryArea;
+      } else {
+        // apartment, retail, commercial_office
+        initVals["salable_area_sqft"] = extractedSalable || primaryArea;
+      }
+      
+      // Keep other fields filled if extracted specifically
+      if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
+      if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
+      if (extractedCarpet) initVals["carpet_area_sqft"] = extractedCarpet;
+      if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
+    }
+    
+    // Ensure all expected fields are strings/numbers, not undefined
+    allExpectedFields.forEach(field => {
+      if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
+        initVals[field] = "";
+      }
+    });
+    
+    return initVals;
+  };
+
+
   const submitQuestion = async (question, isContinuation = false, uiDisplayOverride = null) => {
     const trimmed = question.trim();
     if (!trimmed || isStreaming) return;
@@ -3340,6 +3497,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setInput("");
     setStreamingNote("Connecting to backend stream...");
     setIsStreaming(true);
+
+    let currentSubjectObj = null;
+    let currentMapConf = null;
 
     try {
       const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}&comparable_source=both`), {
@@ -3401,6 +3561,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             };
             setSubjectData(subjectObj);
             subjectDataRef.current = subjectObj;
+            currentSubjectObj = subjectObj;
 
             if (coords?.lat && coords?.lng && !isNaN(Number(coords.lat)) && !isNaN(Number(coords.lng)) && Number(coords.lat) !== 0 && Number(coords.lng) !== 0) {
               // useEffect will handle marker update
@@ -3439,21 +3600,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "clarification_needed") {
             const inputs = event.content?.user_inputs_required || [];
             const fields = event.content?.missing_fields || [];
-
             const schemas = inputs.length > 0 ? inputs : fields.map(f => ({
               field: f, label: f.replaceAll("_", " "), type: "text"
             }));
-
+            const initVals = buildGateInitialValues(schemas, currentSubjectObj, currentMapConf);
+            // Legacy path kept for non-gate flows
             setClarificationPrompt(event.content?.question || event.content?.message || "");
             setClarificationFields(schemas);
-            setClarificationValues(Object.fromEntries(schemas.map((s) => {
-              let val = s.default || "";
-              if (s.field === "property_type" && val) {
-                const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === val);
-                if (!hasOpt) val = "";
-              }
-              return [s.field, val];
-            })));
+            setClarificationValues(initVals);
+            // Open gate wizard
+            setGateAllFields(schemas);
+            setGateValues(initVals);
+            setGateMode('clarification');
+            setGateStep(1);
+            setGateActive(true);
           }
 
           if (event.type === "map_confirmation") {
@@ -3461,16 +3621,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             const lng = Number(event.content?.lng);
 
             if (!isNaN(lat) && !isNaN(lng)) {
-              setMapConfirmation({
+              const conf = {
                 lat,
                 lng,
                 label: event.content?.location_name || "Subject Property",
                 source: "map_confirmation",
                 message: event.content?.message || "Please confirm this location.",
-              });
+              };
+              setMapConfirmation(conf);
+              currentMapConf = conf;
               setClarificationValues(prev => ({
                 ...prev,
-                coordinates: `${lat}, ${lng}`
+                coordinates: `${lat}, ${lng}`,
+                lat: lat,
+                lng: lng
+              }));
+              setGateValues(prev => ({
+                ...prev,
+                coordinates: `${lat}, ${lng}`,
+                lat: lat,
+                lng: lng
               }));
             }
           }
@@ -3488,33 +3658,30 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               "clarification_needed", "recommended_approach", "coordinates",
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
-
-            // Determine property type to decide if project_name should be shown
             const propType = ents?.property_type;
             const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
-
             const fields = Object.entries(ents)
               .filter(([k, v]) => {
                 if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
                 if (v === null || v === "" || typeof v === 'object') return false;
-                // Hide project_name for plot types (not applicable)
                 if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
                 return true;
               })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
-
             if (ents.coordinates && typeof ents.coordinates === 'object') {
-              if (ents.coordinates.lat) {
-                fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
-              }
-              if (ents.coordinates.lng) {
-                fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
-              }
+              if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
+              if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
             }
-
+            const initVals = buildGateInitialValues(fields, currentSubjectObj || ents, currentMapConf);
             setClarificationFields(fields);
-            setClarificationValues(Object.fromEntries(fields.map(f => [f.field, f.default])));
+            setClarificationValues(initVals);
             setClarificationPrompt(event.content?.message || "Please review and confirm the extracted property details.");
+            // Open gate wizard at verification step
+            setGateAllFields(fields);
+            setGateValues(initVals);
+            setGateMode('verification');
+            setGateStep(1);
+            setGateActive(true);
           }
 
           if (event.type === "comparable_results") {
@@ -3847,6 +4014,432 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     }
   };
 
+  // ── Gate Wizard Helpers ───────────────────────────────────────────
+  const IDENTITY_FIELDS   = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
+  const PROP_TYPE_FIELDS  = ["property_type"];
+  const APPROACH_FIELDS   = ["approach", "recommended_approach", "valuation_approach"];
+
+  // Fields that belong to Gate 4 (property-specific attributes, not identity/type/approach)
+  const isGate4Field = (f) =>
+    !IDENTITY_FIELDS.includes(f.field) &&
+    !PROP_TYPE_FIELDS.includes(f.field) &&
+    !APPROACH_FIELDS.includes(f.field);
+
+  const gate1Fields = gateAllFields.filter(f => IDENTITY_FIELDS.includes(f.field));
+  const gate2Fields = gateAllFields.filter(f => PROP_TYPE_FIELDS.includes(f.field));
+  const gate3Fields = gateAllFields.filter(f => APPROACH_FIELDS.includes(f.field));
+  const gate4Fields = gateAllFields.filter(isGate4Field);
+
+  // Current property type from wizard values (or already-known subject data)
+  const wizardPropType = (gateValues["property_type"] || subjectData?.property_type || "").toLowerCase().trim();
+  const isVilla = wizardPropType === "villa";
+
+  // Compute effective max step (skip gate 3 if not villa)
+  const gateMax = isVilla ? 5 : 4;   // 1=Identity,2=PropType,3=Approach(villa only),4=Fields,5=Verify
+
+  const advanceGate = () => {
+    setGateStep(prev => {
+      let next = prev + 1;
+      // Skip approach gate (3) if not villa
+      if (next === 3 && !isVilla) next = 4;
+      return next;
+    });
+  };
+
+  const closeGate = () => {
+    setGateActive(false);
+    setGateStep(1);
+    setGateMode(null);
+  };
+
+  const gateSubmitFinal = () => {
+    // Merge gateValues back into clarificationValues / extractionVerification path
+    setClarificationValues(gateValues);
+    closeGate();
+    
+    // Prepare values to send, ensuring coordinates are formatted and verification flags are true
+    const finalVals = {
+      ...gateValues,
+      extraction_verified: "true",
+      coordinates_confirmed: "true"
+    };
+    if (finalVals.lat && finalVals.lng) {
+      finalVals.coordinates = `${finalVals.lat}, ${finalVals.lng}`;
+    }
+
+    if (gateMode === 'verification') {
+      // Compute changes vs original extraction
+      const ents = extractionVerification?.entities || {};
+      const entsCoords = ents.coordinates || {};
+      const changes = [];
+      Object.entries(gateValues).forEach(([field, value]) => {
+        let isChanged = false;
+        if (field === "lat" || field === "lng") {
+          isChanged = String(value).trim() !== String(entsCoords[field]);
+        } else {
+          isChanged = String(value).trim() !== String(ents[field]);
+        }
+        if (isChanged) changes.push(`${humanizeFieldName(field)}: ${value}`);
+      });
+      let response = "The extracted details are confirmed to be correct. Extraction Verified: true, Coordinates Confirmed: true";
+      if (changes.length > 0) {
+        response = `The extracted details are confirmed with the following corrections: ${changes.join(", ")}. Please use these values. Extraction Verified: true, Coordinates Confirmed: true`;
+        if (changes.some(c => c.startsWith("Lat") || c.startsWith("Lng"))) {
+          response += " Also update the coordinates to the new latitude and longitude.";
+        }
+      }
+      setExtractionVerification(null);
+      setClarificationFields([]);
+      setClarificationPrompt("");
+      submitQuestion(`${currentQuestion}. ${response}`, true, changes.length > 0 ? `Confirmed with corrections: ${changes.join(", ")}` : "Details confirmed");
+    } else {
+      // clarification flow
+      const entries = Object.entries(finalVals).filter(([k, v]) => {
+        if (k === "coordinates" && typeof v === "object") return false;
+        return String(v).trim();
+      });
+      const response = entries.map(([f, v]) => `${humanizeFieldName(f)}: ${v}`).join(", ");
+      setClarificationPrompt("");
+      setClarificationFields([]);
+      submitQuestion(`${currentQuestion}. ${response}`, true, response);
+    }
+  };
+
+  // ── Stage1GateWizard render ───────────────────────────────────────
+  const renderGateField = (schema) => {
+    const val = gateValues[schema.field] ?? "";
+    const update = (v) => setGateValues(prev => ({ ...prev, [schema.field]: v }));
+    const isFilled = String(val).trim() !== "";
+
+    if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
+      return (
+        <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
+          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+            {schema.label || humanizeFieldName(schema.field)}
+            {isFilled && <span className="ml-1.5 inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
+          </span>
+          <select
+            value={val}
+            onChange={e => update(e.target.value)}
+            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+          >
+            <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
+            {schema.options?.map(opt => {
+              const isObj = typeof opt === 'object';
+              const optValue = isObj ? opt.value : opt;
+              const optLabel = isObj ? opt.label : humanizeFieldName(opt);
+              return <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>;
+            })}
+          </select>
+        </label>
+      );
+    }
+
+    return (
+      <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
+        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim flex items-center gap-1.5">
+          {schema.label || humanizeFieldName(schema.field)}
+          {isFilled && <span className="inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
+        </span>
+        <input
+          type={schema.type === "number" ? "number" : "text"}
+          value={val}
+          onChange={e => update(e.target.value)}
+          placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
+          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+        />
+        {schema.field === "age_years" && String(val) === "0" && (
+          <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">* Property marked as Under Construction</span>
+        )}
+      </label>
+    );
+  };
+
+  const GATE_META = [
+    { step: 1, label: "Property Identification", icon: "📍", desc: "Project name / coordinates, location & country" },
+    { step: 2, label: "Property Type",           icon: "🏠", desc: "Select the type of property being valued" },
+    { step: 3, label: "Approach Selection",      icon: "⚖️", desc: "Choose valuation approach (Villa only)" },
+    { step: 4, label: "Property Details",        icon: "📋", desc: "Area, age, floor, and other required attributes" },
+    { step: 5, label: "Verify & Confirm",        icon: "✅", desc: "Review all data before proceeding" },
+  ].filter(g => isVilla || g.step !== 3);
+
+  const Stage1GateWizard = gateActive ? (() => {
+    const currentMeta = GATE_META.find(g => g.step === gateStep) || GATE_META[0];
+    const activeType = wizardPropType;
+
+    // Dynamically build all fields for the active property type
+    const identityFields = [
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "country",       label: "Country",             type: "text" },
+    ];
+    
+    const typeFields = [
+      { field: "property_type", label: "Property Type", type: "select", options: [
+        { value: "apartment", label: "Apartment / Flat" },
+        { value: "villa",     label: "Villa" },
+        { value: "plot",      label: "Plot / Land" },
+        { value: "retail",    label: "Retail / Shop" },
+        { value: "commercial_office", label: "Commercial Office" },
+      ]}
+    ];
+    
+    const approachFields = activeType === "villa" ? [
+      { field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
+        { value: "market", label: "Market Approach" },
+        { value: "cost",   label: "Cost Approach" },
+      ]}
+    ] : [];
+    
+    let detailFields = [];
+    if (activeType === "apartment") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "villa") {
+      detailFields = [
+        { field: "plot_area_sqft",    label: "Plot Area (sqft)", type: "number" },
+        { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
+        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "plot") {
+      detailFields = [
+        { field: "plot_area_sqft",    label: "Plot Area (sqft)", type: "number" },
+        { field: "land_type",         label: "Land Type", type: "select", options: [
+          { value: "agricultural", label: "Agricultural" },
+          { value: "non_agricultural", label: "Non Agricultural" },
+          { value: "residential", label: "Residential" },
+          { value: "commercial", label: "Commercial" }
+        ]},
+      ];
+    } else if (activeType === "retail") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "frontage",          label: "Road Frontage (ft)", type: "number" },
+      ];
+    } else if (activeType === "commercial_office") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "occupancy_status",  label: "Occupancy Status", type: "select", options: [
+          { value: "vacant", label: "Vacant" },
+          { value: "leased", label: "Leased" },
+          { value: "self_use", label: "Self Use" }
+        ]},
+      ];
+    } else {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+      ];
+    }
+
+    // Build step-specific fields
+    let stepFields = [];
+    if (gateStep === 1) stepFields = identityFields;
+    else if (gateStep === 2) stepFields = typeFields;
+    else if (gateStep === 3 && activeType === "villa") stepFields = approachFields;
+    else if (gateStep === 4) stepFields = detailFields;
+
+    // Validate mandatory for current step
+    const mandatoryStep = gateStep === 1
+      ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
+      : gateStep === 2
+      ? gateValues["property_type"]
+      : gateStep === 3
+      ? gateValues["recommended_approach"]
+      : gateStep === 4
+      ? detailFields.every(f => {
+          const val = gateValues[f.field];
+          return val !== undefined && val !== null && String(val).trim() !== "";
+        })
+      : true;
+
+    const visualStep = GATE_META.findIndex(g => g.step === gateStep) + 1;
+    const canAdvance = Boolean(mandatoryStep);
+
+    return (
+      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+        {/* Header */}
+        <div 
+          onClick={() => setGateCollapsed(!gateCollapsed)}
+          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base">
+                {currentMeta.icon}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
+                    Gate {visualStep} of {GATE_META.length} — {currentMeta.label}
+                  </p>
+                  {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                </div>
+                <p className="mt-0.5 text-[10px] text-text-secondary">{currentMeta.desc}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Step progress pills */}
+          {!gateCollapsed && (
+            <div className="mt-3 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+              {GATE_META.map((g, idx) => (
+                <button
+                  key={g.step}
+                  onClick={() => gateStep > g.step && setGateStep(g.step)}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition
+                    ${g.step === gateStep
+                      ? "bg-warning text-bg-deep shadow"
+                      : g.step < gateStep
+                      ? "bg-success/20 text-success border border-success/30 cursor-pointer hover:bg-success/30"
+                      : "bg-border/20 text-text-dim cursor-default"
+                    }`}
+                >
+                  {g.step < gateStep ? "✓" : (idx + 1)} {g.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Gate body */}
+        {!gateCollapsed && (
+          <div className="flex flex-col gap-4 p-4">
+
+            {/* Gate 5 = full review */}
+            {gateStep === 5 ? (
+              <div className="space-y-4">
+                <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
+                <div className="flex flex-wrap gap-3">
+                  {[...identityFields, ...typeFields, ...approachFields, ...detailFields].map(f => renderGateField(f))}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setGateStep(4)}
+                    className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                  >← Back</button>
+                  <button
+                    type="button"
+                    onClick={gateSubmitFinal}
+                    className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                  >Confirm & Proceed →</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  {stepFields.map(f => renderGateField(f))}
+                  {stepFields.length === 0 && (
+                    <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
+                  )}
+                </div>
+
+                {/* Gate 1 Coordinate Verification */}
+                {gateStep === 1 && (
+                  <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
+                      </span>
+                      {mapConfirmation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const latVal = mapConfirmation.lat || "";
+                            const lngVal = mapConfirmation.lng || "";
+                            setGateValues(prev => ({
+                              ...prev,
+                              lat: latVal,
+                              lng: lngVal,
+                              coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                            }));
+                          }}
+                          className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                        >
+                          Pull from Map Confirmation
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                        <input
+                          type="text"
+                          value={gateValues["lat"] ?? ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGateValues(prev => ({
+                              ...prev,
+                              lat: val,
+                              coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
+                            }));
+                          }}
+                          placeholder="e.g. 19.0760"
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                        <input
+                          type="text"
+                          value={gateValues["lng"] ?? ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGateValues(prev => ({
+                              ...prev,
+                              lng: val,
+                              coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
+                            }));
+                          }}
+                          placeholder="e.g. 72.8777"
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                  {gateStep > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setGateStep(prev => {
+                        let back = prev - 1;
+                        if (back === 3 && !isVilla) back = 2;
+                        return back;
+                      })}
+                      className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                    >← Back</button>
+                  ) : <span />}
+
+                  {gateStep < (isVilla ? 4 : 4) ? (
+                    <button
+                      type="button"
+                      disabled={!canAdvance}
+                      onClick={advanceGate}
+                      className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Next →</button>
+                  ) : (
+                    // Last data-entry gate → go to review (gate 5)
+                    <button
+                      type="button"
+                      disabled={!canAdvance}
+                      onClick={() => setGateStep(5)}
+                      className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Review & Confirm →</button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })() : null;
+
   const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
 
   return (
@@ -4034,17 +4627,24 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
       <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
+        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
         {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3">
+            <div 
+              onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
+              className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
                   <FileSearch className="h-5 w-5 text-accent-light" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                    Step 2 — Fetch Listings
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
+                      Step 2 — Fetch Listings
+                    </p>
+                    {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {selectedComps.size > 0
                       ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
@@ -4053,212 +4653,153 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                The listing pipeline will search for real listings for the subject property + your selected comparables.
-              </p>
-              <button
-                type="button"
-                onClick={submitListingFetch}
-                disabled={selectedComps.size === 0}
-                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-              >
-                Proceed to Next Step →
-              </button>
-            </div>
+            {!ctaListingCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  The listing pipeline will search for real listings for the subject property + your selected comparables.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitListingFetch}
+                  disabled={selectedComps.size === 0}
+                  className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                >
+                  Proceed to Next Step →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
         {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3">
+            <div 
+              onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
+              className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
                   <Sparkles className="h-5 w-5 text-[#fb923c]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                    Step 3 — Clean Raw Listings
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                      Step 3 — Clean Raw Listings
+                    </p>
+                    {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-              </p>
-              <button
-                type="button"
-                onClick={submitCleaning}
-                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-              >
-                Start Data Cleaning →
-              </button>
-            </div>
+            {!ctaCleanCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitCleaning}
+                  className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                >
+                  Start Data Cleaning →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── Proceed to Factorial Table CTA ────────────────── */}
         {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3">
+            <div 
+              onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
+              className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
                   <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                    Step 4 — Generate Factorial Table
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
+                      Step 4 — Generate Factorial Table
+                    </p>
+                    {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                This will group data by project and calculate key rate statistics for valuation.
-              </p>
-              <button
-                type="button"
-                onClick={submitFactorial}
-                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-              >
-                Generate Factorial Table →
-              </button>
-            </div>
+            {!ctaFactorialCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  This will group data by project and calculate key rate statistics for valuation.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitFactorial}
+                  className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                >
+                  Generate Factorial Table →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {(clarificationFields.length > 0 || mapConfirmation || approachChoiceNeeded || extractionVerification) && (
+        {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
+        {Stage1GateWizard}
+
+        {/* ── Map Confirmation (standalone — not part of wizard) */}
+        {mapConfirmation && !gateActive && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div className="border-b border-warning/15 bg-warning/5 px-4 py-3">
+            <div 
+              onClick={() => setMapCollapsed(!mapCollapsed)}
+              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
-                    {mapConfirmation ? (
-                      <MapPin className="h-5 w-5 text-warning" />
-                    ) : approachChoiceNeeded ? (
-                      <SlidersHorizontal className="h-5 w-5 text-warning" />
-                    ) : extractionVerification ? (
-                      <ShieldCheck className="h-5 w-5 text-warning" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5 text-warning" />
-                    )}
+                    <MapPin className="h-5 w-5 text-warning" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
-                      {mapConfirmation ? "Map Confirmation" : approachChoiceNeeded ? "Approach Selection" : extractionVerification ? "Extraction Verification" : "Clarification Required"}
-                    </p>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      {mapConfirmation ? mapConfirmation.message : approachChoiceNeeded ? approachChoiceNeeded.question : clarificationPrompt}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                      {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                    </div>
+                    <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setClarificationPrompt("");
-                    setClarificationFields([]);
-                    setClarificationValues({});
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setMapConfirmation(null);
-                    setApproachChoiceNeeded(null);
                   }}
                   className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
             </div>
-
-            <div className="flex flex-col gap-4 p-4">
-              {clarificationFields.length > 0 && (
-                <div className="flex flex-wrap gap-3">
-                  {clarificationFields.map((schema) => (
-                    <label key={schema.field} className="flex min-w-[170px] flex-1 flex-col gap-1.5">
-                      <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                        {schema.label || humanizeFieldName(schema.field)}
-                      </span>
-                      {schema.type === "select" ? (
-                        <select
-                           value={clarificationValues[schema.field] || ""}
-                           onChange={(event) =>
-                             setClarificationValues((prev) => ({
-                               ...prev,
-                               [schema.field]: event.target.value,
-                             }))
-                           }
-                           className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        >
-                          <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
-                          {schema.options?.map(opt => {
-                            const isObj = typeof opt === 'object';
-                            const optValue = isObj ? opt.value : opt;
-                            const optLabel = isObj ? opt.label : humanizeFieldName(opt);
-                            return (
-                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <>
-                          <input
-                            type={schema.type === "number" ? "number" : "text"}
-                            value={clarificationValues[schema.field] || ""}
-                            onChange={(event) =>
-                              setClarificationValues((prev) => ({
-                                ...prev,
-                                [schema.field]: event.target.value,
-                              }))
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                submitClarification();
-                              }
-                            }}
-                            placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
-                          />
-                          {schema.field === "age_years" && String(clarificationValues[schema.field]) === "0" && (
-                            <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">
-                              * Property marked as Under Construction
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {mapConfirmation && (
+            {!mapCollapsed && (
+              <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-end gap-3">
                   <button
                     type="button"
                     onClick={() => submitMapConfirmation(true)}
                     className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >
-                    Location Is Correct
-                  </button>
+                  >Location Is Correct</button>
                   <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                      Correct Lat, Lng
-                    </span>
+                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
                     <input
                       type="text"
                       value={clarificationValues.coordinates || ""}
-                      onChange={(event) =>
-                        setClarificationValues((prev) => ({
-                          ...prev,
-                          coordinates: event.target.value,
-                        }))
-                      }
+                      onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
                       placeholder={PLACEHOLDER_MAP.coordinates}
                       className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
@@ -4267,86 +4808,65 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     type="button"
                     onClick={() => submitMapConfirmation(false)}
                     className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >
-                    Apply Fix
-                  </button>
+                  >Apply Fix</button>
                 </div>
-              )}
-              {approachChoiceNeeded && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => submitApproachChoice(true)}
-                    className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
-                  >
-                    Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach
-                  </button>
-                  <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                      Or Override Approach
-                    </span>
-                    <select
-                      value={clarificationValues.override_approach || ""}
-                      onChange={(e) =>
-                        setClarificationValues({ ...clarificationValues, override_approach: e.target.value })
-                      }
-                      className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                    >
-                      <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
-                      <option key="market" value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                      <option
-                        key="cost"
-                        value="cost"
-                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
-                        disabled={subjectData?.property_type !== "villa"}
-                      >
-                        Cost Approach {subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
-                      </option>
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!clarificationValues.override_approach}
-                    onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
-                  >
-                    Apply Override
-                  </button>
-                </div>
-              )}
-
-              {clarificationFields.length > 0 && extractionVerification && (
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                  <p className="text-xs text-text-dim">
-                    Review and edit the extracted details before proceeding.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={submitExtractionVerification}
-                    className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >
-                    Confirm & Proceed
-                  </button>
-                </div>
-              )}
-
-              {clarificationFields.length > 0 && !extractionVerification && (
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                  <p className="text-xs text-text-dim">
-                    Add the missing details and continue the same valuation request.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={submitClarification}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >
-                    Apply Details
-                  </button>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
+
+        {/* ── Approach Choice (standalone fallback if wizard not active) */}
+        {approachChoiceNeeded && !gateActive && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
+            <div 
+              onClick={() => setApproachCollapsed(!approachCollapsed)}
+              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
+                  <SlidersHorizontal className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                    {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                  </div>
+                  <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                </div>
+              </div>
+            </div>
+            {!approachCollapsed && (
+              <div className="flex flex-wrap items-end gap-3 p-4 animate-in fade-in duration-200">
+                <button
+                  type="button"
+                  onClick={() => submitApproachChoice(true)}
+                  className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
+                >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+                  <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                  <select
+                    value={clarificationValues.override_approach || ""}
+                    onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
+                    className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                  >
+                    <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                    <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                    <option value="cost" disabled={subjectData?.property_type !== "villa"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                      Cost Approach{subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={!clarificationValues.override_approach}
+                  onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
+                  className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
+                >Apply Override</button>
+              </div>
+            )}
+          </div>
+        )}
+
 
         <div className="mb-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
           <span className="truncate pr-4">{currentStage}</span>

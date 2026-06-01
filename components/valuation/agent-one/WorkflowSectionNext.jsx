@@ -33,7 +33,7 @@ const STAGE_META = {
     icon: Box,
     accent: "#22d3ee",
     accentGlow: "rgba(34,211,238,0.18)",
-    description: "LLM extracts entities from query · 5-gate validation (type → approach → fields → map → verify)",
+    description: "3-step profiling (Extraction → Geocoding → Verification) · 5-gate sequential validation (identification → type → approach → details → verify)",
   },
   "Stage 1 Halt": {
     label: "Stage 1 — Approach Selection",
@@ -229,7 +229,14 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={ent.property_type} />
         <DetailRow label="Location" value={ent.location_name} />
+        <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
+        <DetailRow label="Salable Area" value={ent.salable_area_sqft ? `${ent.salable_area_sqft} sqft` : null} />
+        <DetailRow label="Carpet Area" value={ent.carpet_area_sqft ? `${ent.carpet_area_sqft} sqft` : null} />
+        <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />
+        <DetailRow label="Plot Area" value={ent.plot_area_sqft ? `${ent.plot_area_sqft} sqft` : null} />
+        <DetailRow label="Age" value={ent.age_years !== undefined ? `${ent.age_years} years` : null} />
+        <DetailRow label="Floor" value={ent.floor !== undefined ? String(ent.floor) : null} />
         <DetailRow label="Approach" value={ent.recommended_approach} />
       </div>
     );
@@ -632,7 +639,7 @@ function StageAccordion({ meta, steps, defaultOpen }) {
               border: `1px solid ${accent}35` 
             }}
           >
-            {steps.length} STAGE STEP{steps.length !== 1 ? "S" : ""}
+            {steps.length} STEP{steps.length !== 1 ? "S" : ""}
           </span>
           <ChevronDown
             className="text-text-dim h-4 w-4 transition-transform duration-300"
