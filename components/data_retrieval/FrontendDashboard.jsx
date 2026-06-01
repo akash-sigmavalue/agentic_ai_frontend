@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ChatSection from "./ChatSection";
 import MapSection from "./MapSection";
+import ResizableDashboardLayout from "./ResizableDashboardLayout";
 import ThemeToggle from "./ThemeToggle";
 import WorkflowSection from "./WorkflowSection";
 import { API_BASE_URL, apiUrl } from "@/lib/api-client";
+import { downloadStageWordReport } from "@/lib/data-retrieval/stageWordReport";
 
 export default function FrontendDashboard() {
   const apiBaseUrl = useMemo(
@@ -49,11 +51,15 @@ export default function FrontendDashboard() {
   const [selectedPipeline, setSelectedPipeline] = useState("v1");
   const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const [stageCards, setStageCards] = useState([]);
+  const [pipelineStages, setPipelineStages] = useState([]);
+  const [pipelineCatalog, setPipelineCatalog] = useState([]);
+  const [stageReport, setStageReport] = useState(null);
   const [clarificationState, setClarificationState] = useState({
     awaiting: false,
     meta: null,
     selectedOptions: [],
     otherText: "",
+    fieldValues: {},
   });
 
   const eventSourceRef = useRef(null);
@@ -97,9 +103,27 @@ export default function FrontendDashboard() {
 
   function resetRunState() {
     setStageCards([]);
+    setPipelineStages([]);
+    setPipelineCatalog([]);
+    setStageReport(null);
     setMetricsText("Streaming from backend...");
     setTotalTokens(0);
     setTokenEvents([]);
+  }
+
+  function upsertPipelineStage(stage) {
+    if (!stage?.id) {
+      return;
+    }
+    setPipelineStages((current) => {
+      const index = current.findIndex((item) => item.id === stage.id);
+      if (index === -1) {
+        return [...current, stage].sort((left, right) => (left.order || 0) - (right.order || 0));
+      }
+      const next = [...current];
+      next[index] = { ...next[index], ...stage };
+      return next;
+    });
   }
 
   function addStageCard(kind, title, payload, subtitle = "", icon = "⚙️") {
@@ -196,20 +220,42 @@ export default function FrontendDashboard() {
     });
   }
 
+  function formatClarificationAnswerLines(fieldValues, fields) {
+    const lines = [];
+    const schemas = Array.isArray(fields) ? fields : [];
+    const schemaByField = new Map(schemas.map((schema) => [schema.field, schema]));
+
+    for (const [field, rawValue] of Object.entries(fieldValues || {})) {
+      const value = String(rawValue || "").trim();
+      if (!value) {
+        continue;
+      }
+      const schema = schemaByField.get(field);
+      const label = schema?.label || field.replaceAll("__", ": ").replaceAll("_", " ");
+      lines.push(`${label}: ${value}`);
+    }
+    return lines;
+  }
+
   function buildSubmissionPayload() {
     const freeText = input.trim();
 
     if (clarificationState.awaiting && selectedPipeline === "v2") {
-      if (!freeText) {
+      const structuredLines = formatClarificationAnswerLines(
+        clarificationState.fieldValues,
+        clarificationState.meta?.fields,
+      );
+      if (!structuredLines.length && !freeText) {
         return null;
       }
+      const answerText = [...structuredLines, freeText].filter(Boolean).join("\n");
       const originalQuery = clarificationState.meta?.original_query || "";
       const requestText = originalQuery
-        ? `${originalQuery}\nClarification answer: ${freeText}`
-        : freeText;
+        ? `${originalQuery}\nClarification answer: ${answerText}`
+        : answerText;
       return {
         requestText,
-        displayText: freeText,
+        displayText: answerText,
       };
     }
 
@@ -295,6 +341,7 @@ export default function FrontendDashboard() {
       meta: null,
       selectedOptions: [],
       otherText: "",
+      fieldValues: {},
     });
     setInput("");
     setIsStreaming(true);
@@ -339,10 +386,24 @@ export default function FrontendDashboard() {
           );
           break;
         case "start":
-          addStageCard("start", "Request Started", "Incoming query accepted by backend.", "Incoming query accepted by backend.", "🚀");
+          if (selectedPipeline !== "v2") {
+            addStageCard("start", "Request Started", "Incoming query accepted by backend.", "Incoming query accepted by backend.", "🚀");
+          }
+          break;
+        case "pipeline_catalog":
+          if (selectedPipeline === "v2") {
+            setPipelineCatalog(Array.isArray(data.content?.stages) ? data.content.stages : []);
+          }
+          break;
+        case "pipeline_stage":
+          if (selectedPipeline === "v2" && data.content) {
+            upsertPipelineStage(data.content);
+          }
           break;
         case "stage":
-          addStageCard("stage", data.content, "Waiting for stage details...", "Pipeline progress update.", "⚡");
+          if (selectedPipeline !== "v2") {
+            addStageCard("stage", data.content, "Waiting for stage details...", "Pipeline progress update.", "⚡");
+          }
           break;
         case "intent":
           appendStageDetail(`Intent recognized: ${data.content?.intent || "unknown"}`);
@@ -375,6 +436,9 @@ export default function FrontendDashboard() {
           appendStageDetail(`Action: ${data.content}`);
           break;
         case "debug_trace":
+          if (selectedPipeline === "v2") {
+            break;
+          }
           appendStageDetail(
             `Debug: ${data.content?.step || "trace"}\nPhase: ${data.content?.phase || "unknown"}\n${data.content?.summary || "No summary available."}${
               Array.isArray(data.content?.plan_steps) && data.content.plan_steps.length
@@ -409,12 +473,19 @@ export default function FrontendDashboard() {
           }
           break;
         case "clarification_required":
-          addStageCard("clarification", "Clarification Needed", data.content?.message || "More detail is needed before the agent can continue.", "Backend is waiting for more detail.", "❓");
+          addStageCard(
+            "clarification",
+            "Clarification Needed",
+            data.content?.clarification_question || data.content?.message || "More detail is needed before the agent can continue.",
+            data.content?.stopped_at_stage ? `Stopped at ${data.content.stopped_at_stage.replaceAll("_", ".")}` : "Backend is waiting for more detail.",
+            "❓",
+          );
           setClarificationState({
             awaiting: true,
             meta: data.content,
             selectedOptions: [],
             otherText: "",
+            fieldValues: {},
           });
           setMessages((current) =>
             current.map((item) =>
@@ -452,14 +523,27 @@ export default function FrontendDashboard() {
             ),
           );
           break;
+        case "stage_report":
+          if (selectedPipeline === "v2" && data.content) {
+            setStageReport(data.content);
+            const modelLabel =
+              modelOptions.find((option) => option.value === selectedModel)?.label || selectedModel;
+            downloadStageWordReport(data.content, modelLabel);
+            setMetricsText((current) =>
+              `${current} | Stage Word report downloaded`,
+            );
+          }
+          break;
         case "done":
-          addStageCard(
-            "done",
-            "Pipeline Complete",
-            `Run finished in ${data.metrics?.duration_seconds ?? "--"}s with ${data.metrics?.total_tokens ?? 0} total tokens.`,
-            "Backend finished this request.",
-            "🏁",
-          );
+          if (selectedPipeline !== "v2") {
+            addStageCard(
+              "done",
+              "Pipeline Complete",
+              `Run finished in ${data.metrics?.duration_seconds ?? "--"}s with ${data.metrics?.total_tokens ?? 0} total tokens.`,
+              "Backend finished this request.",
+              "🏁",
+            );
+          }
           finalizeStream(data.metrics);
           break;
         default:
@@ -479,6 +563,9 @@ export default function FrontendDashboard() {
     setInput("");
     setIsStreaming(false);
     setStageCards([]);
+    setPipelineStages([]);
+    setPipelineCatalog([]);
+    setStageReport(null);
     setTotalTokens(0);
     setMetricsText("Latency: --s");
     setClarificationState({
@@ -486,17 +573,18 @@ export default function FrontendDashboard() {
       meta: null,
       selectedOptions: [],
       otherText: "",
+      fieldValues: {},
     });
   }
 
   return (
-    <main className="min-h-screen overflow-hidden pt-20" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+    <main className="flex h-screen flex-col overflow-hidden pt-20" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
       <div className="bg-grid" />
       <div className="orb orb-1" />
       <div className="orb orb-2" />
       <div className="orb orb-3" />
 
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="border-b backdrop-blur-xl" style={{ borderColor: "var(--border-soft)", background: "var(--bg-header)" }}>
           <div className="mx-auto flex w-full max-w-[1880px] items-center justify-between gap-4 px-4 py-4 lg:px-6">
             <div className="flex items-center gap-3">
@@ -542,7 +630,7 @@ export default function FrontendDashboard() {
                 <select
                   value={selectedPipeline}
                   onChange={(event) => handlePipelineChange(event.target.value)}
-                  className="cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
                   style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
                   aria-label="Select data retrieval pipeline"
                   disabled={isStreaming}
@@ -564,7 +652,7 @@ export default function FrontendDashboard() {
                 <select
                   value={selectedAgent}
                   onChange={(event) => handleAgentChange(event.target.value)}
-                  className="cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
                   style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
                   aria-label="Select domain agent"
                   disabled={isStreaming || selectedPipeline === "v2"}
@@ -587,7 +675,7 @@ export default function FrontendDashboard() {
                   <select
                     value={selectedModel}
                     onChange={(event) => handleModelChange(event.target.value)}
-                    className="max-w-[210px] cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                    className="reai-native-select max-w-[210px] cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
                     style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
                     aria-label="Select data retrieval agent v2 model"
                     disabled={isStreaming}
@@ -620,28 +708,57 @@ export default function FrontendDashboard() {
           </div>
         </header>
 
-        <div className="mx-auto grid w-full max-w-[1880px] flex-1 gap-4 px-4 py-4 lg:grid-cols-[380px_minmax(0,1fr)_360px] lg:px-6 lg:py-6">
-          <ChatSection
-            messages={messages}
-            input={input}
-            onInputChange={setInput}
-            onSubmit={handleSubmit}
-            isStreaming={isStreaming}
-            metricsText={metricsText}
-            clarificationState={clarificationState}
-            onClarificationToggle={handleClarificationToggle}
-            onClarificationOtherChange={(value) =>
-              setClarificationState((current) => ({
-                ...current,
-                otherText: value,
-              }))
-            }
-            onClear={clearConversation}
-            backendLabel={`${apiBaseUrl} · ${selectedPipeline === "v2" ? "agent v2" : "agent v1"}`}
-          />
-          <WorkflowSection stageCards={stageCards} isGenerating={isStreaming} totalTokens={totalTokens} tokenEvents={tokenEvents} />
-          <MapSection />
-        </div>
+        <ResizableDashboardLayout
+          left={
+            <ChatSection
+              messages={messages}
+              input={input}
+              onInputChange={setInput}
+              onSubmit={handleSubmit}
+              isStreaming={isStreaming}
+              metricsText={metricsText}
+              clarificationState={clarificationState}
+              onClarificationToggle={handleClarificationToggle}
+              onClarificationOtherChange={(value) =>
+                setClarificationState((current) => ({
+                  ...current,
+                  otherText: value,
+                }))
+              }
+              onClarificationFieldChange={(field, value) =>
+                setClarificationState((current) => ({
+                  ...current,
+                  fieldValues: {
+                    ...current.fieldValues,
+                    [field]: value,
+                  },
+                }))
+              }
+              onClear={clearConversation}
+              backendLabel={`${apiBaseUrl} · ${selectedPipeline === "v2" ? "agent v2" : "agent v1"}`}
+            />
+          }
+          center={
+            <WorkflowSection
+              variant={selectedPipeline === "v2" ? "v2" : "v1"}
+              stageCards={stageCards}
+              pipelineStages={pipelineStages}
+              pipelineCatalog={pipelineCatalog}
+              stageReport={stageReport}
+              onDownloadStageReport={() => {
+                const modelLabel =
+                  modelOptions.find((option) => option.value === selectedModel)?.label || selectedModel;
+                if (stageReport) {
+                  downloadStageWordReport(stageReport, modelLabel);
+                }
+              }}
+              isGenerating={isStreaming}
+              totalTokens={totalTokens}
+              tokenEvents={tokenEvents}
+            />
+          }
+          right={<MapSection />}
+        />
       </div>
     </main>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import ClarificationFields from "./ClarificationFields";
 import MarkdownRenderer from "./MarkdownRenderer";
 
 function SendIcon() {
@@ -80,15 +81,28 @@ export default function ChatSection({
   clarificationState,
   onClarificationToggle,
   onClarificationOtherChange,
+  onClarificationFieldChange,
   onClear,
   backendLabel = "Backend SSE",
 }) {
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const canSubmit =
-    clarificationState.awaiting
-      ? clarificationState.selectedOptions.length > 0 || Boolean(clarificationState.otherText.trim()) || Boolean(input.trim())
-      : Boolean(input.trim());
+
+  function hasStructuredClarificationAnswer() {
+    const fields = clarificationState.meta?.fields;
+    if (!Array.isArray(fields) || !fields.length) {
+      return false;
+    }
+    return fields.some((schema) => String(clarificationState.fieldValues?.[schema.field] || "").trim());
+  }
+
+  const canSubmit = clarificationState.awaiting
+    ? clarificationState.meta?.clarification_type === "space_filter"
+      ? clarificationState.selectedOptions.length > 0 ||
+        Boolean(clarificationState.otherText.trim()) ||
+        Boolean(input.trim())
+      : hasStructuredClarificationAnswer() || Boolean(input.trim())
+    : Boolean(input.trim());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,7 +123,7 @@ export default function ChatSection({
   }
 
   return (
-    <section className="app-panel h-full min-h-0 lg:max-h-[calc(100vh-11rem)] transition-shadow duration-200 hover:shadow-[0_0_0_1px_var(--accent),0_18px_48px_rgba(0,0,0,0.18)]">
+    <section className="app-panel flex h-full min-h-0 flex-col overflow-hidden transition-shadow duration-200 hover:shadow-[0_0_0_1px_var(--accent),0_18px_48px_rgba(0,0,0,0.18)]">
       <div className="flex items-center gap-3 border-b px-[18px] py-3.5" style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>💬</div>
         <div>
@@ -119,7 +133,7 @@ export default function ChatSection({
         <small className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{backendLabel}</small>
       </div>
 
-      <div className="panel-scroll flex flex-col gap-3.5">
+      <div className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5">
         {messages.length === 0 ? (
           <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full text-2xl" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>🤖</div>
@@ -155,54 +169,16 @@ export default function ChatSection({
                         />
                       )) : null}
                       {message.clarification ? (
-                        <div className="mt-4 border-t pt-4" style={{ borderColor: "color-mix(in srgb, var(--warning) 18%, transparent)" }}>
-                          <p className="m-0 text-sm" style={{ color: "var(--text-primary)" }}>{message.clarification.message}</p>
-                          {Array.isArray(message.clarification.questions) && message.clarification.questions.length > 0 ? (
-                            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm" style={{ color: "var(--text-secondary)" }}>
-                              {message.clarification.questions.map((line, questionIndex) => (
-                                <li key={questionIndex}>{line}</li>
-                              ))}
-                            </ol>
-                          ) : null}
-                          {message.clarification.clarification_type === "space_filter" ? (
-                            <div className="mt-4">
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                {(message.clarification.options || []).map((option) => {
-                                  const checked = clarificationState.selectedOptions.includes(option.id);
-                                  return (
-                                    <label
-                                      key={option.id}
-                                      className="flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm"
-                                      style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)", color: "var(--text-primary)" }}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => onClarificationToggle?.(option.id)}
-                                        className="h-4 w-4"
-                                      />
-                                      <span>{option.label}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                              {clarificationState.selectedOptions.includes("other") ? (
-                                <div className="mt-4">
-                                  <label className="mb-2 block text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-muted)" }}>
-                                    Other details
-                                  </label>
-                                  <input
-                                    value={clarificationState.otherText}
-                                    onChange={(event) => onClarificationOtherChange?.(event.target.value)}
-                                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
-                                    style={{ borderColor: "var(--border-soft)", background: "var(--bg-input)", color: "var(--text-primary)" }}
-                                    placeholder="Add the space detail you have..."
-                                  />
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
+                        <ClarificationFields
+                          clarification={message.clarification}
+                          fieldValues={clarificationState.fieldValues}
+                          onFieldChange={onClarificationFieldChange}
+                          selectedOptions={clarificationState.selectedOptions}
+                          onToggleOption={onClarificationToggle}
+                          otherText={clarificationState.otherText}
+                          onOtherTextChange={onClarificationOtherChange}
+                          interactive={false}
+                        />
                       ) : null}
                     </>
                   )}
@@ -231,12 +207,32 @@ export default function ChatSection({
       </div>
 
       <div className="border-t p-3" style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}>
+        {clarificationState.awaiting && clarificationState.meta ? (
+          <div className="mb-3 rounded-2xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--warning) 22%, transparent)", background: "color-mix(in srgb, var(--warning) 6%, var(--bg-card))" }}>
+            <ClarificationFields
+              clarification={clarificationState.meta}
+              fieldValues={clarificationState.fieldValues}
+              onFieldChange={onClarificationFieldChange}
+              selectedOptions={clarificationState.selectedOptions}
+              onToggleOption={onClarificationToggle}
+              otherText={clarificationState.otherText}
+              onOtherTextChange={onClarificationOtherChange}
+              interactive
+            />
+          </div>
+        ) : null}
         <div className="flex items-end gap-2 rounded-xl border px-3.5 py-2 transition-all duration-200" style={{ borderColor: "var(--border-soft)", background: "var(--bg-input)" }}>
           <textarea
             ref={textareaRef}
             className="min-h-[22px] max-h-[120px] flex-1 resize-none bg-transparent text-[13px] leading-normal outline-none"
             style={{ color: "var(--text-primary)" }}
-            placeholder={clarificationState.awaiting ? "Answer the clarification and press Execute..." : "Type your real-estate query..."}
+            placeholder={
+              clarificationState.awaiting
+                ? Array.isArray(clarificationState.meta?.fields) && clarificationState.meta.fields.length
+                  ? "Optional extra detail, then press send..."
+                  : "Answer the clarification and press send..."
+                : "Type your real-estate query..."
+            }
             value={input}
             onChange={(event) => onInputChange?.(event.target.value)}
             onKeyDown={handleKeyDown}
