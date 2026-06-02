@@ -5,10 +5,18 @@ import Link from 'next/link';
 import { Network, Map, Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import AgentListDropdown from './AgentListDropdown';
+import { apiFetch } from '../../lib/api-client';
 
 const Header = () => {
   const [isDark, setIsDark] = React.useState(false);
   const pathname = usePathname();
+  const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
+  const [llmModel, setLlmModel] = React.useState<string>('gpt-4o-mini');
+  const [modelsByProvider, setModelsByProvider] = React.useState<Record<string, string[]>>({
+    openai: ['gpt-4o-mini', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+    bedrock: ['moonshotai.kimi-k2.5', 'deepseek.v3.2'],
+  });
+  const [llmReady, setLlmReady] = React.useState(false);
 
   React.useEffect(() => {
     // Hydrate state from localStorage only after initial render
@@ -17,9 +25,87 @@ const Header = () => {
   }, []);
 
   React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelection() {
+      try {
+        const cachedProvider = (localStorage.getItem('sigmavalue_llm_provider') || '').trim().toLowerCase();
+        const cachedModel = (localStorage.getItem('sigmavalue_llm_model') || '').trim();
+        if (cachedProvider === 'openai' || cachedProvider === 'bedrock') {
+          setLlmProvider(cachedProvider);
+        }
+        if (cachedModel) {
+          setLlmModel(cachedModel);
+        }
+
+        const data = await apiFetch<{
+          selection?: { provider?: string; model?: string };
+          allowed?: { providers?: string[]; models_by_provider?: Record<string, string[]> };
+        }>('/v1/llm/selection');
+
+        if (cancelled) return;
+
+        if (data?.allowed?.models_by_provider) {
+          setModelsByProvider(data.allowed.models_by_provider);
+        }
+
+        const provider = (data?.selection?.provider || '').toLowerCase();
+        const model = data?.selection?.model || '';
+        if (provider === 'openai' || provider === 'bedrock') {
+          setLlmProvider(provider);
+          localStorage.setItem('sigmavalue_llm_provider', provider);
+        }
+        if (model) {
+          setLlmModel(model);
+          localStorage.setItem('sigmavalue_llm_model', model);
+        }
+      } catch (error) {
+        // If backend isn't reachable, keep local defaults without blocking UI.
+        console.warn('Failed to load LLM selection', error);
+      } finally {
+        if (!cancelled) setLlmReady(true);
+      }
+    }
+
+    loadSelection();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);
     localStorage.setItem('sigmavalue_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
+
+  const persistAndApplySelection = React.useCallback(
+    async (provider: 'openai' | 'bedrock', model: string) => {
+      localStorage.setItem('sigmavalue_llm_provider', provider);
+      localStorage.setItem('sigmavalue_llm_model', model);
+      setLlmProvider(provider);
+      setLlmModel(model);
+
+      try {
+        await apiFetch('/v1/llm/selection', {
+          method: 'POST',
+          body: JSON.stringify({ provider, model }),
+        });
+      } catch (error) {
+        console.warn('Failed to update LLM selection', error);
+      }
+    },
+    [],
+  );
+
+  const handleProviderChange = async (nextProvider: 'openai' | 'bedrock') => {
+    const allowed = modelsByProvider[nextProvider] || [];
+    const nextModel = allowed.includes(llmModel) ? llmModel : allowed[0] || llmModel;
+    await persistAndApplySelection(nextProvider, nextModel);
+  };
+
+  const handleModelChange = async (nextModel: string) => {
+    await persistAndApplySelection(llmProvider, nextModel);
+  };
 
   const toggleTheme = () => {
     setIsDark((prev) => !prev);
@@ -82,6 +168,36 @@ const Header = () => {
             <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/portfolio-management' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
             <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
           </Link>
+
+          {/* Global LLM selector (applies across all agents) */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all ${pillClass}`}>
+            <SlidersHorizontal className="h-4 w-4 text-slate-400" />
+            <select
+              value={llmProvider}
+              onChange={(e) => handleProviderChange(e.target.value as 'openai' | 'bedrock')}
+              className={`reai-native-select cursor-pointer pointer-events-auto appearance-auto rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest outline-none ${pillTextClass}`}
+              aria-label="LLM provider"
+              title="LLM provider"
+            >
+              <option value="openai">OPENAI</option>
+              <option value="bedrock">BEDROCK</option>
+            </select>
+            <span className={`text-[10px] font-black ${pillTextClass}`}>/</span>
+            <select
+              value={llmModel}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className={`reai-native-select cursor-pointer pointer-events-auto appearance-auto rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest outline-none ${pillTextClass}`}
+              aria-label="LLM model"
+              title="LLM model"
+            >
+              {(modelsByProvider[llmProvider] || []).map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <AgentListDropdown />
           {/* <div 
             onClick={handleLogout}
