@@ -179,10 +179,10 @@ const PortfolioChatSection = () => {
           const isUser = message.role === 'user';
           return (
             <div className={`flex max-w-full gap-3 ${isUser ? 'flex-row-reverse' : ''}`} key={message.id}>
-              <div className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm ${isUser ? 'text-blue-600' : 'text-slate-500'}`}>
+              <div className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm ${isUser ? 'text-slate-900' : 'text-slate-500'}`}>
                 {isUser ? <User size={16} /> : <Bot size={16} />}
               </div>
-              <div className={`max-w-[82%] whitespace-pre-wrap break-words rounded-[22px] px-4 py-3 text-sm font-bold leading-relaxed shadow-sm ${isUser ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
+              <div className={`max-w-[82%] whitespace-pre-wrap break-words rounded-[22px] px-4 py-3 text-sm font-bold leading-relaxed shadow-sm ${isUser ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>
                 {message.status && !isUser && (
                   <div className="mb-2 flex items-center gap-1.5 text-[11px] font-black uppercase text-slate-500">
                     {isStreaming && !message.content ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot size={14} />}
@@ -221,7 +221,7 @@ const PortfolioChatSection = () => {
 
       <div className="flex items-center gap-3 border-t border-slate-100 bg-white p-5">
         <textarea
-          className="min-h-11 flex-1 resize-none rounded-2xl border-2 border-slate-100 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:border-blue-200"
+          className="min-h-11 flex-1 resize-none rounded-2xl border-2 border-slate-100 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:border-slate-300"
           rows={1}
           value={chatInput}
           disabled={isStreaming}
@@ -235,7 +235,7 @@ const PortfolioChatSection = () => {
           placeholder="Type your instruction..."
         />
         <button
-          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border-0 bg-blue-600 text-white shadow-xl shadow-blue-200 transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border-0 bg-slate-900 text-white shadow-xl shadow-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-30"
           type="button"
           onClick={sendChatMessage}
           disabled={!chatInput.trim() || isStreaming}
