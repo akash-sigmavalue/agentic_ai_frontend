@@ -7,7 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {  Message, WorkflowData as WorkflowJson, MarkerData as Marker  } from '@/lib/dashboard/geospatial/types';
 
-// import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '../lib/types';
+import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '@/lib/dashboard/geospatial/types';
 
 interface ChatSectionProps {
   onAiResponse?: (content: string) => void;
