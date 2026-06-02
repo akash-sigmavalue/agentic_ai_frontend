@@ -1,6 +1,6 @@
 "use client";
 
-import type { PromptToWorkflowResponse } from "../../types/api";
+import type { WorkflowResponse } from "./types";
 import { API_BASE_URL, CONNECTOR_API_ROUTES, apiUrl } from "../../lib/api-client";
 
 export interface GoogleOAuthStartResponse {
@@ -22,6 +22,60 @@ export interface ContinueMissingFieldResponse {
   status: "automation_rule_created";
   message: string;
   rule_id: number;
+}
+
+export interface AutomationRuleSummary {
+  id: number;
+  user_id?: number | null;
+  connector_type?: string | null;
+  execution_type?: string | null;
+  trigger_type?: string | null;
+  sender_name?: string | null;
+  sender_email?: string | null;
+  subject_filter?: string | null;
+  keyword_filter?: string[];
+  operation?: string | null;
+  tone?: string | null;
+  output_requirement?: Record<string, unknown>;
+  auto_send?: boolean;
+  is_active?: boolean;
+  last_processed_message_id?: string | null;
+  created_at?: string;
+  updated_at?: string | null;
+  last_execution_status?: string | null;
+  last_execution_message_id?: string | null;
+  last_execution_action?: string | null;
+}
+
+export interface AutomationRuleExecutionLog {
+  id: number;
+  automation_rule_id?: number;
+  user_id?: number;
+  connector_type?: string | null;
+  connector_id?: string | null;
+  trigger_event_id?: string | null;
+  matched_message_id?: string | null;
+  status?: string;
+  action_taken?: string | null;
+  error_message?: string | null;
+  sender_email?: string | null;
+  subject?: string | null;
+  thread_id?: string | null;
+  reply_text?: string | null;
+  draft_id?: string | null;
+  sent_message_id?: string | null;
+  valuation_extraction?: Record<string, unknown> | null;
+  execution_duration_ms?: number | null;
+  created_at?: string;
+}
+
+export interface ConnectorHealthResponse {
+  status?: string;
+  connector?: string;
+  active_rules?: number;
+  users_with_active_watch?: number;
+  rules_executed_last_24h?: number;
+  rules_failed_last_24h?: number;
 }
 
 export const API_BASE = API_BASE_URL;
@@ -127,10 +181,15 @@ export function loginUser(payload: { username: string; password: string }) {
 
 export function processWorkflow(
   prompt: string,
-): Promise<PromptToWorkflowResponse> {
-  return apiFetch<PromptToWorkflowResponse>(CONNECTOR_API_ROUTES.processWorkflow, {
+): Promise<WorkflowResponse> {
+  console.log("[Connector Debug] Before processWorkflow():", { prompt });
+  console.log("[Connector Debug] Calling processWorkflow with payload:", { prompt });
+  return apiFetch<WorkflowResponse>(CONNECTOR_API_ROUTES.processWorkflow, {
     method: "POST",
     body: JSON.stringify({ prompt }),
+  }).then((response) => {
+    console.log("[Connector Debug] processWorkflow response:", response);
+    return response;
   });
 }
 
@@ -141,8 +200,12 @@ export function startGoogleOAuth(): Promise<GoogleOAuthStartResponse> {
 }
 
 export function getGmailConnectionStatus(): Promise<GmailConnectionStatusResponse> {
+  console.log("[Connector Debug] Before Gmail status check:");
   return apiFetch<GmailConnectionStatusResponse>(CONNECTOR_API_ROUTES.gmailStatus, {
     method: "GET",
+  }).then((status) => {
+    console.log("[Connector Debug] Gmail status:", status);
+    return status;
   });
 }
 
@@ -153,6 +216,98 @@ export function continueMissingField(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function fetchAttachment(
+  messageId: string,
+  attachmentId: string,
+  filename?: string,
+  mimeType?: string,
+): Promise<Record<string, unknown>> {
+  const query = new URLSearchParams();
+  if (filename) {
+    query.set("filename", filename);
+  }
+  if (mimeType) {
+    query.set("mime_type", mimeType);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return apiFetch<Record<string, unknown>>(
+    `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}${suffix}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function listAutomationRules(): Promise<{ rules: AutomationRuleSummary[] }> {
+  return apiFetch<{ rules: AutomationRuleSummary[] }>("/connectors/automation-rules", {
+    method: "GET",
+  });
+}
+
+export function getAutomationRuleLogs(ruleId: number): Promise<AutomationRuleExecutionLog[]> {
+  return apiFetch<{ logs: AutomationRuleExecutionLog[] }>(
+    `/connectors/automation-rules/${ruleId}/logs`,
+    {
+      method: "GET",
+    },
+  ).then((response) => response.logs || []);
+}
+
+export function toggleAutomationRule(ruleId: number, isActive: boolean): Promise<{ success?: boolean; rule?: AutomationRuleSummary }> {
+  return apiFetch<{ success?: boolean; rule?: AutomationRuleSummary }>(
+    `/connectors/automation-rules/${ruleId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
+    },
+  );
+}
+
+export async function getAutomationHealth(): Promise<ConnectorHealthResponse> {
+  const rulesResult = await listAutomationRules().catch(() => ({ rules: [] as AutomationRuleSummary[] }));
+  const gmailStatus = await apiFetch<Record<string, unknown>>("/connectors/status/gmail", {
+    method: "GET",
+  }).catch(() => ({}));
+  const logsByRule = await Promise.all(
+    (rulesResult.rules || []).map(async (rule) => ({
+      ruleId: rule.id,
+      logs: await getAutomationRuleLogs(rule.id).catch(() => [] as AutomationRuleExecutionLog[]),
+    })),
+  ).catch(() => [] as Array<{ ruleId: number; logs: AutomationRuleExecutionLog[] }>);
+
+  const activeRules = (rulesResult.rules || []).filter((rule) => rule.is_active !== false).length;
+  const activeWatch = Boolean((gmailStatus as { watch_active?: unknown }).watch_active);
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+  let executedLast24h = 0;
+  let failedLast24h = 0;
+
+  for (const entry of logsByRule) {
+    for (const log of entry.logs || []) {
+      const createdAt = log.created_at ? Date.parse(log.created_at) : NaN;
+      if (!Number.isFinite(createdAt) || createdAt < recentCutoff) {
+        continue;
+      }
+
+      executedLast24h += 1;
+      const status = String(log.status || "").toLowerCase();
+      if (status === "failed" || status === "error") {
+        failedLast24h += 1;
+      }
+    }
+  }
+
+  return {
+    status: "ok",
+    connector: "gmail",
+    active_rules: activeRules,
+    users_with_active_watch: activeWatch ? 1 : 0,
+    rules_executed_last_24h: executedLast24h,
+    rules_failed_last_24h: failedLast24h,
+  };
 }
 
 // Backward-compatible alias if old components still call this name.

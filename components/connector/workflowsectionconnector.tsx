@@ -1,502 +1,1227 @@
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
-import ReactFlow, { Background, Controls, MarkerType, useEdgesState, useNodesState } from 'reactflow';
-import 'reactflow/dist/style.css';
-import { ArrowRight, Database, Sparkles, Workflow } from 'lucide-react';
-import CustomNode from '../shared/workflow/CustomNode';
-import FlowArrowEdge from '../shared/workflow/FlowArrowEdge';
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  MarkerType,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Edge,
+  type Node,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import {
-  ConnectorCapability,
-  ConnectorRegistryResponse,
-  ConnectorStepStatus,
-  ConnectorWorkflowDraft,
-  ConnectorWorkflowStep,
-  MissingField,
-} from '../../types/api';
-import { getLayoutedElements } from '../../lib/utils';
-import { WorkflowData } from '../../types/agents';
+  Brain,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Loader2,
+  Mail,
+  Maximize2,
+  Minimize2,
+  PenLine,
+  Search,
+  Send,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
+import type { ConvStep, StreamStep, WorkflowResponse } from "./types";
 
-interface WorkflowSectionConnectorProps {
-  draft: ConnectorWorkflowDraft | null;
-  registry: ConnectorRegistryResponse | null;
-  selectedConnectorKey: string | null;
-  onSelectConnectorKey?: (connectorKey: string) => void;
-  onSelectStep?: (step: ConnectorWorkflowStep | null) => void;
+type WorkflowSectionConnectorProps = {
+  response: WorkflowResponse | null;
+  needsGmail: boolean;
+  gmailConnected: boolean;
+  gmailEmail: string | null;
+  pendingPrompt: string | null;
+  isLoading: boolean;
+  connectorStatusLoading: boolean;
+  handleConnectGmail: () => void;
+  handleRecheckGmailConnection: () => void;
+  handleContinueWorkflow: () => void;
+  handleActivateFlow: () => void;
+  activatingFlow: boolean;
+  activateFlowResult: { ok: boolean; message: string } | null;
+  completionResult?: {
+    status: string;
+    message: string;
+    rule_id?: number;
+    reply_sent?: string | null;
+    reply_draft?: string | null;
+    analysis?: string | null;
+    delivery_status?: string;
+    execution_type?: string;
+    from_email?: string;
+    subject?: string;
+  } | null;
+  convStep?: ConvStep;
+  /** Live step events from the SSE streaming endpoint */
+  streamingSteps?: StreamStep[];
+};
+
+type FlowNodeStatus = "pending" | "running" | "completed" | "failed";
+
+type FlowNodeData = {
+  label: ReactNode;
+  status: FlowNodeStatus;
+};
+
+type IntentDetails = {
+  operation: string;
+  executionType: string;
+  fromEmail: string;
+  sendDirectly: boolean | null;
+};
+
+type WorkflowStage =
+  | "request"
+  | "intent"
+  | "search"
+  | "read"
+  | "extract"
+  | "reply"
+  | "draft"
+  | "send"
+  | "automation"
+  | "completed"
+  | "unknown";
+
+type StepDisplayMeta = {
+  stage: WorkflowStage;
+  stageLabel: string;
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+};
+
+type WorkflowDisplayStep = {
+  id: string;
+  stepNumber: number;
+  name: string;
+  operation?: string | null;
+  description?: string | null;
+  output?: string | null;
+  durationMs?: number | null;
+  status: FlowNodeStatus;
+};
+
+function normalizeStepKey(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
-const nodeTypes = {
-  input: CustomNode,
-  default: CustomNode,
-  decision: CustomNode,
-  output: CustomNode,
-};
+function matchesStep(stepName: string, aliases: string[]) {
+  const normalized = normalizeStepKey(stepName);
+  return aliases.some((alias) => normalized.includes(alias));
+}
 
-const edgeTypes = {
-  smoothstep: FlowArrowEdge,
-};
+function fallbackStepTitle(stepName: string, operation?: string | null) {
+  return humanStepName((stepName || operation || "Workflow Step").trim());
+}
 
-function statusToNodeStatus(status?: ConnectorStepStatus | string) {
+function getStepDisplayMeta(stepName?: string | null, operation?: string | null): StepDisplayMeta {
+  const composite = `${operation || ""} ${stepName || ""}`;
+  const normalized = normalizeStepKey(composite);
+
+  if (
+    normalized.includes("interpret_gmail_intent") ||
+    normalized.includes("understand_user_request") ||
+    normalized.includes("analyze_intent")
+  ) {
+    return {
+      stage: "intent",
+      stageLabel: "Intent Understanding",
+      title: "Understanding User Request",
+      subtitle: "Analyzing the prompt and extracting the Gmail intent.",
+      icon: <Brain className="h-4 w-4" />,
+    };
+  }
+
+  if (
+    matchesStep(normalized, [
+      "search_email",
+      "search_emails",
+      "search_thread",
+      "search_threads",
+      "search_gmail_threads",
+      "find_thread",
+      "find_threads",
+      "gmail_search",
+      "lookup_email",
+    ])
+  ) {
+    return {
+      stage: "search",
+      stageLabel: "Gmail Search",
+      title: "Searching Gmail Inbox",
+      subtitle: "Looking for matching threads and relevant emails.",
+      icon: <Search className="h-4 w-4" />,
+    };
+  }
+
+  if (
+    matchesStep(normalized, [
+      "read_email",
+      "read_thread",
+      "read_message",
+      "fetch_latest_thread",
+      "get_thread",
+      "open_thread",
+      "inspect_thread",
+    ])
+  ) {
+    return {
+      stage: "read",
+      stageLabel: "Email Reading",
+      title: "Reading Email Content",
+      subtitle: "Opening the thread and reviewing the message details.",
+      icon: <Mail className="h-4 w-4" />,
+    };
+  }
+
+  if (
+    matchesStep(normalized, [
+      "extract_key_details",
+      "extract_details",
+      "parse_details",
+      "summarize_thread",
+      "summarize_email",
+      "analyze_thread",
+      "analyze_email",
+    ])
+  ) {
+    return {
+      stage: "extract",
+      stageLabel: "AI Extraction",
+      title: "Extracting Key Details",
+      subtitle: "Pulling out the important context and action points.",
+      icon: <Sparkles className="h-4 w-4" />,
+    };
+  }
+
+  if (
+    matchesStep(normalized, [
+      "generate_reply",
+      "prepare_reply",
+      "compose_reply",
+      "draft_reply",
+      "write_reply",
+    ])
+  ) {
+    return {
+      stage: "reply",
+      stageLabel: "AI Reply",
+      title: "Preparing AI Reply",
+      subtitle: "Drafting a response with the right tone and context.",
+      icon: <PenLine className="h-4 w-4" />,
+    };
+  }
+
+  if (matchesStep(normalized, ["create_draft", "save_draft", "gmail_draft"])) {
+    return {
+      stage: "draft",
+      stageLabel: "Gmail Draft",
+      title: "Creating Gmail Draft",
+      subtitle: "Saving the generated reply as a draft in Gmail.",
+      icon: <PenLine className="h-4 w-4" />,
+    };
+  }
+
+  if (matchesStep(normalized, ["send_reply", "send_email", "dispatch_reply", "deliver_reply"])) {
+    return {
+      stage: "send",
+      stageLabel: "Email Delivery",
+      title: "Sending Email Reply",
+      subtitle: "Delivering the response to the recipient.",
+      icon: <Send className="h-4 w-4" />,
+    };
+  }
+
+  if (
+    matchesStep(normalized, [
+      "activate_automation",
+      "enable_automation",
+      "create_rule",
+      "create_automation",
+      "activate_rule",
+    ])
+  ) {
+    return {
+      stage: "automation",
+      stageLabel: "Automation",
+      title: "Activating Automation Rule",
+      subtitle: "Turning the workflow into a reusable automation.",
+      icon: <Sparkles className="h-4 w-4" />,
+    };
+  }
+
+  if (matchesStep(normalized, ["complete", "completed", "finalize", "finish", "done"])) {
+    return {
+      stage: "completed",
+      stageLabel: "Completed",
+      title: "Workflow Completed",
+      subtitle: "The live execution trail has finished.",
+      icon: <CheckCircle2 className="h-4 w-4" />,
+    };
+  }
+
+  return {
+    stage: "unknown",
+    stageLabel: "Workflow Step",
+    title: fallbackStepTitle(stepName || operation || ""),
+    subtitle: "Executing the next workflow action.",
+    icon: getFallbackStepIcon(stepName, operation),
+  };
+}
+
+function getStepIcon(stepName?: string | null, operation?: string | null) {
+  const text = `${operation || ""} ${stepName || ""}`.toLowerCase();
+  if (text.includes("search")) return <Search className="h-4 w-4" />;
+  if (text.includes("thread") || text.includes("mail")) return <Mail className="h-4 w-4" />;
+  if (text.includes("reply") || text.includes("send")) return <Send className="h-4 w-4" />;
+  if (text.includes("draft")) return <PenLine className="h-4 w-4" />;
+  if (text.includes("summar") || text.includes("report")) return <FileText className="h-4 w-4" />;
+  if (text.includes("generat") || text.includes("llm")) return <Sparkles className="h-4 w-4" />;
+  return <Sparkles className="h-4 w-4" />;
+}
+
+function getFallbackStepIcon(stepName?: string | null, operation?: string | null) {
+  return getStepIcon(stepName, operation);
+}
+
+function getStatusLabel(status: FlowNodeStatus) {
   switch (status) {
-    case 'published':
-    case 'tested':
-      return 'Done';
-    case 'needs_auth':
-    case 'needs_config':
-    case 'warning':
-      return 'Needs review';
+    case "running":
+      return "Executing";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
     default:
-      return 'In Progress';
+      return "Waiting";
   }
 }
 
-function stepToNodeType(step: ConnectorWorkflowStep) {
-  switch (step.step_type) {
-    case 'prompt':
-      return 'input';
-    case 'condition':
-      return 'decision';
-    case 'publish':
-    case 'output':
-      return 'output';
+function getStatusDetail(status: FlowNodeStatus) {
+  switch (status) {
+    case "running":
+      return "AI agent is currently executing this step...";
+    case "completed":
+      return "Step finished successfully.";
+    case "failed":
+      return "The agent hit an error while running this step.";
     default:
-      return 'default';
+      return "Waiting for the agent to reach this step.";
   }
 }
 
-function normalizeMissingField(field: MissingField | string, fallbackStepId?: string): MissingField {
-  if (typeof field === 'string') {
+function shorten(value: string, limit: number) {
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit - 1).trimEnd()}...`;
+}
+
+function humanStepName(raw: string): string {
+  return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeStatus(status?: string | null): FlowNodeStatus {
+  const value = String(status || "").toLowerCase();
+  if (value === "running") return "running";
+  if (value === "completed" || value === "success" || value === "done") return "completed";
+  if (value === "failed" || value === "error") return "failed";
+  return "pending";
+}
+
+function resolveIntentDetails(intentValue: unknown): IntentDetails {
+  if (!intentValue || typeof intentValue !== "object" || Array.isArray(intentValue)) {
     return {
-      key: field,
-      label: field.replace(/[._-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
-      description: null,
-      required: true,
-      step_id: fallbackStepId || null,
-      value: null,
+      operation: "",
+      executionType: "",
+      fromEmail: "",
+      sendDirectly: null,
     };
   }
 
-  return field;
+  const intent = intentValue as Record<string, unknown>;
+  const operation =
+    (typeof intent.operation === "string" && intent.operation) ||
+    (typeof intent.intent === "string" && intent.intent) ||
+    (typeof intent.type === "string" && intent.type) ||
+    (typeof intent.name === "string" && intent.name) ||
+    "";
+  const executionType =
+    (typeof intent.execution_type === "string" && intent.execution_type) ||
+    (typeof intent.executionType === "string" && intent.executionType) ||
+    "";
+  const fromEmail =
+    (typeof intent.from_email === "string" && intent.from_email) ||
+    (typeof intent.sender_email === "string" && intent.sender_email) ||
+    (typeof intent.from === "string" && intent.from) ||
+    "";
+  const sendDirectlyValue = intent.send_directly;
+  const sendDirectly =
+    typeof sendDirectlyValue === "boolean"
+      ? sendDirectlyValue
+      : typeof sendDirectlyValue === "string"
+        ? sendDirectlyValue.toLowerCase() === "true"
+        : null;
+
+  return {
+    operation,
+    executionType,
+    fromEmail,
+    sendDirectly,
+  };
 }
 
-function getStepMissingFields(step: ConnectorWorkflowStep | null): MissingField[] {
-  if (!step) return [];
-  return (step.missing_fields || []).map((field) => normalizeMissingField(field, step.step_id));
-}
+function buildDisplaySteps(
+  response: WorkflowResponse | null,
+  streamingSteps: StreamStep[],
+): WorkflowDisplayStep[] {
+  if (streamingSteps.length > 0) {
+    return streamingSteps.map((step, index) => ({
+      id: step.step_id || `stream-${index + 1}`,
+      stepNumber: Number(step.step) || index + 1,
+      name: step.name || "workflow_step",
+      output: step.output || null,
+      durationMs: step.duration_ms ?? null,
+      status: normalizeStatus(step.status),
+    }));
+  }
 
-function stepSummary(step: ConnectorWorkflowStep) {
-  const operation = step.action_key || step.trigger_key || step.service_key || 'operation';
-  return [step.connector_key, step.service_key, operation].filter(Boolean).join(' · ');
-}
+  const planSteps = response?.plan?.steps || [];
 
-function stepAgentLabel(step: ConnectorWorkflowStep, index: number) {
-  return step.agent_role || `Agent ${index + 1}`;
-}
-
-function stepAgentTask(step: ConnectorWorkflowStep) {
-  return step.agent_task || 'Complete the connector step.';
-}
-
-function buildWorkflowData(draft: ConnectorWorkflowDraft | null): WorkflowData | null {
-  if (!draft || !draft.steps.length) return null;
-
-  const nodes = draft.steps.map((step, index) => {
-    const missingCount = getStepMissingFields(step).length;
-    const agentLabel = stepAgentLabel(step, index);
-    const agentTask = stepAgentTask(step);
-    return {
-      id: step.step_id,
-      type: stepToNodeType(step) as 'input' | 'default' | 'decision' | 'output',
-      data: {
-        label: `${agentLabel}: ${step.label}`,
-        description: `${agentTask}${step.description ? ` · ${step.description}` : ''}`,
-        owner: step.connector_key,
-        duration: missingCount ? `${missingCount} missing` : 'Ready',
-        status: statusToNodeStatus(step.status),
-        highlighted: index === 0,
-      },
-    };
-  });
-
-  const edges = draft.steps.slice(1).map((step, index) => ({
-    id: `${draft.steps[index].step_id}-${step.step_id}`,
-    source: draft.steps[index].step_id,
-    target: step.step_id,
-    label: step.action_key || step.trigger_key || step.step_type,
-    animated: draft.can_execute,
+  return planSteps.map((step, index) => ({
+    id: step.id || `plan-${index + 1}`,
+    stepNumber: index + 1,
+    name: step.name || "workflow_step",
+    operation: step.operation || null,
+    description: step.description || null,
+    output: step.description || null,
+    durationMs: null,
+    status: "completed",
   }));
-
-  return { nodes, edges };
 }
 
-function CapabilityPill({
-  capability,
-  active,
-  onClick,
+function getExecutionNodeTitle(status: FlowNodeStatus) {
+  if (status === "running") return "AI agent is currently executing this step...";
+  if (status === "completed") return "Execution completed successfully.";
+  if (status === "failed") return "Execution stopped because of an error.";
+  return "Waiting for execution to begin.";
+}
+
+function getNodeTheme(status: FlowNodeStatus) {
+  switch (status) {
+    case "completed":
+      return {
+        border: "#bbf7d0",
+        iconBg: "bg-emerald-500 text-white",
+        badgeBg: "bg-emerald-50 text-emerald-600",
+        badgeText: "done",
+      };
+    case "running":
+      return {
+        border: "#c7d2fe",
+        iconBg: "bg-indigo-500 text-white",
+        badgeBg: "bg-indigo-50 text-indigo-600",
+        badgeText: "running",
+      };
+    case "failed":
+      return {
+        border: "#fecaca",
+        iconBg: "bg-rose-500 text-white",
+        badgeBg: "bg-rose-50 text-rose-600",
+        badgeText: "failed",
+      };
+    default:
+      return {
+        border: "#e2e8f0",
+        iconBg: "bg-slate-100 text-slate-500",
+        badgeBg: "bg-slate-100 text-slate-600",
+        badgeText: "pending",
+      };
+  }
+}
+
+function StatusBadge({
+  status,
+  showSpinner,
 }: {
-  capability: ConnectorCapability;
-  active: boolean;
-  onClick: () => void;
+  status: FlowNodeStatus;
+  showSpinner?: boolean;
 }) {
+  const theme = getNodeTheme(status);
+  const badgeLabel = getStatusLabel(status);
+
+  if (status === "running") {
+    return (
+      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+        {showSpinner ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Clock className="h-2.5 w-2.5" />}
+        {badgeLabel}
+      </span>
+    );
+  }
+
+  if (status === "completed") {
+    return (
+      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        {badgeLabel}
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+        <XCircle className="h-2.5 w-2.5" />
+        {badgeLabel}
+      </span>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-2xl border px-4 py-3 text-left transition-all ${
-        active ? 'border-indigo-200 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200'
-      }`}
-    >
-      <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">{capability.connector_key}</p>
-      <p className="mt-2 text-sm font-black text-[#1a1c3d]">{capability.display_name}</p>
-      <p className="mt-1 text-xs text-slate-500">
-        {capability.services.length} services, {capability.triggers.length} triggers, {capability.actions.length} actions
-      </p>
-    </button>
+    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+      <Clock className="h-2.5 w-2.5" />
+      {badgeLabel}
+    </span>
   );
 }
 
-function formatMissingFields(fields: MissingField[]) {
-  if (!fields.length) return 'No required fields are missing.';
-  return fields
-    .map((field) => field.label || field.key)
-    .slice(0, 3)
-    .join(', ');
+function WorkflowNodeCard({
+  stepLabel,
+  title,
+  subtitle,
+  statusDetail,
+  output,
+  durationMs,
+  status,
+  icon,
+  isIntent = false,
+}: {
+  stepLabel: string;
+  title: string;
+  subtitle?: string;
+  statusDetail?: string;
+  output?: string;
+  durationMs?: number | null;
+  status: FlowNodeStatus;
+  icon: ReactNode;
+  isIntent?: boolean;
+}) {
+  const theme = getNodeTheme(status);
+  const isRunning = status === "running";
+
+  return (
+    <div
+      className="min-w-[320px] max-w-[400px] rounded-[14px] border bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+      style={{ borderColor: theme.border }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] ${theme.iconBg}`}
+        >
+          {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
+              {stepLabel}
+            </p>
+            <StatusBadge status={status} showSpinner={isRunning && !isIntent} />
+          </div>
+
+          <h4 className="mt-1 text-sm font-semibold text-slate-900">{title}</h4>
+
+          {subtitle ? (
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>
+          ) : null}
+
+          <p
+            className={`mt-2 rounded-xl border px-3 py-2 text-[11px] font-medium leading-relaxed ${
+              status === "running"
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : status === "completed"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : status === "failed"
+                    ? "border-rose-200 bg-rose-50 text-rose-700"
+                    : "border-slate-200 bg-slate-50 text-slate-600"
+            }`}
+          >
+            {statusDetail || getExecutionNodeTitle(status)}
+          </p>
+
+          {output ? (
+            <div className="mt-2 rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Output preview
+              </p>
+              <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-600">
+                {shorten(output, 120)}
+              </p>
+            </div>
+          ) : null}
+
+          {durationMs != null ? (
+            <p className="mt-1.5 text-[10px] text-slate-400">{durationMs} ms</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function formatAgentLine(step: ConnectorWorkflowStep, index: number) {
-  const agentLabel = stepAgentLabel(step, index);
-  const agentTask = stepAgentTask(step);
-  return `${agentLabel} · ${agentTask}`;
-}
-
-export default function WorkflowSectionConnector({
-  draft,
-  registry,
-  selectedConnectorKey,
-  onSelectConnectorKey,
-  onSelectStep,
-}: WorkflowSectionConnectorProps) {
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const workflowData = useMemo(() => buildWorkflowData(draft), [draft]);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+function WorkflowViewportSync({
+  nodeCount,
+  viewportKey,
+}: {
+  nodeCount: number;
+  viewportKey: string;
+}) {
+  const { fitView } = useReactFlow();
 
   useEffect(() => {
-    if (!workflowData) {
-      setNodes([]);
-      setEdges([]);
+    if (nodeCount <= 0) return;
+
+    const timeout = window.setTimeout(() => {
+      fitView({ padding: 0.18, duration: 400, maxZoom: 1.1 });
+    }, 60);
+
+    return () => window.clearTimeout(timeout);
+  }, [fitView, nodeCount, viewportKey]);
+
+  return null;
+}
+
+function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
+  const {
+    response,
+    needsGmail,
+    gmailConnected,
+    gmailEmail,
+    pendingPrompt,
+    isLoading,
+    connectorStatusLoading,
+    handleConnectGmail,
+    handleRecheckGmailConnection,
+    handleContinueWorkflow,
+    handleActivateFlow,
+    activatingFlow,
+    activateFlowResult,
+    completionResult,
+    convStep,
+    streamingSteps = [],
+  } = props;
+
+  const connectors =
+    response?.plan?.steps
+      ?.map((step) => step.system)
+      .filter((value): value is string => Boolean(value)) || [];
+  const uniqueConnectors = [...new Set(connectors)];
+  const intentDetails = useMemo(
+    () => resolveIntentDetails(response?.plan?.gmail_intent),
+    [response?.plan?.gmail_intent],
+  );
+  const displaySteps = useMemo(
+    () => buildDisplaySteps(response, streamingSteps),
+    [response, streamingSteps],
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const isStreaming =
+    convStep === "streaming" ||
+    (streamingSteps.length > 0 && convStep !== "done" && convStep !== "idle");
+  const hasWorkflowNodes = nodes.length > 0;
+
+  useEffect(() => {
+    console.log("[Connector Debug] Workflow panel render state:", {
+      hasResponse: Boolean(response),
+      response,
+      streamingSteps,
+      convStep,
+      isStreaming,
+    });
+  }, [response, streamingSteps, convStep, isStreaming]);
+
+  const workflowGraphSignature = useMemo(() => {
+    const responseSignature = response
+      ? {
+          goal: response.plan?.goal ?? null,
+          steps: (response.plan?.steps || []).map((step) => ({
+            id: step.id || "",
+            kind: step.kind || "",
+            name: step.name || "",
+            description: step.description || null,
+            system: step.system || null,
+            operation: step.operation || null,
+            requires_approval: Boolean(step.requires_approval),
+            output: step.output || null,
+          })),
+          can_execute: Boolean(response.can_execute),
+          missing_field: response.missing_field || null,
+          summary: response.summary || null,
+          message: response.message || null,
+          status: response.status || null,
+          connector: response.connector || null,
+          execution_type: response.execution_type || null,
+          reply_sent: response.reply_sent || null,
+          reply_draft: response.reply_draft || null,
+          final_answer: response.final_answer || null,
+        }
+      : null;
+
+    const streamingSignature = streamingSteps.map((step) => ({
+      step: step.step,
+      step_id: step.step_id,
+      name: step.name,
+      status: step.status,
+      output: step.output,
+      duration_ms: step.duration_ms ?? null,
+      error: step.error ?? null,
+    }));
+
+    const completionSignature = completionResult
+      ? {
+          status: completionResult.status,
+          message: completionResult.message,
+          rule_id: completionResult.rule_id ?? null,
+          reply_sent: completionResult.reply_sent ?? null,
+          reply_draft: completionResult.reply_draft ?? null,
+          analysis: completionResult.analysis ?? null,
+          delivery_status: completionResult.delivery_status ?? null,
+          execution_type: completionResult.execution_type ?? null,
+          from_email: completionResult.from_email ?? null,
+          subject: completionResult.subject ?? null,
+        }
+      : null;
+
+    return JSON.stringify({
+      response: responseSignature,
+      streamingSteps: streamingSignature,
+      convStep: convStep || "idle",
+      pendingPrompt: pendingPrompt || null,
+      completionResult: completionSignature,
+    });
+  }, [completionResult, convStep, pendingPrompt, response, streamingSteps]);
+
+  useEffect(() => {
+    const nextNodes: Node<FlowNodeData>[] = [];
+    const nextEdges: Edge[] = [];
+    const shouldShowIntent = Boolean(response || streamingSteps.length > 0);
+
+    if (!shouldShowIntent) {
+      setNodes((current) => (current.length === 0 ? current : []));
+      setEdges((current) => (current.length === 0 ? current : []));
       return;
     }
 
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-      workflowData.nodes,
-      workflowData.edges.map((edge) => ({
-        ...edge,
-        type: 'smoothstep',
-        animated: edge.animated !== false,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#525ceb' },
-      })),
-      'LR'
-    );
+    const activeDisplaySteps = displaySteps;
+    const intentStepIndex = activeDisplaySteps.findIndex((step) => {
+      const meta = getStepDisplayMeta(step.name, step.operation);
+      return meta.stage === "intent";
+    });
 
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-  }, [workflowData, setEdges, setNodes]);
+    const intentStep =
+      intentStepIndex >= 0 ? activeDisplaySteps[intentStepIndex] : undefined;
+    const remainingSteps = intentStep
+      ? activeDisplaySteps.filter((step) => step.id !== intentStep.id)
+      : activeDisplaySteps;
 
-  const selectedStep = useMemo(
-    () => draft?.steps.find((step) => step.step_id === selectedStepId) || draft?.steps[0] || null,
-    [draft, selectedStepId]
-  );
+    const requestStatus: FlowNodeStatus =
+      activeDisplaySteps.length > 0 || response?.plan?.goal ? "completed" : "pending";
+    const requestSubtitle =
+      pendingPrompt ||
+      response?.plan?.goal ||
+      "The user request is being translated into an execution plan.";
+
+    nextNodes.push({
+      id: "node-request",
+      type: "default",
+      position: { x: 300, y: 0 },
+      style: {
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        width: 400,
+      },
+      data: {
+        label: (
+          <WorkflowNodeCard
+            stepLabel="STEP 1 - USER REQUEST"
+            title="User Request"
+            subtitle={requestSubtitle}
+            statusDetail={getExecutionNodeTitle(requestStatus)}
+            status={requestStatus}
+            icon={<Brain className="h-4 w-4" />}
+          />
+        ),
+        status: requestStatus,
+      },
+    });
+
+    let previousNodeId = "node-request";
+
+    const intentStatus: FlowNodeStatus = intentStep?.status || (activeDisplaySteps.length > 0 ? "completed" : "pending");
+    const intentSubtitleParts: string[] = [];
+
+    if (intentDetails.operation) intentSubtitleParts.push(intentDetails.operation);
+    if (intentDetails.fromEmail) intentSubtitleParts.push(`from ${intentDetails.fromEmail}`);
+    if (intentDetails.executionType) {
+      intentSubtitleParts.push(intentDetails.executionType.replace(/_/g, " "));
+    }
+    if (typeof intentDetails.sendDirectly === "boolean") {
+      intentSubtitleParts.push(intentDetails.sendDirectly ? "send directly" : "draft first");
+    }
+
+    const intentMeta = getStepDisplayMeta(intentStep?.name, intentStep?.operation);
+    nextNodes.push({
+      id: "node-intent",
+      type: "default",
+      position: { x: 300, y: 150 },
+      style: {
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        width: 400,
+      },
+      data: {
+        label: (
+          <WorkflowNodeCard
+            stepLabel="STEP 2 - INTENT UNDERSTANDING"
+            title={intentMeta.title}
+            subtitle={intentSubtitleParts.join(" - ") || intentMeta.subtitle}
+            statusDetail={getExecutionNodeTitle(intentStatus)}
+            status={intentStatus}
+            icon={intentMeta.icon}
+            isIntent
+          />
+        ),
+        status: intentStatus,
+      },
+    });
+
+    nextEdges.push({
+      id: "node-request->node-intent",
+      source: "node-request",
+      target: "node-intent",
+      type: "smoothstep",
+      animated: intentStatus === "running",
+      style: {
+        stroke: "#6366f1",
+        strokeWidth: 2,
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "#6366f1",
+      },
+    });
+
+    remainingSteps.forEach((step, index) => {
+      const meta = getStepDisplayMeta(step.name, step.operation);
+      const stepId = `step-${step.stepNumber}-${index}`;
+      const stepStatus = step.status;
+      const stepSubtitle = step.description || meta.subtitle;
+      const stepNumber = index + 3;
+
+      nextNodes.push({
+        id: stepId,
+        type: "default",
+      position: { x: 300, y: (index + 2) * 150 },
+        style: {
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          width: 400,
+        },
+        data: {
+          label: (
+            <WorkflowNodeCard
+              stepLabel={`STEP ${stepNumber} - ${meta.stageLabel.toUpperCase()}`}
+              title={meta.title}
+              subtitle={stepSubtitle}
+              statusDetail={getStatusDetail(stepStatus)}
+              output={step.output || undefined}
+              durationMs={step.durationMs ?? null}
+              status={stepStatus}
+              icon={meta.icon}
+            />
+          ),
+          status: stepStatus,
+        },
+      });
+
+      nextEdges.push({
+        id: `${previousNodeId}->${stepId}`,
+        source: previousNodeId,
+        target: stepId,
+        type: "smoothstep",
+        animated: stepStatus === "running",
+        style: {
+          stroke: "#6366f1",
+          strokeWidth: 2,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#6366f1",
+        },
+      });
+
+      previousNodeId = stepId;
+    });
+
+    const shouldShowCompletionNode =
+      activeDisplaySteps.length > 0 || Boolean(completionResult) || convStep === "done" || response?.can_execute;
+    if (shouldShowCompletionNode) {
+      const completionStatus: FlowNodeStatus =
+        convStep === "done" || Boolean(completionResult) ? "completed" : "pending";
+      const completionNodeId = "node-completed";
+      nextNodes.push({
+        id: completionNodeId,
+        type: "default",
+        position: { x: 300, y: (remainingSteps.length + 2) * 150 },
+        style: {
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          width: 400,
+        },
+        data: {
+          label: (
+            <WorkflowNodeCard
+              stepLabel={`STEP ${remainingSteps.length + 3} - COMPLETED`}
+              title="Workflow Completed"
+              subtitle="The live execution trail has finished."
+              statusDetail={getExecutionNodeTitle(completionStatus)}
+              output={completionResult?.message || response?.summary || undefined}
+              status={completionStatus}
+              icon={<CheckCircle2 className="h-4 w-4" />}
+            />
+          ),
+          status: completionStatus,
+        },
+      });
+
+      nextEdges.push({
+        id: `${previousNodeId}->${completionNodeId}`,
+        source: previousNodeId,
+        target: completionNodeId,
+        type: "smoothstep",
+        animated: false,
+        style: {
+          stroke: "#6366f1",
+          strokeWidth: 2,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#6366f1",
+        },
+      });
+    }
+
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+  }, [workflowGraphSignature]);
 
   useEffect(() => {
-    onSelectStep?.(selectedStep);
-  }, [onSelectStep, selectedStep]);
+    if (!isFullscreen) return;
 
-  const selectedCapability = useMemo(() => {
-    if (!registry || !selectedConnectorKey) return null;
-    return registry.connectors.find((item) => item.connector_key === selectedConnectorKey) || null;
-  }, [registry, selectedConnectorKey]);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-  const normalizedMissingFields = useMemo(() => {
-    const draftFields = (draft?.missing_fields || []).map((field) => normalizeMissingField(field));
-    const stepFields = (draft?.steps || []).flatMap((step) => getStepMissingFields(step));
-    return [...draftFields, ...stepFields];
-  }, [draft]);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
 
-  return (
-    <section className="connector-panel flex h-full min-h-[620px] flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
-      <div className="connector-panel-header border-b border-slate-100 bg-[#f8fafc] px-8 py-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
-              <Workflow className="h-5 w-5 text-slate-500" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Step 2</p>
-              <h2 className="mt-1 text-[13px] font-black uppercase tracking-tight text-[#1a1c3d]">Workflow Builder</h2>
-            </div>
-          </div>
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-            {draft?.can_execute ? 'Executable draft' : 'Needs config'}
-          </div>
-        </div>
-      </div>
+    window.addEventListener("keydown", handleKeyDown);
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-8">
-        <div className="connector-card rounded-[1.75rem] border border-slate-200 bg-[#f8fafc] p-5 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#525ceb]" />
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Backend draft</p>
-          </div>
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullscreen]);
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Workflow</p>
-                  <h3 className="mt-2 text-lg font-black text-[#1a1c3d]">{draft?.workflow_name || 'Waiting for a prompt'}</h3>
-                </div>
-                <span
-                  className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                    draft?.can_execute ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'
-                  }`}
-                >
-                  {draft?.can_execute ? 'Ready' : 'Needs fields'}
-                </span>
+  const renderCanvas = (fullscreen = false, showHeader = true) => (
+    <div className={`relative flex min-h-0 flex-1 flex-col ${fullscreen ? "h-full" : ""}`}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        {showHeader && (
+          <div className="flex items-center justify-between border-b border-slate-100 bg-[#f8fafc] px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
+                <Brain className="h-5 w-5 text-slate-500" />
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                {draft?.description || 'Use the prompt planner to generate a connector workflow from capability metadata.'}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(draft?.connector_refs || []).map((ref) => (
-                  <span
-                    key={`${ref.connector_key}-${ref.service_key || 'service'}-${ref.trigger_key || ref.action_key || 'op'}`}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500"
-                  >
-                    {ref.display_name || ref.connector_key}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-indigo-600" />
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Missing fields</p>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">{formatMissingFields(normalizedMissingFields)}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {normalizedMissingFields.slice(0, 4).map((field) => (
-                  <span
-                    key={field.key}
-                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700"
-                  >
-                    {field.label || field.key}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {workflowData ? (
-            <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Workflow graph</p>
-                  <h4 className="mt-1 text-sm font-black text-[#1a1c3d]">{draft?.steps.length || 0} backend-planned steps</h4>
-                </div>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  {draft?.confidence ? `${Math.round(draft.confidence * 100)}% confidence` : 'Planner output'}
-                </span>
-              </div>
-
-              <div className="relative h-[460px] bg-white">
-                <div
-                  className="absolute inset-0 pointer-events-none opacity-[0.35]"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
-                    backgroundSize: '40px 40px',
-                  }}
-                />
-                {nodes.length > 0 ? (
-                  <ReactFlow
-                    nodes={nodes}
-                    edges={edges}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    nodeTypes={nodeTypes}
-                    edgeTypes={edgeTypes}
-                    fitView
-                    fitViewOptions={{ padding: 0.3 }}
-                    className="relative z-10"
-                    onNodeClick={(_, node) => {
-                      const next = draft?.steps.find((step) => step.step_id === node.id) || null;
-                      if (!next) return;
-                      setSelectedStepId(next.step_id);
-                      onSelectStep?.(next);
-                    }}
-                  >
-                    <Background color="#cbd5e1" gap={40} size={1} />
-                    <Controls className="dashboard-controls overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl" />
-                  </ReactFlow>
-                ) : (
-                  <div className="relative z-10 flex h-full items-center justify-center p-6 text-center">
-                    <div>
-                      <Sparkles className="mx-auto h-6 w-6 text-slate-400" />
-                      <p className="mt-3 text-sm font-semibold text-slate-600">No workflow nodes to render yet.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {draft?.notes?.length ? (
-                <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
-                  {draft.notes[0]}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="mt-5 rounded-3xl border border-dashed border-slate-200 bg-white p-8 text-center">
-              <Workflow className="mx-auto h-6 w-6 text-slate-500" />
-              <h4 className="mt-4 text-lg font-black text-[#1a1c3d]">Prompt for a workflow draft</h4>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                The planner will map the prompt into connector-aware steps as soon as a draft is returned.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {draft?.steps.map((step, index) => {
-                const active = step.step_id === selectedStepId;
-                const stepMissingFields = getStepMissingFields(step);
-                const agentLabel = stepAgentLabel(step, index);
-                return (
-                  <button
-                    key={step.step_id}
-                    type="button"
-                    onClick={() => {
-                    setSelectedStepId(step.step_id);
-                    onSelectStep?.(step);
-                    onSelectConnectorKey?.(step.connector_key);
-                  }}
-                  className={`rounded-2xl border px-4 py-4 text-left transition-all ${
-                    active ? 'border-indigo-200 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">
-                          {agentLabel}
-                        </p>
-                        <h4 className="mt-2 text-sm font-black text-[#1a1c3d]">{step.label}</h4>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-500">{formatAgentLine(step, index)}</p>
-                      </div>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      {step.status || 'ready'}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      {step.connector_key}
-                    </span>
-                    {step.service_key ? (
-                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        {step.service_key}
-                      </span>
-                    ) : null}
-                    {step.action_key ? (
-                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        {step.action_key}
-                      </span>
-                    ) : null}
-                    {stepMissingFields.length ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                        {stepMissingFields.length} missing
-                      </span>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {selectedStep ? (
-            <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Selected step</p>
-                  <h4 className="mt-1 text-sm font-black text-[#1a1c3d]">{selectedStep.label}</h4>
-                  <p className="mt-1 text-xs font-black uppercase tracking-[0.24em] text-indigo-600">
-                    {stepAgentLabel(selectedStep, 0)} · {selectedStep.step_type}
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-slate-400" />
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {stepAgentTask(selectedStep)}
-                {selectedStep.description ? ` · ${selectedStep.description}` : ` · ${stepSummary(selectedStep)}`}
-              </p>
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Agent responsibility</p>
-                <p className="mt-2 font-semibold text-[#1a1c3d]">{selectedStep.agent_role || 'Unassigned agent'}</p>
-                <p className="mt-1 leading-relaxed text-slate-600">
-                  {selectedStep.agent_task || 'No task description was provided for this step.'}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                  AI Agent Execution
                 </p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {getStepMissingFields(selectedStep).map((field) => (
-                  <span
-                    key={field.key}
-                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700"
-                  >
-                    {field.label || field.key}
-                  </span>
-                ))}
-                {!getStepMissingFields(selectedStep).length ? (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                    Ready
-                  </span>
+                <p className="mt-1 text-[11px] font-medium text-slate-500">
+                  Live workflow reasoning and action trail
+                </p>
+                {fullscreen ? (
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                    Press Escape to return
+                  </p>
                 ) : null}
               </div>
             </div>
-          ) : null}
-        </div>
 
-        {registry?.connectors.length ? (
-          <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Available connectors</p>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                Capability-driven
-              </span>
+            <div className="flex items-center gap-3">
+              <div
+                className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
+                  isStreaming
+                    ? "bg-indigo-50 text-indigo-600"
+                    : convStep === "done"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {isStreaming ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    Executing
+                  </span>
+                ) : convStep === "done" ? (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    Completed
+                  </span>
+                ) : (
+                  "Waiting"
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsFullscreen((current) => !current)}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600"
+                title={fullscreen ? "Exit fullscreen" : "Fullscreen workflow"}
+              >
+                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {registry.connectors.map((capability) => (
-                <CapabilityPill
-                  key={capability.connector_key}
-                  capability={capability}
-                  active={capability.connector_key === selectedConnectorKey}
-                  onClick={() => onSelectConnectorKey?.(capability.connector_key)}
-                />
+          </div>
+        )}
+
+        <div className="relative min-h-[540px] flex-1 bg-white">
+          {hasWorkflowNodes ? (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              nodesDraggable
+              nodesConnectable={false}
+              elementsSelectable
+              panOnDrag
+              minZoom={0.35}
+              maxZoom={1.4}
+            >
+              <WorkflowViewportSync
+                nodeCount={nodes.length}
+                viewportKey={`${fullscreen ? "fullscreen" : "panel"}:${streamingSteps.length}:${convStep || "idle"}`}
+              />
+              <Background color="#e2e8f0" gap={40} size={1} />
+              <Controls className="overflow-hidden rounded-xl border border-slate-200 shadow-xl" />
+            </ReactFlow>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+              <i className="ti ti-git-branch text-slate-300" style={{ fontSize: 32 }} aria-hidden="true" />
+              <p className="mt-3 text-sm font-medium text-slate-400">
+                Workflow steps will appear here
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                Run a prompt to see live agent execution
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const goalBlock =
+    response?.plan?.goal || response?.missing_field ? (
+      <div className="flex flex-col overflow-hidden space-y-4">
+        {response?.plan?.goal && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Goal
+              </p>
+              {intentDetails.operation && (
+                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-700">
+                  {String(intentDetails.operation).replace(/_/g, " ")}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm font-medium text-slate-900">{response.plan.goal}</p>
+          </div>
+        )}
+
+        {response?.can_execute && response?.flow && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex-shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+              Ready to activate
+            </p>
+            <p className="mt-2 text-sm font-medium text-slate-900">
+              This automation flow can be saved and enabled now.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleActivateFlow}
+                disabled={activatingFlow || activateFlowResult?.ok === true}
+                className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {activatingFlow ? "Activating..." : activateFlowResult?.ok ? "Activated ✓" : "Activate automation"}
+              </button>
+              {activateFlowResult && (
+                <p className={`text-sm font-medium ${activateFlowResult.ok ? "text-emerald-700" : "text-rose-600"}`}>
+                  {activateFlowResult.message}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {uniqueConnectors.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex-shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Connectors
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {uniqueConnectors.map((connector) => (
+                <span
+                  key={connector}
+                  className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700"
+                >
+                  {connector}
+                </span>
               ))}
             </div>
-            {selectedCapability ? (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Selected capability</p>
-                <p className="mt-2 font-black text-[#1a1c3d]">{selectedCapability.display_name}</p>
-                <p className="mt-1">
-                  Auth: {selectedCapability.auth_type} · Modes: {selectedCapability.execution_modes.join(', ') || 'manual'}
-                </p>
-              </div>
-            ) : null}
+          </div>
+        )}
+
+        {/*
+        {response?.plan?.steps?.length ? (
+          <div className="h-[420px] w-full flex-shrink-0 pb-4">
+            <WorkflowSummaryConnector response={response} />
           </div>
         ) : null}
+        */}
+      </div>
+    ) : null;
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Workflow</p>
+
+      {/* Gmail connection banner */}
+      {needsGmail && (
+        <div className="mt-4 rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700">
+            Gmail Connection Required
+          </p>
+          <h3 className="mt-2 text-base font-semibold text-slate-900">
+            {gmailConnected
+              ? `Gmail connected as ${gmailEmail || "the signed-in account"}`
+              : "Connect Gmail to continue this workflow"}
+          </h3>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
+            {gmailConnected
+              ? "Your Gmail account is connected. You can recheck the connection or continue the pending workflow."
+              : "This prompt cannot be processed yet. Please connect Gmail now so the assistant can read mail and complete the workflow."}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {!gmailConnected && (
+              <button
+                type="button"
+                onClick={handleConnectGmail}
+                className="inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-[#434dd8]"
+              >
+                Connect Gmail Now
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleRecheckGmailConnection}
+              disabled={connectorStatusLoading}
+              className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {connectorStatusLoading ? "Rechecking..." : "Recheck connection"}
+            </button>
+            {gmailConnected && pendingPrompt && (
+              <button
+                type="button"
+                onClick={handleContinueWorkflow}
+                disabled={isLoading}
+                className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? "Continuing..." : "Continue Workflow"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
+        {renderCanvas(false, true)}
+
+        {goalBlock}
       </div>
 
-      <div className="connector-panel-footer border-t border-slate-100 bg-white px-8 py-4 text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">
-        {draft?.can_execute ? 'Backend-ready workflow draft' : 'Planner output awaiting required fields'}
-      </div>
-    </section>
+      {isFullscreen && (
+        <div className="fixed inset-0 z-[99999] bg-slate-100 p-4">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
+            <div className="border-b border-slate-100 bg-[#f8fafc] px-8 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
+                    <Brain className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-[13px] font-black uppercase tracking-tight text-[#1a1c3d]">
+                      Workflow Canvas
+                    </h2>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      Press Escape to return
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(false)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600"
+                  title="Exit fullscreen"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                  Exit
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1">{renderCanvas(true, false)}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function WorkflowSectionConnector(props: WorkflowSectionConnectorProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowSectionConnectorInner {...props} />
+    </ReactFlowProvider>
   );
 }
