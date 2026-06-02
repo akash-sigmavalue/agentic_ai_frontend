@@ -956,7 +956,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               <>
                 <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
                   <div className="flex items-center justify-center gap-1">
-                    FSI
+                    Gross Floor area/Plot area
                     <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
                       <Info size={11} className="inline-block" />
                       <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-56 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-2 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
