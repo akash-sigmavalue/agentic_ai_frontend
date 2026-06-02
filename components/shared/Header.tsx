@@ -7,11 +7,14 @@ import { usePathname } from 'next/navigation';
 import AgentListDropdown from './AgentListDropdown';
 
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sigmavalue_theme') === 'dark';
-  });
+  const [isDark, setIsDark] = React.useState(false);
   const pathname = usePathname();
+
+  React.useEffect(() => {
+    // Hydrate state from localStorage only after initial render
+    const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
+    setIsDark(theme);
+  }, []);
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);

@@ -8,7 +8,7 @@ const VISUALIZATION_IDEAS = [
 
 export default function MapSection() {
   return (
-    <section className="app-panel relative h-full min-h-[620px] overflow-hidden transition-shadow duration-200 hover:shadow-[0_0_0_1px_var(--accent),0_18px_48px_rgba(0,0,0,0.18)]">
+    <section className="app-panel relative flex h-full min-h-0 flex-col overflow-hidden transition-shadow duration-200 hover:shadow-[0_0_0_1px_var(--accent),0_18px_48px_rgba(0,0,0,0.18)]">
       <div className="flex items-center gap-3 border-b px-[18px] py-3.5" style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>🗺️</div>
         <div>
@@ -20,7 +20,7 @@ export default function MapSection() {
         </span>
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="execution-flow-scroll relative flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6 text-center">
         <div
           className="absolute inset-0 opacity-80"
           style={{

@@ -16,6 +16,7 @@ import {
   Globe2,
   Handshake,
   LineChart,
+  MapIcon,
   MapPinned,
   MonitorCog,
   Plug,
@@ -54,6 +55,7 @@ const agentLayers: AgentLayer[] = [
     soft: "from-blue-500/10 to-cyan-500/10",
     agents: [
       { name: "Land/GIS", icon: MapPinned },
+      { name: "Visualization Agent", icon: MapIcon, href: "/visualization_agent" },
       { name: "Valuation", icon: BarChart3, href: "/valuation" },
       { name: "Market Research", icon: Search },
       { name: "Physical AI", icon: Bot },
