@@ -7,7 +7,7 @@ export interface Message {
 
 export interface WorkflowNode {
   id: string;
-  type: 'input' | 'default' | 'decision' | 'output';
+  type: 'input' | 'default' | 'decision' | 'output' | 'plus';
   data: {
     label: string;
     description?: string;
@@ -44,7 +44,7 @@ export interface MarkerData {
   context?: string;
 }
 
-export type SampleMapMode = 'default' | '2d' | '3d' | '3d-timelapse' | 'visualization' | 'project_rate_growth_timelapse' | 'location_rate_volume_timelapse' | 'heatmap-timelapse';
+export type SampleMapMode = 'default' | '2d' | '3d' | '3d-timelapse' | 'visualization' | 'heatmap-timelapse';
 
 export interface ThreeDMapRequest {
   place_name: string;
@@ -53,6 +53,9 @@ export interface ThreeDMapRequest {
   city_for_api?: string | null;
   dry_run: boolean;
   include_debug_logs: boolean;
+  fast_mode?: boolean;
+  max_buildings?: number;
+  runtime_buildings?: Record<string, unknown>[];
 }
 
 export interface ThreeDMapLocation {
@@ -94,6 +97,9 @@ export interface ThreeDMapTimelapseRequest {
   city_for_api?: string | null;
   dry_run: boolean;
   include_debug_logs: boolean;
+  fast_mode?: boolean;
+  max_buildings?: number;
+  runtime_buildings?: Record<string, unknown>[];
 }
 
 export interface FloorRateCell {
@@ -134,6 +140,7 @@ export interface SpatialAnalysisRequest {
   subject_lat: number | null;
   subject_lon: number | null;
   use_subject: boolean;
+  radius_m?: number;
 }
 
 export interface SpatialAnalysisStats {
@@ -143,17 +150,21 @@ export interface SpatialAnalysisStats {
   total_cost_usd: number;
 }
 
+// Spatial analysis rows are heterogeneous backend payloads consumed dynamically by the map renderer.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpatialLooseRecord = Record<string, any>;
+
 export interface SpatialAnalysisResponse {
-  projects: Record<string, any>[];
-  roads: Record<string, any>[];
-  places: Record<string, any>[];
-  planner: Record<string, any>;
-  execution_summary: Record<string, any>;
+  projects: SpatialLooseRecord[];
+  roads: SpatialLooseRecord[];
+  places: SpatialLooseRecord[];
+  planner: SpatialLooseRecord;
+  execution_summary: SpatialLooseRecord;
   insights: string;
-  subject_info: Record<string, any> | null;
-  token_log: Record<string, any>[];
+  subject_info: SpatialLooseRecord | null;
+  token_log: SpatialLooseRecord[];
   progress_log: string[];
-  excel_preview: Record<string, any>[];
+  excel_preview: SpatialLooseRecord[];
   stats: SpatialAnalysisStats;
 }
 
@@ -261,6 +272,10 @@ export interface HeatmapTimelapseRequest {
   place_name: string;
   radius_m: number;
   city_for_api?: string | null;
+  focus_points?: Array<{ name?: string | null; lat: number; lng: number }>;
+  fast_mode?: boolean;
+  max_buildings_per_location?: number;
+  max_total_buildings?: number;
 }
 
 export interface HeatmapHub {

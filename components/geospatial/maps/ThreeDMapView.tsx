@@ -10,6 +10,7 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { setOptions as setGoogleMapsOptions, importLibrary as importGoogleLibrary } from '@googlemaps/js-api-loader';
 import { fetchThreeDMap } from '@/lib/dashboard/geospatial/sampleMaps';
 import type { MarkerData, ThreeDMapRequest, ThreeDMapResponse } from '@/lib/dashboard/geospatial/types';
+import type { StyleSpecification } from 'maplibre-gl';
 
 const FLOOR_HEIGHT = 3.0;
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
@@ -27,6 +28,7 @@ interface BuildingFeatureProperties {
   floor_rates?: Array<number | null> | null;
   min_rate?: number | string | null;
   max_rate?: number | string | null;
+  runtime_has_floor_data?: boolean;
 }
 
 type BuildingFeature = Feature<Geometry, BuildingFeatureProperties>;
@@ -41,18 +43,35 @@ interface MarkerTooltipData {
 }
 
 interface FloorTooltipData {
-  kind: 'floor';
+  kind: 'floor' | 'building';
   floor: number;
   name: string;
   totalFloors: number;
   baseZ: number;
   rateDisplay: string;
+  heightDisplay?: string;
 }
 
 type TooltipObject = BuildingFeature | MarkerTooltipData | FloorTooltipData;
 
 interface ThreeDMapViewProps {
   markers?: MarkerData[];
+  initialPlaceName?: string;
+  initialRadius?: number;
+  initialCityForApi?: string;
+  initialUseGeocoding?: boolean;
+  runtimeBuildings?: Record<string, unknown>[];
+  fastMode?: boolean;
+  maxBuildings?: number;
+  mapStyle?: string | StyleSpecification;
+  basemapControls?: React.ReactNode;
+  mapId?: string;
+  mapLabel?: string;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
 function rateToColor(normalizedValue: number) {
@@ -98,11 +117,25 @@ function normalizeErrorMessage(message: string) {
   return message;
 }
 
-export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
-  const [placeName, setPlaceName] = useState(markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India');
-  const [radius, setRadius] = useState(450);
-  const [useGeocoding, setUseGeocoding] = useState(false);
-  const [cityForApi, setCityForApi] = useState('Pune');
+export default function ThreeDMapView({
+  markers = [],
+  initialPlaceName,
+  initialRadius,
+  initialCityForApi,
+  initialUseGeocoding,
+  runtimeBuildings,
+  fastMode,
+  maxBuildings,
+  mapStyle,
+  basemapControls,
+  mapId = 'default:3d',
+  mapLabel = 'Default 3D Building Map',
+  onInsightDataReady,
+}: ThreeDMapViewProps) {
+  const [placeName, setPlaceName] = useState(initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India');
+  const [radius, setRadius] = useState(initialRadius || 450);
+  const [useGeocoding, setUseGeocoding] = useState(Boolean(initialUseGeocoding));
+  const [cityForApi, setCityForApi] = useState(initialCityForApi || 'Pune');
   const [includeDebugLogs, setIncludeDebugLogs] = useState(false);
   const [dryRun, setDryRun] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +156,10 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
   // Use a ref to read the latest form values so loadMap stays stable
   // and does NOT re-trigger on every keystroke.
   const formRef = useRef({ placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs });
-  formRef.current = { placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs };
+
+  useEffect(() => {
+    formRef.current = { placeName, radius, useGeocoding, cityForApi, dryRun, includeDebugLogs };
+  }, [cityForApi, dryRun, includeDebugLogs, placeName, radius, useGeocoding]);
 
   // Google Places Autocomplete
   useEffect(() => {
@@ -170,6 +206,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
 
     setIsLoading(true);
     setError(null);
+    onInsightDataReady?.(null);
 
     try {
       const payload: ThreeDMapRequest = {
@@ -179,11 +216,24 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
         city_for_api: city || null,
         dry_run: dry,
         include_debug_logs: debug,
+        fast_mode: fastMode,
+        max_buildings: maxBuildings,
+        runtime_buildings: runtimeBuildings,
         ...payloadOverride,
       };
 
       const response = await fetchThreeDMap(payload);
       setData(response);
+      onInsightDataReady?.({
+        mapId,
+        mapLabel,
+        plottedData: {
+          location: response.location,
+          summary: response.summary,
+          markers: response.excel_markers,
+          warnings: response.warnings,
+        },
+      });
       setViewState({
         longitude: response.location.lng,
         latitude: response.location.lat,
@@ -197,7 +247,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fastMode, mapId, mapLabel, maxBuildings, onInsightDataReady, runtimeBuildings]);
 
   // Only load once on mount — subsequent loads happen via the button
   useEffect(() => {
@@ -212,6 +262,14 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
     const features = featureCollection.features as BuildingFeature[];
     const customFeatures = features.filter((feature) => feature.properties?.is_custom === true);
     const normalFeatures = features.filter((feature) => feature.properties?.is_custom !== true);
+    const noFloorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data === false);
+    const floorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data !== false);
+    const noFloorRates = noFloorCustomFeatures
+      .flatMap((feature) => feature.properties?.floor_rates || [])
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const noFloorMin = noFloorRates.length ? Math.min(...noFloorRates) : 0;
+    const noFloorMax = noFloorRates.length ? Math.max(...noFloorRates) : 1;
+    const noFloorRange = noFloorMax - noFloorMin || 1;
 
     const normalLayer = new GeoJsonLayer<BuildingFeatureProperties>({
       id: 'normal-buildings',
@@ -244,7 +302,30 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
       highlightColor: [255, 255, 255, 180],
     });
 
-    const floorLayers = customFeatures.flatMap((building) => {
+    const runtimeBuildingLayer = new GeoJsonLayer<BuildingFeatureProperties>({
+      id: 'runtime-custom-buildings',
+      data: { type: 'FeatureCollection', features: noFloorCustomFeatures },
+      extruded: true,
+      filled: true,
+      stroked: true,
+      wireframe: true,
+      getLineColor: [0, 0, 0, 210],
+      lineWidthMinPixels: 1.5,
+      opacity: 1,
+      getElevation: (feature) => Number(feature.properties?.height_render ?? 15),
+      getFillColor: (feature) => {
+        const metric = feature.properties?.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        if (metric == null) return [148, 163, 184, 230];
+        const normalized = Math.max(0, Math.min(1, (metric - noFloorMin) / noFloorRange));
+        return rateToColor(normalized);
+      },
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 150],
+      material: { ambient: 0.35, diffuse: 0.75, shininess: 15, specularColor: [180, 180, 180] },
+    });
+
+    const floorLayers = floorCustomFeatures.flatMap((building) => {
       const name = String(building.properties?.building_name || 'Custom Building');
       const totalFloors = Number(building.properties?.num_floors || 0);
       const floorRates = building.properties?.floor_rates as Array<number | null> | undefined;
@@ -276,7 +357,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
                   name,
                   totalFloors,
                   baseZ,
-                  rateDisplay: rate == null ? 'N/A' : `₹${rate.toLocaleString()}/sq.m.`,
+                  rateDisplay: rate == null ? 'N/A' : `Rs.${rate.toLocaleString()}/sq.m.`,
                 },
               ]
             : [],
@@ -300,7 +381,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
 
     const finalLayers = [];
     if (showUnmatched) finalLayers.push(normalLayer);
-    finalLayers.push(markerLayer, ...floorLayers);
+    finalLayers.push(runtimeBuildingLayer, markerLayer, ...floorLayers);
 
     return finalLayers;
   }, [data, showUnmatched]);
@@ -314,6 +395,12 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
       };
     }
 
+    if ('kind' in object && object.kind === 'building') {
+      return {
+        html: `<div><strong>${object.name}</strong></div><div>Rate: ${object.rateDisplay}</div><div>Height: ${object.heightDisplay}</div>`,
+      };
+    }
+
     if ('kind' in object && object.kind === 'floor') {
       return {
         html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>Rate: ${object.rateDisplay}/sq.m.</div><div>Height: ${object.baseZ.toFixed(1)}m - ${(object.baseZ + FLOOR_HEIGHT).toFixed(1)}m</div>`,
@@ -321,6 +408,12 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
     }
 
     if ('properties' in object && object.properties) {
+      if (object.properties.is_custom && object.properties.runtime_has_floor_data === false) {
+        const metric = object.properties.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        return {
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : `Rs.${metric.toLocaleString()}/sq.m.`}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+        };
+      }
       return {
         html: `<div><strong>Overture Building</strong></div><div>Height: ${Number(object.properties.height_render || 0).toFixed(1)}m</div>`,
       };
@@ -427,6 +520,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
       </div>
 
       <div className="relative min-h-[400px] flex-[1.5] shrink-0">
+        {basemapControls}
         <button
           onClick={() => setIsFullscreen((prev) => !prev)}
           className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
@@ -469,7 +563,7 @@ export default function ThreeDMapView({ markers = [] }: ThreeDMapViewProps) {
             getTooltip={tooltip}
             style={{ position: 'absolute', inset: '0px' }}
           >
-            <Map mapLib={import('maplibre-gl')} mapStyle={DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
+            <Map mapLib={import('maplibre-gl')} mapStyle={mapStyle || DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
               <NavigationControl position="top-right" />
             </Map>
           </DeckGL>
