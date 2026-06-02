@@ -16,7 +16,8 @@ import {
   Database,
   CheckCircle,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Info
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -430,8 +431,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
                       const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
                         tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
-                        tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
-                        "bg-danger/20 text-danger border-danger/30";
+                          tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                            "bg-danger/20 text-danger border-danger/30";
                       const fb = comp.factor_breakdown || {};
                       const tooltip = [
                         comp.confidence_reasoning || "",
@@ -527,8 +528,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     key={opt}
                     onClick={() => setSourceFilter(opt)}
                     className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                        ? "bg-[#fb923c] text-bg-deep shadow"
-                        : "text-text-dim hover:text-text-primary"
+                      ? "bg-[#fb923c] text-bg-deep shadow"
+                      : "text-text-dim hover:text-text-primary"
                       }`}
                   >
                     {opt === "all" ? "All Sources" : opt}
@@ -569,8 +570,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       key={opt}
                       onClick={() => setSourceFilter(opt)}
                       className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                          ? "bg-[#fb923c] text-bg-deep shadow"
-                          : "text-text-dim hover:text-text-primary"
+                        ? "bg-[#fb923c] text-bg-deep shadow"
+                        : "text-text-dim hover:text-text-primary"
                         }`}
                     >
                       {opt === "all" ? "All Sources" : opt}
@@ -607,20 +608,20 @@ function ListingTable({ listings, dbTransactions }) {
     project_name: t.project_name,
     property_type: t.property_type_raw || t.property_type,
     project_category: t.property_type,
-    listing_type:     t.transaction_category,
-    bhk:              t.unit_configuration,
-    currency:         t.currency,
-    price:            t.agreement_price,
-    price_per_sqft:   t.price_per_sqft,
-    area_sqft:        t.area_sqft,
-    area_type:        t.area_type || "Carpet Area",
-    is_subject:       t.is_subject || false,
-    floor:            t.floor_number,
-    total_floors:     null,
-    location:         t.location_name,
+    listing_type: t.transaction_category,
+    bhk: t.unit_configuration,
+    currency: t.currency,
+    price: t.agreement_price,
+    price_per_sqft: t.price_per_sqft,
+    area_sqft: t.area_sqft,
+    area_type: t.area_type || "Carpet Area",
+    is_subject: t.is_subject || false,
+    floor: t.floor_number,
+    total_floors: null,
+    location: t.location_name,
     transaction_date: t.transaction_date,
-    source_url:       null,
-    _is_db:           true,   // flag to render source badge
+    source_url: null,
+    _is_db: true,   // flag to render source badge
   }));
 
   const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
@@ -904,7 +905,7 @@ function formatDate(dateStr) {
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType }) {
+function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType, valuationApproach }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
@@ -918,6 +919,11 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
   const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase()?.trim());
   const isVillaSubject = subjectPropertyType?.toLowerCase()?.trim() === "villa";
+  // In Cost Approach, villa subject derives the PLOT/LAND rate (reverse residual: villa price - CC = land value)
+  // In Market Approach, villa subject derives the VILLA built-up rate (plot comps × FSI + CC)
+  const isCostApproach = valuationApproach?.toLowerCase?.() === "cost";
+  // derivedRateLabel reflects what is being DERIVED, not the subject type
+  const derivedRateLabel = (isVillaSubject && isCostApproach) ? "Plot" : (isVillaSubject ? "Villa" : "Plot");
 
   // Always show the FSI/CC overrides if the subject is a plot or villa
   const showPlotControls = isPlotSubject;
@@ -948,9 +954,30 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
 
             {showPlotControls && (
               <>
-                <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{isVillaSubject ? "Villa Derived Rate / Sqft" : "Plot Derived Rate / Sqft"}</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent">{isVillaSubject ? "Villa Rate Range" : "Plot Rate Range"}</th>
+                <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1">
+                    FSI
+                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
+                      <Info size={11} className="inline-block" />
+                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-56 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-2 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
+                        Any location does not have one fixed FSI/FAR; it depends on the specific plot, zoning,  Development authority approvals & various other factors
+                      </span>
+                    </div>
+                  </div>
+                </th>
+                <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1">
+                    CC (₹/sqft)
+                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
+                      <Info size={11} className="inline-block" />
+                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-32 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-1 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
+                        Construction Cost
+                      </span>
+                    </div>
+                  </div>
+                </th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{derivedRateLabel} Derived Rate / Sqft</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">{derivedRateLabel} Rate Range</th>
                 <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
               </>
             )}
@@ -996,73 +1023,38 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               {showPlotControls && (
                 <>
                   <td className="px-3 py-2 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">Low</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.fsi_low ?? (lst.plot_fsi_range?.low || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], fsi_low: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">High</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.fsi_high ?? (lst.plot_fsi_range?.high || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], fsi_high: val }
-                            }));
-                          }}
-                        />
-                      </div>
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="FSI"
+                        className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                        value={rowOverrides[i]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRowOverrides(prev => ({
+                            ...prev,
+                            [i]: { ...prev[i], fsi_best: val }
+                          }));
+                        }}
+                      />
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">Low</span>
-                        <input
-                          type="number"
-                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.cc_low ?? (lst.plot_construction_cost_range?.low || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], cc_low: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">High</span>
-                        <input
-                          type="number"
-                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.cc_high ?? (lst.plot_construction_cost_range?.high || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], cc_high: val }
-                            }));
-                          }}
-                        />
-                      </div>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="number"
+                        placeholder="CC"
+                        className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                        value={rowOverrides[i]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRowOverrides(prev => ({
+                            ...prev,
+                            [i]: { ...prev[i], const_cost_best: val }
+                          }));
+                        }}
+                      />
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
@@ -1072,7 +1064,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
                     {lst.plot_derived_rate_range
-                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`
+                      ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
+                        ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()}`
+                        : `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
                       : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -1116,7 +1110,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
-              {hasPlotData ? `Cleaned & ${isVillaSubject ? "Villa" : "Plot"} Valuation Data` : "Cleaned & Normalized Data"}
+              {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
@@ -1200,7 +1194,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
-                    {hasPlotData ? `Normalized Listing & ${isVillaSubject ? "Villa" : "Plot"} Data` : "Normalized Listing Data"}
+                    {hasPlotData ? `Normalized Listing & ${derivedRateLabel} Data` : "Normalized Listing Data"}
                   </h3>
                   {showPlotControls && onRecalculate && (
                     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
@@ -1730,8 +1724,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   };
 
   const subjectRow = comparable_factoring_table.find(r => r.role === "SUBJECT");
-  const compRows   = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
-  const finalRate  = Number(subject_final_rate || 0);
+  const compRows = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
+  const finalRate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
 
   const MainContent = (
@@ -1844,7 +1838,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
               {compRows.filter(r => r.factor_reasoning).map((row, i) => (
                 <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
                   <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
-                  
+
                   {/* Attribute percentage chips */}
                   <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
                     <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
@@ -1899,7 +1893,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           return (
             <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
-              
+
               <div className="flex-1 space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
@@ -2701,7 +2695,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       }
 
       // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
-      const webFetchNote = webComps.length > 0 
+      const webFetchNote = webComps.length > 0
         ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
         : `🌐 Fetching web listings for Subject Project...`;
       setStreamingNote(webFetchNote);
@@ -2972,11 +2966,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     ]);
 
     try {
+      const mappedOverrides = {};
+      Object.entries(rowOverrides).forEach(([key, ov]) => {
+        if (!ov) return;
+        mappedOverrides[key] = {};
+        if (ov.fsi_best !== undefined) {
+          mappedOverrides[key].fsi_low = ov.fsi_best;
+          mappedOverrides[key].fsi_high = ov.fsi_best;
+        }
+        if (ov.const_cost_best !== undefined) {
+          mappedOverrides[key].cc_low = ov.const_cost_best;
+          mappedOverrides[key].cc_high = ov.const_cost_best;
+        }
+      });
+
       const payload = {
         cleaned_listings: cleanedData,
         subject: subjectData,
         property_type: subjectData.property_type || "plot",
-        overrides: rowOverrides,
+        overrides: mappedOverrides,
       };
       if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
       if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
@@ -3350,7 +3358,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const buildGateInitialValues = (schemas, currentSubjectData, currentMapConfirmation) => {
     const sData = currentSubjectData || subjectDataRef.current || {};
     const mapConf = currentMapConfirmation || mapConfirmation || null;
-    
+
     const allExpectedFields = [
       ...schemas.map(s => s.field),
       "project_name",
@@ -3371,9 +3379,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       "frontage",
       "occupancy_status"
     ];
-    
+
     const initVals = {};
-    
+
     // Fill defaults from schemas
     schemas.forEach(s => {
       let dVal = s.default;
@@ -3385,7 +3393,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         initVals[s.field] = dVal;
       }
     });
-    
+
     // Autofill from sData (extracted from query)
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
@@ -3403,7 +3411,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         }
       }
     });
-    
+
     // Fallback/custom fields mapping
     if (!initVals["lat"] || Number(initVals["lat"]) === 0) {
       if (mapConf?.lat) {
@@ -3423,7 +3431,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         initVals["lng"] = sData.lng;
       }
     }
-    
+
     if (!initVals["coordinates"]) {
       if (initVals["lat"] && initVals["lng"]) {
         initVals["coordinates"] = `${initVals["lat"]}, ${initVals["lng"]}`;
@@ -3438,7 +3446,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     // Area fields fallback mapping
     const propType = (gateValues["property_type"] || sData.property_type || "").toLowerCase().trim();
-    
+
     const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
     const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
     const extractedCarpet = sData.carpet_area_sqft || sData.entities?.carpet_area_sqft || "";
@@ -3456,21 +3464,21 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         // apartment, retail, commercial_office
         initVals["salable_area_sqft"] = extractedSalable || primaryArea;
       }
-      
+
       // Keep other fields filled if extracted specifically
       if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
       if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
       if (extractedCarpet) initVals["carpet_area_sqft"] = extractedCarpet;
       if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
     }
-    
+
     // Ensure all expected fields are strings/numbers, not undefined
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
         initVals[field] = "";
       }
     });
-    
+
     return initVals;
   };
 
@@ -4015,9 +4023,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   };
 
   // ── Gate Wizard Helpers ───────────────────────────────────────────
-  const IDENTITY_FIELDS   = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
-  const PROP_TYPE_FIELDS  = ["property_type"];
-  const APPROACH_FIELDS   = ["approach", "recommended_approach", "valuation_approach"];
+  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
+  const PROP_TYPE_FIELDS = ["property_type"];
+  const APPROACH_FIELDS = ["approach", "recommended_approach", "valuation_approach"];
 
   // Fields that belong to Gate 4 (property-specific attributes, not identity/type/approach)
   const isGate4Field = (f) =>
@@ -4056,7 +4064,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     // Merge gateValues back into clarificationValues / extractionVerification path
     setClarificationValues(gateValues);
     closeGate();
-    
+
     // Prepare values to send, ensuring coordinates are formatted and verification flags are true
     const finalVals = {
       ...gateValues,
@@ -4157,10 +4165,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
   const GATE_META = [
     { step: 1, label: "Property Identification", icon: "📍", desc: "Project name / coordinates, location & country" },
-    { step: 2, label: "Property Type",           icon: "🏠", desc: "Select the type of property being valued" },
-    { step: 3, label: "Approach Selection",      icon: "⚖️", desc: "Choose valuation approach (Villa only)" },
-    { step: 4, label: "Property Details",        icon: "📋", desc: "Area, age, floor, and other required attributes" },
-    { step: 5, label: "Verify & Confirm",        icon: "✅", desc: "Review all data before proceeding" },
+    { step: 2, label: "Property Type", icon: "🏠", desc: "Select the type of property being valued" },
+    { step: 3, label: "Approach Selection", icon: "⚖️", desc: "Choose valuation approach (Villa only)" },
+    { step: 4, label: "Property Details", icon: "📋", desc: "Area, age, floor, and other required attributes" },
+    { step: 5, label: "Verify & Confirm", icon: "✅", desc: "Review all data before proceeding" },
   ].filter(g => isVilla || g.step !== 3);
 
   const Stage1GateWizard = gateActive ? (() => {
@@ -4171,66 +4179,74 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const identityFields = [
       ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
       { field: "location_name", label: "Location / Locality", type: "text" },
-      { field: "country",       label: "Country",             type: "text" },
+      { field: "country", label: "Country", type: "text" },
     ];
-    
+
     const typeFields = [
-      { field: "property_type", label: "Property Type", type: "select", options: [
-        { value: "apartment", label: "Apartment / Flat" },
-        { value: "villa",     label: "Villa" },
-        { value: "plot",      label: "Plot / Land" },
-        { value: "retail",    label: "Retail / Shop" },
-        { value: "commercial_office", label: "Commercial Office" },
-      ]}
+      {
+        field: "property_type", label: "Property Type", type: "select", options: [
+          { value: "apartment", label: "Apartment / Flat" },
+          { value: "villa", label: "Villa" },
+          { value: "plot", label: "Plot / Land" },
+          { value: "retail", label: "Retail / Shop" },
+          { value: "commercial_office", label: "Commercial Office" },
+        ]
+      }
     ];
-    
+
     const approachFields = activeType === "villa" ? [
-      { field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
-        { value: "market", label: "Market Approach" },
-        { value: "cost",   label: "Cost Approach" },
-      ]}
+      {
+        field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
+          { value: "market", label: "Market Approach" },
+          { value: "cost", label: "Cost Approach" },
+        ]
+      }
     ] : [];
-    
+
     let detailFields = [];
     if (activeType === "apartment") {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
-        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
     } else if (activeType === "villa") {
       detailFields = [
-        { field: "plot_area_sqft",    label: "Plot Area (sqft)", type: "number" },
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
-        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
     } else if (activeType === "plot") {
       detailFields = [
-        { field: "plot_area_sqft",    label: "Plot Area (sqft)", type: "number" },
-        { field: "land_type",         label: "Land Type", type: "select", options: [
-          { value: "agricultural", label: "Agricultural" },
-          { value: "non_agricultural", label: "Non Agricultural" },
-          { value: "residential", label: "Residential" },
-          { value: "commercial", label: "Commercial" }
-        ]},
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        {
+          field: "land_type", label: "Land Type", type: "select", options: [
+            { value: "agricultural", label: "Agricultural" },
+            { value: "non_agricultural", label: "Non Agricultural" },
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" }
+          ]
+        },
       ];
     } else if (activeType === "retail") {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
-        { field: "frontage",          label: "Road Frontage (ft)", type: "number" },
+        { field: "frontage", label: "Road Frontage (ft)", type: "number" },
       ];
     } else if (activeType === "commercial_office") {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
-        { field: "occupancy_status",  label: "Occupancy Status", type: "select", options: [
-          { value: "vacant", label: "Vacant" },
-          { value: "leased", label: "Leased" },
-          { value: "self_use", label: "Self Use" }
-        ]},
+        {
+          field: "occupancy_status", label: "Occupancy Status", type: "select", options: [
+            { value: "vacant", label: "Vacant" },
+            { value: "leased", label: "Leased" },
+            { value: "self_use", label: "Self Use" }
+          ]
+        },
       ];
     } else {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
-        { field: "age_years",         label: "Age of Building (yrs)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
     }
 
@@ -4245,15 +4261,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const mandatoryStep = gateStep === 1
       ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
       : gateStep === 2
-      ? gateValues["property_type"]
-      : gateStep === 3
-      ? gateValues["recommended_approach"]
-      : gateStep === 4
-      ? detailFields.every(f => {
-          const val = gateValues[f.field];
-          return val !== undefined && val !== null && String(val).trim() !== "";
-        })
-      : true;
+        ? gateValues["property_type"]
+        : gateStep === 3
+          ? gateValues["recommended_approach"]
+          : gateStep === 4
+            ? detailFields.every(f => {
+              const val = gateValues[f.field];
+              return val !== undefined && val !== null && String(val).trim() !== "";
+            })
+            : true;
 
     const visualStep = GATE_META.findIndex(g => g.step === gateStep) + 1;
     const canAdvance = Boolean(mandatoryStep);
@@ -4261,7 +4277,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     return (
       <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300">
         {/* Header */}
-        <div 
+        <div
           onClick={() => setGateCollapsed(!gateCollapsed)}
           className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
         >
@@ -4293,8 +4309,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     ${g.step === gateStep
                       ? "bg-warning text-bg-deep shadow"
                       : g.step < gateStep
-                      ? "bg-success/20 text-success border border-success/30 cursor-pointer hover:bg-success/30"
-                      : "bg-border/20 text-text-dim cursor-default"
+                        ? "bg-success/20 text-success border border-success/30 cursor-pointer hover:bg-success/30"
+                        : "bg-border/20 text-text-dim cursor-default"
                     }`}
                 >
                   {g.step < gateStep ? "✓" : (idx + 1)} {g.label}
@@ -4566,7 +4582,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       dbTransactions={message.db_transactions || []}
                     />
                   )}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
                       <FactorialTable
@@ -4630,7 +4646,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
         {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-            <div 
+            <div
               onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
               className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
             >
@@ -4674,7 +4690,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
         {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-            <div 
+            <div
               onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
               className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
             >
@@ -4715,7 +4731,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* ── Proceed to Factorial Table CTA ────────────────── */}
         {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-            <div 
+            <div
               onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
               className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
             >
@@ -4759,7 +4775,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* ── Map Confirmation (standalone — not part of wizard) */}
         {mapConfirmation && !gateActive && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div 
+            <div
               onClick={() => setMapCollapsed(!mapCollapsed)}
               className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
             >
@@ -4818,7 +4834,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* ── Approach Choice (standalone fallback if wizard not active) */}
         {approachChoiceNeeded && !gateActive && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div 
+            <div
               onClick={() => setApproachCollapsed(!approachCollapsed)}
               className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
             >
