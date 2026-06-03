@@ -2265,6 +2265,39 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   });
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
+  // Helper for model-wise pricing:
+  // Kimi: Input $0.60/1M, Output $3.00/1M
+  // GPT-4o: Input $5.00/1M, Output $15.00/1M
+  // GPT-4o-mini/others: Input $0.15/1M, Output $0.60/1M
+  const getModelCost = (model, prompt, completion) => {
+    const modelLower = model.toLowerCase();
+    if (modelLower.includes("kimi") || modelLower.includes("moonshot")) {
+      return (prompt / 1000000 * 0.60) + (completion / 1000000 * 3.00);
+    } else if (modelLower.includes("gpt-4o") && !modelLower.includes("mini")) {
+      return (prompt / 1000000 * 5.00) + (completion / 1000000 * 15.00);
+    } else {
+      return (prompt / 1000000 * 0.15) + (completion / 1000000 * 0.60);
+    }
+  };
+
+  const calculatedTotalTokens = useMemo(() => {
+    return Object.entries(tokenStats.model_breakdown)
+      .filter(([model]) => model.toLowerCase() !== "unknown")
+      .reduce((sum, [_, usage]) => sum + (usage.total || 0), 0);
+  }, [tokenStats.model_breakdown]);
+
+  const calculatedCostUsd = useMemo(() => {
+    const modelCost = Object.entries(tokenStats.model_breakdown).reduce(
+      (sum, [model, usage]) => sum + getModelCost(model, usage.prompt || 0, usage.completion || 0),
+      0
+    );
+    const toolCost = Object.values(tokenStats.tool_breakdown).reduce(
+      (sum, tool) => sum + (tool.cost_usd || 0),
+      0
+    );
+    return modelCost + toolCost;
+  }, [tokenStats.model_breakdown, tokenStats.tool_breakdown]);
+
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [clarificationPrompt, setClarificationPrompt] = useState("");
   const [clarificationFields, setClarificationFields] = useState([]);
@@ -2742,19 +2775,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const model = newUsage.model || "gpt-4o-mini";
               setListingData(listings);
               setTokenStats((prev) => {
-                const next = { ...prev };
-                next.total_tokens += total;
-                if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-                next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-                next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-                next.model_breakdown[model].total += total;
+                const nextModelBreakdown = { ...prev.model_breakdown };
+                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                
+                const promptDiff = (newUsage.prompt_tokens || 0);
+                const completionDiff = (newUsage.completion_tokens || 0);
 
-                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-                const promptRate = isGpt4o ? 5.00 : 0.15;
-                const completionRate = isGpt4o ? 15.00 : 0.60;
-                const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
-                next.cost_usd = (next.cost_usd || 0) + addedCost;
-                return next;
+                nextModelBreakdown[model] = {
+                  prompt: currentModelStats.prompt + promptDiff,
+                  completion: currentModelStats.completion + completionDiff,
+                  total: currentModelStats.total + total
+                };
+
+                const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+                return {
+                  ...prev,
+                  total_tokens: prev.total_tokens + total,
+                  model_breakdown: nextModelBreakdown,
+                  cost_usd: (prev.cost_usd || 0) + addedCost
+                };
               });
               setMessages((prev) => {
                 const next = [...prev];
@@ -2886,21 +2926,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
             setCleanedData(cleanedListings);
             setTokenStats((prev) => {
-              const next = { ...prev };
-              next.total_tokens += total;
-              if (!next.model_breakdown[model]) {
-                next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-              }
-              next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-              next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-              next.model_breakdown[model].total += total;
+              const nextModelBreakdown = { ...prev.model_breakdown };
+              const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+              
+              const promptDiff = (newUsage.prompt_tokens || 0);
+              const completionDiff = (newUsage.completion_tokens || 0);
 
-              const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-              const promptRate = isGpt4o ? 5.00 : 0.15;
-              const completionRate = isGpt4o ? 15.00 : 0.60;
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
-              next.cost_usd = (next.cost_usd || 0) + addedCost;
-              return next;
+              nextModelBreakdown[model] = {
+                prompt: currentModelStats.prompt + promptDiff,
+                completion: currentModelStats.completion + completionDiff,
+                total: currentModelStats.total + total
+              };
+
+              const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+              return {
+                ...prev,
+                total_tokens: prev.total_tokens + total,
+                model_breakdown: nextModelBreakdown,
+                cost_usd: (prev.cost_usd || 0) + addedCost
+              };
             });
 
             setMessages((prev) => {
@@ -3270,26 +3315,28 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const total = usage.total_tokens || 0;
               const model = usage.model || "gpt-4o";
               setTokenStats((prev) => {
-                const next = { ...prev };
-                next.total_tokens += total;
-                if (!next.model_breakdown[model]) {
-                  next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-                }
-                next.model_breakdown[model].prompt += (usage.prompt_tokens || 0);
-                next.model_breakdown[model].completion += (usage.completion_tokens || 0);
-                next.model_breakdown[model].total += total;
+                const nextModelBreakdown = { ...prev.model_breakdown };
+                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                
+                const promptDiff = (usage.prompt_tokens || 0);
+                const completionDiff = (usage.completion_tokens || 0);
 
-                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-                const promptRate = isGpt4o ? 5.00 : 0.15;
-                const completionRate = isGpt4o ? 15.00 : 0.60;
-                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * promptRate) + ((usage.completion_tokens || 0) / 1000000 * completionRate);
-                next.cost_usd = (next.cost_usd || 0) + addedCost;
+                nextModelBreakdown[model] = {
+                  prompt: currentModelStats.prompt + promptDiff,
+                  completion: currentModelStats.completion + completionDiff,
+                  total: currentModelStats.total + total
+                };
 
-                // Track current stage
-                next.last_stage_tokens = total;
-                next.last_stage_name = "LLM Factoring (Stage 5)";
+                const addedCost = getModelCost(model, promptDiff, completionDiff);
 
-                return next;
+                return {
+                  ...prev,
+                  total_tokens: prev.total_tokens + total,
+                  model_breakdown: nextModelBreakdown,
+                  cost_usd: (prev.cost_usd || 0) + addedCost,
+                  last_stage_tokens: total,
+                  last_stage_name: "LLM Factoring (Stage 5)"
+                };
               });
             }
 
@@ -3647,6 +3694,28 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "approach_choice_needed") {
             setApproachChoiceNeeded(event.content);
+            // Open the 5-step wizard at Step 3 (Approach Selection)
+            const schemas = [
+              {
+                field: "recommended_approach",
+                label: "Valuation Approach",
+                type: "select",
+                options: [
+                  { value: "market", label: "Market Approach" },
+                  { value: "cost",   label: "Cost Approach" }
+                ],
+                default: event.content.recommended_approach
+              }
+            ];
+            const initVals = buildGateInitialValues(schemas, currentSubjectObj || subjectDataRef.current, currentMapConf || mapConfirmation);
+            if (event.content.recommended_approach) {
+              initVals["recommended_approach"] = event.content.recommended_approach;
+            }
+            setGateAllFields(schemas);
+            setGateValues(initVals);
+            setGateMode('clarification');
+            setGateStep(3); // Start directly at Step 3: Approach Selection
+            setGateActive(true);
           }
 
           if (event.type === "extraction_verification") {
@@ -4079,7 +4148,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         } else {
           isChanged = String(value).trim() !== String(ents[field]);
         }
-        if (isChanged) changes.push(`${humanizeFieldName(field)}: ${value}`);
+        if (isChanged) {
+          if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
+            changes.push(`Use ${value} approach`);
+          } else {
+            changes.push(`${humanizeFieldName(field)}: ${value}`);
+          }
+        }
       });
       let response = "The extracted details are confirmed to be correct. Extraction Verified: true, Coordinates Confirmed: true";
       if (changes.length > 0) {
@@ -4098,7 +4173,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         if (k === "coordinates" && typeof v === "object") return false;
         return String(v).trim();
       });
-      const response = entries.map(([f, v]) => `${humanizeFieldName(f)}: ${v}`).join(", ");
+      const response = entries.map(([f, v]) => {
+        if (f === "recommended_approach" || f === "valuation_approach" || f === "approach") {
+          return `Use ${v} approach`;
+        }
+        return `${humanizeFieldName(f)}: ${v}`;
+      }).join(", ");
       setClarificationPrompt("");
       setClarificationFields([]);
       submitQuestion(`${currentQuestion}. ${response}`, true, response);
@@ -4307,6 +4387,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         {/* Gate body */}
         {!gateCollapsed && (
           <div className="flex flex-col gap-4 p-4">
+
+            {/* Show prompt/question from the agent if available */}
+            {gateStep === 3 && approachChoiceNeeded?.question && (
+              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
+              </div>
+            )}
+            {gateStep !== 3 && clarificationPrompt && (
+              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
+              </div>
+            )}
 
             {/* Gate 5 = full review */}
             {gateStep === 5 ? (
@@ -4876,7 +4968,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             className={`flex items-center gap-1.5 transition hover:text-accent-light ${showTokenBreakdown ? "text-accent-light" : ""}`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] animate-pulse" />
-            {tokenStats.total_tokens > 0 ? `${tokenStats.total_tokens.toLocaleString()} tokens` : "No usage yet"}
+            {calculatedTotalTokens > 0 ? `${calculatedTotalTokens.toLocaleString()} tokens` : "No usage yet"}
             <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>
           </button>
         </div>
@@ -4891,7 +4983,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               </div>
               <div className="text-right">
                 <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
-                <p className="text-sm font-mono font-bold text-success">${tokenStats.cost_usd.toFixed(4)}</p>
+                <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
                 {tokenStats.last_stage_tokens && (
                   <p className="text-[8px] text-accent-light font-bold mt-0.5">
                     +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
@@ -4903,11 +4995,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
-                {Object.entries(tokenStats.model_breakdown).length === 0 ? (
+                {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
                   <p className="text-[11px] text-text-dim italic">No model data yet...</p>
                 ) : (
-                  Object.entries(tokenStats.model_breakdown).map(([model, usage]) => (
-                    <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
+                  Object.entries(tokenStats.model_breakdown)
+                    .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
+                    .map(([model, usage]) => (
+                      <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[11px] font-bold text-accent-light">{model}</span>
                         <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
