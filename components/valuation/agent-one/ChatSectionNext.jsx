@@ -998,75 +998,86 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
               </td>
             </tr>
-          ) : displayedListings.map((lst, i) => (
-            <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
-              <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
-                {lst.cleaned_match_project || lst.project_name || "—"}
-              </td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
-              <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-              <td className="px-3 py-2 text-right font-mono text-text-primary">
-                {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-text-primary">
-                {lst.cleaned_price_value && lst.final_super_builtup_area
-                  ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
-                  : "—"}
-              </td>
+          ) : displayedListings.map((lst, i) => {
+            const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
+            const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
+            return (
+              <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
+                <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
+                  {lst.cleaned_match_project || lst.project_name || "—"}
+                </td>
+                <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
+                <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
+                <td className="px-3 py-2 text-right font-mono text-text-primary">
+                  {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                  {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                  {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-text-primary">
+                  {lst.cleaned_price_value && lst.final_super_builtup_area
+                    ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
+                    : "—"}
+                </td>
 
-              {showPlotControls && (
-                <>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex items-center justify-center">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="FSI"
-                        className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
-                        value={rowOverrides[i]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setRowOverrides(prev => ({
-                            ...prev,
-                            [i]: { ...prev[i], fsi_best: val }
-                          }));
-                        }}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex items-center justify-center">
-                      <input
-                        type="number"
-                        placeholder="CC"
-                        className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
-                        value={rowOverrides[i]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setRowOverrides(prev => ({
-                            ...prev,
-                            [i]: { ...prev[i], const_cost_best: val }
-                          }));
-                        }}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                {showPlotControls && (
+                  <>
+                    <td className="px-3 py-2 text-center">
+                      {isFsiCcRequired ? (
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="FSI"
+                            className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                            value={rowOverrides[i]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRowOverrides(prev => ({
+                                ...prev,
+                                [i]: { ...prev[i], fsi_best: val }
+                              }));
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-text-dim">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {isFsiCcRequired ? (
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="number"
+                            placeholder="CC"
+                            className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                            value={rowOverrides[i]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRowOverrides(prev => ({
+                                ...prev,
+                                [i]: { ...prev[i], const_cost_best: val }
+                              }));
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-text-dim">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {lst.plot_derived_rate_per_sqft
-                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
+                      ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
                       : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
                     {lst.plot_derived_rate_range
                       ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
-                        ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()}`
-                        : `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
+                        ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
+                        : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
                       : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -1097,7 +1108,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </td>
               )}
             </tr>
-          ))}
+          )})}
         </tbody>
       </table>
     </div>
