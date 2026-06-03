@@ -45,7 +45,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import type { WorkflowData } from '../lib/types';
+import type { WorkflowData } from '../../lib/dashboard/geospatial/types';
 
 interface WorkflowSectionProps {
   data: WorkflowData | null;

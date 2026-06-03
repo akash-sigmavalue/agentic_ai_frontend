@@ -18,12 +18,12 @@ export function uploadDocumentRequest(formData: FormData) {
   });
 }
 
-export function askQuestionStreamRequest(question: string) {
+export function askQuestionStreamRequest(question: string, session_id?: string) {
   return fetch(`${API_BASE_URL}/user-input/ask/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, session_id }),
   });
 }
