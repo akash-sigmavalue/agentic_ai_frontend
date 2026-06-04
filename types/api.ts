@@ -296,15 +296,36 @@ export type UploadResult = {
 };
 
 export type Chunk = {
+  chunk_id?: string;
+  document_id?: string;
+  source_name?: string;
   source: string;
   page: string;
+  page_number?: string;
   page_range?: string;
   type?: "text" | "table" | "image";
   content?: string;
+  text?: string;
   image_base64?: string;
   image_mime?: string;
   relevance_score?: number;
   confidence_score?: number;
+};
+
+export type HighlightRect = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  page_width: number;
+  page_height: number;
+};
+
+export type HighlightResponse = {
+  success: boolean;
+  page_number: number;
+  rects: HighlightRect[];
+  message?: string | null;
 };
 
 export type AskResult = {

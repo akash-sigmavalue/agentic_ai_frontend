@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Upload, Send, FileText, Image, Loader2 } from "lucide-react";
@@ -8,11 +8,12 @@ import { Check, Upload, Send, FileText, Image, Loader2 } from "lucide-react";
 import {
   API_BASE_URL,
   askQuestionStreamRequest,
+  highlightRectsRequest,
   parseApiError,
   uploadDocumentRequest,
 } from "../../lib/user_input/api-client";
 import type { GraphNodeId, PipelineDurations } from "../../types/agents";
-import type { AskResult, Chunk, TokenUsage, UploadResult } from "../../types/api";
+import type { AskResult, Chunk, HighlightRect, HighlightResponse, TokenUsage, UploadResult } from "../../types/api";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -223,6 +224,11 @@ export default function DocumentReader() {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [activeChunkIndex, setActiveChunkIndex] = useState<number | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfUrlsBySource, setPdfUrlsBySource] = useState<Record<string, string>>({});
+  const [highlightRects, setHighlightRects] = useState<HighlightRect[]>([]);
+  const [highlightLoading, setHighlightLoading] = useState(false);
+  const [highlightError, setHighlightError] = useState<string | null>(null);
+  const highlightRequestIdRef = useRef(0);
   const router = useRouter();
 
   const tokenUsage = useMemo<TokenUsage>(
@@ -239,6 +245,7 @@ export default function DocumentReader() {
     () => (activeChunkIndex != null ? askResult?.chunks[activeChunkIndex] ?? null : null),
     [activeChunkIndex, askResult]
   );
+  const activePdfUrl = activeChunk ? pdfUrlsBySource[activeChunk.source] || pdfUrl : pdfUrl;
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -262,11 +269,19 @@ export default function DocumentReader() {
       if (!response.ok) throw new Error(await parseApiError(response));
       const result = await response.json();
       setUploadResult(result);
-      const pdfFile = files.find(isPdfFile);
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      setPdfUrl(pdfFile ? URL.createObjectURL(pdfFile) : null);
+      Object.values(pdfUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
+
+      const nextPdfUrlsBySource: Record<string, string> = {};
+      files.filter(isPdfFile).forEach((file) => {
+        nextPdfUrlsBySource[file.name] = URL.createObjectURL(file);
+      });
+      setPdfUrlsBySource(nextPdfUrlsBySource);
+      setPdfUrl(Object.values(nextPdfUrlsBySource)[0] || null);
       setMessages([]);
       setActiveChunkIndex(null);
+      setHighlightRects([]);
+      setHighlightError(null);
     } catch (err) {
       setError(err instanceof Error ? `${err.message} (${API_BASE_URL})` : "Upload failed.");
     } finally {
@@ -295,6 +310,8 @@ export default function DocumentReader() {
       setMessages((prev) => [...prev, { role: "user", content: questionText }]);
       setQuestion("");
       setActiveChunkIndex(null);
+      setHighlightRects([]);
+      setHighlightError(null);
 
       const response = await askQuestionStreamRequest(questionText, sessionId);
       if (!response.ok) throw new Error(await parseApiError(response));
@@ -398,6 +415,48 @@ export default function DocumentReader() {
     setQuestion(suggestedQ);
     handleAsk(suggestedQ);
   };
+
+  async function handleChunkSelect(chunk: Chunk, idx: number) {
+    setActiveChunkIndex(idx);
+    setHighlightRects([]);
+    setHighlightError(null);
+
+    const requestId = highlightRequestIdRef.current + 1;
+    highlightRequestIdRef.current = requestId;
+
+    const pageNumber = parseChunkPage(chunk);
+    const chunkText = chunk.text || chunk.content || "";
+
+    if (!chunk.document_id || !chunkText.trim()) {
+      setHighlightError("Page opened, but exact text highlight could not be matched.");
+      return;
+    }
+
+    try {
+      setHighlightLoading(true);
+      const response = await highlightRectsRequest(chunk.document_id, pageNumber, chunkText);
+      const data = (await response.json()) as HighlightResponse;
+
+      if (highlightRequestIdRef.current !== requestId) return;
+
+      if (!response.ok || !data.success) {
+        setHighlightRects([]);
+        setHighlightError(data.message || "Page opened, but exact text highlight could not be matched.");
+        return;
+      }
+
+      setHighlightRects(data.rects || []);
+      setHighlightError(null);
+    } catch {
+      if (highlightRequestIdRef.current !== requestId) return;
+      setHighlightRects([]);
+      setHighlightError("Page opened, but highlight request failed.");
+    } finally {
+      if (highlightRequestIdRef.current === requestId) {
+        setHighlightLoading(false);
+      }
+    }
+  }
 
   return (
     <main className="h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 to-white p-5 font-sans antialiased">
@@ -529,11 +588,11 @@ export default function DocumentReader() {
                   key={idx}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setActiveChunkIndex(idx)}
+                  onClick={() => handleChunkSelect(chunk, idx)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setActiveChunkIndex(idx);
+                      handleChunkSelect(chunk, idx);
                     }
                   }}
                   className={`cursor-pointer rounded-xl border p-3 transition-all hover:shadow-md ${activeChunkIndex === idx ? "border-blue-400 bg-blue-50/50 shadow-sm ring-1 ring-blue-200" : "border-slate-200 hover:border-blue-200"
@@ -620,22 +679,29 @@ export default function DocumentReader() {
           <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Viewer</h3>
-              {activeChunk && pdfUrl && (
+              {activeChunk && activePdfUrl && (
                 <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   Page {activeChunk.page_range || activeChunk.page}
                 </span>
               )}
             </div>
           </div>
-          <div className="flex-1 overflow-hidden rounded-b-2xl bg-slate-100">
-            {pdfUrl ? (
-              <CustomPdfViewer
-                key={`${activeChunkIndex ?? "none"}-${parseChunkPage(activeChunk)}`}
-                pdfUrl={pdfUrl}
-                pageNumber={parseChunkPage(activeChunk)}
-                searchText={getSearchTerm(activeChunk?.content)}
-                highlightColor="blue"
-              />
+          <div className="flex flex-1 flex-col overflow-hidden rounded-b-2xl bg-slate-100">
+            {(highlightLoading || highlightError) && activePdfUrl && (
+              <div className="border-b border-slate-200 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600">
+                {highlightLoading ? "Finding text highlight..." : highlightError}
+              </div>
+            )}
+            {activePdfUrl ? (
+              <div className="min-h-0 flex-1">
+                <CustomPdfViewer
+                  key={`${activeChunkIndex ?? "none"}-${parseChunkPage(activeChunk)}`}
+                  pdfUrl={activePdfUrl}
+                  pageNumber={parseChunkPage(activeChunk)}
+                  searchText={getSearchTerm(activeChunk?.content)}
+                  highlightRects={highlightRects}
+                />
+              </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-sm text-slate-400">
                 <Image className="mb-2 h-10 w-10 opacity-40" />

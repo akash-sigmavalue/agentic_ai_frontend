@@ -27,3 +27,13 @@ export function askQuestionStreamRequest(question: string, session_id?: string) 
     body: JSON.stringify({ question, session_id }),
   });
 }
+
+export function highlightRectsRequest(document_id: string, page_number: number, chunk_text: string) {
+  return fetch(`${API_BASE_URL}/user-input/pdf/highlight-rects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ document_id, page_number, chunk_text }),
+  });
+}
