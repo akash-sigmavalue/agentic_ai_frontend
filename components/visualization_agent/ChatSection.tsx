@@ -76,12 +76,10 @@ interface Module1ResponseData {
 }
 
 const MODULE1_RUNTIME_MODEL = 'moonshotai.kimi-k2.5';
-const MODULE1_RUNTIME_PROVIDER = 'AWS Bedrock';
-const MODULE1_RUNTIME_REGION = 'ap-south-1';
-const MODULE1_RUNTIME_PRICING = { input: 0.72, cached_input: 0, output: 3.6 };
 const MODULE7_RUNTIME_MODEL = 'moonshot.kimi-k2-thinking';
 const MODULE7_RUNTIME_PROVIDER = 'AWS Bedrock';
 const MODULE7_RUNTIME_REGION = 'ap-south-1';
+const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Give me average year on year rate for each floor of Kohinoor Emerald from 2021 to 2024';
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ||
@@ -418,7 +416,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
   const [isLoading, setIsLoading] = useState(false);
-  const [demoMode, setDemoMode] = useState(false);
   const [chatCategory, setChatCategory] = useState<ChatCategory>('land-gis');
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
   const [totalCost, setTotalCost] = useState(0);
@@ -826,7 +823,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
-          demo_mode: demoMode,
+          demo_mode: DEMO_MODE_ENABLED,
         }),
       });
 
@@ -864,7 +861,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       setMessages((prev) => [...prev, assistantMsg]);
 
       // Update token ledger. Demo mode mirrors Streamlit behavior and is not counted.
-      if (!demoMode && data.usage && data.usage.total_tokens > 0) {
+      if (!DEMO_MODE_ENABLED && data.usage && data.usage.total_tokens > 0) {
         const newRow: TokenLedgerRow = data.ledger_row || {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -1319,32 +1316,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
                 {isLandGisChat ? MODULE1_RUNTIME_MODEL : MODULE7_RUNTIME_MODEL}
               </span>
-              {isLandGisChat ? (
-                <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                  <input
-                    type="checkbox"
-                    checked={demoMode}
-                    onChange={(e) => setDemoMode(e.target.checked)}
-                    className="h-3 w-3 accent-indigo-600"
-                  />
-                  Demo mode
-                </label>
-              ) : null}
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Enter to send - Shift+Enter for newline
-              </p>
-              {isLandGisChat ? (
-                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                  Module 1 runtime: {MODULE1_RUNTIME_PROVIDER} / {MODULE1_RUNTIME_MODEL} / {MODULE1_RUNTIME_REGION} -
-                  ${MODULE1_RUNTIME_PRICING.input.toFixed(2)} in / ${MODULE1_RUNTIME_PRICING.output.toFixed(2)} out per 1M
-                </p>
-              ) : (
-                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                  Module 7 runtime: {MODULE7_RUNTIME_PROVIDER} / {MODULE7_RUNTIME_MODEL} / {MODULE7_RUNTIME_REGION}
-                </p>
-              )}
             </div>
           </div>
         </div>

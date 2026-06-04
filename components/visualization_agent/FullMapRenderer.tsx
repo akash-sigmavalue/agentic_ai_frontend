@@ -387,25 +387,77 @@ export default function FullMapRenderer({ output, basemapMode, onBasemapModeChan
           <summary className="cursor-pointer select-none font-extrabold uppercase tracking-widest">
             Module 3 Token Ledger - ${output.usage.total_cost_usd.toFixed(6)} / {output.usage.total_tokens.toLocaleString()} tokens
           </summary>
-          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          <div className="mt-3 grid gap-2 sm:grid-cols-5">
+            <span>Calls: {output.usage.total_llm_calls}</span>
             <span>Input: {output.usage.total_input_tokens.toLocaleString()}</span>
             <span>Cached: {output.usage.total_cached_input_tokens.toLocaleString()}</span>
             <span>Output: {output.usage.total_output_tokens.toLocaleString()}</span>
-            <span>Time: {output.processing_time_seconds.toFixed(2)}s</span>
+            <span>Total: {output.usage.total_tokens.toLocaleString()}</span>
           </div>
-          {output.usage.ledger.map((entry) => (
-            <div key={entry.call_name} className="mt-3 border-t border-violet-100 pt-2 font-semibold">
-              <p>{entry.call_name}: {entry.model}</p>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                <span>{entry.input_tokens.toLocaleString()} input / ${Number(entry.input_cost || 0).toFixed(6)}</span>
-                <span>{entry.cached_input_tokens.toLocaleString()} cached / ${Number(entry.cached_input_cost || 0).toFixed(6)}</span>
-                <span>{entry.output_tokens.toLocaleString()} output / ${Number(entry.output_cost || 0).toFixed(6)}</span>
-                <span>Total: ${Number(entry.total_cost || 0).toFixed(6)}</span>
-              </div>
-            </div>
-          ))}
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <span>Input Cost: ${Number(output.usage.total_input_cost_usd || 0).toFixed(6)}</span>
+            <span>Cached Cost: ${Number(output.usage.total_cached_input_cost_usd || 0).toFixed(6)}</span>
+            <span>Output Cost: ${Number(output.usage.total_output_cost_usd || 0).toFixed(6)}</span>
+            <span className="font-extrabold">Total Cost: ${output.usage.total_cost_usd.toFixed(6)}</span>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[1480px] text-left text-[11px]">
+              <thead className="text-violet-500">
+                <tr>
+                  <th className="py-1 pr-3">#</th>
+                  <th className="py-1 pr-3">Timestamp</th>
+                  <th className="py-1 pr-3">Call</th>
+                  <th className="py-1 pr-3">Step</th>
+                  <th className="py-1 pr-3">Duration</th>
+                  <th className="py-1 pr-3">Provider</th>
+                  <th className="py-1 pr-3">Region</th>
+                  <th className="py-1 pr-3">Endpoint</th>
+                  <th className="py-1 pr-3">Model</th>
+                  <th className="py-1 pr-3">API Model</th>
+                  <th className="py-1 pr-3">Input</th>
+                  <th className="py-1 pr-3">Cached</th>
+                  <th className="py-1 pr-3">Output</th>
+                  <th className="py-1 pr-3">Tokens</th>
+                  <th className="py-1 pr-3">Input Cost</th>
+                  <th className="py-1 pr-3">Cached Cost</th>
+                  <th className="py-1 pr-3">Output Cost</th>
+                  <th className="py-1 pr-3">Total Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {output.usage.ledger.map((entry) => (
+                  <tr key={`${entry.call_id || 0}-${entry.call_name}`} className="border-t border-violet-200/70">
+                    <td className="py-1.5 pr-3">{entry.call_id || '-'}</td>
+                    <td className="whitespace-nowrap py-1.5 pr-3">{entry.timestamp?.replace('T', ' ') || '-'}</td>
+                    <td className="py-1.5 pr-3 font-bold">{entry.call_name}</td>
+                    <td className="py-1.5 pr-3">{entry.step || '-'}</td>
+                    <td className="py-1.5 pr-3">{entry.processing_time_seconds != null ? `${entry.processing_time_seconds.toFixed(3)}s` : '-'}</td>
+                    <td className="py-1.5 pr-3">{entry.provider || '-'}</td>
+                    <td className="py-1.5 pr-3 font-mono">{entry.region || '-'}</td>
+                    <td className="py-1.5 pr-3">{entry.endpoint_type || '-'}</td>
+                    <td className="max-w-[220px] py-1.5 pr-3 font-mono">
+                      <span className="block whitespace-normal break-words" title={entry.model}>{entry.model}</span>
+                    </td>
+                    <td className="max-w-[220px] py-1.5 pr-3 font-mono">
+                      <span className="block whitespace-normal break-words" title={entry.api_model || entry.model}>
+                        {entry.api_model || entry.model}
+                      </span>
+                    </td>
+                    <td className="py-1.5 pr-3">{entry.input_tokens.toLocaleString()}</td>
+                    <td className="py-1.5 pr-3">{entry.cached_input_tokens.toLocaleString()}</td>
+                    <td className="py-1.5 pr-3">{entry.output_tokens.toLocaleString()}</td>
+                    <td className="py-1.5 pr-3">{entry.total_tokens.toLocaleString()}</td>
+                    <td className="py-1.5 pr-3">${Number(entry.input_cost_usd ?? entry.input_cost ?? 0).toFixed(6)}</td>
+                    <td className="py-1.5 pr-3">${Number(entry.cached_input_cost_usd ?? entry.cached_input_cost ?? 0).toFixed(6)}</td>
+                    <td className="py-1.5 pr-3">${Number(entry.output_cost_usd ?? entry.output_cost ?? 0).toFixed(6)}</td>
+                    <td className="py-1.5 pr-3 font-bold">${Number(entry.total_cost_usd ?? entry.total_cost ?? 0).toFixed(6)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="mt-2 font-semibold">
-            Full runtime rows bound after planning: {scene.records.length}. Generated HTML/TSX tokens: 0.
+            Full runtime rows bound after planning: {scene.records.length}. Generated HTML/TSX tokens: 0. Total module time: {output.processing_time_seconds.toFixed(2)}s.
           </p>
         </details>
       </header>

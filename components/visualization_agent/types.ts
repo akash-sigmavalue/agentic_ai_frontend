@@ -273,13 +273,17 @@ export interface Module31Readiness {
 }
 
 export interface Module31UsageLedgerEntry {
+  call_id?: number;
   call_name: string;
   step?: string;
+  purpose?: string;
+  timestamp?: string;
   provider?: string;
   region?: string;
   endpoint_type?: string;
   model: string;
   api_model?: string;
+  processing_time_seconds?: number;
   input_tokens: number;
   cached_input_tokens: number;
   output_tokens: number;
@@ -300,6 +304,9 @@ export interface Module31Usage {
   total_cached_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
+  total_input_cost_usd?: number;
+  total_cached_input_cost_usd?: number;
+  total_output_cost_usd?: number;
   total_cost_usd: number;
   ledger: Module31UsageLedgerEntry[];
 }

@@ -1246,11 +1246,20 @@ function Module31TokenLedger({ config }: { config: GeneratedMapConfig }) {
           <span>Output: {usage.total_output_tokens.toLocaleString()}</span>
           <span>Total: {usage.total_tokens.toLocaleString()}</span>
         </div>
-        <table className="w-full min-w-[1120px] text-left text-[11px]">
+        <div className="mb-3 grid gap-2 sm:grid-cols-4">
+          <span>Input Cost: ${Number(usage.total_input_cost_usd || 0).toFixed(6)}</span>
+          <span>Cached Cost: ${Number(usage.total_cached_input_cost_usd || 0).toFixed(6)}</span>
+          <span>Output Cost: ${Number(usage.total_output_cost_usd || 0).toFixed(6)}</span>
+          <span className="font-extrabold">Total Cost: ${usage.total_cost_usd.toFixed(6)}</span>
+        </div>
+        <table className="w-full min-w-[1480px] text-left text-[11px]">
           <thead className="text-violet-500">
             <tr>
+              <th className="py-1 pr-3">#</th>
+              <th className="py-1 pr-3">Timestamp</th>
               <th className="py-1 pr-3">Call</th>
               <th className="py-1 pr-3">Step</th>
+              <th className="py-1 pr-3">Duration</th>
               <th className="py-1 pr-3">Provider</th>
               <th className="py-1 pr-3">Region</th>
               <th className="py-1 pr-3">Endpoint</th>
@@ -1268,9 +1277,12 @@ function Module31TokenLedger({ config }: { config: GeneratedMapConfig }) {
           </thead>
           <tbody>
             {usage.ledger.map((row) => (
-              <tr key={row.call_name} className="border-t border-violet-200/70">
+              <tr key={`${row.call_id || 0}-${row.call_name}`} className="border-t border-violet-200/70">
+                <td className="py-1.5 pr-3">{row.call_id || '-'}</td>
+                <td className="whitespace-nowrap py-1.5 pr-3">{row.timestamp?.replace('T', ' ') || '-'}</td>
                 <td className="py-1.5 pr-3 font-bold">{row.call_name}</td>
                 <td className="py-1.5 pr-3">{row.step || '-'}</td>
+                <td className="py-1.5 pr-3">{row.processing_time_seconds != null ? `${row.processing_time_seconds.toFixed(3)}s` : '-'}</td>
                 <td className="py-1.5 pr-3">{row.provider || 'AWS Bedrock'}</td>
                 <td className="py-1.5 pr-3 font-mono">{row.region || 'ap-south-1'}</td>
                 <td className="py-1.5 pr-3">{row.endpoint_type || 'bedrock-mantle'}</td>
