@@ -459,6 +459,57 @@ const fmt = (value, digits = 2) => {
   return Number(value).toFixed(digits);
 };
 
+const tokenUsageKeys = [
+  'input_tokens',
+  'output_tokens',
+  'prompt_tokens',
+  'completion_tokens',
+  'total_tokens',
+  'request_count',
+  'llm_request_count'
+];
+
+const normalizeTokenUsage = (usage = {}) => {
+  const normalized = {};
+  tokenUsageKeys.forEach((key) => {
+    normalized[key] = Number(usage?.[key] || 0);
+  });
+  normalized.stages = Array.isArray(usage?.stages) ? usage.stages : [];
+  return normalized;
+};
+
+const hasTokenUsage = (usage) => tokenUsageKeys.some((key) => Number(usage?.[key] || 0) > 0) || Boolean(usage?.stages?.length);
+
+const sumTokenUsage = (usages = []) => usages.reduce((total, usage) => {
+  tokenUsageKeys.forEach((key) => {
+    total[key] = Number(total[key] || 0) + Number(usage?.[key] || 0);
+  });
+  total.stages = [...(total.stages || []), ...(usage?.stages || [])];
+  return total;
+}, normalizeTokenUsage());
+
+const buildTokenUsageSummary = (preview, mode) => {
+  if (!preview) return null;
+  const tables = (preview.tables || []).map((table, index) => ({
+    tableIndex: table.table_index ?? index + 1,
+    detectedSectionKey: table.detected_section_key || '',
+    tokenUsage: normalizeTokenUsage(table.mapping_result?.token_usage)
+  }));
+  const rootUsage = normalizeTokenUsage(preview.mapping_agent_token_usage);
+  const tableAggregate = sumTokenUsage(tables.map((table) => table.tokenUsage));
+  const displayUsage = hasTokenUsage(rootUsage) ? rootUsage : tableAggregate;
+
+  return {
+    mode,
+    uploadId: preview.upload_id || '',
+    capturedAt: new Date().toLocaleString(),
+    rootUsage,
+    tableAggregate,
+    displayUsage,
+    tables
+  };
+};
+
 const getSectionByName = (sections, name) => sections.find((section) => section.name === name);
 
 const getRecordByAsset = (sections, sectionName, assetId) => {
@@ -1020,6 +1071,7 @@ export default function PortfolioManagementApp() {
   const [excelWorkbookData, setExcelWorkbookData] = useState({});
   const [globalColumnMappings, setGlobalColumnMappings] = useState({});
   const [backendUploadPreview, setBackendUploadPreview] = useState(null);
+  const [latestUploadTokenUsage, setLatestUploadTokenUsage] = useState(null);
   const [dashboardSaveMessage, setDashboardSaveMessage] = useState('');
   const [sectionSaveMessage, setSectionSaveMessage] = useState('');
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -1403,6 +1455,7 @@ export default function PortfolioManagementApp() {
         { method: 'POST', body: formData }
       );
       setBackendUploadPreview(preview);
+      setLatestUploadTokenUsage(buildTokenUsageSummary(preview, uploadMode));
       const tables = preview.tables || [];
       const firstTable = tables[0] || {};
       const rows = firstTable.preview_rows || [];
@@ -1539,6 +1592,7 @@ export default function PortfolioManagementApp() {
           setAgentListOpen={setAgentListOpen}
           saveAllAndRefreshDashboard={saveAllAndRefreshDashboard}
           addSection={addSection}
+          tokenUsageSummary={latestUploadTokenUsage}
         />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
