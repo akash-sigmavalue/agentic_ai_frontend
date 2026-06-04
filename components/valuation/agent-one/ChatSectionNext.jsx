@@ -2266,13 +2266,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
   // Helper for model-wise pricing:
-  // Kimi: Input $0.60/1M, Output $3.00/1M
+  // Mistral Large 3: Input $0.50/1M, Output $1.50/1M
+  // Kimi: Input $0.60/1M, Output $3.00/1M (commented out)
   // GPT-4o: Input $5.00/1M, Output $15.00/1M
   // GPT-4o-mini/others: Input $0.15/1M, Output $0.60/1M
   const getModelCost = (model, prompt, completion) => {
     const modelLower = model.toLowerCase();
-    if (modelLower.includes("kimi") || modelLower.includes("moonshot")) {
-      return (prompt / 1000000 * 0.60) + (completion / 1000000 * 3.00);
+    if (modelLower.includes("mistral.mistral-large-3-675b-instruct") || modelLower.includes("mistral-large-3")) {
+      return (prompt / 1000000 * 0.50) + (completion / 1000000 * 1.50);
     } else if (modelLower.includes("gpt-4o") && !modelLower.includes("mini")) {
       return (prompt / 1000000 * 5.00) + (completion / 1000000 * 15.00);
     } else {

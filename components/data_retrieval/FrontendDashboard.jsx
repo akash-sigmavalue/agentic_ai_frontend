@@ -35,7 +35,7 @@ export default function FrontendDashboard() {
       { value: "gpt-4o-mini", label: "GPT-4o mini" },
       { value: "gpt-5.1", label: "GPT-5.1" },
       { value: "deepseek.v3.2", label: "AWS Bedrock - DeepSeek V3.2" },
-      { value: "moonshotai.kimi-k2.5", label: "AWS Bedrock - Kimi K2.5" },
+      { value: "mistral.mistral-large-3-675b-instruct", label: "AWS Bedrock - Mistral Large 3" },
     ],
     [],
   );
