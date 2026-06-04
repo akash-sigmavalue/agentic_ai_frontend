@@ -22,6 +22,8 @@ import type {
   VisualizationRetrievalResultSet,
   VisualizationRetrievalState,
   VisualizationRetrievalTokenEvent,
+  VisualizationRetrievalClarification,
+  VisualizationRetrievalClarificationField,
 } from './types';
 
 interface ChatSectionProps {
@@ -51,12 +53,17 @@ interface Message {
 interface TokenLedgerRow {
   request_id: number;
   timestamp: string;
+  provider?: string;
+  region?: string;
   model: string;
   query_preview: string;
   input_tokens: number;
   cached_input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  input_cost_usd?: number;
+  cached_input_cost_usd?: number;
+  output_cost_usd?: number;
   total_cost_usd: number;
 }
 
@@ -68,14 +75,14 @@ interface Module1ResponseData {
   ledger_row?: TokenLedgerRow | null;
 }
 
-const MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'];
-const MODEL_PRICING: Record<string, { input: number; cached_input: number; output: number }> = {
-  'gpt-5.5': { input: 5.0, cached_input: 0.5, output: 30.0 },
-  'gpt-5.4': { input: 2.5, cached_input: 0.25, output: 15.0 },
-  'gpt-5.4-mini': { input: 0.75, cached_input: 0.075, output: 4.5 },
-};
-const DEFAULT_MODEL = 'gpt-5.4-mini';
-const EXAMPLE_QUERY = 'Show residential sales density in Akurdi and Pimple saudagar from 2021 to 2024.';
+const MODULE1_RUNTIME_MODEL = 'moonshotai.kimi-k2.5';
+const MODULE1_RUNTIME_PROVIDER = 'AWS Bedrock';
+const MODULE1_RUNTIME_REGION = 'ap-south-1';
+const MODULE1_RUNTIME_PRICING = { input: 0.72, cached_input: 0, output: 3.6 };
+const MODULE7_RUNTIME_MODEL = 'moonshot.kimi-k2-thinking';
+const MODULE7_RUNTIME_PROVIDER = 'AWS Bedrock';
+const MODULE7_RUNTIME_REGION = 'ap-south-1';
+const EXAMPLE_QUERY = 'Give me average year on year rate for each floor of Kohinoor Emerald from 2021 to 2024';
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -105,7 +112,6 @@ const DEFAULT_INSIGHT_QUERY = 'Generate insights for map';
 async function requestInsightGeneration(
   map: RuntimeGeneratedMapOption,
   question: string,
-  model: string,
 ): Promise<Module7GenerationOutput> {
   const context = map.insightContext;
   const response = await fetch(`${API_BASE}/visualization-agent/module7/generate-insights`, {
@@ -121,7 +127,6 @@ async function requestInsightGeneration(
       module_2_output_json: context.module2Output,
       module_31_output_json: context.module31Output,
       user_question: question,
-      model,
     }),
   });
 
@@ -365,6 +370,42 @@ function RetrievedDataTable({ resultSet, maxRows = 100 }: { resultSet?: Visualiz
   );
 }
 
+function defaultClarificationValue(field: VisualizationRetrievalClarificationField) {
+  if (field.type === 'select') {
+    return field.options?.[0]?.value || '';
+  }
+  return '';
+}
+
+function clarificationFieldLabel(field: VisualizationRetrievalClarificationField) {
+  return field.label || field.field.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function buildClarificationAnswer(
+  clarification: VisualizationRetrievalClarification | undefined,
+  values: Record<string, string>,
+) {
+  const fields = clarification?.fields || [];
+  if (!fields.length) {
+    return Object.values(values).join('\n').trim();
+  }
+  return fields
+    .map((field) => {
+      const value = (values[field.field] || '').trim();
+      if (!value) return '';
+      return `${clarificationFieldLabel(field)}: ${value}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function missingRequiredClarificationFields(
+  clarification: VisualizationRetrievalClarification | undefined,
+  values: Record<string, string>,
+) {
+  return (clarification?.fields || []).filter((field) => field.required !== false && !(values[field.field] || '').trim());
+}
+
 const ChatSection: React.FC<ChatSectionProps> = ({
   onToggleExpand,
   isExpanded,
@@ -377,7 +418,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [demoMode, setDemoMode] = useState(false);
   const [chatCategory, setChatCategory] = useState<ChatCategory>('land-gis');
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
@@ -391,6 +431,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [retrievalModalData, setRetrievalModalData] = useState<VisualizationRetrievalState | null>(null);
   const [activeRetrievalTab, setActiveRetrievalTab] = useState(0);
   const [insightMapModalOpen, setInsightMapModalOpen] = useState(false);
+  const [pendingRetrievalClarification, setPendingRetrievalClarification] = useState<{
+    messageId: string;
+    originalQuery: string;
+    question: string;
+  } | null>(null);
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, Record<string, string>>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -403,7 +449,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     workflow: '',
     conversational: '',
   });
-  const selectedPricing = MODEL_PRICING[selectedModel];
   const isLandGisChat = chatCategory === 'land-gis';
   const isInsightChat = chatCategory === 'insight-generation';
   const selectedInsightMap = runtimeGeneratedMaps.find((map) => map.id === selectedInsightMapId) || null;
@@ -470,6 +515,27 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     );
   };
 
+  const initializeClarificationAnswers = (messageId: string, clarification: VisualizationRetrievalClarification) => {
+    const values = (clarification.fields || []).reduce<Record<string, string>>((acc, field) => {
+      acc[field.field] = defaultClarificationValue(field);
+      return acc;
+    }, {});
+    setClarificationAnswers((current) => ({
+      ...current,
+      [messageId]: values,
+    }));
+  };
+
+  const updateClarificationAnswer = (messageId: string, field: string, value: string) => {
+    setClarificationAnswers((current) => ({
+      ...current,
+      [messageId]: {
+        ...(current[messageId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
   const startHiddenDataRetrieval = (query: string, messageId: string) => {
     closeRetrievalSource(messageId);
     updateRetrievalForMessage(messageId, {
@@ -478,6 +544,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       retrievalIntent: undefined,
       sqlQuery: undefined,
       resultSet: undefined,
+      clarification: undefined,
       tokenEvents: [],
       metrics: undefined,
       error: undefined,
@@ -489,7 +556,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       params.set('session_id', storedSession);
     }
 
-    const source = new EventSource(`${API_BASE}/ask_stream_data_retrieval?${params.toString()}`);
+    const source = new EventSource(`${API_BASE}/aks_stream_data_retrieval_agent_v2?${params.toString()}`);
     retrievalSourcesRef.current.set(messageId, source);
 
     source.onmessage = (event) => {
@@ -506,6 +573,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           if (sessionId) {
             window.localStorage.setItem('visualization-data-retrieval-session-id', sessionId);
           }
+          updateRetrievalForMessage(messageId, { agentRoute: 'data_retrieval_agent_v2' });
           break;
         }
         case 'agent_route': {
@@ -531,6 +599,23 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           });
           break;
         }
+        case 'clarification_required': {
+          const clarification = (payload.content || {}) as VisualizationRetrievalClarification;
+          const question =
+            clarification.clarification_question ||
+            clarification.message ||
+            clarification.questions?.[0] ||
+            'Please clarify the requested values.';
+          const originalQuery = clarification.original_query || query;
+          setPendingRetrievalClarification({ messageId, originalQuery, question });
+          initializeClarificationAnswers(messageId, clarification);
+          updateRetrievalForMessage(messageId, {
+            status: 'needs_clarification',
+            clarification,
+            error: undefined,
+          });
+          break;
+        }
         case 'token_usage': {
           updateRetrievalForMessage(messageId, (current) => ({
             ...current,
@@ -547,9 +632,14 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         case 'done': {
           updateRetrievalForMessage(messageId, (current) => ({
             ...current,
-            status: current.resultSet?.rows?.length ? 'success' : 'error',
+            status:
+              current.status === 'needs_clarification'
+                ? 'needs_clarification'
+                : current.resultSet?.rows?.length
+                  ? 'success'
+                  : 'error',
             metrics: payload.metrics,
-            error: current.resultSet?.rows?.length
+            error: current.status === 'needs_clarification' || current.resultSet?.rows?.length
               ? current.error
               : current.error || 'Data retrieval completed without a result set.',
           }));
@@ -576,6 +666,53 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     };
   };
 
+  const submitRetrievalClarification = (messageId: string, retrieval: VisualizationRetrievalState) => {
+    const clarification = retrieval.clarification;
+    const originalQuery = clarification?.original_query || pendingRetrievalClarification?.originalQuery || '';
+    const values = clarificationAnswers[messageId] || {};
+    const missingFields = missingRequiredClarificationFields(clarification, values);
+    const answer = buildClarificationAnswer(clarification, values).trim();
+    if (!originalQuery || !answer || missingFields.length > 0) {
+      updateRetrievalForMessage(messageId, {
+        error:
+          missingFields.length > 0
+            ? `Please answer: ${missingFields.map(clarificationFieldLabel).join(', ')}.`
+            : 'Please answer the clarification fields before rerunning data retrieval.',
+      });
+      return;
+    }
+
+    const assistantId = (Date.now() + 1).toString();
+    const combinedQuery = `${originalQuery}\nClarification answer:\n${answer}`;
+    latestRetrievalMessageIdRef.current = assistantId;
+    onRetrievalOutput?.(null);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: 'user', content: answer },
+      {
+        id: assistantId,
+        role: 'assistant',
+        content: '**Data Retrieval V2:** Rerunning with your clarification.',
+        retrieval: {
+          status: 'running',
+          agentRoute: 'data_retrieval_agent_v2',
+          tokenEvents: [],
+        },
+      },
+    ]);
+    setInput('');
+    chatDraftsRef.current['land-gis'] = '';
+    setPendingRetrievalClarification(null);
+    setClarificationAnswers((current) => {
+      const next = { ...current };
+      delete next[messageId];
+      return next;
+    });
+    setIsLoading(true);
+    startHiddenDataRetrieval(combinedQuery, assistantId);
+    setIsLoading(false);
+  };
+
   const handleSend = async () => {
     const query = input.trim();
     if (!query || isLoading) return;
@@ -594,16 +731,22 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       chatDraftsRef.current['insight-generation'] = '';
       setIsLoading(true);
       try {
-        const output = await requestInsightGeneration(selectedInsightMap, query, selectedModel);
+        const output = await requestInsightGeneration(selectedInsightMap, query);
+        const usageRow = output.usage.ledger[0];
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          model: selectedModel,
+          provider: usageRow?.provider || MODULE7_RUNTIME_PROVIDER,
+          region: usageRow?.region || MODULE7_RUNTIME_REGION,
+          model: usageRow?.model || MODULE7_RUNTIME_MODEL,
           query_preview: `Insights: ${query}`.substring(0, 80),
           input_tokens: output.usage.total_input_tokens,
           cached_input_tokens: output.usage.total_cached_input_tokens,
           output_tokens: output.usage.total_output_tokens,
           total_tokens: output.usage.total_tokens,
+          input_cost_usd: usageRow?.input_cost_usd ?? usageRow?.input_cost ?? 0,
+          cached_input_cost_usd: usageRow?.cached_input_cost_usd ?? usageRow?.cached_input_cost ?? 0,
+          output_cost_usd: usageRow?.output_cost_usd ?? usageRow?.output_cost ?? 0,
           total_cost_usd: output.usage.total_cost_usd,
         };
         setMessages((previous) => [
@@ -632,6 +775,35 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     }
     if (!isLandGisChat) return;
 
+    if (pendingRetrievalClarification) {
+      const answer = query;
+      const assistantId = (Date.now() + 1).toString();
+      const combinedQuery = `${pendingRetrievalClarification.originalQuery}\nClarification answer: ${answer}`;
+      latestRetrievalMessageIdRef.current = assistantId;
+      onRetrievalOutput?.(null);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: 'user', content: answer },
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '**Data Retrieval V2:** Rerunning with your clarification.',
+          retrieval: {
+            status: 'running',
+            agentRoute: 'data_retrieval_agent_v2',
+            tokenEvents: [],
+          },
+        },
+      ]);
+      setInput('');
+      chatDraftsRef.current['land-gis'] = '';
+      setPendingRetrievalClarification(null);
+      setIsLoading(true);
+      startHiddenDataRetrieval(combinedQuery, assistantId);
+      setIsLoading(false);
+      return;
+    }
+
     const assistantId = (Date.now() + 1).toString();
     latestRetrievalMessageIdRef.current = assistantId;
     onRetrievalOutput?.(null);
@@ -654,7 +826,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
-          model: selectedModel,
           demo_mode: demoMode,
         }),
       });
@@ -697,12 +868,17 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         const newRow: TokenLedgerRow = data.ledger_row || {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          model: selectedModel,
+          provider: 'AWS Bedrock',
+          region: 'ap-south-1',
+          model: 'moonshotai.kimi-k2.5',
           query_preview: query.substring(0, 80),
           input_tokens: data.usage.input_tokens || 0,
           cached_input_tokens: data.usage.cached_input_tokens || 0,
           output_tokens: data.usage.output_tokens || 0,
           total_tokens: data.usage.total_tokens || 0,
+          input_cost_usd: data.cost?.input_cost || 0,
+          cached_input_cost_usd: data.cost?.cached_input_cost || 0,
+          output_cost_usd: data.cost?.output_cost || 0,
           total_cost_usd: data.cost?.total_cost || 0,
         };
         setTokenLedger((prev) => [...prev, newRow]);
@@ -866,15 +1042,17 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                       )}
 
                       {/* Output actions */}
-                      {m.role === 'assistant' && m.intentOutput && (
+                      {m.role === 'assistant' && (m.intentOutput || m.retrieval) && (
                         <div className="flex flex-wrap items-center gap-2 self-start">
-                          <button
-                            onClick={() => openModal(m)}
-                            className="flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-widest transition-all hover:bg-indigo-100 hover:shadow-sm"
-                          >
-                            <ChevronDown className="h-3 w-3" />
-                            View Full Output
-                          </button>
+                          {m.intentOutput && (
+                            <button
+                              onClick={() => openModal(m)}
+                              className="flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-bold text-indigo-600 uppercase tracking-widest transition-all hover:bg-indigo-100 hover:shadow-sm"
+                            >
+                              <ChevronDown className="h-3 w-3" />
+                              View Full Output
+                            </button>
+                          )}
 
                           {m.retrieval?.status === 'running' && (
                             <button
@@ -886,7 +1064,109 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                             </button>
                           )}
 
-                          {Boolean(m.retrieval?.resultSet?.rows?.length) && m.retrieval?.sqlQuery && (
+                          {m.retrieval?.status === 'needs_clarification' && (
+                            <div className="w-full max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900 shadow-sm">
+                              <div className="flex items-start gap-2">
+                                <span className="text-base font-black leading-none text-red-500">?</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-extrabold uppercase tracking-widest text-[10px] text-amber-700">
+                                    {m.retrieval.clarification?.stopped_at_stage?.replace(/_/g, ' ') || 'Data Retrieval V2'} Clarification
+                                  </p>
+                                  <p className="mt-1 font-semibold leading-5">
+                                    {m.retrieval.clarification?.clarification_question ||
+                                      m.retrieval.clarification?.message ||
+                                      'Please clarify the requested values.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {m.retrieval.clarification?.next_action ? (
+                                <p className="mt-2 text-[11px] font-medium leading-4 text-amber-800">
+                                  {m.retrieval.clarification.next_action}
+                                </p>
+                              ) : null}
+
+                              {Array.isArray(m.retrieval.clarification?.fields) && m.retrieval.clarification.fields.length > 0 ? (
+                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                  {m.retrieval.clarification.fields.map((field) => {
+                                    const label = clarificationFieldLabel(field);
+                                    const value = clarificationAnswers[m.id]?.[field.field] ?? defaultClarificationValue(field);
+                                    return (
+                                      <label key={field.field} className="block min-w-0">
+                                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
+                                          {label}
+                                        </span>
+                                        {field.help_text ? (
+                                          <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700">
+                                            {field.help_text}
+                                          </span>
+                                        ) : null}
+                                        {field.type === 'select' ? (
+                                          <select
+                                            value={value}
+                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
+                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                          >
+                                            {(field.options || []).map((option) => (
+                                              <option key={option.value} value={option.value}>
+                                                {option.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        ) : field.type === 'textarea' ? (
+                                          <textarea
+                                            rows={3}
+                                            value={value}
+                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
+                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
+                                            className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                          />
+                                        ) : (
+                                          <input
+                                            type="text"
+                                            value={value}
+                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
+                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
+                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                          />
+                                        )}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <label className="mt-4 block">
+                                  <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
+                                    Answer
+                                  </span>
+                                  <textarea
+                                    rows={3}
+                                    value={clarificationAnswers[m.id]?.clarification_answer || ''}
+                                    onChange={(event) => updateClarificationAnswer(m.id, 'clarification_answer', event.target.value)}
+                                    placeholder="Provide the missing detail"
+                                    className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                  />
+                                </label>
+                              )}
+
+                              {m.retrieval.error ? (
+                                <p className="mt-2 text-[11px] font-bold text-red-600">{m.retrieval.error}</p>
+                              ) : null}
+
+                              <div className="mt-3 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => submitRetrievalClarification(m.id, m.retrieval as VisualizationRetrievalState)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-700"
+                                >
+                                  <Send className="h-3 w-3" />
+                                  Submit Answer
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {Boolean(m.retrieval?.resultSet?.rows?.length) && (
                             <button
                               onClick={() => openRetrievalModal(m.retrieval as VisualizationRetrievalState)}
                               className="flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest transition-all hover:bg-emerald-100 hover:shadow-sm"
@@ -968,8 +1248,10 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                 }
               }}
               placeholder={
-                isLandGisChat
-                  ? 'Ask the Visualization Agent what to analyze or visualize...'
+                pendingRetrievalClarification
+                  ? 'Answer the data retrieval clarification...'
+                  : isLandGisChat
+                    ? 'Ask the Visualization Agent what to analyze or visualize...'
                   : 'Ask for anything about insights from the loaded map...'
               }
               disabled={isLoading}
@@ -981,7 +1263,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
               disabled={isLoading || !input.trim() || (isInsightChat && !selectedInsightMap)}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-40"
               title={
-                isLandGisChat
+                pendingRetrievalClarification
+                  ? 'Submit clarification answer'
+                  : isLandGisChat
                   ? 'Send message'
                   : selectedInsightMap
                     ? 'Generate insights for the selected map'
@@ -1014,7 +1298,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             </label>
             {isLandGisChat ? (
               <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
-                Module 1 + Retrieval Active
+                {pendingRetrievalClarification ? 'Answer Retrieval Clarification' : 'Module 1 + Retrieval V2 Active'}
               </span>
             ) : (
               <button
@@ -1029,23 +1313,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             )}
           </div>
 
-          {/* Model selector */}
+          {/* Runtime model information */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Model:
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
+                {isLandGisChat ? MODULE1_RUNTIME_MODEL : MODULE7_RUNTIME_MODEL}
               </span>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200"
-              >
-                {MODELS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
               {isLandGisChat ? (
                 <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
                   <input
@@ -1062,9 +1335,14 @@ const ChatSection: React.FC<ChatSectionProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                 Enter to send - Shift+Enter for newline
               </p>
-              {selectedPricing && (
+              {isLandGisChat ? (
                 <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                  ${selectedPricing.input.toFixed(3)} in / ${selectedPricing.cached_input.toFixed(3)} cached / ${selectedPricing.output.toFixed(3)} out per 1M
+                  Module 1 runtime: {MODULE1_RUNTIME_PROVIDER} / {MODULE1_RUNTIME_MODEL} / {MODULE1_RUNTIME_REGION} -
+                  ${MODULE1_RUNTIME_PRICING.input.toFixed(2)} in / ${MODULE1_RUNTIME_PRICING.output.toFixed(2)} out per 1M
+                </p>
+              ) : (
+                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                  Module 7 runtime: {MODULE7_RUNTIME_PROVIDER} / {MODULE7_RUNTIME_MODEL} / {MODULE7_RUNTIME_REGION}
                 </p>
               )}
             </div>
@@ -1327,7 +1605,22 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr className="bg-slate-100">
-                            {['#', 'Time', 'Model', 'Query', 'In', 'Cached', 'Out', 'Total', 'Cost'].map(
+                            {[
+                              '#',
+                              'Time',
+                              'Provider',
+                              'Region',
+                              'Model',
+                              'Query',
+                              'Input Tokens',
+                              'Cached',
+                              'Output Tokens',
+                              'Total Tokens',
+                              'Input Cost',
+                              'Cached Cost',
+                              'Output Cost',
+                              'Total Cost',
+                            ].map(
                               (h) => (
                                 <th
                                   key={h}
@@ -1349,7 +1642,15 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                                 {row.timestamp}
                               </td>
                               <td className="border border-slate-200 px-3 py-2 text-slate-500">
-                                {row.model}
+                                {row.provider || 'AWS Bedrock'}
+                              </td>
+                              <td className="border border-slate-200 px-3 py-2 font-mono text-slate-500">
+                                {row.region || 'ap-south-1'}
+                              </td>
+                              <td className="max-w-[240px] border border-slate-200 px-3 py-2 font-mono text-slate-700">
+                                <span className="block whitespace-normal break-words" title={row.model}>
+                                  {row.model}
+                                </span>
                               </td>
                               <td className="border border-slate-200 px-3 py-2 text-slate-700 max-w-[200px] truncate">
                                 {row.query_preview}
@@ -1365,6 +1666,15 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                               </td>
                               <td className="border border-slate-200 px-3 py-2 font-mono font-bold text-slate-800">
                                 {row.total_tokens.toLocaleString()}
+                              </td>
+                              <td className="border border-slate-200 px-3 py-2 font-mono text-emerald-600">
+                                ${(row.input_cost_usd || 0).toFixed(6)}
+                              </td>
+                              <td className="border border-slate-200 px-3 py-2 font-mono text-emerald-600">
+                                ${(row.cached_input_cost_usd || 0).toFixed(6)}
+                              </td>
+                              <td className="border border-slate-200 px-3 py-2 font-mono text-emerald-600">
+                                ${(row.output_cost_usd || 0).toFixed(6)}
                               </td>
                               <td className="border border-slate-200 px-3 py-2 font-mono text-emerald-600">
                                 ${row.total_cost_usd.toFixed(6)}

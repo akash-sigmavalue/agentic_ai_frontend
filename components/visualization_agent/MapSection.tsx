@@ -1239,24 +1239,57 @@ function Module31TokenLedger({ config }: { config: GeneratedMapConfig }) {
         Module 3.1 Token Ledger - ${usage.total_cost_usd.toFixed(6)} / {usage.total_tokens.toLocaleString()} tokens
       </summary>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[520px] text-left text-[11px]">
+        <div className="mb-3 grid gap-2 sm:grid-cols-5">
+          <span>Calls: {usage.total_llm_calls}</span>
+          <span>Input: {usage.total_input_tokens.toLocaleString()}</span>
+          <span>Cached: {usage.total_cached_input_tokens.toLocaleString()}</span>
+          <span>Output: {usage.total_output_tokens.toLocaleString()}</span>
+          <span>Total: {usage.total_tokens.toLocaleString()}</span>
+        </div>
+        <table className="w-full min-w-[1120px] text-left text-[11px]">
           <thead className="text-violet-500">
             <tr>
               <th className="py-1 pr-3">Call</th>
+              <th className="py-1 pr-3">Step</th>
+              <th className="py-1 pr-3">Provider</th>
+              <th className="py-1 pr-3">Region</th>
+              <th className="py-1 pr-3">Endpoint</th>
+              <th className="py-1 pr-3">Model</th>
+              <th className="py-1 pr-3">API Model</th>
               <th className="py-1 pr-3">Input</th>
+              <th className="py-1 pr-3">Cached</th>
               <th className="py-1 pr-3">Output</th>
               <th className="py-1 pr-3">Tokens</th>
-              <th className="py-1 pr-3">Cost</th>
+              <th className="py-1 pr-3">Input Cost</th>
+              <th className="py-1 pr-3">Cached Cost</th>
+              <th className="py-1 pr-3">Output Cost</th>
+              <th className="py-1 pr-3">Total Cost</th>
             </tr>
           </thead>
           <tbody>
             {usage.ledger.map((row) => (
               <tr key={row.call_name} className="border-t border-violet-200/70">
                 <td className="py-1.5 pr-3 font-bold">{row.call_name}</td>
+                <td className="py-1.5 pr-3">{row.step || '-'}</td>
+                <td className="py-1.5 pr-3">{row.provider || 'AWS Bedrock'}</td>
+                <td className="py-1.5 pr-3 font-mono">{row.region || 'ap-south-1'}</td>
+                <td className="py-1.5 pr-3">{row.endpoint_type || 'bedrock-mantle'}</td>
+                <td className="max-w-[220px] py-1.5 pr-3 font-mono">
+                  <span className="block whitespace-normal break-words" title={row.model}>{row.model}</span>
+                </td>
+                <td className="max-w-[220px] py-1.5 pr-3 font-mono">
+                  <span className="block whitespace-normal break-words" title={row.api_model || row.model}>
+                    {row.api_model || row.model}
+                  </span>
+                </td>
                 <td className="py-1.5 pr-3">{row.input_tokens.toLocaleString()}</td>
+                <td className="py-1.5 pr-3">{row.cached_input_tokens.toLocaleString()}</td>
                 <td className="py-1.5 pr-3">{row.output_tokens.toLocaleString()}</td>
                 <td className="py-1.5 pr-3">{row.total_tokens.toLocaleString()}</td>
-                <td className="py-1.5 pr-3">${(row.total_cost || 0).toFixed(6)}</td>
+                <td className="py-1.5 pr-3">${Number(row.input_cost_usd ?? row.input_cost ?? 0).toFixed(6)}</td>
+                <td className="py-1.5 pr-3">${Number(row.cached_input_cost_usd ?? row.cached_input_cost ?? 0).toFixed(6)}</td>
+                <td className="py-1.5 pr-3">${Number(row.output_cost_usd ?? row.output_cost ?? 0).toFixed(6)}</td>
+                <td className="py-1.5 pr-3 font-bold">${Number(row.total_cost_usd ?? row.total_cost ?? 0).toFixed(6)}</td>
               </tr>
             ))}
           </tbody>
