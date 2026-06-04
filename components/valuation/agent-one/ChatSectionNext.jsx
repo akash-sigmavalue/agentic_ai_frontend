@@ -658,7 +658,7 @@ function ListingTable({ listings, dbTransactions }) {
             {lst.project_name || "—"}
             {lst.is_fallback && (
               <span
-                title="Data found via LLM search fallback (scraping failed)"
+                title="Data found via Agent search fallback (scraping failed)"
                 className="ml-2 inline-flex items-center rounded-full bg-orange-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-400 border border-orange-400/20"
               >
                 Fallback
@@ -1091,7 +1091,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
-                      {lst.plot_derived_by || "llm"}
+                      {lst.plot_derived_by || "Agent"}
                     </span>
                   </td>
                 </>
@@ -1953,7 +1953,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
         {raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
-              <span className="flex items-center gap-2">🧾 LLM Reasoning Report</span>
+              <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
               <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
             {showReport && (
@@ -3258,25 +3258,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (!factData || !subject || isFactorialAnalysisStreaming) return;
 
     setIsFactorialAnalysisStreaming(true);
-    setStreamingNote("Sending factorial data to LLM for adjustment analysis...");
-    setCurrentStage("Stage 5: LLM Factorial Analysis");
+    setStreamingNote("Sending factorial data to Agent for adjustment analysis...");
+    setCurrentStage("Stage 5: Agent Factorial Analysis");
 
     setMessages((prev) => {
       const existingIndex = prev.findIndex(m =>
         m.meta === "factorial analysis results" ||
         m.meta === "factorial analysis done" ||
         m.meta === "factorial analysis start" ||
-        m.content === "Running LLM Factoring..."
+        m.content === "Running Agent Factoring..."
       );
 
       if (existingIndex !== -1) {
         const next = [...prev];
-        next[existingIndex] = { role: "assistant", content: "Running LLM Factoring...", meta: "Live" };
+        next[existingIndex] = { role: "assistant", content: "Running Agent Factoring...", meta: "Live" };
         return next;
       }
       return [
         ...prev,
-        { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
+        { role: "assistant", content: "Running Agent Factoring...", meta: "Live" }
       ];
     });
 
@@ -3293,7 +3293,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`LLM Factoring request failed with status ${response.status}`);
+        throw new Error(`Agent Factoring request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -3314,9 +3314,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           onEvent?.(event);
           let summary = "Pipeline update received.";
-          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running LLM factoring analysis...";
-          else if (event.type === "factorial_analysis_result") summary = `🤖 LLM Factoring ready.`;
-          else if (event.type === "factorial_analysis_done") summary = "LLM Factoring completed.";
+          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Agent factoring analysis...";
+          else if (event.type === "factorial_analysis_result") summary = `🤖 Agent Factoring ready.`;
+          else if (event.type === "factorial_analysis_done") summary = "Agent Factoring completed.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
@@ -3350,7 +3350,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   model_breakdown: nextModelBreakdown,
                   cost_usd: (prev.cost_usd || 0) + addedCost,
                   last_stage_tokens: total,
-                  last_stage_name: "LLM Factoring (Stage 5)"
+                  last_stage_name: "Agent Factoring (Stage 5)"
                 };
               });
             }
@@ -3396,7 +3396,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           next[targetIndex] = {
             ...next[targetIndex],
             role: "assistant",
-            content: `LLM Factoring error: ${error.message}`,
+            content: `Agent Factoring error: ${error.message}`,
             meta: "Error",
           };
         }

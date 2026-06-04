@@ -267,7 +267,7 @@ export default function SpatialAnalysisView({
                <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"/> Loading Dataset</div>
                <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" style={{animationDelay: "0.2s"}}/> Extracting OSM Context</div>
                <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" style={{animationDelay: "0.4s"}}/> Analyzing Variables</div>
-               <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" style={{animationDelay: "0.6s"}}/> LLM Reasoning Steps</div>
+               <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" style={{animationDelay: "0.6s"}}/> Agent Reasoning Steps</div>
             </div>
           </div>
         ) : error ? (
@@ -280,7 +280,7 @@ export default function SpatialAnalysisView({
            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-60 pointer-events-none p-6 text-center">
               <MapIcon className="w-20 h-20 text-slate-300 stroke-[1.5] mb-6" />
               <h2 className="text-2xl font-bold text-slate-400">No Data Yet</h2>
-              <p className="mt-2 text-sm text-slate-400 max-w-md">Click "Run Spatial Workflow" to extract map data, perform LLM analysis, and render business insights.</p>
+              <p className="mt-2 text-sm text-slate-400 max-w-md">Click "Run Spatial Workflow" to extract map data, perform Agent analysis, and render business insights.</p>
            </div>
         ) : (
            <div className="absolute inset-0 p-4 pb-12 overflow-x-hidden pwa-scrollbar">
@@ -436,7 +436,7 @@ export default function SpatialAnalysisView({
                  <div className="bg-slate-900 rounded-2xl p-5 w-full overflow-hidden shadow-lg border border-slate-800">
                    <div className="flex items-center gap-2 mb-4">
                      <ListTree className="w-5 h-5 text-[#38bdf8]" />
-                     <h3 className="text-sm font-bold text-white tracking-wide uppercase">LLM Requirement Deciphering & Scope</h3>
+                     <h3 className="text-sm font-bold text-white tracking-wide uppercase">Agent Requirement Deciphering & Scope</h3>
                    </div>
                    <pre className="text-xs text-sky-200 overflow-x-auto whitespace-pre-wrap leading-relaxed scroolbar-hide">
                      {JSON.stringify(data.planner, null, 2)}
@@ -460,7 +460,7 @@ export default function SpatialAnalysisView({
                     
                     <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-lg">
                        <h3 className="text-sm font-bold tracking-wide uppercase text-white mb-4 flex items-center gap-2">
-                         <MapPin className="w-5 h-5 text-[#f472b6]" /> LLM Execution Summary
+                         <MapPin className="w-5 h-5 text-[#f472b6]" /> Agent Execution Summary
                        </h3>
                        <pre className="text-xs text-pink-200 overflow-x-auto whitespace-pre-wrap leading-relaxed scroolbar-hide">
                          {JSON.stringify(data.execution_summary, null, 2)}

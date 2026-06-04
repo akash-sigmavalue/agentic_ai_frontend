@@ -241,7 +241,7 @@ function StageAccordionCard({ stage, catalog, index, isExpanded, onToggle, showR
             </div>
           ) : (
             <p className="m-0 rounded-xl border px-4 py-6 text-center text-sm" style={{ borderColor: "var(--border-soft)", color: "var(--text-muted)" }}>
-              {stage.phase === "running" ? "Waiting for the LLM to finish this stage..." : "No execution steps were returned."}
+              {stage.phase === "running" ? "Waiting for the Agent to finish this stage..." : "No execution steps were returned."}
             </p>
           )}
 
@@ -292,7 +292,7 @@ function TokenLedger({ tokenEvents = [], totalTokens = 0 }) {
           </div>
         ) : (
           <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
-            Token usage appears as each LLM stage completes.
+            Token usage appears as each Agent stage completes.
           </p>
         )}
       </div>
