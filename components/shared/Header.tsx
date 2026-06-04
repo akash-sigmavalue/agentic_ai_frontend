@@ -70,17 +70,17 @@ const Header = () => {
             <span className={`text-[10px] font-black uppercase tracking-widest ${pillTextClass}`}>WORKFLOW</span>
           </div> */}
           <Link
-            href="/"
+            href="/portfolio-management"
             className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${
-              pathname === '/'
+              pathname === '/portfolio-management'
                 ? isDark
                   ? 'bg-indigo-950 border-indigo-800'
                   : 'bg-indigo-50 border-indigo-200'
                 : pillClass
             }`}
           >
-            <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
-            <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
+            <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/portfolio-management' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
+            <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
           </Link>
           <AgentListDropdown />
           {/* <div 
