@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
+import { Building2 } from "lucide-react";
 import ThemeToggle from "@/components/valuation/shared/ThemeToggle";
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
@@ -25,6 +26,44 @@ export default function HomePage() {
   const [amenityUpdates, setAmenityUpdates] = useState(null);
   const [roadUpdates, setRoadUpdates] = useState(null);
 
+  // Resize split panel widths (percentages)
+  const [leftWidth, setLeftWidth] = useState(33); // 33%
+  const [middleWidth, setMiddleWidth] = useState(34); // 34%
+  const containerRef = useRef(null);
+
+  const handleMouseDown = (dividerIndex) => (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startLeft = leftWidth;
+    const startMiddle = middleWidth;
+    const containerWidth = containerRef.current?.getBoundingClientRect().width || 1200;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaPercent = (deltaX / containerWidth) * 100;
+      
+      if (dividerIndex === 0) {
+        // Chat to Workflow divider
+        const newLeft = Math.max(22, Math.min(45, startLeft + deltaPercent));
+        setLeftWidth(newLeft);
+      } else {
+        // Workflow to Map divider
+        const newMiddle = Math.max(22, Math.min(50, startMiddle + deltaPercent));
+        if (leftWidth + newMiddle < 82) {
+          setMiddleWidth(newMiddle);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
   const factorialData = useMemo(() => {
     const ev = [...events].reverse().find(e => e.type === "factorial_results");
     if (!ev || !ev.content) return null;
@@ -46,14 +85,9 @@ export default function HomePage() {
       data.table = data.table.map(row => {
         const update = amenityUpdates.find(d => d.project_name === row.project_name);
         if (update) {
-          // Preserve existing summary if update doesn't have a new one, 
-          // or construct a new one from the updated amenities list
           if (update.amenity_summary) {
             row.amenity_summary = update.amenity_summary;
           } else if (update.amenities) {
-            // If the map only sends a list of amenities, we could calculate counts here,
-            // but for now, let's just make sure we don't break the existing one with a null/undefined score.
-            // We'll update MapSection to send the summary too.
             row.amenities = update.amenities;
           }
         }
@@ -81,12 +115,21 @@ export default function HomePage() {
       <div className="orb orb-two" />
       <div className="orb orb-three" />
 
+      {/* Responsive panel width overrides */}
+      <style>{`
+        @media (min-width: 1280px) {
+          .resize-panel-left { width: calc(${leftWidth}% - 6px) !important; }
+          .resize-panel-middle { width: calc(${middleWidth}% - 6px) !important; }
+          .resize-panel-right { width: calc(${100 - leftWidth - middleWidth}% - 12px) !important; }
+        }
+      `}</style>
+
       <div className="relative z-10 mt-20 flex h-[calc(100vh-5rem)] flex-col">
         <header className="border-b border-border bg-bg-header backdrop-blur-2xl">
           <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-4 px-6 py-4">
             <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] text-white shadow-[0_0_24px_rgba(34,211,238,0.35)]">
-                🏢
+                <Building2 className="h-5 w-5" />
               </div>
               <div>
                 <p className="font-display text-sm uppercase tracking-[0.22em] text-text-primary">
@@ -116,21 +159,57 @@ export default function HomePage() {
         </header>
 
         <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-6">
-          <section className="grid h-full min-h-0 flex-1 gap-4 xl:grid-cols-[1.05fr_1.2fr_0.95fr]">
-            <ChatSection
-              onClear={() => {
-                setEvents([]);
-                setMarkers([]);
-                setMarkers([]);
-              }}
-              onEvent={(event) => setEvents((prev) => [...prev, event])}
-              onMarkersUpdate={(m) => {
-                setMarkers(m);
-              }}
-              factorialData={factorialData}
-            />
-            <WorkflowSection events={events} />
-            <MapSection markers={markers} factorialData={factorialData} onDensityUpdate={setDensityUpdates} onAmenityUpdate={setAmenityUpdates} onRoadUpdate={setRoadUpdates} />
+          <section ref={containerRef} className="flex flex-col xl:flex-row h-full min-h-0 flex-1 gap-4 xl:gap-0">
+            {/* Chat section */}
+            <div className="resize-panel-left w-full xl:h-full min-h-0">
+              <ChatSection
+                onClear={() => {
+                  setEvents([]);
+                  setMarkers([]);
+                }}
+                onEvent={(event) => setEvents((prev) => [...prev, event])}
+                onMarkersUpdate={(m) => {
+                  setMarkers(m);
+                }}
+                factorialData={factorialData}
+              />
+            </div>
+
+            {/* Splitter 1 */}
+            <div 
+              onMouseDown={handleMouseDown(0)}
+              className="hidden xl:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+            >
+              <div className="w-[1px] h-20 bg-white/10 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              </div>
+            </div>
+
+            {/* Workflow Section */}
+            <div className="resize-panel-middle w-full xl:h-full min-h-0">
+              <WorkflowSection events={events} />
+            </div>
+
+            {/* Splitter 2 */}
+            <div 
+              onMouseDown={handleMouseDown(1)}
+              className="hidden xl:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+            >
+              <div className="w-[1px] h-20 bg-white/10 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              </div>
+            </div>
+
+            {/* Map Section */}
+            <div className="resize-panel-right w-full xl:h-full min-h-0">
+              <MapSection markers={markers} factorialData={factorialData} onDensityUpdate={setDensityUpdates} onAmenityUpdate={setAmenityUpdates} onRoadUpdate={setRoadUpdates} />
+            </div>
           </section>
         </div>
       </div>
