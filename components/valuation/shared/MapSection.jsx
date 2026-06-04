@@ -3,7 +3,38 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap, LayersControl, Circle, Polygon, Polyline } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { API_BASE_URL, apiUrl } from "@/lib/api-client";
+import {
+  Map as MapIcon,
+  Loader2,
+  ClipboardList,
+  Building2,
+  Building,
+  Milestone,
+  Star,
+  Sparkles,
+  HeartPulse,
+  Stethoscope,
+  GraduationCap,
+  School,
+  Bus,
+  Train,
+  Tram,
+  Flower,
+  Trees,
+  ShoppingBag,
+  ShoppingCart,
+  Cpu,
+  Utensils,
+  Shield,
+  Flame,
+  Info,
+  Laptop,
+  Store,
+  Compass
+} from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -27,53 +58,83 @@ const glowingIcon = L.divIcon({
   popupAnchor: [0, -12],
 });
 
-const createCircleIcon = (color, innerColor, emoji, size = 18) => L.divIcon({
+const createCircleIcon = (color, innerColor, symbol, size = 18) => L.divIcon({
   className: "",
   html: `<div style="
       width:${size}px;
       height:${size}px;
       background:${innerColor};
-      border:2px solid #fff;
+      border:2.5px solid #fff;
       border-radius:50%;
       box-shadow:0 0 0 4px ${color}40, 0 0 12px ${color}80;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: ${size * 0.55}px;
-  ">${emoji || ''}</div>`,
+      font-size: ${size * 0.45}px;
+      font-family: monospace;
+      font-weight: 900;
+      color: #ffffff;
+  ">${symbol || ''}</div>`,
   iconSize: [size, size],
   iconAnchor: [size / 2, size / 2],
   popupAnchor: [0, -size / 2],
 });
 
 const icons = {
-  subject: createCircleIcon('#22d3ee', '#0891b2', '🌟', 26),
-  comparable: createCircleIcon('#a78bfa', '#7c3aed', '🏢', 22),
-  amenity_Healthcare: createCircleIcon('#fb7185', '#e11d48', '🏥', 18),
-  amenity_Education: createCircleIcon('#fbbf24', '#d97706', '🎓', 18),
-  amenity_Retail: createCircleIcon('#34d399', '#059669', '🛍️', 18),
-  amenity_Transport: createCircleIcon('#60a5fa', '#2563eb', '🚇', 18),
-  amenity_Leisure: createCircleIcon('#a3e635', '#65a30d', '🌳', 18),
-  amenity_default: createCircleIcon('#9ca3af', '#4b5563', '📍', 16),
+  subject: createCircleIcon('#22d3ee', '#0891b2', 'S', 26),
+  comparable: createCircleIcon('#a78bfa', '#7c3aed', 'C', 22),
+  amenity_Healthcare: createCircleIcon('#fb7185', '#e11d48', '', 18),
+  amenity_Education: createCircleIcon('#fbbf24', '#d97706', '', 18),
+  amenity_Retail: createCircleIcon('#34d399', '#059669', '', 18),
+  amenity_Transport: createCircleIcon('#60a5fa', '#2563eb', '', 18),
+  amenity_Leisure: createCircleIcon('#a3e635', '#65a30d', '', 18),
+  amenity_default: createCircleIcon('#9ca3af', '#4b5563', '', 16),
 };
 
 const rawCategoryIcons = {
-  hospitals: { color: '#ef4444', emoji: '🏥' },
-  clinics: { color: '#f43f5e', emoji: '⚕️' },
-  schools: { color: '#22c55e', emoji: '🎓' },
-  colleges: { color: '#10b981', emoji: '🏫' },
-  bus_stops: { color: '#3b82f6', emoji: '🚌' },
-  metro_stations: { color: '#eab308', emoji: '🚇' },
-  railway_stations: { color: '#a855f7', emoji: '🚉' },
-  gardens: { color: '#84cc16', emoji: '🌳' },
-  parks: { color: '#84cc16', emoji: '🌳' },
-  malls: { color: '#d946ef', emoji: '🛍️' },
-  supermarkets: { color: '#8b5cf6', emoji: '🛒' },
-  it_parks: { color: '#64748b', emoji: '💻' },
-  restaurants_entertainment: { color: '#f97316', emoji: '🍴' },
-  police_stations: { color: '#0ea5e9', emoji: '👮' },
-  fire_stations: { color: '#dc2626', emoji: '🔥' },
+  hospitals: { color: '#ef4444' },
+  clinics: { color: '#f43f5e' },
+  schools: { color: '#22c55e' },
+  colleges: { color: '#10b981' },
+  bus_stops: { color: '#3b82f6' },
+  metro_stations: { color: '#eab308' },
+  railway_stations: { color: '#a855f7' },
+  gardens: { color: '#84cc16' },
+  parks: { color: '#84cc16' },
+  malls: { color: '#d946ef' },
+  supermarkets: { color: '#8b5cf6' },
+  it_parks: { color: '#64748b' },
+  restaurants_entertainment: { color: '#f97316' },
+  police_stations: { color: '#0ea5e9' },
+  fire_stations: { color: '#dc2626' },
 };
+
+function getCategoryIcon(cat, className = "h-4 w-4") {
+  const key = String(cat).toLowerCase().trim();
+  if (key.includes("hospital")) return <HeartPulse className={`${className} text-red-500`} />;
+  if (key.includes("clinic")) return <Stethoscope className={`${className} text-rose-500`} />;
+  if (key.includes("school")) return <GraduationCap className={`${className} text-emerald-500`} />;
+  if (key.includes("college")) return <School className={`${className} text-teal-500`} />;
+  if (key.includes("bus")) return <Bus className={`${className} text-blue-500`} />;
+  if (key.includes("metro")) return <Train className={`${className} text-amber-500`} />;
+  if (key.includes("railway")) return <Tram className={`${className} text-purple-500`} />;
+  if (key.includes("garden")) return <Flower className={`${className} text-lime-500`} />;
+  if (key.includes("park")) return <Trees className={`${className} text-green-500`} />;
+  if (key.includes("mall")) return <ShoppingBag className={`${className} text-pink-500`} />;
+  if (key.includes("supermarket")) return <ShoppingCart className={`${className} text-violet-500`} />;
+  if (key.includes("it") || key.includes("office") || key.includes("computer")) return <Cpu className={`${className} text-slate-500`} />;
+  if (key.includes("restaurant") || key.includes("food") || key.includes("eat")) return <Utensils className={`${className} text-orange-500`} />;
+  if (key.includes("police")) return <Shield className={`${className} text-sky-500`} />;
+  if (key.includes("fire")) return <Flame className={`${className} text-red-600`} />;
+  return <Info className={`${className} text-slate-400`} />;
+}
+
+function getCbdIcon(type, className = "h-4 w-4") {
+  const key = String(type).toLowerCase().trim();
+  if (key.includes("traditional")) return <Building className={`${className} text-amber-500`} />;
+  if (key.includes("park") || key.includes("sez")) return <Laptop className={`${className} text-purple-500`} />;
+  return <Store className={`${className} text-cyan-500`} />;
+}
 
 const getIcon = (marker) => {
   if (marker.source === 'subject') return icons.subject;
@@ -104,33 +165,64 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   const map = useMap();
 
   useEffect(() => {
+    let timer;
     if (markers.length > 0 && radius) {
-      const bounds = L.latLngBounds(
-        markers.map(m => [Number(m.lat), Number(m.lng)])
-      );
+      const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
+      if (validMarkers.length > 0) {
+        const bounds = L.latLngBounds(
+          validMarkers.map(m => [Number(m.lat), Number(m.lng)])
+        );
 
-      const latOffset = radius / 111320;
+        const latOffset = radius / 111320;
 
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
 
-      const lngOffsetSW = radius / (111320 * Math.cos(sw.lat * Math.PI / 180));
-      const lngOffsetNE = radius / (111320 * Math.cos(ne.lat * Math.PI / 180));
+        const lngOffsetSW = radius / (111320 * Math.cos(sw.lat * Math.PI / 180));
+        const lngOffsetNE = radius / (111320 * Math.cos(ne.lat * Math.PI / 180));
 
-      const newSW = L.latLng(sw.lat - latOffset, sw.lng - lngOffsetSW);
-      const newNE = L.latLng(ne.lat + latOffset, ne.lng + lngOffsetNE);
+        const newSW = L.latLng(sw.lat - latOffset, sw.lng - lngOffsetSW);
+        const newNE = L.latLng(ne.lat + latOffset, ne.lng + lngOffsetNE);
 
-      const paddedBounds = L.latLngBounds(newSW, newNE);
+        const paddedBounds = L.latLngBounds(newSW, newNE);
 
-      map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
-      setTimeout(() => map.invalidateSize(), 200);
+        if (map && typeof map.fitBounds === 'function') {
+          map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
+          timer = setTimeout(() => {
+            if (map && map._container && typeof map.invalidateSize === 'function') {
+              map.invalidateSize();
+            }
+          }, 200);
+        }
+      }
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [markers, radius, mapMode, map]);
 
   return null;
 }
 
-export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, backendUrl = "http://localhost:8000" }) {
+export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate }) {
+  const [activeTheme, setActiveTheme] = useState("dark");
+
+  useEffect(() => {
+    const getTheme = () => document.documentElement.classList.contains("light") ? "light" : "dark";
+    setActiveTheme(getTheme());
+
+    const observer = new MutationObserver(() => {
+      setActiveTheme(getTheme());
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   const [isMaximized, setIsMaximized] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
@@ -162,14 +254,14 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       const results = await Promise.all(markers.map(async (m) => {
         let res;
         try {
-          res = await fetch(`${backendUrl}/api/local-amenities`, {
+          res = await fetch(apiUrl("/api/local-amenities"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: amenityRadius, city_name: city })
           });
         } catch (fetchErr) {
           console.error("Fetch error for marker:", m, fetchErr);
-          throw new Error(`Connection to backend failed at ${backendUrl}. Please ensure the backend server is running.`);
+          throw new Error(`Connection to backend failed at ${API_BASE_URL}. Please ensure the backend server is running.`);
         }
 
         if (!res.ok) {
@@ -249,14 +341,14 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       const results = await Promise.all(markers.map(async (m) => {
         let res;
         try {
-          res = await fetch(`${backendUrl}/api/builtup-density`, {
+          res = await fetch(apiUrl("/api/builtup-density"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: densityRadius })
           });
         } catch (fetchErr) {
           console.error("Fetch error for density:", m, fetchErr);
-          throw new Error(`Connection to backend failed at ${backendUrl}. Please ensure the backend server is running.`);
+          throw new Error(`Connection to backend failed at ${API_BASE_URL}. Please ensure the backend server is running.`);
         }
 
         if (!res.ok) {
@@ -279,13 +371,33 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
     if (markers.length === 0) return;
     setIsFetchingRoads(true);
     try {
-      const queries = markers.map(m => `way["highway"](around:${roadRadius},${m.lat},${m.lng});`).join('');
+      const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
+      if (validMarkers.length === 0) {
+        setIsFetchingRoads(false);
+        return;
+      }
+      const queries = validMarkers.map(m => `way["highway"](around:${roadRadius},${Number(m.lat)},${Number(m.lng)});`).join('');
       const overpassQuery = `[out:json][timeout:25];(${queries});out geom qt;`;
 
       const res = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
-        body: overpassQuery
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`
       });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Overpass API returned HTTP ${res.status}: ${errText.slice(0, 150)}`);
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        const text = await res.text();
+        throw new Error(`Overpass API returned non-JSON content: ${text.slice(0, 150)}`);
+      }
+
       const data = await res.json();
 
       const newRoads = [];
@@ -378,7 +490,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         lng: markers[i + 1]?.lng,
       }));
 
-      const res = await fetch(`${backendUrl}/api/cbd-identification`, {
+      const res = await fetch(apiUrl("/api/cbd-identification"), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject, comparables }),
@@ -421,10 +533,27 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   const availableProjects = useMemo(() => {
     if (!factorialData?.table) return markers;
     // Map markers to only those present in the factorial table
-    return markers.filter(m => {
+    const mapped = markers.filter(m => {
       const name = m.label || m.project_name;
       return factorialData.table.some(p => p.project_name === name);
     });
+
+    // Deduplicate by project name, prioritizing "Web" data_source
+    const seen = new Map();
+    for (const m of mapped) {
+      const name = (m.label || m.project_name || "").toLowerCase().trim();
+      const existing = seen.get(name);
+      if (!existing) {
+        seen.set(name, m);
+      } else {
+        const currentIsWeb = String(m.data_source || m.source_url ? "Web" : "DB").toLowerCase() === "web";
+        const existingIsWeb = String(existing.data_source || existing.source_url ? "Web" : "DB").toLowerCase() === "web";
+        if (currentIsWeb && !existingIsWeb) {
+          seen.set(name, m);
+        }
+      }
+    }
+    return Array.from(seen.values());
   }, [markers, factorialData]);
 
   const displayedProjects = useMemo(() => {
@@ -484,6 +613,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       </div>
       <div className="w-full flex-1 relative z-0">
         <MapContainer
+          key={activeTheme}
           center={center}
           zoom={15}
           style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
@@ -496,7 +626,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
           />
 
           <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="Dark Map">
+            <LayersControl.BaseLayer checked={activeTheme === "dark"} name="Dark Map">
               <TileLayer
                 attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -514,7 +644,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
             </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="Light Map">
+            <LayersControl.BaseLayer checked={activeTheme === "light"} name="Light Map">
               <TileLayer
                 attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                 url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -641,24 +771,24 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   className: '',
                   html: `<div style="
                     width:22px;height:22px;
-                    background:#f59e0b;border:2px solid #fff;
+                    background:#f59e0b;border:2.5px solid #fff;
                     border-radius:4px;
                     box-shadow:0 0 0 3px rgba(245,158,11,0.3),0 0 12px rgba(245,158,11,0.6);
                     display:flex;align-items:center;justify-content:center;
-                    font-size:11px;
-                  ">🏙</div>`,
+                    font-size:10px;font-family:monospace;font-weight:bold;color:#fff;
+                  ">B</div>`,
                   iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -14],
                 });
                 return (
                   <Marker key={`cbd-${projName}-${ci}`} position={[cbd.lat, cbd.lng]} icon={cbdIcon}>
                     <Popup>
-                      <div className="text-[11px] font-mono p-1">
-                        <strong className="text-[#f59e0b] block mb-1 text-xs">🏙 {cbd.short_name}</strong>
-                        <div style={{ fontSize: '10px', color: '#aaa', marginBottom: '2px' }}>{cbd.name}</div>
-                        <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px', textTransform: 'uppercase' }}>{cbd.type?.replace(/_/g, ' ')}</div>
-                        <div style={{ fontSize: '10px', color: '#22d3ee', fontWeight: 'bold' }}>Near: {projName}</div>
+                      <div className="text-[12px] font-sans p-1">
+                        <strong className="text-[#f59e0b] block mb-1 text-sm">{cbd.short_name}</strong>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginBottom: '2px' }}>{cbd.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim, #64748b)', marginBottom: '4px', textTransform: 'uppercase' }}>{cbd.type?.replace(/_/g, ' ')}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--accent, #22d3ee)', fontWeight: 'bold' }}>Near: {projName}</div>
                         {cbd.distance_km != null && (
-                          <div style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold', marginTop: '2px' }}>Distance: {cbd.distance_km} km</div>
+                          <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 'bold', marginTop: '2px' }}>Distance: {cbd.distance_km} km</div>
                         )}
                       </div>
                     </Popup>
@@ -673,49 +803,47 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   );
 
   return (
-    <section className="panel-shell">
-      <div className="panel-header-shell">
+    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+      <div className="panel-header-shell border-b border-border/60">
         <div className="panel-title-shell">
-          <div className="icon-chip">🗺️</div>
-          <div>
-            <p className="panel-kicker">Visual Layer</p>
-            <h2 className="panel-heading">Graphs, Charts, Maps</h2>
+          <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
+            <MapIcon className="h-5 w-5 text-accent" />
           </div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
-        <div className="panel-pill">{markers.length > 0 ? "LIVE MAP" : "WAITING"}</div>
+        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{markers.length > 0 ? "LIVE MAP" : "WAITING"}</div>
       </div>
 
-      <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar relative z-0">
+      <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
         {factorialData && factorialData.table && (
-          <div className="rounded-2xl border border-border bg-bg-card p-4 shadow-panel flex gap-4 items-end flex-wrap shrink-0 relative z-10">
+          <div className="rounded-2xl border border-border/80 bg-bg-card/80 p-5 shadow-panel flex gap-4 items-end flex-wrap shrink-0 relative z-10">
             <div className="flex-1 min-w-[220px]">
-              <label className="mb-1.5 block pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+              <label className="mb-1.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
                 Map View Mode
               </label>
               <select
                 value={mapMode}
                 onChange={(e) => setMapMode(e.target.value)}
-                className="w-full rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-accent"
+                className="w-full rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-accent font-medium shadow-sm hover:bg-bg-input/80"
               >
-                <option className="bg-bg-card text-text-primary" value="amenity">Amenities Layout</option>
-                <option className="bg-bg-card text-text-primary" value="density">Built-Up Density & Congestion</option>
-                <option className="bg-bg-card text-text-primary" value="roads">Road Infrastructure</option>
-                <option className="bg-bg-card text-text-primary" value="cbd">CBD Proximity</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="amenity">Amenities Layout</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="density">Built-Up Density & Congestion</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="roads">Road Infrastructure</option>
+                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="cbd">CBD Proximity</option>
               </select>
             </div>
 
             {mapMode === "amenity" && availableCategories.length > 0 && (
-              <div className="w-full mt-2 pt-3 border-t border-white/5">
-                <label className="mb-2 block pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+              <div className="w-full mt-2 pt-3.5 border-t border-border/40">
+                <label className="mb-2.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
                   Amenity Filters
                 </label>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <div className="flex flex-wrap gap-x-5 gap-y-2.5">
                   {availableCategories.map(cat => {
                     const label = cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     const isChecked = activeFilters.includes(cat);
-                    const color = rawCategoryIcons[cat]?.color || '#9ca3af';
                     return (
-                      <label key={cat} className="flex items-center gap-1.5 cursor-pointer group">
+                      <label key={cat} className="flex items-center gap-2 cursor-pointer group select-none">
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -726,11 +854,11 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                               setSelectedCategories([...activeFilters, cat]);
                             }
                           }}
-                          className="accent-accent w-3 h-3 bg-bg-deep border-border rounded-sm"
+                          className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded-sm cursor-pointer"
                         />
-                        <div className="flex items-center gap-1">
-                          <span className="text-[12px] leading-none shrink-0">{rawCategoryIcons[cat]?.emoji || '📍'}</span>
-                          <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition">{label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
+                          <span className="text-[11px] text-text-secondary group-hover:text-text-primary transition font-medium">{label}</span>
                         </div>
                       </label>
                     );
@@ -739,16 +867,16 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               </div>
             )}
 
-            <div className="w-full mt-2 pt-3 border-t border-white/5">
-              <label className="mb-2 block pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+            <div className="w-full mt-2 pt-3.5 border-t border-border/40">
+              <label className="mb-2.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
                 Project Visibility
               </label>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
+              <div className="flex flex-wrap gap-x-5 gap-y-2.5">
                 {availableProjects.map((proj, i) => {
                   const name = proj.label || proj.project_name || "Subject";
                   const isChecked = !hiddenProjects.has(name);
                   return (
-                    <label key={i} className="flex items-center gap-1.5 cursor-pointer group">
+                    <label key={i} className="flex items-center gap-2 cursor-pointer group select-none">
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -758,9 +886,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                           else newHidden.delete(name);
                           setHiddenProjects(newHidden);
                         }}
-                        className="accent-accent w-3 h-3 bg-bg-deep border-border rounded-sm"
+                        className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded-sm cursor-pointer"
                       />
-                      <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition">{name}</span>
+                      <span className="text-[11px] text-text-secondary group-hover:text-text-primary transition font-medium">{name}</span>
                     </label>
                   );
                 })}
@@ -769,7 +897,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
             {mapMode !== "cbd" && (
               <div className="flex-[0.5] min-w-[140px]">
-                <label className="mb-1.5 block pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+                <label className="mb-1.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
                   Search Radius (m)
                 </label>
                 <input
@@ -781,7 +909,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                     else setRoadRadius(Number(e.target.value));
                   }}
                   step={100}
-                  className="w-full rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-accent"
+                  className="w-full rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-accent font-medium shadow-sm"
                 />
               </div>
             )}
@@ -790,9 +918,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               <button
                 onClick={handleRefresh}
                 disabled={isFetchingAmenities || isFetchingDensity || isFetchingRoads}
-                className="shrink-0 h-[42px] rounded-xl border border-border bg-accent/10 px-5 text-xs font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep disabled:opacity-50 whitespace-nowrap"
+                className="shrink-0 h-[46px] rounded-xl border border-border bg-accent/10 px-6 text-xs font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep disabled:opacity-50 whitespace-nowrap shadow-sm cursor-pointer"
               >
-                {(isFetchingAmenities || isFetchingDensity || isFetchingRoads) ? "Refreshing..." : "↻ Refresh Data"}
+                {(isFetchingAmenities || isFetchingDensity || isFetchingRoads) ? "Refreshing..." : "Refresh Data"}
               </button>
             )}
           </div>
@@ -803,17 +931,17 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             {typeof window !== 'undefined' && isMaximized ? createPortal(mapContent, document.body) : mapContent}
           </div>
         ) : (
-          <div className="relative flex min-h-[400px] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-dashed border-border bg-bg-card">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.12),transparent_30%),radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.14),transparent_32%)]" />
-            <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(148,163,184,0.16)_1px,transparent_1px)] [background-size:32px_32px]" />
+          <div className="relative flex min-h-[400px] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-dashed border-border bg-bg-card shadow-inner">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.08),transparent_30%),radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.1),transparent_32%)]" />
+            <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:32px_32px]" />
             <div className="relative z-10 max-w-sm px-8 py-10 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent-glow text-3xl text-accent-light">
-                ◌
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/25 text-accent-light shadow-md animate-pulse">
+                <Compass className="h-8 w-8 text-accent" />
               </div>
-              <h3 className="font-display text-base uppercase tracking-[0.14em] text-text-primary">
+              <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
                 Waiting For Coordinates
               </h3>
-              <p className="mt-3 text-sm leading-6 text-text-secondary">
+              <p className="mt-3.5 text-sm leading-6 text-text-secondary">
                 This panel follows the legacy frontend behavior. Once the backend sends coordinates or a map confirmation event, the location map will render here.
               </p>
             </div>
@@ -826,7 +954,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               <div className="rounded-2xl border border-border bg-bg-card p-4 shadow-panel shrink-0 opacity-40 flex items-center justify-between">
                 <span className="text-text-dim text-xs font-bold tracking-widest uppercase">Table is Fullscreen</span>
                 {mapMode === "amenity" && allAmenities.length > 0 && (
-                  <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
                       ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
                       : "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/20"
                     }`}>
@@ -836,15 +964,15 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               </div>
               {typeof window !== 'undefined' ? createPortal(
                 <div className="fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_0_100px_rgba(0,0,0,0.9)] flex flex-col">
-                  <div className="flex items-center justify-between border-b border-border bg-bg-input px-4 py-3 shrink-0">
-                    <span className="font-display text-[11px] uppercase tracking-[0.14em] text-accent-light">
+                  <div className="flex items-center justify-between border-b border-border bg-bg-input px-5 py-4 shrink-0">
+                    <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-accent-light">
                       Fullscreen {mapMode === "amenity" ? "Amenities" : mapMode === "density" ? "Built-up Density" : mapMode === "cbd" ? "CBD Proximity" : "Road Infrastructure"} Table
                     </span>
                     <button
                       onClick={() => setIsTableMaximized(false)}
-                      className="rounded-md bg-accent/10 px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
+                      className="rounded-md bg-accent/10 px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
                     >
-                      ⛕ Close Fullscreen
+                      Close Fullscreen
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
@@ -862,14 +990,25 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 , document.body) : null}
             </>
           ) : (
-            <div className="rounded-2xl border border-border bg-bg-card p-4 shadow-panel shrink-0 flex flex-col">
-              <div className="flex items-center justify-between mb-3 shrink-0">
+            <div className="rounded-2xl border border-border bg-bg-card p-5 shadow-panel shrink-0 flex flex-col">
+              <div className="flex items-center justify-between mb-4 shrink-0 border-b border-border/40 pb-3">
                 <div className="flex items-center gap-3">
-                  <h3 className="font-display text-sm uppercase tracking-[0.14em] text-accent-light flex items-center gap-2">
-                    <span>{mapMode === "amenity" ? '📋' : mapMode === "density" ? '🏙️' : mapMode === "cbd" ? '🏛️' : '🛣️'}</span> {mapMode === "amenity" ? `Amenities Found (${allAmenities.length})` : mapMode === "density" ? 'Built-Up Density & Congestion' : mapMode === "cbd" ? 'CBD Proximity' : 'Nearby Road Infrastructure'}
+                  <h3 className="font-display text-sm font-bold uppercase tracking-[0.14em] text-text-primary flex items-center gap-2">
+                    <span className="text-accent shrink-0">
+                      {mapMode === "amenity" ? (
+                        <ClipboardList className="h-4.5 w-4.5" />
+                      ) : mapMode === "density" ? (
+                        <Building2 className="h-4.5 w-4.5" />
+                      ) : mapMode === "cbd" ? (
+                        <Building className="h-4.5 w-4.5" />
+                      ) : (
+                        <Milestone className="h-4.5 w-4.5" />
+                      )}
+                    </span>{" "}
+                    {mapMode === "amenity" ? `Amenities Found (${allAmenities.length})` : mapMode === "density" ? 'Built-Up Density & Congestion' : mapMode === "cbd" ? 'CBD Proximity' : 'Nearby Road Infrastructure'}
                   </h3>
                   {mapMode === "amenity" && allAmenities.length > 0 && (
-                    <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
                         ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
                         : "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/20"
                       }`}>
@@ -879,9 +1018,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 </div>
                 <button
                   onClick={() => setIsTableMaximized(true)}
-                  className="rounded-md bg-accent/10 px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
+                  className="rounded-md bg-accent/10 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
                 >
-                  ⛶ Maximize
+                  Maximize
                 </button>
               </div>
               <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2">
@@ -913,7 +1052,7 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-6 text-center">
-        <span className="text-3xl">🏛️</span>
+        <Building className="h-8 w-8 text-text-dim" />
         <p className="text-xs text-text-dim italic max-w-[260px]">
           CBD data is computed automatically during analysis. Run the Factorial Table to populate this view.
         </p>
@@ -929,9 +1068,9 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
   });
 
   const typeConfig = {
-    traditional_cbd: { color: '#f59e0b', bg: '#f59e0b15', label: 'Traditional CBD', icon: '🏛️', desc: 'Established central business district with premium Grade-A office stock, institutional presence, and highest footfall.' },
-    business_park: { color: '#a78bfa', bg: '#a78bfa15', label: 'Business Park / SEZ', icon: '💻', desc: 'Planned IT/ITeS or special economic zone with modern infrastructure, large corporate campuses, and talent concentration.' },
-    commercial_hub: { color: '#22d3ee', bg: '#22d3ee15', label: 'Commercial Hub', icon: '🏬', desc: 'Emerging or secondary commercial micro-market with growing retail, office, and mixed-use development.' },
+    traditional_cbd: { color: '#f59e0b', bg: '#f59e0b15', label: 'Traditional CBD', desc: 'Established central business district with premium Grade-A office stock, institutional presence, and highest footfall.' },
+    business_park: { color: '#a78bfa', bg: '#a78bfa15', label: 'Business Park / SEZ', desc: 'Planned IT/ITeS or special economic zone with modern infrastructure, large corporate campuses, and talent concentration.' },
+    commercial_hub: { color: '#22d3ee', bg: '#22d3ee15', label: 'Commercial Hub', desc: 'Emerging or secondary commercial micro-market with growing retail, office, and mixed-use development.' },
   };
 
   // Collect all unique CBDs across all projects for the summary table
@@ -957,7 +1096,7 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
           <div key={projName} className="flex flex-col gap-3 rounded-2xl border border-border/40 p-4 bg-bg-deep/30">
             {/* Project header */}
             <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-              <span className="text-lg">{isSubject ? '🌟' : '🏢'}</span>
+              {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
               <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
                 {projName}
               </h4>
@@ -967,13 +1106,13 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
             {/* CBD cards */}
             <div className="flex flex-col gap-2">
               {cbds.map((cbd, ci) => {
-                const cfg = typeConfig[cbd.type] || { color: '#9ca3af', bg: '#9ca3af15', label: 'CBD', icon: '🏙️', desc: 'Key commercial zone in the city.' };
+                const cfg = typeConfig[cbd.type] || { color: '#9ca3af', bg: '#9ca3af15', label: 'CBD', desc: 'Key commercial zone in the city.' };
                 return (
                   <div key={ci} className="rounded-xl border border-border/30 bg-black/20 overflow-hidden">
                     {/* CBD title row */}
                     <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-white/5">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[15px] shrink-0">{cfg.icon}</span>
+                        <span className="shrink-0">{getCbdIcon(cbd.type, "h-4 w-4")}</span>
                         <div className="min-w-0">
                           <div className="font-bold text-[12px] text-text-primary">{cbd.short_name}</div>
                           <div className="text-[9px] text-text-dim truncate" title={cbd.name}>{cbd.name}</div>
@@ -995,7 +1134,7 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
                         {cbd.lat && cbd.lng && (
                           <span className="font-mono text-[9px] text-text-dim">
-                            📍 {Number(cbd.lat).toFixed(4)}, {Number(cbd.lng).toFixed(4)}
+                            Lat/Lng: {Number(cbd.lat).toFixed(4)}, {Number(cbd.lng).toFixed(4)}
                           </span>
                         )}
                         {cbd.geocode_source && cbd.geocode_source !== 'failed' && (
@@ -1017,8 +1156,8 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
       {/* Combined summary table across all projects */}
       {allCbds.length > 0 && (
         <div className="flex flex-col gap-2 rounded-2xl border border-border/40 p-4 bg-bg-deep/30">
-          <h4 className="font-display text-[11px] uppercase tracking-[0.14em] text-text-dim border-b border-white/5 pb-2 mb-1">
-            🏛️ All Identified CBDs — Summary
+          <h4 className="font-display text-[11px] uppercase tracking-[0.14em] text-text-dim border-b border-white/5 pb-2 mb-1 flex items-center gap-1.5">
+            <Building className="h-3.5 w-3.5 text-accent" /> All Identified CBDs — Summary
           </h4>
           <table className="w-full text-left text-[10px]">
             <thead>
@@ -1031,11 +1170,14 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
             </thead>
             <tbody className="divide-y divide-white/5">
               {allCbds.map((cbd, i) => {
-                const cfg = typeConfig[cbd.type] || { color: '#9ca3af', label: 'CBD', icon: '🏙️' };
+                const cfg = typeConfig[cbd.type] || { color: '#9ca3af', label: 'CBD' };
                 return (
                   <tr key={i} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-2 pr-2">
-                      <div className="font-semibold text-text-primary">{cfg.icon} {cbd.short_name}</div>
+                      <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                        {getCbdIcon(cbd.type, "h-3.5 w-3.5")}
+                        {cbd.short_name}
+                      </div>
                       <div className="text-[8px] text-text-dim truncate max-w-[120px]">{cbd.name}</div>
                     </td>
                     <td className="py-2 pr-2">
@@ -1098,7 +1240,7 @@ function DensityTableContent({ liveDensity, factorialData, markers }) {
         return (
           <div key={i} className="flex flex-col gap-3 rounded-xl border border-border/40 p-3 bg-bg-input/20">
             <div className="flex items-center gap-2 border-b border-border/50 pb-2">
-              <span className="text-base">{isSubject ? '🌟' : '🏢'}</span>
+              {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
               <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
                 {proj.project_name} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px]">SUBJECT</span>}
               </h4>
@@ -1170,9 +1312,9 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
           <div key={project} className="flex flex-col gap-2 rounded-2xl border border-border bg-bg-deep/40 p-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{isSubject ? '🌟' : '🏢'}</span>
+                {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
                 <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
-                  {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px]">SUBJECT</span>}
+                  {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">SUBJECT</span>}
                 </h4>
               </div>
               <div className="flex flex-wrap items-center gap-2 max-w-[50%] justify-end">
@@ -1199,7 +1341,7 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
                     <tr key={i} className="group hover:bg-white/[0.02] transition-colors">
                       <td className="py-2.5 font-medium text-text-primary pr-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-[14px] leading-none shrink-0">{rawCategoryIcons[a.category]?.emoji || '📍'}</span>
+                          <span className="shrink-0">{getCategoryIcon(a.category, "h-3.5 w-3.5")}</span>
                           <span>{a.name}</span>
                         </div>
                       </td>
@@ -1269,14 +1411,14 @@ function RoadsTableContent({ allRoads, radius, markers }) {
           <div key={project} className="flex flex-col gap-2 rounded-2xl border border-border bg-bg-deep/40 p-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{isSubject ? '🌟' : '🏢'}</span>
+                {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
                 <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
-                  {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px]">SUBJECT</span>}
+                  {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">SUBJECT</span>}
                 </h4>
               </div>
               <div className="flex items-center gap-2">
-                <p className="text-[10px] text-text-dim uppercase tracking-widest">Highest Grade</p>
-                <span className={`rounded-lg px-3 py-1 border text-sm font-bold shadow-sm ${typeColor}`}>Type {bestCat}</span>
+                <p className="text-[10px] text-text-dim uppercase tracking-widest font-semibold">Highest Grade</p>
+                <span className={`rounded-lg px-3 py-1 border text-xs font-bold shadow-sm ${typeColor}`}>Type {bestCat}</span>
               </div>
             </div>
 
@@ -1310,8 +1452,8 @@ function RoadsTableContent({ allRoads, radius, markers }) {
           </div>
         );
       })}
-      <p className="mt-2 text-[9px] text-text-dim italic leading-relaxed">
-        * Priority: Type D (Trunk/Motorway) {">"} Type C (Primary) {">"} Type B (Secondary) {">"} Type A (Tertiary/Residential). The highest tier road within the radius determines the property's Road Type score.
+      <p className="mt-2 text-[10px] text-text-dim italic leading-relaxed">
+        * Priority: Type D (Trunk/Motorway) &gt; Type C (Primary) &gt; Type B (Secondary) &gt; Type A (Tertiary/Residential). The highest tier road within the radius determines the property's Road Type score.
       </p>
     </div>
   );

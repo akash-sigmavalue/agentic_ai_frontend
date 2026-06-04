@@ -10,8 +10,6 @@ import ThreeDMapView from './maps/ThreeDMapView';
 import ThreeDMapTimelapseView from './maps/ThreeDMapTimelapseView';
 import SpatialAnalysisView from './maps/SpatialAnalysisView';
 import MapOverlayView from './maps/MapOverlayView';
-import ProjectRateGrowthTimelapse from './maps/timelapse/ProjectRateGrowthTimelapse';
-import LocationRateVolumeTimelapse from './maps/timelapse/LocationRateVolumeTimelapse';
 import HeatmapTimelapseView from './maps/timelapse/HeatmapTimelapseView';
 import { SAMPLE_MAP_OPTIONS } from '@/lib/dashboard/geospatial/sampleMaps';
 import { useSearchParams } from 'next/navigation';
@@ -374,10 +372,6 @@ const MapSection: React.FC<MapSectionProps> = ({
           <ThreeDMapTimelapseView markers={markers} />
         ) : sampleMapMode === 'visualization' ? (
           <SpatialAnalysisView markers={markers} isFullscreen={isMapFullscreen} toggleFullscreen={() => setIsMapFullscreen(!isMapFullscreen)} />
-        ) : sampleMapMode === 'project_rate_growth_timelapse' ? (
-          <ProjectRateGrowthTimelapse />
-        ) : sampleMapMode === 'location_rate_volume_timelapse' ? (
-          <LocationRateVolumeTimelapse />
         ) : sampleMapMode === 'heatmap-timelapse' ? (
           <HeatmapTimelapseView />
         ) : null}

@@ -3,20 +3,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ChatSection from "./ChatSection";
 import MapSection from "./MapSection";
+import ResizableDashboardLayout from "./ResizableDashboardLayout";
 import ThemeToggle from "./ThemeToggle";
 import WorkflowSection from "./WorkflowSection";
+import { API_BASE_URL, apiUrl } from "@/lib/api-client";
+import { downloadStageWordReport } from "@/lib/data-retrieval/stageWordReport";
 
 export default function FrontendDashboard() {
-  const apiBaseUrl = useMemo(
-    () => (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, ""),
-    [],
-  );
+  const apiBaseUrl = useMemo(() => API_BASE_URL, []);
 
   const agentOptions = useMemo(
     () => [
       { value: "auto", label: "Auto Agent" },
       { value: "transaction", label: "Transaction" },
       { value: "project", label: "Project" },
+    ],
+    [],
+  );
+  const pipelineOptions = useMemo(
+    () => [
+      { value: "v1", label: "Agent v1" },
+      { value: "v2", label: "Agent v2" },
+    ],
+    [],
+  );
+  const modelOptions = useMemo(
+    () => [
+      { value: "gpt-4o-mini", label: "GPT-4o mini" },
+      { value: "gpt-5.1", label: "GPT-5.1" },
+      { value: "deepseek.v3.2", label: "AWS Bedrock - DeepSeek V3.2" },
+      { value: "moonshotai.kimi-k2.5", label: "AWS Bedrock - Kimi K2.5" },
     ],
     [],
   );
@@ -29,38 +45,87 @@ export default function FrontendDashboard() {
   const [tokenEvents, setTokenEvents] = useState([]);
   const [sessionId, setSessionId] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("auto");
+  const [selectedPipeline, setSelectedPipeline] = useState("v1");
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const [stageCards, setStageCards] = useState([]);
+  const [pipelineStages, setPipelineStages] = useState([]);
+  const [pipelineCatalog, setPipelineCatalog] = useState([]);
+  const [stageReport, setStageReport] = useState(null);
   const [clarificationState, setClarificationState] = useState({
     awaiting: false,
     meta: null,
     selectedOptions: [],
     otherText: "",
+    fieldValues: {},
   });
 
   const eventSourceRef = useRef(null);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("reai-session-id") || "";
-    const storedAgent = window.localStorage.getItem("reai-selected-agent") || "auto";
-    setSessionId(stored);
-    if (["auto", "transaction", "project"].includes(storedAgent)) {
-      setSelectedAgent(storedAgent);
-    }
+    queueMicrotask(() => {
+      const stored = window.localStorage.getItem("reai-session-id") || "";
+      const storedAgent =
+        window.localStorage.getItem("reai-selected-agent") || "auto";
+      const storedPipeline =
+        window.localStorage.getItem("reai-selected-pipeline") || "v1";
+      const storedModel =
+        window.localStorage.getItem("reai-selected-v2-model") || "gpt-4o-mini";
+      setSessionId(stored);
+      if (["auto", "transaction", "project"].includes(storedAgent)) {
+        setSelectedAgent(storedAgent);
+      }
+      if (["v1", "v2"].includes(storedPipeline)) {
+        setSelectedPipeline(storedPipeline);
+      }
+      if (modelOptions.some((option) => option.value === storedModel)) {
+        setSelectedModel(storedModel);
+      }
+    });
     return () => {
       eventSourceRef.current?.close();
     };
-  }, []);
+  }, [modelOptions]);
 
   function handleAgentChange(nextAgent) {
     setSelectedAgent(nextAgent);
     window.localStorage.setItem("reai-selected-agent", nextAgent);
   }
 
+  function handlePipelineChange(nextPipeline) {
+    setSelectedPipeline(nextPipeline);
+    window.localStorage.setItem("reai-selected-pipeline", nextPipeline);
+  }
+
+  function handleModelChange(nextModel) {
+    setSelectedModel(nextModel);
+    window.localStorage.setItem("reai-selected-v2-model", nextModel);
+  }
+
   function resetRunState() {
     setStageCards([]);
+    setPipelineStages([]);
+    setPipelineCatalog([]);
+    setStageReport(null);
     setMetricsText("Streaming from backend...");
     setTotalTokens(0);
     setTokenEvents([]);
+  }
+
+  function upsertPipelineStage(stage) {
+    if (!stage?.id) {
+      return;
+    }
+    setPipelineStages((current) => {
+      const index = current.findIndex((item) => item.id === stage.id);
+      if (index === -1) {
+        return [...current, stage].sort(
+          (left, right) => (left.order || 0) - (right.order || 0),
+        );
+      }
+      const next = [...current];
+      next[index] = { ...next[index], ...stage };
+      return next;
+    });
   }
 
   function addStageCard(kind, title, payload, subtitle = "", icon = "⚙️") {
@@ -101,7 +166,9 @@ export default function FrontendDashboard() {
 
       next[next.length - 1] = {
         ...last,
-        payload: previousText ? `${previousText}\n${incomingText}` : incomingText,
+        payload: previousText
+          ? `${previousText}\n${incomingText}`
+          : incomingText,
       };
       return next;
     });
@@ -113,7 +180,9 @@ export default function FrontendDashboard() {
       return "Planner returned no concrete steps.";
     }
     return steps
-      .map((step, index) => `${index + 1}. ${String(step).replaceAll("_", " ")}`)
+      .map(
+        (step, index) => `${index + 1}. ${String(step).replaceAll("_", " ")}`,
+      )
       .join("\n");
   }
 
@@ -143,11 +212,15 @@ export default function FrontendDashboard() {
       if (optionId === "no_details") {
         return {
           ...current,
-          selectedOptions: current.selectedOptions.includes(optionId) ? [] : ["no_details"],
+          selectedOptions: current.selectedOptions.includes(optionId)
+            ? []
+            : ["no_details"],
         };
       }
 
-      const filtered = current.selectedOptions.filter((item) => item !== "no_details");
+      const filtered = current.selectedOptions.filter(
+        (item) => item !== "no_details",
+      );
       return {
         ...current,
         selectedOptions: filtered.includes(optionId)
@@ -157,18 +230,71 @@ export default function FrontendDashboard() {
     });
   }
 
+  function formatClarificationAnswerLines(fieldValues, fields) {
+    const lines = [];
+    const schemas = Array.isArray(fields) ? fields : [];
+    const schemaByField = new Map(
+      schemas.map((schema) => [schema.field, schema]),
+    );
+
+    for (const [field, rawValue] of Object.entries(fieldValues || {})) {
+      const value = String(rawValue || "").trim();
+      if (!value) {
+        continue;
+      }
+      const schema = schemaByField.get(field);
+      const label =
+        schema?.label || field.replaceAll("__", ": ").replaceAll("_", " ");
+      lines.push(`${label}: ${value}`);
+    }
+    return lines;
+  }
+
   function buildSubmissionPayload() {
     const freeText = input.trim();
 
-    if (!clarificationState.awaiting || clarificationState.meta?.clarification_type !== "space_filter") {
+    if (clarificationState.awaiting && selectedPipeline === "v2") {
+      const structuredLines = formatClarificationAnswerLines(
+        clarificationState.fieldValues,
+        clarificationState.meta?.fields,
+      );
+      if (!structuredLines.length && !freeText) {
+        return null;
+      }
+      const answerText = [...structuredLines, freeText]
+        .filter(Boolean)
+        .join("\n");
+      const originalQuery = clarificationState.meta?.original_query || "";
+      const requestText = originalQuery
+        ? `${originalQuery}\nClarification answer: ${answerText}`
+        : answerText;
+      return {
+        requestText,
+        displayText: answerText,
+      };
+    }
+
+    if (
+      !clarificationState.awaiting ||
+      clarificationState.meta?.clarification_type !== "space_filter"
+    ) {
       return freeText ? { requestText: freeText, displayText: freeText } : null;
     }
 
-    if (!clarificationState.selectedOptions.length && !freeText && !clarificationState.otherText.trim()) {
+    if (
+      !clarificationState.selectedOptions.length &&
+      !freeText &&
+      !clarificationState.otherText.trim()
+    ) {
       return null;
     }
 
-    const optionMap = new Map((clarificationState.meta.options || []).map((option) => [option.id, option.label]));
+    const optionMap = new Map(
+      (clarificationState.meta.options || []).map((option) => [
+        option.id,
+        option.label,
+      ]),
+    );
     const noDetails = clarificationState.selectedOptions.includes("no_details");
     const requestLines = [
       "Space clarification response:",
@@ -205,7 +331,9 @@ export default function FrontendDashboard() {
     setIsStreaming(false);
     if (metrics) {
       setTotalTokens(metrics.total_tokens || 0);
-      setMetricsText(`Latency: ${metrics.duration_seconds}s | Tokens: ${metrics.total_tokens}`);
+      setMetricsText(
+        `Latency: ${metrics.duration_seconds}s | Tokens: ${metrics.total_tokens}`,
+      );
     }
   }
 
@@ -242,20 +370,30 @@ export default function FrontendDashboard() {
       meta: null,
       selectedOptions: [],
       otherText: "",
+      fieldValues: {},
     });
     setInput("");
     setIsStreaming(true);
     resetRunState();
 
     const params = new URLSearchParams({ question: submission.requestText });
-    if (selectedAgent !== "auto") {
+    if (selectedPipeline === "v1" && selectedAgent !== "auto") {
       params.set("selected_domain", selectedAgent);
     }
     if (sessionId) {
       params.set("session_id", sessionId);
     }
+    if (selectedPipeline === "v2") {
+      params.set("model", selectedModel);
+    }
 
-    const source = new EventSource(`${apiBaseUrl}/ask_stream_data_retrieval?${params.toString()}`);
+    const streamPath =
+      selectedPipeline === "v2"
+        ? "/aks_stream_data_retrieval_agent_v2"
+        : "/ask_stream_data_retrieval";
+    const source = new EventSource(
+      apiUrl(`${streamPath}?${params.toString()}`),
+    );
     eventSourceRef.current = source;
 
     source.onmessage = (message) => {
@@ -280,13 +418,43 @@ export default function FrontendDashboard() {
           );
           break;
         case "start":
-          addStageCard("start", "Request Started", "Incoming query accepted by backend.", "Incoming query accepted by backend.", "🚀");
+          if (selectedPipeline !== "v2") {
+            addStageCard(
+              "start",
+              "Request Started",
+              "Incoming query accepted by backend.",
+              "Incoming query accepted by backend.",
+              "🚀",
+            );
+          }
+          break;
+        case "pipeline_catalog":
+          if (selectedPipeline === "v2") {
+            setPipelineCatalog(
+              Array.isArray(data.content?.stages) ? data.content.stages : [],
+            );
+          }
+          break;
+        case "pipeline_stage":
+          if (selectedPipeline === "v2" && data.content) {
+            upsertPipelineStage(data.content);
+          }
           break;
         case "stage":
-          addStageCard("stage", data.content, "Waiting for stage details...", "Pipeline progress update.", "⚡");
+          if (selectedPipeline !== "v2") {
+            addStageCard(
+              "stage",
+              data.content,
+              "Waiting for stage details...",
+              "Pipeline progress update.",
+              "⚡",
+            );
+          }
           break;
         case "intent":
-          appendStageDetail(`Intent recognized: ${data.content?.intent || "unknown"}`);
+          appendStageDetail(
+            `Intent recognized: ${data.content?.intent || "unknown"}`,
+          );
           break;
         case "plan":
           appendStageDetail(`Plan:\n${summarizePlan(data.content)}`);
@@ -316,9 +484,13 @@ export default function FrontendDashboard() {
           appendStageDetail(`Action: ${data.content}`);
           break;
         case "debug_trace":
+          if (selectedPipeline === "v2") {
+            break;
+          }
           appendStageDetail(
             `Debug: ${data.content?.step || "trace"}\nPhase: ${data.content?.phase || "unknown"}\n${data.content?.summary || "No summary available."}${
-              Array.isArray(data.content?.plan_steps) && data.content.plan_steps.length
+              Array.isArray(data.content?.plan_steps) &&
+              data.content.plan_steps.length
                 ? `\nPlan: ${data.content.plan_steps.join(" -> ")}`
                 : ""
             }${
@@ -330,14 +502,18 @@ export default function FrontendDashboard() {
           break;
         case "token_usage":
           if (data.content) {
-            const stageName = String(data.content.stage || data.content.stage_name || "unknown stage");
+            const stageName = String(
+              data.content.stage || data.content.stage_name || "unknown stage",
+            );
             const event = {
               id: `${stageName}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
               stage: stageName,
               promptTokens: Number(data.content.prompt_tokens || 0),
               completionTokens: Number(data.content.completion_tokens || 0),
               totalTokens: Number(data.content.total_tokens || 0),
-              cumulativeTotalTokens: Number(data.content.cumulative_total_tokens || 0),
+              cumulativeTotalTokens: Number(
+                data.content.cumulative_total_tokens || 0,
+              ),
               cumulativeCostUsd: Number(data.content.cumulative_cost_usd || 0),
             };
             setTokenEvents((current) => [...current, event].slice(-16));
@@ -350,12 +526,23 @@ export default function FrontendDashboard() {
           }
           break;
         case "clarification_required":
-          addStageCard("clarification", "Clarification Needed", data.content?.message || "More detail is needed before the agent can continue.", "Backend is waiting for more detail.", "❓");
+          addStageCard(
+            "clarification",
+            "Clarification Needed",
+            data.content?.clarification_question ||
+              data.content?.message ||
+              "More detail is needed before the agent can continue.",
+            data.content?.stopped_at_stage
+              ? `Stopped at ${data.content.stopped_at_stage.replaceAll("_", ".")}`
+              : "Backend is waiting for more detail.",
+            "❓",
+          );
           setClarificationState({
             awaiting: true,
             meta: data.content,
             selectedOptions: [],
             otherText: "",
+            fieldValues: {},
           });
           setMessages((current) =>
             current.map((item) =>
@@ -381,26 +568,44 @@ export default function FrontendDashboard() {
           );
           break;
         case "error":
-          appendStageDetail(`Issue: ${typeof data.content === "string" ? data.content : JSON.stringify(data.content)}`);
+          appendStageDetail(
+            `Issue: ${typeof data.content === "string" ? data.content : JSON.stringify(data.content)}`,
+          );
           setMessages((current) =>
             current.map((item) =>
               item.id === assistantId
                 ? {
                     ...item,
-                    content: item.content || `Error: ${typeof data.content === "string" ? data.content : JSON.stringify(data.content)}`,
+                    content:
+                      item.content ||
+                      `Error: ${typeof data.content === "string" ? data.content : JSON.stringify(data.content)}`,
                   }
                 : item,
             ),
           );
           break;
+        case "stage_report":
+          if (selectedPipeline === "v2" && data.content) {
+            setStageReport(data.content);
+            const modelLabel =
+              modelOptions.find((option) => option.value === selectedModel)
+                ?.label || selectedModel;
+            downloadStageWordReport(data.content, modelLabel);
+            setMetricsText(
+              (current) => `${current} | Stage Word report downloaded`,
+            );
+          }
+          break;
         case "done":
-          addStageCard(
-            "done",
-            "Pipeline Complete",
-            `Run finished in ${data.metrics?.duration_seconds ?? "--"}s with ${data.metrics?.total_tokens ?? 0} total tokens.`,
-            "Backend finished this request.",
-            "🏁",
-          );
+          if (selectedPipeline !== "v2") {
+            addStageCard(
+              "done",
+              "Pipeline Complete",
+              `Run finished in ${data.metrics?.duration_seconds ?? "--"}s with ${data.metrics?.total_tokens ?? 0} total tokens.`,
+              "Backend finished this request.",
+              "🏁",
+            );
+          }
           finalizeStream(data.metrics);
           break;
         default:
@@ -420,6 +625,9 @@ export default function FrontendDashboard() {
     setInput("");
     setIsStreaming(false);
     setStageCards([]);
+    setPipelineStages([]);
+    setPipelineCatalog([]);
+    setStageReport(null);
     setTotalTokens(0);
     setMetricsText("Latency: --s");
     setClarificationState({
@@ -427,65 +635,140 @@ export default function FrontendDashboard() {
       meta: null,
       selectedOptions: [],
       otherText: "",
+      fieldValues: {},
     });
   }
 
   return (
-    <main className="min-h-screen overflow-hidden pt-20" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+    <main
+      className="flex h-screen flex-col overflow-hidden pt-20"
+      style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}
+    >
       <div className="bg-grid" />
       <div className="orb orb-1" />
       <div className="orb orb-2" />
       <div className="orb orb-3" />
 
-      <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="border-b backdrop-blur-xl" style={{ borderColor: "var(--border-soft)", background: "var(--bg-header)" }}>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <header
+          className="border-b backdrop-blur-xl"
+          style={{
+            borderColor: "var(--border-soft)",
+            background: "var(--bg-header)",
+          }}
+        >
           <div className="mx-auto flex w-full max-w-[1880px] items-center justify-between gap-4 px-4 py-4 lg:px-6">
             <div className="flex items-center gap-3">
               <div
                 className="flex h-11 w-11 items-center justify-center rounded-2xl text-white"
                 style={{
-                  background: "linear-gradient(135deg, var(--accent), var(--accent-secondary))",
-                  boxShadow: "0 0 30px color-mix(in srgb, var(--accent) 34%, transparent)",
+                  background:
+                    "linear-gradient(135deg, var(--accent), var(--accent-secondary))",
+                  boxShadow:
+                    "0 0 30px color-mix(in srgb, var(--accent) 34%, transparent)",
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
               <div>
-                <div className="font-orbitron text-sm font-bold uppercase tracking-[0.22em]">Real Estate AI</div>
-                <div className="text-xs uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>Intelligence Layer</div>
+                <div className="font-orbitron text-sm font-bold uppercase tracking-[0.22em]">
+                  Data Retrieval agent
+                </div>
+                <div
+                  className="text-xs uppercase tracking-[0.14em]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Intelligence Layer
+                </div>
               </div>
-              <span
+              {/* <span
                 className="hidden rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] sm:inline-flex"
-                style={{ borderColor: "color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-glow)", color: "var(--accent-light)" }}
+                style={{
+                  borderColor:
+                    "color-mix(in srgb, var(--accent) 22%, transparent)",
+                  background: "var(--accent-glow)",
+                  color: "var(--accent-light)",
+                }}
               >
                 v3.0 Agentic
-              </span>
+              </span> */}
             </div>
 
-            <div
+            {/* <div
               className="hidden items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold md:flex"
               style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)", color: "var(--text-muted)" }}
             >
               <span className="h-2 w-2 rounded-full" style={{ background: "var(--success)", boxShadow: "0 0 10px var(--success)" }} />
               <span>Agent Synchronized</span>
-            </div>
+            </div> */}
 
             <div className="flex items-center gap-3">
               <label
                 className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
-                style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}
+                style={{
+                  borderColor: "var(--border-soft)",
+                  background: "var(--bg-card)",
+                }}
               >
-                <span className="font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
+                <span
+                  className="font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Pipeline
+                </span>
+                <select
+                  value={selectedPipeline}
+                  onChange={(event) => handlePipelineChange(event.target.value)}
+                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                  style={{
+                    borderColor: "var(--border-soft)",
+                    color: "var(--text-primary)",
+                    backgroundColor: "var(--bg-input)",
+                  }}
+                  aria-label="Select data retrieval pipeline"
+                  disabled={isStreaming}
+                >
+                  {pipelineOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                style={{
+                  borderColor: "var(--border-soft)",
+                  background: "var(--bg-card)",
+                  opacity: selectedPipeline === "v2" ? 0.55 : 1,
+                }}
+              >
+                <span
+                  className="font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Agent
                 </span>
                 <select
                   value={selectedAgent}
                   onChange={(event) => handleAgentChange(event.target.value)}
-                  className="cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
-                  style={{ borderColor: "var(--border-soft)", color: "var(--text-primary)", backgroundColor: "var(--bg-input)" }}
+                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                  style={{
+                    borderColor: "var(--border-soft)",
+                    color: "var(--text-primary)",
+                    backgroundColor: "var(--bg-input)",
+                  }}
                   aria-label="Select domain agent"
+                  disabled={isStreaming || selectedPipeline === "v2"}
                 >
                   {agentOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -494,48 +777,128 @@ export default function FrontendDashboard() {
                   ))}
                 </select>
               </label>
-              <div className="rounded-lg border px-3 py-2 font-mono text-xs" style={{ borderColor: "var(--border-soft)", background: "var(--bg-input)" }}>
+              {selectedPipeline === "v2" ? (
+                <label
+                  className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                  style={{
+                    borderColor: "var(--border-soft)",
+                    background: "var(--bg-card)",
+                  }}
+                >
+                  <span
+                    className="font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Model
+                  </span>
+                  <select
+                    value={selectedModel}
+                    onChange={(event) => handleModelChange(event.target.value)}
+                    className="reai-native-select max-w-[210px] cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
+                    style={{
+                      borderColor: "var(--border-soft)",
+                      color: "var(--text-primary)",
+                      backgroundColor: "var(--bg-input)",
+                    }}
+                    aria-label="Select data retrieval agent v2 model"
+                    disabled={isStreaming}
+                  >
+                    {modelOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {/* <div
+                className="rounded-lg border px-3 py-2 font-mono text-xs"
+                style={{
+                  borderColor: "var(--border-soft)",
+                  background: "var(--bg-input)",
+                }}
+              >
                 <span style={{ color: "var(--text-dim)" }}>CORE:</span>{" "}
-                <span className="font-semibold" style={{ color: "var(--accent-light)" }}>FastAPI SSE</span>
+                <span
+                  className="font-semibold"
+                  style={{ color: "var(--accent-light)" }}
+                >
+                  {selectedPipeline === "v2" ? "FastAPI SSE v2" : "FastAPI SSE"}
+                </span>
               </div>
               <div className="hidden gap-1 md:flex">
                 {["TRX", "PRJ", "LST", "AMN"].map((label) => (
                   <span
                     key={label}
                     className="rounded-md border px-2 py-1 text-[10px] font-black"
-                    style={{ borderColor: "color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-glow)", color: "var(--accent-light)" }}
+                    style={{
+                      borderColor:
+                        "color-mix(in srgb, var(--accent) 22%, transparent)",
+                      background: "var(--accent-glow)",
+                      color: "var(--accent-light)",
+                    }}
                   >
                     {label}
                   </span>
                 ))}
-              </div>
-              <ThemeToggle />
+              </div> */}
+              {/* <ThemeToggle /> */}
             </div>
           </div>
         </header>
 
-        <div className="mx-auto grid w-full max-w-[1880px] flex-1 gap-4 px-4 py-4 lg:grid-cols-[380px_minmax(0,1fr)_360px] lg:px-6 lg:py-6">
-          <ChatSection
-            messages={messages}
-            input={input}
-            onInputChange={setInput}
-            onSubmit={handleSubmit}
-            isStreaming={isStreaming}
-            metricsText={metricsText}
-            clarificationState={clarificationState}
-            onClarificationToggle={handleClarificationToggle}
-            onClarificationOtherChange={(value) =>
-              setClarificationState((current) => ({
-                ...current,
-                otherText: value,
-              }))
-            }
-            onClear={clearConversation}
-            backendLabel={apiBaseUrl}
-          />
-          <WorkflowSection stageCards={stageCards} isGenerating={isStreaming} totalTokens={totalTokens} tokenEvents={tokenEvents} />
-          <MapSection />
-        </div>
+        <ResizableDashboardLayout
+          left={
+            <ChatSection
+              messages={messages}
+              input={input}
+              onInputChange={setInput}
+              onSubmit={handleSubmit}
+              isStreaming={isStreaming}
+              metricsText={metricsText}
+              clarificationState={clarificationState}
+              onClarificationToggle={handleClarificationToggle}
+              onClarificationOtherChange={(value) =>
+                setClarificationState((current) => ({
+                  ...current,
+                  otherText: value,
+                }))
+              }
+              onClarificationFieldChange={(field, value) =>
+                setClarificationState((current) => ({
+                  ...current,
+                  fieldValues: {
+                    ...current.fieldValues,
+                    [field]: value,
+                  },
+                }))
+              }
+              onClear={clearConversation}
+              backendLabel={`${apiBaseUrl} · ${selectedPipeline === "v2" ? "agent v2" : "agent v1"}`}
+            />
+          }
+          center={
+            <WorkflowSection
+              variant={selectedPipeline === "v2" ? "v2" : "v1"}
+              stageCards={stageCards}
+              pipelineStages={pipelineStages}
+              pipelineCatalog={pipelineCatalog}
+              stageReport={stageReport}
+              onDownloadStageReport={() => {
+                const modelLabel =
+                  modelOptions.find((option) => option.value === selectedModel)
+                    ?.label || selectedModel;
+                if (stageReport) {
+                  downloadStageWordReport(stageReport, modelLabel);
+                }
+              }}
+              isGenerating={isStreaming}
+              totalTokens={totalTokens}
+              tokenEvents={tokenEvents}
+            />
+          }
+          right={<MapSection />}
+        />
       </div>
     </main>
   );

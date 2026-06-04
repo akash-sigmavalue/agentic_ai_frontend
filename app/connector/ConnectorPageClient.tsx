@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import WorkflowSectionDashboard from "@/components/dashboard/workflowsectiondashboard";
 import { LayoutDashboard, History, Settings, Plug, CheckCircle2, Download, Mail, CornerDownLeft, Send, ChevronDown, Check } from "lucide-react";
 import {
-  API_BASE,
   getGmailConnectionStatus,
   processWorkflow,
   startGoogleOAuth,
 } from "@/components/connector/api";
+import { apiUrl } from "@/lib/api-client";
 
 type WorkflowResponse = {
   success?: boolean;
@@ -138,7 +138,7 @@ export default function ConnectorPageClient() {
     setStatusMessage("Testing Gmail token with Gmail API...");
 
     try {
-      const response = await fetch(`${API_BASE}/debug/gmail-token-test`, {
+      const response = await fetch(apiUrl("/debug/gmail-token-test"), {
         method: "GET",
         // headers: {
         //   Authorization: `Bearer ${token}`,
@@ -750,7 +750,6 @@ export default function ConnectorPageClient() {
     </main>
   );
 }
-
 
 
 

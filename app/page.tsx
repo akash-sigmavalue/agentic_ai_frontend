@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import ChatSection from '../components/geospatial/ChatSection';
 import WorkflowSection from '../components/geospatial/WorkflowSection';
 import MapSection from '../components/geospatial/MapSection';
@@ -101,6 +101,7 @@ export default function WorkspacePage() {
   };
 
   return (
+     <Suspense fallback={<div>Loading...</div>}>
     <main className="workspace-page flex min-h-screen w-screen flex-col bg-[#f8fafc] text-slate-900 overflow-y-auto custom-scrollbar relative">
       {/* Subtle Background Grid */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]"
@@ -173,5 +174,6 @@ export default function WorkspacePage() {
         </div>
       </footer>
     </main>
+    </Suspense>
   );
 }

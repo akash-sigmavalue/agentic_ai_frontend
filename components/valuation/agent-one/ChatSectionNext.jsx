@@ -1,7 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, Fragment } from "react";
+import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { apiUrl } from "@/lib/api-client";
+import {
+  MessageSquareCode,
+  Bot,
+  FileSearch,
+  Sparkles,
+  TrendingUp,
+  MapPin,
+  SlidersHorizontal,
+  ShieldCheck,
+  AlertTriangle,
+  Database,
+  CheckCircle
+} from "lucide-react";
 
 const QUICK_PROMPTS = [
   "Value a 2BHK flat in Hiranandani Gardens, Powai, Mumbai. 1100 sqft, 5 years old, floor 15/25, West facing",
@@ -10,7 +24,9 @@ const QUICK_PROMPTS = [
 ];
 
 const PLACEHOLDER_MAP = {
+  project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
+  salable_area_sqft: "e.g. 1100 sqft",
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
   age_years: "e.g. 5, or '0' for Under Construction",
@@ -24,6 +40,165 @@ const PLACEHOLDER_MAP = {
   clear_height: "e.g. 20 ft",
 };
 
+const getCurrencySymbol = (currencyCode) => {
+  if (!currencyCode) return "₹";
+  try {
+    const formatter = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: currencyCode.toUpperCase().trim(),
+    });
+    const parts = formatter.formatToParts(0);
+    const symbolPart = parts.find((part) => part.type === "currency");
+    return symbolPart ? symbolPart.value : currencyCode;
+  } catch (e) {
+    return currencyCode || "₹";
+  }
+};
+
+function ReActReasoningReport({ report }) {
+  const renderedLines = useMemo(() => {
+    if (!report) return [];
+
+    const lines = report.split('\n');
+    return lines.map((line) => {
+      let trimmed = line.trim();
+      if (!trimmed) {
+        return { type: 'empty', content: '' };
+      }
+
+      // Clean up markdown hashes & asterisks
+      trimmed = trimmed.replace(/^#+\s*/, "");
+      trimmed = trimmed.replace(/^\*\*+\s*/, "").replace(/\s*\*\*+$/, "");
+      trimmed = trimmed.replaceAll("**", "");
+
+      const upper = trimmed.toUpperCase();
+
+      // 1. Stage Header Match
+      if (upper.startsWith('STAGE ')) {
+        return {
+          type: 'stage-header',
+          content: trimmed
+        };
+      }
+
+      // 2. Step Header Match
+      if (upper.startsWith('STEP ')) {
+        return {
+          type: 'step-header',
+          content: trimmed
+        };
+      }
+
+      // 3. Keyword matches
+      const keywords = ['THOUGHT:', 'ACTION:', 'OBSERVATION:', 'CRITIQUE:', 'REVISE:'];
+      for (const kw of keywords) {
+        if (upper.startsWith(kw)) {
+          return {
+            type: kw.toLowerCase().slice(0, -1),
+            label: trimmed.substring(0, kw.length),
+            value: trimmed.substring(kw.length).trim()
+          };
+        }
+      }
+
+      // 4. Bullet points
+      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+        return {
+          type: 'bullet',
+          content: trimmed.substring(1).trim()
+        };
+      }
+
+      // 5. Default line
+      return {
+        type: 'text',
+        content: trimmed
+      };
+    });
+  }, [report]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel p-6">
+      <div className="max-h-[720px] overflow-y-auto custom-scrollbar space-y-3.5 font-mono text-[11px] leading-relaxed pr-2">
+        {renderedLines.map((line, idx) => {
+          switch (line.type) {
+            case 'empty':
+              return <div key={idx} className="h-1" />;
+
+            case 'stage-header':
+              return (
+                <div key={idx} className="border-b border-border/60 pb-2 pt-4 first:pt-0">
+                  <h4 className="text-accent text-[12px] font-black tracking-wider uppercase">
+                    {line.content}
+                  </h4>
+                </div>
+              );
+
+            case 'step-header':
+              return (
+                <div key={idx} className="pt-2">
+                  <h5 className="text-text-primary text-[11px] font-bold tracking-wide uppercase">
+                    {line.content}
+                  </h5>
+                </div>
+              );
+
+            case 'thought':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-dim italic">
+                  <span className="text-accent-purple font-bold not-italic">{line.label}</span> {line.value}
+                </div>
+              );
+
+            case 'action':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent/40 text-text-secondary">
+                  <span className="text-accent font-bold">{line.label}</span> <code className="bg-bg-deep/40 px-1 py-0.5 rounded text-accent-light">{line.value}</code>
+                </div>
+              );
+
+            case 'observation':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-success/40 text-text-secondary">
+                  <span className="text-success font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+
+            case 'critique':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-warning/40 text-text-secondary">
+                  <span className="text-warning font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+
+            case 'revise':
+              return (
+                <div key={idx} className="pl-3.5 border-l-2 border-accent-purple/40 text-text-secondary">
+                  <span className="text-accent-purple font-bold">{line.label}</span> {line.value}
+                </div>
+              );
+
+            case 'bullet':
+              return (
+                <div key={idx} className="pl-8 flex items-start gap-2 text-text-muted">
+                  <span className="text-accent-light select-none">•</span>
+                  <span>{line.content}</span>
+                </div>
+              );
+
+            default:
+              return (
+                <div key={idx} className="text-text-secondary pl-3.5">
+                  {line.content}
+                </div>
+              );
+          }
+        })}
+      </div>
+    </div>
+  );
+}
+
 function summarizeEvent(event) {
   if (typeof event.content === "string") return event.content;
   if (event.type === "entities") return "I extracted the structured property details and pushed them into the workflow panel.";
@@ -34,28 +209,28 @@ function summarizeEvent(event) {
   if (event.type === "workflow") return "Agent 3 has compiled the execution workflow steps.";
   if (event.type === "comparable_search_progress") {
     const p = event.content;
-    return `🔍 Searching radius ${p?.radius_km}km — iteration ${p?.iteration}, ${p?.comps_so_far} comps found so far...`;
+    return `[SEARCH] Searching radius ${p?.radius_km}km — iteration ${p?.iteration}, ${p?.comps_so_far} comps found so far...`;
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    return `✅ Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
+    return `[SUCCESS] Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
     const p = event.content;
-    if (p?.status === "scraped") return `📄 ${p?.project}: ${p?.detail?.listings_found || 0} listings found`;
-    if (p?.status === "fallback") return `🔄 Running fallback search for ${p?.detail?.projects?.length || 0} projects...`;
-    return `📡 Listing pipeline: ${p?.status}`;
+    if (p?.status === "scraped") return `[SCRAPED] ${p?.project}: ${p?.detail?.listings_found || 0} listings found`;
+    if (p?.status === "fallback") return `[FALLBACK] Running fallback search for ${p?.detail?.projects?.length || 0} projects...`;
+    return `[PIPELINE] Listing pipeline: ${p?.status}`;
   }
   if (event.type === "listing_results") {
-    return `📊 Fetched ${event.content?.total_listings || 0} listings across ${event.content?.projects_processed || 0} projects.`;
+    return `[LISTINGS] Fetched ${event.content?.total_listings || 0} listings across ${event.content?.projects_processed || 0} projects.`;
   }
   if (event.type === "listing_done") return "Listing fetch completed.";
   if (event.type === "extraction_verification") return event.content?.message || "Please verify the extracted attributes.";
   if (event.type === "factorial_start") return event.content?.message || "Analyzing project metrics...";
   if (event.type === "factorial_results") {
     const t = event.content?.table || [];
-    return `📈 Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
+    return `[METRICS] Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
   }
   if (event.type === "factorial_done") return "Valuation analytics generated.";
   if (event.type === "done") return "Pipeline execution completed or artificially frozen.";
@@ -66,11 +241,6 @@ function summarizeEvent(event) {
 function humanizeFieldName(field) {
   return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
-
-
-
-
-
 
 // ── Road Type Badge ──────────────────────────────────────────────
 function RoadTypeBadge({ type }) {
@@ -122,7 +292,7 @@ function ComparisonModal({ projects, onClose }) {
                 <div className="space-y-4">
                   <div className="flex justify-between items-end border-b border-border/50 pb-2">
                     <span className="text-xs text-text-dim">Median Rate</span>
-                    <span className="text-lg font-bold text-accent-light">{"\u20B9"}{p.median_rate.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-accent-light">{formatPrice(p.median_rate, p.currency || "INR")}</span>
                   </div>
 
                   <div className="flex justify-between items-center bg-bg-deep/50 rounded-xl p-3">
@@ -140,88 +310,204 @@ function ComparisonModal({ projects, onClose }) {
 }
 
 // ── Comparable Table with Checkboxes ─────────────────────────────
+const INITIAL_COMPARABLE_RADIUS_KM = 2;
+
+function getComparableDistanceKm(comp) {
+  const rawDistance = comp?.distance_from_subject_km;
+  if (rawDistance === null || rawDistance === undefined || rawDistance === "") return null;
+  const distance = Number(String(rawDistance).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(distance) ? distance : null;
+}
+
 function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showAllComparables, setShowAllComparables] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
+
   if (!comparables || comparables.length === 0) return null;
 
-  const allSelected = comparables.every((_, i) => selectedComps?.has(i));
+  // Detect whether mixed sources exist
+  const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            {selectable && (
-              <th className="px-3 py-2.5 font-semibold">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => {
-                    if (allSelected) {
-                      comparables.forEach((_, i) => onToggle?.(i, false));
-                    } else {
-                      comparables.forEach((_, i) => onToggle?.(i, true));
-                    }
-                  }}
-                  className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
-                />
-              </th>
-            )}
-            <th className="px-3 py-2.5 font-semibold">Project Name</th>
-            <th className="px-3 py-2.5 font-semibold">Location</th>
-            <th className="px-3 py-2.5 font-semibold">Country</th>
-            <th className="px-3 py-2.5 font-semibold">Type</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
-            <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
-            <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
-            <th className="px-3 py-2.5 font-semibold">Status</th>
-            <th className="px-3 py-2.5 font-semibold">Reason</th>
-            <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {comparables.map((comp, i) => {
-            const isChecked = selectedComps?.has(i);
-            return (
-              <tr
-                key={`${comp.project_name}-${i}`}
-                className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
-              >
-                {selectable && (
+  const filteredComparables = sourceFilter === "all"
+    ? comparables
+    : comparables.filter(c => (c.data_source || "Web") === sourceFilter);
+
+  const indexedComparables = filteredComparables.map((comp, originalIndex) => ({
+    comp,
+    originalIndex: comparables.indexOf(comp), // keep original indices for selection
+    distanceKm: getComparableDistanceKm(comp),
+  }));
+  const nearbyComparables = indexedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
+  const visibleComparables = showAllComparables ? indexedComparables : nearbyComparables;
+  const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
+  const hasHiddenComparables = hiddenComparableCount > 0;
+  const visibleResultLabel = showAllComparables
+    ? `${filteredComparables.length} results`
+    : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
+  const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
+
+  const renderTable = (maxHeightClass = "") => (
+    <div className="relative">
+      <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              {selectable && (
+                <th className="px-3 py-2.5 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => {
+                      if (allSelected) {
+                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
+                      } else {
+                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
+                      }
+                    }}
+                    className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
+                  />
+                </th>
+              )}
+              <th className="px-3 py-2.5 font-semibold">Project Name</th>
+              <th className="px-3 py-2.5 font-semibold">Location</th>
+              <th className="px-3 py-2.5 font-semibold">Country</th>
+              <th className="px-3 py-2.5 font-semibold">Type</th>
+              <th className="px-3 py-2.5 font-semibold">Property Category</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
+              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
+              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
+              <th className="px-3 py-2.5 font-semibold">Status</th>
+              <th className="px-3 py-2.5 font-semibold">Reason</th>
+              <th className="px-3 py-2.5 font-semibold text-center text-accent-light whitespace-nowrap">Confidence</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Confidence Reasoning</th>
+              <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
+              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleComparables.map(({ comp, originalIndex }) => {
+              const isChecked = selectedComps?.has(originalIndex);
+              return (
+                <tr
+                  key={`${comp.project_name}-${originalIndex}`}
+                  className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
+                >
+                  {selectable && (
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked || false}
+                        onChange={() => onToggle?.(originalIndex, !isChecked)}
+                        className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
+                      />
+                    </td>
+                  )}
+                  <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary">{comp.country || "—"}</td>
                   <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={isChecked || false}
-                      onChange={() => onToggle?.(i, !isChecked)}
-                      className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
-                    />
+                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                      {comp.property_type || "—"}
+                    </span>
                   </td>
-                )}
-                <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary">{comp.country || "—"}</td>
-                <td className="px-3 py-2.5">
-                  <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
-                    {comp.property_type || "—"}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
-                <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
-                <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
-                <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
-                  {comp.source_url ? (
-                    <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
-                      {comp.source_url}
-                    </a>
-                  ) : "—"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td className="px-3 py-2.5">
+                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                      {comp.project_category || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                  <td className="px-3 py-2.5 text-center">
+                    {comp.confidence_score !== undefined && comp.confidence_score !== null ? (() => {
+                      const score = comp.confidence_score;
+                      const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
+                      const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
+                        tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                        tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                        "bg-danger/20 text-danger border-danger/30";
+                      const fb = comp.factor_breakdown || {};
+                      const tooltip = [
+                        comp.confidence_reasoning || "",
+                        fb.location !== undefined ? `📍 Location: ${fb.location}` : "",
+                        fb.amenities !== undefined ? `🏊 Amenities: ${fb.amenities}` : "",
+                        fb.property_category !== undefined ? `🏷 Category: ${fb.property_category}` : "",
+                      ].filter(Boolean).join(" | ");
+                      return (
+                        <div className="group relative inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums ${tierColor}`}>
+                            {score}
+                          </span>
+                          <span className={`text-[8px] font-bold uppercase tracking-wider ${tierColor.split(" ")[1]}`}>
+                            {tier}
+                          </span>
+                        </div>
+                      );
+                    })() : <span className="text-text-dim text-[10px]">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[260px]">
+                    {comp.confidence_reasoning
+                      ? <p className="text-[10px] leading-relaxed text-text-secondary truncate" title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
+                      : <span className="text-text-dim text-[10px]">—</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    {comp.location_certainty ? (
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                        }`}>
+                        {comp.location_certainty}
+                      </span>
+                    ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                        }`}>
+                        {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
+                      </span>
+                    ) : "—")}
+                  </td>
+                  <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
+                    {comp.source_url ? (
+                      <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
+                        {comp.source_url}
+                      </a>
+                    ) : "—"}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {comp.data_source === "Internal DB" ? (
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {visibleComparables.length === 0 && (
+        <div className="px-4 py-6 text-center text-xs text-text-dim">
+          No comparable projects found within {INITIAL_COMPARABLE_RADIUS_KM} km.
+          {hasHiddenComparables ? " Use Show more to view farther projects." : ""}
+        </div>
+      )}
+      {hasHiddenComparables && (
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-bg-input/40 px-4 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim">
+            {showAllComparables ? "Showing all comparable projects" : `${hiddenComparableCount} farther project(s) hidden`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAllComparables((prev) => !prev)}
+            className="rounded-lg border border-[#fb923c]/35 bg-[#fb923c]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fb923c] transition hover:border-[#fb923c] hover:bg-[#fb923c]/15"
+          >
+            {showAllComparables ? `Show within ${INITIAL_COMPARABLE_RADIUS_KM} km` : "Show more"}
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -229,11 +515,27 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
         <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
+            {hasMixedSources && (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                {["all", "Web", "Internal DB"].map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setSourceFilter(opt)}
+                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
+                        ? "bg-[#fb923c] text-bg-deep shadow"
+                        : "text-text-dim hover:text-text-primary"
+                      }`}
+                  >
+                    {opt === "all" ? "All Sources" : opt}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{comparables.length} results</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
@@ -244,20 +546,36 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-border bg-bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4 flex-wrap">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Comparable Projects Detail</h3>
-                  <p className="text-[10px] text-text-dim">{comparables.length} results found in vicinity</p>
+                  <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
+              {hasMixedSources && (
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                  {["all", "Web", "Internal DB"].map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setSourceFilter(opt)}
+                      className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
+                          ? "bg-[#fb923c] text-bg-deep shadow"
+                          : "text-text-dim hover:text-text-primary"
+                        }`}
+                    >
+                      {opt === "all" ? "All Sources" : opt}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -267,7 +585,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
-                {tableContent}
+                {renderTable("")}
               </div>
             </div>
           </div>
@@ -279,12 +597,35 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
 }
 
 // ── Listing Table ────────────────────────────────────────────────
-function ListingTable({ listings }) {
+function ListingTable({ listings, dbTransactions }) {
   const [isMaximized, setIsMaximized] = useState(false);
-  if (!listings || listings.length === 0) return null;
 
-  const subjectListings = listings.filter((l) => l.is_subject);
-  const compListings = listings.filter((l) => !l.is_subject);
+  // Map internal DB transactions into listing row shape
+  const dbRows = (dbTransactions || []).map(t => ({
+    project_name: t.project_name,
+    property_type: t.property_type_raw || t.property_type,
+    project_category: t.property_type,
+    listing_type:     t.transaction_category,
+    bhk:              t.unit_configuration,
+    currency:         t.currency,
+    price:            t.agreement_price,
+    price_per_sqft:   t.price_per_sqft,
+    area_sqft:        t.area_sqft,
+    area_type:        t.area_type || "Carpet Area",
+    is_subject:       t.is_subject || false,
+    floor:            t.floor_number,
+    total_floors:     null,
+    location:         t.location_name,
+    transaction_date: t.transaction_date,
+    source_url:       null,
+    _is_db:           true,   // flag to render source badge
+  }));
+
+  const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
+  if (allEmpty) return null;
+
+  const subjectListings = (listings || []).filter((l) => l.is_subject);
+  const compListings = (listings || []).filter((l) => !l.is_subject);
 
   const renderRows = (rows, label) => (
     <>
@@ -309,6 +650,7 @@ function ListingTable({ listings }) {
             )}
           </td>
           <td className="px-3 py-2 text-text-secondary">{lst.property_type || "—"}</td>
+          <td className="px-3 py-2 text-text-secondary">{lst.project_category || "—"}</td>
           <td className="px-3 py-2 text-text-secondary">{lst.listing_type || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary">{lst.bhk || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.currency || "—"}</td>
@@ -328,8 +670,11 @@ function ListingTable({ listings }) {
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.floor || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.total_floors || "—"}</td>
           <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{lst.location || "—"}</td>
+          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
-            {lst.source_url ? (
+            {lst._is_db ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+            ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
               </a>
@@ -340,13 +685,14 @@ function ListingTable({ listings }) {
     </>
   );
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
+  const renderTable = (maxHeightClass = "") => (
+    <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <th className="px-3 py-2.5 font-semibold">Project</th>
             <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
             <th className="px-3 py-2.5 font-semibold">List Type</th>
             <th className="px-3 py-2.5 font-semibold text-center">BHK</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
@@ -358,12 +704,14 @@ function ListingTable({ listings }) {
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Location</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
             <th className="px-3 py-2.5 font-semibold">Source</th>
           </tr>
         </thead>
         <tbody>
           {renderRows(subjectListings, "Subject Property")}
           {renderRows(compListings, "Comparable Projects")}
+          {dbRows.length > 0 && renderRows(dbRows, "Internal DB Transactions")}
         </tbody>
       </table>
     </div>
@@ -377,7 +725,7 @@ function ListingTable({ listings }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm">📊</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Listing Data Fetched</span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} listings</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{(listings || []).length} web + {dbRows.length} db records</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-cyan-400 hover:text-cyan-400"
@@ -388,7 +736,7 @@ function ListingTable({ listings }) {
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
@@ -399,7 +747,7 @@ function ListingTable({ listings }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Listing Data Detail</h3>
-                  <p className="text-[10px] text-text-dim">{listings.length} total records found</p>
+                  <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
               <button
@@ -411,7 +759,7 @@ function ListingTable({ listings }) {
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
-                {tableContent}
+                {renderTable("")}
               </div>
             </div>
           </div>
@@ -422,32 +770,171 @@ function ListingTable({ listings }) {
   );
 }
 
-// ── Helper: Format Price based on Currency ───────────────────
-function formatPrice(value, currency) {
-  if (!value) return "—";
-  const isIndian = currency === "INR" || currency === "\u20B9" || (!currency && value > 100000);
-
-  if (isIndian) {
-    if (value >= 10000000) return `${(value / 10000000).toFixed(2)} Cr`;
-    if (value >= 100000) return `${(value / 100000).toFixed(2)} Lac`;
-    return value.toLocaleString();
-  }
-
-  // Standard International formatting
-  if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return value.toLocaleString();
-}
-
-// ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings }) {
+// ── Transaction Table (Internal DB) ─────────────────────────────────────────
+function TransactionTable({ transactions }) {
   const [isMaximized, setIsMaximized] = useState(false);
-  if (!listings || listings.length === 0) return null;
+  if (!transactions || transactions.length === 0) return null;
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+            <th className="px-3 py-2.5 font-semibold">Project</th>
+            <th className="px-3 py-2.5 font-semibold">Type</th>
+            <th className="px-3 py-2.5 font-semibold">Property Category</th>
+            <th className="px-3 py-2.5 font-semibold">List Type</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Price/Sqft</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Area (Sqft)</th>
+            <th className="px-3 py-2.5 font-semibold">Area Type</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
+            <th className="px-3 py-2.5 font-semibold">Location</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
+            <th className="px-3 py-2.5 font-semibold">Source</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Net Carpet (SQM)</th>
+            <th className="px-3 py-2.5 font-semibold">Country</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map((t, i) => (
+            <tr key={i} className="border-b border-border/50 transition hover:bg-[rgba(52,211,153,0.04)]">
+              <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">{t.project_name || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.property_type_raw || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.property_type || "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.transaction_category || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary">{t.currency || "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{t.agreement_price ?? "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-accent-light whitespace-nowrap">{t.price_per_sqft ?? "—"}</td>
+              <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">{t.area_sqft ?? "—"}</td>
+              <td className="px-3 py-2 text-text-dim">{t.area_type || "Carpet Area"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-dim">{t.floor_number ?? "—"}</td>
+              <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{t.location_name || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
+              <td className="px-3 py-2">
+                <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                  Internal DB
+                </span>
+              </td>
+              <td className="px-3 py-2 text-right font-mono text-text-dim">{t.net_carpet_area_sq_m ?? "—"}</td>
+              <td className="px-3 py-2 text-text-secondary">{t.country_name || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="mt-3 overflow-hidden rounded-2xl border border-emerald-500/25 bg-bg-card shadow-panel transition-all duration-300">
+        <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Internal DB Transactions</span>
+            <div className="ml-auto flex items-center gap-3">
+              <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
+              <button
+                onClick={() => setIsMaximized(true)}
+                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-emerald-400 hover:text-emerald-400"
+                title="Maximize Table"
+              >⛶</button>
+            </div>
+          </div>
+        </div>
+        {tableContent}
+      </div>
+
+      {isMaximized && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-emerald-500/30 bg-bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Internal DB Transactions</h3>
+                  <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden">{tableContent}</div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ── Helper: Format Price based on Currency ───────────────────
+function formatPrice(value, currency = "INR") {
+  if (!value && value !== 0) return "—";
+
+  const curr = currency === "\u20B9" ? "INR" : (currency || "INR");
+  const isIndian = curr === "INR";
+
+  if (isIndian) {
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(2)} Lac`;
+    return `₹${Number(value).toLocaleString('en-IN')}`;
+  }
+
+  // International formatting
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: curr,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch (e) {
+    return `${curr} ${Number(value).toLocaleString()}`;
+  }
+}
+
+// ── Helper: Format Date ──────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  return String(dateStr).split(/[T ]/)[0];
+}
+
+// ── Cleaned Data Table ──────────────────────────────────────────
+function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType }) {
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [fsiGlobal, setFsiGlobal] = useState("");
+  const [ccGlobal, setCcGlobal] = useState("");
+  const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
+  const [activeTab, setActiveTab] = useState("valid"); // "valid" | "outliers" | "dropped"
+
+  if (!listings || listings.length === 0) return null;
+
+  // Detect if we have plot data and if the subject itself is a plot
+  // Detect if the subject itself is a plot or villa
+  const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase()?.trim());
+  const isVillaSubject = subjectPropertyType?.toLowerCase()?.trim() === "villa";
+
+  // Always show the FSI/CC overrides if the subject is a plot or villa
+  const showPlotControls = isPlotSubject;
+
+  // Determine which rows to display based on active tab
+  const displayedListings = activeTab === "valid" ? listings : activeTab === "outliers" ? reviewListings : droppedListings;
+  const showReasonColumn = activeTab === "outliers" || activeTab === "dropped";
+
+  // Helper: extract reason for drop/outlier
+  const getRowReason = (lst) => {
+    if (activeTab === "outliers") return "Statistical outlier (IQR)";
+    if (lst.is_duplicate) return "Duplicate listing";
+    return lst.cleaned_irrelevance_reason || lst.irrelevance_reason || "Not relevant for valuation";
+  };
+
+  const tableContent = (
+    <div className={`overflow-x-auto overflow-y-auto custom-scrollbar ${isMaximized ? '' : 'max-h-[500px]'}`}>
+      <table className="w-full text-left text-xs relative">
+        <thead className="sticky top-0 z-[11] bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <th className="px-3 py-2.5 font-semibold">Matched Project</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
@@ -456,15 +943,34 @@ function CleanedTable({ listings }) {
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
+
+            {showPlotControls && (
+              <>
+                <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{isVillaSubject ? "Villa Derived Rate / Sqft" : "Plot Derived Rate / Sqft"}</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">{isVillaSubject ? "Villa Rate Range" : "Plot Rate Range"}</th>
+                <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
+              </>
+            )}
+
             <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
             <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Source</th>
             <th className="px-3 py-2.5 font-semibold">Flag</th>
+            {showReasonColumn && <th className="px-3 py-2.5 font-semibold">Reason</th>}
           </tr>
         </thead>
         <tbody>
-          {listings.map((lst, i) => (
-            <tr key={i} className="border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)]">
+          {displayedListings.length === 0 ? (
+            <tr>
+              <td colSpan={99} className="px-4 py-8 text-center text-sm text-text-dim">
+                {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
+              </td>
+            </tr>
+          ) : displayedListings.map((lst, i) => (
+            <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
               <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                 {lst.cleaned_match_project || lst.project_name || "—"}
               </td>
@@ -484,14 +990,116 @@ function CleanedTable({ listings }) {
                   ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
                   : "—"}
               </td>
+
+              {showPlotControls && (
+                <>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_low ?? (lst.plot_fsi_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.fsi_high ?? (lst.plot_fsi_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], fsi_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">Low</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_low ?? (lst.plot_construction_cost_range?.low || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_low: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] opacity-40 uppercase">High</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
+                          value={rowOverrides[i]?.cc_high ?? (lst.plot_construction_cost_range?.high || "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRowOverrides(prev => ({
+                              ...prev,
+                              [i]: { ...prev[i], cc_high: val }
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                    {lst.plot_derived_rate_per_sqft
+                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                    {lst.plot_derived_rate_range
+                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`
+                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                      {lst.plot_derived_by || "llm"}
+                    </span>
+                  </td>
+                </>
+              )}
+
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
+              <td className="px-3 py-2 text-center">
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                  {lst.source || "Web"}
+                </span>
+              </td>
               <td className="px-3 py-2">
                 <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
                   {lst.stat_flag || "ok"}
                 </span>
               </td>
+              {showReasonColumn && (
+                <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
+                  {getRowReason(lst)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -505,7 +1113,9 @@ function CleanedTable({ listings }) {
         <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Cleaned & Normalized Data</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
+              {hasPlotData ? `Cleaned & ${isVillaSubject ? "Villa" : "Plot"} Valuation Data` : "Cleaned & Normalized Data"}
+            </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
@@ -518,6 +1128,65 @@ function CleanedTable({ listings }) {
             </div>
           </div>
         </div>
+
+        {/* ── Tab Bar ────────────────────────────────────── */}
+        <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2">
+          <button
+            onClick={() => setActiveTab("valid")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ✅ Valid ({listings.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("outliers")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ⚠️ Outliers ({reviewListings.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("dropped")}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+          >
+            ❌ Dropped ({droppedListings.length})
+          </button>
+        </div>
+
+        {showPlotControls && onRecalculate && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+            <input
+              type="number"
+              step="0.1"
+              placeholder="FSI"
+              value={fsiGlobal}
+              onChange={e => setFsiGlobal(e.target.value)}
+              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+            />
+            <input
+              type="number"
+              placeholder="CC (₹/sqft)"
+              value={ccGlobal}
+              onChange={e => setCcGlobal(e.target.value)}
+              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+            />
+            <div className="h-4 w-px bg-border mx-2" />
+            <button
+              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+              className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+            >
+              Apply All & Recalculate
+            </button>
+            {Object.keys(rowOverrides).length > 0 && (
+              <button
+                onClick={() => setRowOverrides({})}
+                className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+              >
+                Reset Edits
+              </button>
+            )}
+          </div>
+        )}
+
         {tableContent}
       </div>
 
@@ -528,7 +1197,36 @@ function CleanedTable({ listings }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Normalized Listing Data</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
+                    {hasPlotData ? `Normalized Listing & ${isVillaSubject ? "Villa" : "Plot"} Data` : "Normalized Listing Data"}
+                  </h3>
+                  {showPlotControls && onRecalculate && (
+                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="FSI"
+                        value={fsiGlobal}
+                        onChange={e => setFsiGlobal(e.target.value)}
+                        className="w-24 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                      />
+                      <input
+                        type="number"
+                        placeholder="CC (₹/sqft)"
+                        value={ccGlobal}
+                        onChange={e => setCcGlobal(e.target.value)}
+                        className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                      />
+                      <div className="h-4 w-px bg-border mx-2" />
+                      <button
+                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                        className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                      >
+                        Apply All & Recalculate
+                      </button>
+                    </div>
+                  )}
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
                 </div>
               </div>
@@ -539,9 +1237,35 @@ function CleanedTable({ listings }) {
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
-                {tableContent}
+            <div className="flex-1 overflow-hidden flex flex-col">
+
+              {/* ── Tab Bar (maximized) ────────────────────── */}
+              <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2 shrink-0">
+                <button
+                  onClick={() => setActiveTab("valid")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ✅ Valid ({listings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("outliers")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ⚠️ Outliers ({reviewListings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("dropped")}
+                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
+                >
+                  ❌ Dropped ({droppedListings.length})
+                </button>
+              </div>
+
+              {/* ── Table (full-width, scrollable) ─────────── */}
+              <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+                <div className="w-full border border-border rounded-2xl overflow-hidden bg-bg-card">
+                  {tableContent}
+                </div>
               </div>
             </div>
           </div>
@@ -553,10 +1277,11 @@ function CleanedTable({ listings }) {
 }
 
 // ── Factorial Rate Summary Table ─────────────────────────────────
-function FactorialTable({ data }) {
+function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canCalculateRate = true }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState(new Set());
   const [showComparison, setShowComparison] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState(new Set());
 
   if (!data || !data.table || data.table.length === 0) return null;
 
@@ -572,8 +1297,8 @@ function FactorialTable({ data }) {
 
   const fmt = (v) => (!v && v !== 0) ? "—" : formatter.format(v);
 
-  const tableContent = (
-    <div className="overflow-x-auto custom-scrollbar">
+  const renderTable = (maxHeightClass = "") => (
+    <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
@@ -589,11 +1314,14 @@ function FactorialTable({ data }) {
             <th className="px-4 py-3 font-semibold text-right">Avg Rate</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Lower</th>
             <th className="px-4 py-3 font-semibold text-right">90% CI Upper</th>
+            <th className="px-4 py-3 font-semibold text-center">Rate Source</th>
           </tr>
         </thead>
         <tbody>
           {data.table.map((row, i) => {
-            console.log("Factorial Row:", row);
+            const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
+            const isExpanded = expandedProjects.has(i);
+
             return (
               <Fragment key={`fact-${i}`}>
                 <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
@@ -611,10 +1339,27 @@ function FactorialTable({ data }) {
                     />
                   </td>
                   <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
-                    {row.project_name || "—"}
-                    {row.is_subject && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {hasSubRows && (
+                        <button
+                          onClick={() => {
+                            const next = new Set(expandedProjects);
+                            if (isExpanded) next.delete(i);
+                            else next.add(i);
+                            setExpandedProjects(next);
+                          }}
+                          className="text-text-dim hover:text-text-primary p-0.5 rounded hover:bg-white/5 transition"
+                        >
+                          <span className={`inline-block w-3 text-center text-[8px] transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                            ▶
+                          </span>
+                        </button>
+                      )}
+                      <span>{row.project_name || "—"}</span>
+                      {row.is_subject && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-[11px] font-bold text-[#c4b5fd]">{row.listing_count}</span>
@@ -685,7 +1430,64 @@ function FactorialTable({ data }) {
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {row.rate_derived_from === "micromarket" ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                        Micromarket
+                      </span>
+                    ) : row.rate_derived_from === "mixed" ? (
+                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
+                        Web + DB
+                      </span>
+                    ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
+                      <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
+                        Internal DB
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                        Listing
+                      </span>
+                    )}
+                  </td>
                 </tr>
+                {isExpanded && hasSubRows && row.sub_rows.map((sub, subIdx) => {
+                  const isSubDb = sub.rate_derived_from === "internal_db";
+                  return (
+                    <tr
+                      key={`fact-${i}-sub-${subIdx}`}
+                      className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
+                    >
+                      <td className="px-4 py-2"></td>
+                      <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
+                        <span className="text-border">└─</span>
+                        <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-[10px] font-semibold text-text-dim">
+                          {sub.listing_count}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-center">—</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.avg_rate)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_lower)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_upper)}</td>
+                      <td className="px-4 py-2 text-center">
+                        {isSubDb ? (
+                          <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
+                            Internal DB
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
+                            Listing
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </Fragment>
             );
           })}
@@ -715,7 +1517,22 @@ function FactorialTable({ data }) {
             </div>
           </div>
         </div>
-        {tableContent}
+        {renderTable("max-h-[360px] overflow-y-auto")}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent-light">Ready For Final Rate</p>
+          <p className="mt-1 text-xs text-text-dim">Review the Comparable Project Metrics and map factors, then calculate the saleable-area rate.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCalculateRate}
+          disabled={!canCalculateRate || isCalculatingRate}
+          className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isCalculatingRate ? "Calculating..." : "Calculate Rate"}
+        </button>
       </div>
 
       {showComparison && (
@@ -738,7 +1555,9 @@ function FactorialTable({ data }) {
               <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
-              <div className="min-w-max border border-border rounded-2xl overflow-hidden">{tableContent}</div>
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
+                {renderTable("")}
+              </div>
             </div>
           </div>
         </div>, document.body
@@ -792,9 +1611,9 @@ function ValuationResult({ data, currency = "INR" }) {
               onChange={(e) => setConfLevel(e.target.value)}
               className="rounded-lg border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-2 py-1 text-xs font-bold text-[#10b981] outline-none cursor-pointer hover:bg-[rgba(16,185,129,0.15)] transition"
             >
-              <option value="90">90%</option>
-              <option value="95">95%</option>
-              <option value="99">99%</option>
+              <option value="90" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>90%</option>
+              <option value="95" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>95%</option>
+              <option value="99" style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }}>99%</option>
             </select>
           </div>
         </div>
@@ -834,224 +1653,585 @@ function ValuationResult({ data, currency = "INR" }) {
     </div>
   );
 }
+// ── Amenity Cell Chips ────────────────────────────────────────────────────────
+function AmenityCellChips({ summary, isSubject }) {
+  if (!summary || summary === "—") return <span className="text-text-dim text-[9px]">—</span>;
+  const chips = summary
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => {
+      const parts = s.split(":");
+      return { label: parts[0]?.trim(), count: parts[1]?.trim() };
+    })
+    .filter(c => c.label && c.count && c.count !== "0");
+  if (!chips.length) return <span className="text-text-dim text-[9px]">{summary}</span>;
+  return (
+    <div className="flex flex-wrap justify-center gap-1 py-0.5">
+      {chips.map((c, i) => (
+        <span key={i} className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[8px] font-bold border ${isSubject ? "border-green-500/25 bg-green-500/10 text-green-400" : "border-blue-500/20 bg-blue-500/[0.07] text-blue-300"}`}>
+          <span className="opacity-70">{c.label}</span>
+          <span className="font-black">{c.count}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
+// ── CBD Cell ──────────────────────────────────────────────────────────────────
+function CbdCell({ km, name, isSubject }) {
+  if (km == null && !name) return <span className="text-text-dim text-[9px]">—</span>;
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      {name && (
+        <span className={`text-[8px] font-bold leading-tight text-center max-w-[120px] ${isSubject ? "text-green-400/80" : "text-blue-300/80"}`}>
+          {name}
+        </span>
+      )}
+      {km != null && (
+        <span className="font-mono text-[9px] text-text-dim font-bold">{Number(km).toFixed(1)} km</span>
+      )}
+    </div>
+  );
+}
 
-
-// ── Factoring Result Card (Step 5) ──────────────────────────────
-function FactoringResultCard({ data, area_unit }) {
-  const [maximizedFactor, setMaximizedFactor] = useState(null);
+function FactoringResultCard({ data, area_unit, subjectData }) {
+  const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
   if (!data) return null;
 
   const {
-    methodology,
+    comparable_factoring_table = [],
+    blending = {},
     subject_final_rate,
     subject_rate_range,
-    valuation_details,
     confidence,
     raw_markdown_report,
+    reconciliation_note,
   } = data;
 
-  const fmtRate = (val) => val ? "\u20B9" + Number(val).toLocaleString() : "—";
-  const fmtPct = (val) => val ? (Number(val) > 0 ? "+" : "") + Number(val).toFixed(2) + "%" : "0.00%";
-  const adjColor = (val) => {
-    const n = Number(val);
+  const currencyCode = subjectData?.currency || "INR";
+  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
+  const formatter = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode, maximumFractionDigits: 0 });
+  const fmtRate = (v) => v != null ? formatter.format(Number(v)) : "—";
+  const fmtPct = (v) => {
+    if (v == null) return "—";
+    const n = Number(v) * 100;
+    return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+  };
+  const adjColor = (v) => {
+    if (v == null) return "text-text-dim";
+    const n = Number(v);
     if (n > 0) return "text-green-400";
     if (n < 0) return "text-red-400";
     return "text-text-dim";
   };
 
-  const renderFactorTable = (factor, data, isFull = false) => {
-    const subjectRow = data.projects?.find(p => p.role === "SUBJECT" || p.name.toLowerCase().includes("subject"));
-    const compRows = data.projects?.filter(p => p !== subjectRow) || [];
-    
-    return (
-      <div className={`overflow-hidden ${isFull ? "rounded-none" : "rounded-2xl border border-white/5 bg-black/40"}`}>
-        <table className="w-full text-left text-[10px]">
-          <thead>
-            <tr className="bg-white/[0.05] border-b border-white/10 text-text-dim uppercase tracking-widest font-black">
-              <th className="px-6 py-4">Project Entity</th>
-              <th className="px-6 py-4 text-center">Value</th>
-              <th className="px-6 py-4">Interpretation</th>
-              <th className="px-6 py-4 text-right">Adj.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subjectRow && (
-              <tr className="bg-accent/10 border-b border-accent/20">
-                <td className="px-6 py-4 text-white font-black flex items-center gap-3">
-                  {subjectRow.name}
-                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-accent text-bg-deep font-black uppercase">Subject</span>
-                </td>
-                <td className="px-6 py-4 text-center text-white font-bold">{subjectRow.value}</td>
-                <td className="px-6 py-4 text-text-secondary italic font-medium">{subjectRow.interpretation}</td>
-                <td className="px-6 py-4 text-right text-[8px] font-black text-accent-light opacity-50 uppercase">Base</td>
-              </tr>
-            )}
-            {compRows.map((p, i) => (
-              <tr key={i} className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02]">
-                <td className="px-6 py-4 text-text-secondary font-bold">{p.name}</td>
-                <td className="px-6 py-4 text-center text-text-dim font-mono">{p.value}</td>
-                <td className="px-6 py-4 text-text-dim italic opacity-70 max-w-xs">{p.interpretation}</td>
-                <td className={`px-6 py-4 text-right font-mono font-black ${adjColor(p.adjustment)}`}>{fmtPct(p.adjustment)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  const subjectRow = comparable_factoring_table.find(r => r.role === "SUBJECT");
+  const compRows   = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
+  const finalRate  = Number(subject_final_rate || 0);
+  const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
 
-  const DashboardContent = (
-    <div className={`mt-8 overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0f172a]/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-auto border-accent/30" : ""}`}>
-      {/* Detail Modal */}
-      {maximizedFactor && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-bg-deep/95 p-4 md:p-12 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-[3rem] border border-white/10 bg-[#0f172a] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-10 py-8">
-              <div className="flex items-center gap-5">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent text-2xl border border-accent/20">📊</span>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-[0.2em] text-white">Factor Audit: {maximizedFactor.replace("_", " ")}</h3>
-                  <p className="text-[10px] text-text-dim uppercase tracking-widest mt-1">Detailed comparison & adjustment logic</p>
-                </div>
-              </div>
-              <button onClick={() => setMaximizedFactor(null)} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 hover:bg-red-500/20 hover:text-red-400 text-3xl transition-all">×</button>
-            </div>
-            <div className="flex-1 overflow-auto p-10 custom-scrollbar">
-              {renderFactorTable(maximizedFactor, valuation_details.factor_breakdown[maximizedFactor], true)}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+  const MainContent = (
+    <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
 
       {/* Header */}
-      <div className="border-b border-white/5 bg-gradient-to-r from-accent/10 to-transparent px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
-            <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Professional Appraisal Summary</h2>
-              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Ready Market Adjustment Report</p>
-            </div>
+      <div className="border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-8 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
+          <div>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</h2>
+            <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
           </div>
-          <button 
-            onClick={() => setIsSectionMaximized(!isSectionMaximized)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all text-[8px] font-black uppercase tracking-widest"
-          >
-            {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
+        </div>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" : confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>
+            <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }}></span>
+            {confidence || "Medium"} Confidence
+          </div>
+          <button onClick={() => setIsSectionMaximized(!isSectionMaximized)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-soft bg-bg-input hover:bg-accent/20 hover:text-accent transition-all text-[8px] font-black uppercase tracking-widest">
+            {isSectionMaximized ? "Collapse" : "⛶ Expand"}
           </button>
         </div>
       </div>
 
       <div className="p-8 space-y-10">
-        {/* FACTORING SUMMARY TABLE */}
+
+        {/* ── COMPARABLE FACTORING TABLE ─────────────────────────────── */}
         <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-lg">📊</span>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Market Adjustment Factors</h3>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">Per-Comparable Factor Adjustment Table</h3>
+              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
+            </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/5 bg-black/20">
-            <table className="w-full text-left text-[11px]">
+          <div className="overflow-x-auto rounded-2xl border border-border-soft shadow-xl">
+            <table className="w-full text-left text-[10px] min-w-[900px]">
               <thead>
-                <tr className="bg-white/[0.03] border-b border-white/10 text-text-dim uppercase tracking-widest text-[9px] font-black">
-                  <th className="px-6 py-4">Dimension</th>
-                  <th className="px-6 py-4 text-right">Adjustment</th>
-                  <th className="px-6 py-4 text-center">Audit</th>
+                <tr className="bg-bg-input border-b border-border-soft text-text-dim uppercase tracking-widest font-black text-[8px]">
+                  <th className="px-5 py-3.5 min-w-[180px]">Project Name</th>
+                  <th className="px-4 py-3.5 text-center">Road Type</th>
+                  <th className="px-4 py-3.5 text-center min-w-[140px]">Amenity</th>
+                  <th className="px-4 py-3.5 text-center">Density Score</th>
+                  <th className="px-4 py-3.5 text-center">CBD (km)</th>
+                  <th className="px-4 py-3.5 text-right">Avg Rate</th>
+                  <th className="px-4 py-3.5 text-center">Factor</th>
+                  <th className="px-4 py-3.5 text-right min-w-[150px]">Net Factored Rate</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {valuation_details?.factor_breakdown && Object.keys(valuation_details.factor_breakdown).map((factor) => (
-                  <tr key={factor} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-4 font-bold text-text-secondary capitalize flex items-center gap-3">
-                      <div className="h-1 w-1 rounded-full bg-accent/40"></div>
-                      {factor.replace("_", " ")}
+              <tbody>
+                {/* Subject row */}
+                {subjectRow && (
+                  <tr className="bg-accent/10 border-b border-accent/20">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-text-primary text-[11px]">{subjectRow.project_name}</span>
+                        <span className="text-[7px] px-1.5 py-0.5 rounded bg-accent text-bg-deep font-black uppercase shrink-0">Subject</span>
+                      </div>
                     </td>
-                    <td className={`px-6 py-4 text-right font-mono font-black text-sm ${adjColor(valuation_details.net_impacts?.[factor])}`}>
-                      {fmtPct(valuation_details.net_impacts?.[factor])}
+                    <td className="px-4 py-4 text-center font-mono font-bold text-accent">{subjectRow.road_type || "—"}</td>
+                    <td className="px-4 py-4 text-center">
+                      <AmenityCellChips summary={subjectRow.amenity_summary} isSubject />
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={() => setMaximizedFactor(factor)}
-                        className="h-7 w-7 rounded-lg border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent hover:border-accent/40 transition-all flex items-center justify-center mx-auto"
-                      >
-                        🔍
-                      </button>
+                    <td className="px-4 py-4 text-center font-mono font-bold text-accent">{subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}</td>
+                    <td className="px-4 py-4 text-center">
+                      <CbdCell km={subjectRow.cbd_nearest_km} name={subjectRow.cbd_name} isSubject />
                     </td>
+                    <td className="px-4 py-4 text-right font-mono font-bold text-green-400">{fmtRate(subjectRow.avg_rate)}</td>
+                    <td className="px-4 py-4 text-center text-[8px] font-black text-accent/50 uppercase">Base</td>
+                    <td className="px-4 py-4 text-right font-mono font-black text-green-400 text-[13px]">{fmtRate(subjectRow.avg_rate)}</td>
                   </tr>
-                ))}
+                )}
+
+                {/* Comparable rows */}
+                {compRows.map((row, i) => {
+                  const totalF = row.total_factor != null ? Number(row.total_factor) : null;
+                  const factoredRate = row.factored_rate;
+                  return (
+                    <tr key={i} className="border-b border-border-dim hover:bg-bg-input/50 transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-text-dim">{row.road_type || "—"}</td>
+                      <td className="px-4 py-4 text-center">
+                        <AmenityCellChips summary={row.amenity_summary} />
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-text-dim">{row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}</td>
+                      <td className="px-4 py-4 text-center">
+                        <CbdCell km={row.cbd_nearest_km} name={row.cbd_name} />
+                      </td>
+                      <td className="px-4 py-4 text-right font-mono text-text-secondary">{fmtRate(row.avg_rate)}</td>
+                      <td className={`px-4 py-4 text-center font-mono font-black text-[12px] ${adjColor(totalF)}`}>
+                        {totalF != null ? (totalF >= 0 ? "+" : "") + (totalF * 100).toFixed(2) + "%" : "—"}
+                      </td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-[12px] text-blue-400">
+                        {fmtRate(factoredRate)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
-              <tfoot>
-                <tr className="bg-accent/10 font-black text-white border-t border-accent/20">
-                  <td className="px-6 py-6 uppercase tracking-[0.2em] text-accent text-[9px]">Total Correction Factor</td>
-                  <td className={`px-6 py-6 text-right font-mono text-xl ${adjColor(valuation_details?.total_net_adjustment)}`}>
-                    {fmtPct(valuation_details?.total_net_adjustment)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
+
+          {/* Factor breakdown legend */}
+          {compRows.some(r => r.factor_reasoning) && (
+            <div className="mt-4 space-y-2">
+              {compRows.filter(r => r.factor_reasoning).map((row, i) => (
+                <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
+                  
+                  {/* Attribute percentage chips */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
+                    <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_road > 0 ? "text-green-400" : row.factor_road < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Road: {row.factor_road != null ? (row.factor_road >= 0 ? "+" : "") + (row.factor_road * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_amenity > 0 ? "text-green-400" : row.factor_amenity < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Amenity: {row.factor_amenity != null ? (row.factor_amenity >= 0 ? "+" : "") + (row.factor_amenity * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_density > 0 ? "text-green-400" : row.factor_density < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Density: {row.factor_density != null ? (row.factor_density >= 0 ? "+" : "") + (row.factor_density * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_cbd > 0 ? "text-green-400" : row.factor_cbd < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      CBD: {row.factor_cbd != null ? (row.factor_cbd >= 0 ? "+" : "") + (row.factor_cbd * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-lg bg-accent/15 border border-accent/25 font-mono text-[9px] font-black ${row.total_factor > 0 ? "text-green-400" : row.total_factor < 0 ? "text-red-400" : "text-text-dim"}`}>
+                      Total: {row.total_factor != null ? (row.total_factor >= 0 ? "+" : "") + (row.total_factor * 100).toFixed(2) + "%" : "0.00%"}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-text-secondary leading-relaxed">{row.factor_reasoning}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* VALUATION FORMULA & FINAL RATE */}
-        <section className="pt-4">
-          <div className="relative group mx-auto max-w-3xl">
-            <div className="absolute -inset-1 bg-gradient-to-r from-accent to-[#818cf8] rounded-[2.5rem] blur-2xl opacity-10"></div>
-            <div className="relative bg-[#0f172a] rounded-[2.5rem] p-12 border border-white/10 text-center shadow-xl">
-              <div className="mb-10">
-                <span className="text-[8px] font-black uppercase tracking-[0.6em] text-text-dim mb-8 block">Executive Valuation Derivation</span>
-                <div className="flex items-center justify-center gap-4 font-mono text-base text-text-secondary">
-                  <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-[8px] block mb-1 opacity-40 uppercase tracking-widest font-sans font-black text-white/50">Base Rate</span>
-                    {fmtRate(valuation_details?.base_rate)}
-                  </div>
-                  <span className="text-2xl text-accent-light opacity-50">×</span>
-                  <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/5">
-                    <span className="text-[8px] block mb-1 opacity-40 uppercase tracking-widest font-sans font-black text-white/50">Adjustment</span>
-                    (1 {Number(valuation_details?.total_net_adjustment) >= 0 ? "+" : "-"} {Math.abs(valuation_details?.total_net_adjustment / 100).toFixed(3)})
-                  </div>
+        {/* ── DERIVED RATE AND VALUE SUMMARY ─────────────────────────────── */}
+        {(() => {
+          const propType = (subjectData?.property_type || "").toLowerCase().trim();
+          let selectedArea = 0;
+          let areaLabel = "Area";
+
+          if (["flat", "apartment", "shop", "retail", "office", "commercial_office"].includes(propType)) {
+            selectedArea = Number(subjectData?.salable_area_sqft || 0);
+            areaLabel = "Salable Area";
+          } else if (["villa", "house"].includes(propType)) {
+            selectedArea = Number(subjectData?.builtup_area_sqft || 0);
+            areaLabel = "Built-up Area";
+          } else if (["land", "plot"].includes(propType)) {
+            selectedArea = Number(subjectData?.plot_area_sqft || 0);
+            areaLabel = "Total Area";
+          } else {
+            // fallback: check in logical order
+            selectedArea = Number(subjectData?.salable_area_sqft || subjectData?.builtup_area_sqft || subjectData?.plot_area_sqft || subjectData?.carpet_area_sqft || 0);
+            if (subjectData?.salable_area_sqft) areaLabel = "Salable Area";
+            else if (subjectData?.builtup_area_sqft) areaLabel = "Built-up Area";
+            else if (subjectData?.plot_area_sqft) areaLabel = "Total Area";
+            else if (subjectData?.carpet_area_sqft) areaLabel = "Carpet Area";
+          }
+
+          return (
+            <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
+              
+              <div className="flex-1 space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
+                <div className="flex items-baseline gap-1">
+                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)]">
+                    {fmtRate(finalRate)}
+                  </h2>
+                  <span className="text-xs text-text-dim font-bold">/ {area_unit || "sqft"}</span>
                 </div>
+                {selectedArea > 0 ? (
+                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider">
+                    Calculated on <span className="text-accent-light">{selectedArea.toLocaleString()} {area_unit || "sqft"}</span> of {areaLabel}
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse">
+                    Please enter the {areaLabel} in subject details to view final valuation
+                  </p>
+                )}
               </div>
 
-              <div className="mb-10">
-                <div className="flex items-baseline justify-center gap-3">
-                  <span className="text-6xl font-black text-white tracking-tighter drop-shadow-[0_0_20px_rgba(167,139,250,0.3)]">{fmtRate(subject_final_rate)}</span>
-                  <span className="text-xl font-bold text-text-dim opacity-50">/ {area_unit}</span>
-                </div>
-              </div>
-
-              {subject_rate_range && (
-                <div className="pt-8 border-t border-white/5 flex items-center justify-center gap-10">
-                  <div className="text-center">
-                    <p className="text-[8px] uppercase tracking-[0.2em] text-text-dim mb-1 font-black">Market Low</p>
-                    <span className="text-sm font-black text-white font-mono opacity-80">{fmtRate(subject_rate_range.low)}</span>
-                  </div>
-                  <div className="h-10 w-px bg-white/10"></div>
-                  <div className="text-center">
-                    <p className="text-[8px] uppercase tracking-[0.2em] text-text-dim mb-1 font-black">Market High</p>
-                    <span className="text-sm font-black text-white font-mono opacity-80">{fmtRate(subject_rate_range.high)}</span>
-                  </div>
+              {selectedArea > 0 && (
+                <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80">Valuation Value</span>
+                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
+                    {formatter.format(finalRate * selectedArea)}
+                  </h2>
+                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest">
+                    {fmtRate(finalRate)}/{area_unit || "sqft"} × {selectedArea.toLocaleString()} {area_unit || "sqft"} ({areaLabel})
+                  </p>
                 </div>
               )}
+            </section>
+          );
+        })()}
+
+
+        {/* ── REASONING REPORT ──────────────────────────────────────── */}
+        {raw_markdown_report && (
+          <section>
+            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
+              <span className="flex items-center gap-2">🧾 LLM Reasoning Report</span>
+              <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
+            </button>
+            {showReport && (
+              <div className="mt-3 rounded-xl border border-border-soft bg-bg-dark/40 p-4 overflow-auto max-h-[600px] custom-scrollbar animate-in fade-in duration-200">
+                <ReActReasoningReport report={raw_markdown_report} />
+              </div>
+            )}
+          </section>
+        )}
+
+        {reconciliation_note && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
+            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
+            <p className="text-[10px] text-text-secondary leading-relaxed">{reconciliation_note}</p>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+
+  if (isSectionMaximized && typeof document !== "undefined") {
+    return createPortal(
+      <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl animate-in fade-in duration-300 flex flex-col">
+        {/* Sticky top bar with close button */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-border-soft bg-bg-card/80 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</p>
+              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsSectionMaximized(false)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim"
+          >
+            ✕ Collapse
+          </button>
+        </div>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+          {MainContent}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return MainContent;
+}
+
+
+
+// ── Cost Approach Inputs Form ────────────────────────────────────
+function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData }) {
+  if (!schema) return null;
+
+  return (
+    <div className="mt-8 overflow-hidden rounded-[2rem] border border-warning/30 bg-bg-card shadow-2xl backdrop-blur-3xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/20 text-warning text-xl border border-warning/30">
+          🏗️
+        </div>
+        <div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Cost Approach Parameters</h3>
+          <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest font-bold opacity-50">Please enter cost-specific details for subject project</p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        {schema.inputs?.map((inp) => {
+          let label = inp.label;
+          let placeholder = inp.placeholder || inp.default || 0;
+          if (inp.field === "construction_rate_per_sqft") {
+            const sym = getCurrencySymbol(subjectData?.currency);
+            label = `Construction Rate per sqft (${sym})`;
+          } else if (inp.field === "total_life_of_building") {
+            label = "Economic Life (Years)";
+            placeholder = 60;
+          } else if (inp.field === "age_of_property") {
+            label = "Age of Property (Years)";
+          }
+
+          let helpText = inp.help;
+          if (inp.field === "construction_rate_per_sqft") {
+            const propType = (subjectData?.property_type || "").toLowerCase();
+            if (propType === "apartment" || propType === "retail" || propType === "commercial_office") {
+              helpText = "Remark: Please enter construction cost per sqft on Salable Area.";
+            } else if (propType === "villa") {
+              helpText = "Remark: Please enter construction cost per sqft on Built-up Area.";
+            }
+          }
+
+          return (
+            <label key={inp.field} className="flex flex-col gap-1.5">
+              <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+                {label}
+              </span>
+              <input
+                type="number"
+                value={values[inp.field] !== undefined ? values[inp.field] : ""}
+                onChange={(e) => onChange(inp.field, e.target.value)}
+                placeholder={`e.g. ${placeholder}`}
+                className="rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/[0.05]"
+              />
+              {helpText && (
+                <span className="pl-1 text-[9px] text-warning/80 font-semibold leading-relaxed">{helpText}</span>
+              )}
+            </label>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={onSubmit}
+        disabled={isCalculating}
+        className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
+      >
+        {isCalculating ? "Calculating Cost Valuation..." : "Execute Cost Approach Calculation"}
+      </button>
+    </div>
+  );
+}
+
+// ── Cost Result Card ─────────────────────────────────────────────
+function CostResultCard({ data, subjectData }) {
+  const [isSectionMaximized, setIsSectionMaximized] = useState(false);
+  if (!data) return null;
+
+  const derived_plot_rate_per_sqft = data.inputs?.derived_plot_rate_per_sqft;
+  const plot_area_sqft = data.inputs?.plot_area_sqft;
+  const builtup_area_sqft = data.inputs?.builtup_area_sqft;
+  const construction_rate_per_sqft = data.inputs?.construction_rate_per_sqft;
+  const age_of_property = data.inputs?.age_of_property;
+  const total_life_of_building = data.inputs?.total_life_of_building;
+
+  const land_value = data.calculations?.land_value;
+  const construction_cost = data.calculations?.construction_cost;
+  const depreciation_rate = (data.calculations?.depreciation_rate_pct || 0) / 100;
+  const depreciated_building_value = data.calculations?.depreciated_building_value;
+
+  const final_property_value = data.result?.cost_value;
+  const property_type = data.property_type;
+
+  const audit_trail = {
+    land_value_formula: data.formula_audit?.step_1,
+    construction_cost_formula: data.formula_audit?.step_2,
+    depreciation_formula: data.formula_audit?.step_3,
+    depreciated_cost_formula: data.formula_audit?.step_4,
+    final_value_formula: data.formula_audit?.step_5,
+  };
+
+  const currencyCode = subjectData?.currency || "INR";
+  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
+  const formatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  });
+
+  const fmt = (val) => val != null ? formatter.format(Number(val)) : "—";
+  const fmtRate = (val) => val != null ? formatter.format(Number(val)) : "—";
+
+  const DashboardContent = (
+    <div className={`mt-8 rounded-[2.5rem] border border-success/20 bg-bg-card/95 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${isSectionMaximized
+      ? "fixed inset-0 z-[10000] m-4 md:m-12 rounded-[3rem] h-[calc(100vh-6rem)] overflow-y-auto border-success/40 custom-scrollbar"
+      : "overflow-hidden"
+      }`}>
+      {/* Header */}
+      <div className="border-b border-border-soft bg-gradient-to-r from-success/10 to-transparent px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
+            <div>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Valuation Appraisal</h2>
+              <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Land + Depreciated Structure Method</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSectionMaximized(!isSectionMaximized)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-success/20 hover:text-success hover:border-success/40 transition-all text-[8px] font-black uppercase tracking-widest text-text-secondary"
+            >
+              {isSectionMaximized ? "Collapse Audit" : "Maximize Audit View"} ⛶
+            </button>
+            <div className="flex items-center gap-1.5 rounded-xl border border-success/20 bg-success/5 px-3 py-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"></span>
+              <span className="text-[9px] font-black uppercase tracking-[0.14em] text-success">Verified Audit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-8 space-y-8">
+        <section className="space-y-4">
+          <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-text-primary">Appraisal Step Calculation Audit</h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Step 1 */}
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Land component Valuation</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Land Value</p>
+                  <p className="text-2xl font-black text-sky-400 font-mono leading-none">{fmt(land_value)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-white/55">Valuation Base:</p>
+                <p className="font-mono text-white/80 leading-relaxed font-bold">
+                  {audit_trail?.land_value_formula || `Land Value = ${fmtRate(derived_plot_rate_per_sqft)}/sqft × ${plot_area_sqft} sqft (Plot Area)`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Replacement Construction Cost</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Construction Cost</p>
+                  <p className="text-2xl font-black text-amber-400 font-mono leading-none">{fmt(construction_cost)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-amber-400/55">Formula & Inputs:</p>
+                <p className="font-mono text-amber-400/90 leading-relaxed font-bold">
+                  {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${builtup_area_sqft} sqft (Built-up Area)`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Straight-Line Depreciation Rate</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-dim">Depreciation %</p>
+                  <p className="text-2xl font-black text-warning font-mono leading-none">{(depreciation_rate * 100).toFixed(2)}%</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-text-secondary">Formula:</p>
+                <p className="font-mono text-text-primary leading-relaxed">
+                  {audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="rounded-2xl border border-border-soft bg-bg-input/30 p-5 space-y-3 flex flex-col justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Structure Value</span>
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Structure Value</p>
+                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(depreciated_building_value)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-2">
+                <div>
+                  <p className="font-mono text-teal-400/80 leading-relaxed font-bold">
+                    {audit_trail?.depreciated_cost_formula || `Depreciated Value = ${fmt(construction_cost)} × (100% − ${(depreciation_rate * 100).toFixed(2)}%) = ${fmt(depreciated_building_value)}`}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {raw_markdown_report && (
-          <section className="pt-2">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-lg">🧾</span>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">ReAct Reasoning Report</h3>
+        {/* Hero Section */}
+        <section className="relative">
+          <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
+
+          <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
+            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Villa Value</span>
+
+            <div className="space-y-1">
+              <h1 className="font-mono text-5xl font-black text-text-primary drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
+                {fmt(final_property_value)}
+              </h1>
+              <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
+                Land Value + Depreciated Structure Value
+              </p>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-              <pre className="max-h-[720px] overflow-auto whitespace-pre-wrap break-words p-6 text-[11px] leading-6 text-text-secondary custom-scrollbar">{raw_markdown_report}</pre>
+            <div className="border-t border-success/20 pt-4 max-w-lg mx-auto">
+              <p className="text-[9px] font-mono text-text-secondary leading-relaxed">
+                Appraisal Audit Trail:<br />
+                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(land_value)} (Land) + ${fmt(depreciated_building_value)} (Structure) = ${fmt(final_property_value)}`}</span>
+              </p>
             </div>
-          </section>
-        )}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1059,7 +2239,7 @@ function FactoringResultCard({ data, area_unit }) {
   if (isSectionMaximized && typeof document !== "undefined") {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl p-4 md:p-8 flex items-center justify-center animate-in fade-in duration-300">
-        <div className="w-full h-full">
+        <div className="w-full h-full max-h-[90vh] overflow-y-auto custom-scrollbar">
           {DashboardContent}
         </div>
       </div>,
@@ -1070,9 +2250,7 @@ function FactoringResultCard({ data, area_unit }) {
   return DashboardContent;
 }
 
-
-
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, backendUrl = "http://localhost:8000", factorialData: externalFactorialData }) {
+export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1094,8 +2272,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   const [extractionVerification, setExtractionVerification] = useState(null);
   const [comparableData, setComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
+  const [dbNoResults, setDbNoResults] = useState(false);
   const [subjectData, setSubjectData] = useState(null);
   const [listingData, setListingData] = useState(null);
+  const [dbTransactions, setDbTransactions] = useState([]); // transactions from Internal DB comparables
   const [isListingStreaming, setIsListingStreaming] = useState(false);
   const [cleanedData, setCleanedData] = useState(null);
   const [isCleaningStreaming, setIsCleaningStreaming] = useState(false);
@@ -1106,6 +2286,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   const [pipelineDone, setPipelineDone] = useState(false);
   const [currentStage, setCurrentStage] = useState("Stage 0: Initialization");
 
+  // Cost Approach States
+  const [costInputsSchema, setCostInputsSchema] = useState(null);
+  const [costInputsValues, setCostInputsValues] = useState({});
+  const [costCalculationData, setCostCalculationData] = useState(null);
+  const [isCostCalculating, setIsCostCalculating] = useState(false);
+
   // Special Factorial Analysis State
   const [showSpecialForm, setShowSpecialForm] = useState(false);
   const [specialSubjectName, setSpecialSubjectName] = useState("Lodha Altamount");
@@ -1114,9 +2300,141 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   const [specialCompName, setSpecialCompName] = useState("Rustomjee Crown");
   const [specialCompLat, setSpecialCompLat] = useState("19.018");
   const [specialCompLng, setSpecialCompLng] = useState("72.827");
+
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
   const markersRef = useRef([]);
+  const subjectDataRef = useRef(null);
+
+  const selectedComparablePayload = () => {
+    if (!comparableData) return [];
+    return Array.from(selectedComps).map((i) => comparableData[i]).filter(Boolean);
+  };
+
+  const handleCalculateRate = (factData) => {
+    submitFactorialAnalysis(factData || factorialData, subjectData, selectedComparablePayload());
+  };
+
+  const handleCostCalculate = async () => {
+    if (isCostCalculating || !subjectData || !factorialAnalysisData) return;
+
+    setIsCostCalculating(true);
+    setStreamingNote("Sending inputs to Traditional Cost Approach Engine...");
+
+    const derivedRate = factorialAnalysisData.subject_final_rate || 0;
+    const plotArea = subjectData?.plot_area_sqft || 0;
+    const builtupArea = subjectData?.builtup_area_sqft || 0;
+    const ageYears = subjectData?.age_years || 0;
+
+    const payload = {
+      derived_plot_rate_per_sqft: Number(derivedRate),
+      plot_area_sqft: Number(plotArea),
+      builtup_area_sqft: Number(builtupArea),
+      property_type: "villa",
+      construction_rate_per_sqft: Number(costInputsValues.construction_rate_per_sqft || 0),
+      total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
+      age_of_property: Number(ageYears),
+    };
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: `Run Traditional Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Economic Life: ${payload.total_life_of_building} yrs. Plot Area: ${payload.plot_area_sqft} sqft, Built-up Area: ${payload.builtup_area_sqft} sqft, Age: ${payload.age_of_property} yrs.`,
+        meta: "Now"
+      },
+      { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
+    ]);
+
+    try {
+      const response = await fetch(apiUrl("/cost_calculation_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Cost calculation failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "cost_calculation_start") summary = event.content?.message || "Running Cost Approach calculations...";
+          else if (event.type === "cost_calculation_result") summary = `🛡️ Cost Approach calculated.`;
+          else if (event.type === "cost_calculation_done") summary = "Cost Approach calculation complete.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+
+          if (event.type === "cost_calculation_result") {
+            setCostCalculationData(event.content);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "cost calculation results",
+                  cost_calculation_data: event.content,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "cost_calculation_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "cost calculation done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Cost calculation error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsCostCalculating(false);
+      setStreamingNote("");
+    }
+  };
 
   useEffect(() => {
     setFactorialData(externalFactorialData);
@@ -1143,11 +2461,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setExtractionVerification(null);
     setComparableData(null);
     setSelectedComps(new Set());
+    setDbNoResults(false);
     setSubjectData(null);
     setListingData(null);
+    setDbTransactions([]);
     setCleanedData(null);
     setFactorialData(null);
     setFactorialAnalysisData(null);
+    setCostInputsSchema(null);
+    setCostInputsValues({});
+    setCostCalculationData(null);
+    setIsCostCalculating(false);
     setPipelineDone(false);
     setCurrentStage("Stage 0: Initialization");
     markersRef.current = [];
@@ -1190,9 +2514,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           lat: Number(c.map_search_lat),
           lng: Number(c.map_search_lng),
           label: c.project_name || "Comparable",
-          source: "comparable"
+          source: "comparable",
+          data_source: c.data_source || "Web"
         }));
-      allMarkers = [...allMarkers, ...toolMarkers];
+
+      // Deduplicate comparables by label (project name), prioritizing Web source coordinate
+      const seen = new Map();
+      for (const m of toolMarkers) {
+        const name = (m.label || "").toLowerCase().trim();
+        const existing = seen.get(name);
+        if (!existing) {
+          seen.set(name, m);
+        } else {
+          const currentIsWeb = String(m.data_source).toLowerCase() === "web";
+          const existingIsWeb = String(existing.data_source).toLowerCase() === "web";
+          if (currentIsWeb && !existingIsWeb) {
+            seen.set(name, m);
+          }
+        }
+      }
+      allMarkers = [...allMarkers, ...Array.from(seen.values())];
     }
 
 
@@ -1206,116 +2547,223 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
+    // Split by source
+    const dbComps = selected.filter(c => (c.data_source || "Web") === "Internal DB");
+    const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
+
+    // If subject project exists in internal DB, also fetch its transactions
+    const subjectDbProject = subjectData?.subject_db_project || null;
+
     setIsListingStreaming(true);
-    setStreamingNote("Starting listing search pipeline...");
+    setStreamingNote("Starting listing fetch pipeline...");
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
 
+    const totalDbFetches = dbComps.length + (subjectDbProject ? 1 : 0);
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — fetch listings.`, meta: "Now" },
+      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`, meta: "Now" },
       { role: "assistant", content: "Running listing pipeline...", meta: "Live" },
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/listing_stream`, {
+      // ── 1. Fetch transactions for each Internal DB comparable ──────────
+      const allDbTransactions = [];
+      for (const comp of dbComps) {
+        const projId = comp.project_id || comp.id || comp.project_name;
+        const propType = comp.property_type || subjectData.property_type || "apartment";
+        if (!projId) continue;
+
+        setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        try {
+          const res = await fetch(apiUrl("/transaction_stream"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              project_id: String(projId),
+              property_type: propType,
+              project_name: comp.project_name || "",
+            }),
+          });
+          if (!res.ok || !res.body) continue;
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const chunks = buf.split("\n\n");
+            buf = chunks.pop() || "";
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const ev = JSON.parse(chunk.slice(6));
+              onEvent?.(ev);
+              if (ev.type === "transaction_results") {
+                allDbTransactions.push(...(ev.content?.transactions || []));
+                setStreamingNote(`✅ Got ${ev.content?.total || 0} transactions for "${comp.project_name}"`);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("DB transaction fetch failed for", comp.project_name, e);
+        }
+      }
+
+      // Also fetch subject's own DB transactions if it was found in the internal DB
+      if (subjectDbProject) {
+        const projId = subjectDbProject.project_id || subjectDbProject.id || subjectDbProject.project_name;
+        const propType = subjectDbProject.property_type || subjectData.property_type || "apartment";
+        if (projId) {
+          setStreamingNote(`🗄️ Fetching DB transactions for subject "${subjectDbProject.project_name}"...`);
+          try {
+            const res = await fetch(apiUrl("/transaction_stream"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                project_id: String(projId),
+                property_type: propType,
+                project_name: subjectDbProject.project_name || "",
+              }),
+            });
+            if (res.ok && res.body) {
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = "";
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const chunks = buf.split("\n\n");
+                buf = chunks.pop() || "";
+                for (const chunk of chunks) {
+                  if (!chunk.startsWith("data: ")) continue;
+                  const ev = JSON.parse(chunk.slice(6));
+                  onEvent?.(ev);
+                  if (ev.type === "transaction_results") {
+                    // Mark subject transactions with is_subject flag
+                    const subjectTx = (ev.content?.transactions || []).map(t => ({ ...t, is_subject: true }));
+                    allDbTransactions.push(...subjectTx);
+                    setStreamingNote(`✅ Got ${ev.content?.total || 0} subject transactions from Internal DB`);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("DB transaction fetch failed for subject", subjectDbProject.project_name, e);
+          }
+        }
+      }
+
+      // Store DB transactions and stamp on the message
+      if (allDbTransactions.length > 0) {
+        setDbTransactions(allDbTransactions);
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0) {
+            next[lastIndex] = {
+              ...next[lastIndex],
+              db_transactions: allDbTransactions,
+            };
+          }
+          return next;
+        });
+      }
+
+      // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
+      const webFetchNote = webComps.length > 0 
+        ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+        : `🌐 Fetching web listings for Subject Project...`;
+      setStreamingNote(webFetchNote);
+
+      const response = await fetch(apiUrl("/listing_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: subjectData,
-          selected_comparables: selected,
+          selected_comparables: webComps,
           property_type: subjectData.property_type || "apartment",
         }),
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`Listing request failed with status ${response.status}`);
-      }
+      if (response.ok && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+          for (const chunk of chunks) {
+            if (!chunk.startsWith("data: ")) continue;
+            const event = JSON.parse(chunk.slice(6));
+            onEvent?.(event);
+            const summary = summarizeEvent(event);
+            setStreamingNote(summary);
 
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() || "";
+            if (event.type === "listing_results") {
+              const listings = event.content?.listings || [];
+              const newUsage = event.content?.token_usage || {};
+              const total = newUsage.total_tokens || 0;
+              const model = newUsage.model || "gpt-4o-mini";
+              setListingData(listings);
+              setTokenStats((prev) => {
+                const next = { ...prev };
+                next.total_tokens += total;
+                if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
+                next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
+                next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
+                next.model_breakdown[model].total += total;
 
-        for (const chunk of chunks) {
-          if (!chunk.startsWith("data: ")) continue;
-          const event = JSON.parse(chunk.slice(6));
+                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+                const promptRate = isGpt4o ? 5.00 : 0.15;
+                const completionRate = isGpt4o ? 15.00 : 0.60;
+                const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
+                next.cost_usd = (next.cost_usd || 0) + addedCost;
+                return next;
+              });
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0) {
+                  next[lastIndex] = {
+                    ...next[lastIndex],
+                    role: "assistant",
+                    content: summary,
+                    meta: "listing results",
+                    listings,
+                    // Preserve any DB transactions stamped in the same message
+                    db_transactions: next[lastIndex].db_transactions || [],
+                  };
+                }
+                return next;
+              });
+            }
 
-          onEvent?.(event);
-          const summary = summarizeEvent(event);
-          setStreamingNote(summary);
-
-          if (event.type === "listing_results") {
-            const listings = event.content?.listings || [];
-            const newUsage = event.content?.token_usage || {};
-            const total = newUsage.total_tokens || 0;
-            const model = newUsage.model || "gpt-4o-mini";
-
-            setListingData(listings);
-            setTokenStats((prev) => {
-              const next = { ...prev };
-              next.total_tokens += total;
-              if (!next.model_breakdown[model]) {
-                next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-              }
-              next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-              next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-              next.model_breakdown[model].total += total;
-
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
-              next.cost_usd = (next.cost_usd || 0) + addedCost;
-              return next;
-            });
-
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: "listing results",
-                  listings: listings,
-                };
-              }
-              return next;
-            });
-          }
-
-          if (event.type === "listing_done" || event.type === "error") {
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].listings) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: event.type === "error" ? "error" : "listing done",
-                };
-              }
-              return next;
-            });
+            if (event.type === "listing_done" || event.type === "error") {
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0 && !next[lastIndex].listings) {
+                  next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                }
+                return next;
+              });
+            }
           }
         }
       }
+
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
         if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            role: "assistant",
-            content: `Listing fetch error: ${error.message}`,
-            meta: "Error",
-          };
+          next[next.length - 1] = { ...next[next.length - 1], role: "assistant", content: `Listing fetch error: ${error.message}`, meta: "Error" };
         }
         return next;
       });
@@ -1327,9 +2775,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
   // ── Proceed to Data Cleaning (Step 3) ──────────────────────────
   const submitCleaning = async () => {
-    if (!listingData || listingData.length === 0 || !subjectData || isCleaningStreaming) return;
+    // Trigger if we have web listings OR db transactions (or both)
+    const hasWebListings = listingData && listingData.length > 0;
+    const hasDbTx = dbTransactions && dbTransactions.length > 0;
+    if ((!hasWebListings && !hasDbTx) || !subjectData || isCleaningStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
+    const webCount = (listingData || []).length;
+    const dbCount = dbTransactions.length;
 
     setIsCleaningStreaming(true);
     setStreamingNote("Starting data cleaning pipeline...");
@@ -1337,19 +2790,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed to clean and normalize ${listingData.length} raw listings.`, meta: "Now" },
+      {
+        role: "user",
+        content: `Proceed to clean ${webCount} web listing(s) and merge with ${dbCount} Internal DB transaction(s).`,
+        meta: "Now",
+      },
       { role: "assistant", content: "Running smart data cleaning pipeline...", meta: "Live" },
     ]);
 
+
     try {
-      const response = await fetch(`${backendUrl}/cleaning_stream`, {
+      const response = await fetch(apiUrl("/cleaning_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          listings: listingData,
+          listings: listingData || [],          // web listings only — cleaning applies here
           subject: subjectData,
           comparables: selected,
           property_type: subjectData.property_type || "apartment",
+          db_transactions: dbTransactions,      // passed through as-is, merged after cleaning
         }),
       });
 
@@ -1377,7 +2836,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           let summary = "Pipeline update received.";
           if (event.type === "cleaning_start") summary = event.content?.message || "Starting data cleaning...";
           else if (event.type === "cleaning_progress") summary = `🧹 Cleaning: ${event.content?.detail || event.content?.stage}`;
-          else if (event.type === "cleaning_results") summary = `✅ Cleaning complete: ${event.content?.cleaned_listings?.length || 0} valid listings remaining.`;
+          else if (event.type === "cleaning_results") {
+            const webCnt = event.content?.web_count ?? (event.content?.cleaned_listings?.length || 0);
+            const dbCnt = event.content?.db_count ?? 0;
+            summary = `✅ Cleaning complete: ${webCnt} web listing(s) + ${dbCnt} Internal DB transaction(s) merged.`;
+          }
           else if (event.type === "cleaning_done") summary = "Data cleaning pipeline finished.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
@@ -1385,10 +2848,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
           if (event.type === "cleaning_results") {
             const cleanedListings = event.content?.cleaned_listings || [];
+            const reviewListings = event.content?.review_listings || [];
+            const droppedListings = event.content?.dropped_listings || [];
             const auditStats = event.content?.audit_stats || {};
             const newUsage = auditStats.token_usage || {};
             const total = newUsage.total_tokens || 0;
-            const model = "gpt-4o-mini";
+            const model = newUsage.model || "gpt-4o-mini";
 
             setCleanedData(cleanedListings);
             setTokenStats((prev) => {
@@ -1401,7 +2866,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
               next.model_breakdown[model].total += total;
 
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * 0.15) + ((newUsage.completion_tokens || 0) / 1000000 * 0.60);
+              const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+              const promptRate = isGpt4o ? 5.00 : 0.15;
+              const completionRate = isGpt4o ? 15.00 : 0.60;
+              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
               next.cost_usd = (next.cost_usd || 0) + addedCost;
               return next;
             });
@@ -1416,6 +2884,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   content: summary,
                   meta: "cleaning results",
                   cleaned_listings: cleanedListings,
+                  review_listings: reviewListings,
+                  dropped_listings: droppedListings,
                 };
               }
               return next;
@@ -1459,12 +2929,134 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
   };
 
 
+  // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
+  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
+    if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
+
+    setIsCleaningStreaming(true);
+    setStreamingNote("Recalculating plot rates with overrides...");
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Recalculate plot rates with manual adjustments.`, meta: "Now" },
+      { role: "assistant", content: "Applying user overrides and recalculating...", meta: "Live" },
+    ]);
+
+    try {
+      const payload = {
+        cleaned_listings: cleanedData,
+        subject: subjectData,
+        property_type: subjectData.property_type || "plot",
+        overrides: rowOverrides,
+      };
+      if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
+      if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
+
+      const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Recalculate request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let newCleanedListings = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "recalculate_start") summary = event.content || "Recalculating plot rates...";
+          else if (event.type === "recalculate_results") {
+            summary = `Recalculation ready — ${event.content?.listings?.length || 0} listings.`;
+            newCleanedListings = event.content.listings;
+          }
+          else if (event.type === "recalculate_done") summary = "Plot rate recalculation complete.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+
+          if (event.type === "recalculate_results" && event.content?.listings) {
+            setCleanedData(event.content.listings);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "cleaning results",
+                  cleaned_listings: event.content.listings,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "recalculate_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "recalculation done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+
+      if (newCleanedListings) {
+        setFactorialData(null);
+        setFactorialAnalysisData(null);
+      }
+
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Recalculate error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsCleaningStreaming(false);
+      setStreamingNote("");
+    }
+  };
+
+
   // ── Proceed to Factorial Table (Step 4) ────────────────────────
   const submitFactorial = async () => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isFactorialStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
-    const lastFactorDataRef = { current: null };
 
     setIsFactorialStreaming(true);
     setStreamingNote("Computing factorial rate table...");
@@ -1477,15 +3069,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cleaned_listings: cleanedData,
           subject: subjectData,
           comparables: selected,
-          currency: subjectData.currency || "INR",
-          area_unit: "sqft",
+          currency: subjectData.currency,
+          area_unit: subjectData.area_unit || "sqft",
         }),
       });
 
@@ -1521,7 +3113,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
-            lastFactorDataRef.current = event.content;
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -1571,10 +3162,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     } finally {
       setIsFactorialStreaming(false);
       setStreamingNote("");
-      // Automatically trigger Step 5: LLM Factorial Analysis if we have the results
-      if (lastFactorDataRef.current) {
-        submitFactorialAnalysis(lastFactorDataRef.current, subjectData, selected);
-      }
     }
   };
 
@@ -1585,13 +3172,27 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setStreamingNote("Sending factorial data to LLM for adjustment analysis...");
     setCurrentStage("Stage 5: LLM Factorial Analysis");
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
-    ]);
+    setMessages((prev) => {
+      const existingIndex = prev.findIndex(m =>
+        m.meta === "factorial analysis results" ||
+        m.meta === "factorial analysis done" ||
+        m.meta === "factorial analysis start" ||
+        m.content === "Running LLM Factoring..."
+      );
+
+      if (existingIndex !== -1) {
+        const next = [...prev];
+        next[existingIndex] = { role: "assistant", content: "Running LLM Factoring...", meta: "Live" };
+        return next;
+      }
+      return [
+        ...prev,
+        { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
+      ];
+    });
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_analysis_stream`, {
+      const response = await fetch(apiUrl("/factorial_analysis_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1649,8 +3250,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                 next.model_breakdown[model].completion += (usage.completion_tokens || 0);
                 next.model_breakdown[model].total += total;
 
-                // Stage 5 cost (GPT-4o) - $5/1M input, $15/1M output
-                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * 5.00) + ((usage.completion_tokens || 0) / 1000000 * 15.00);
+                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
+                const promptRate = isGpt4o ? 5.00 : 0.15;
+                const completionRate = isGpt4o ? 15.00 : 0.60;
+                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * promptRate) + ((usage.completion_tokens || 0) / 1000000 * completionRate);
                 next.cost_usd = (next.cost_usd || 0) + addedCost;
 
                 // Track current stage
@@ -1663,10 +3266,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+              if (targetIndex !== -1) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: "factorial analysis results",
@@ -1680,10 +3283,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           if (event.type === "factorial_analysis_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+              if (targetIndex !== -1 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "factorial analysis done",
@@ -1697,9 +3300,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
+        if (targetIndex !== -1) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `LLM Factoring error: ${error.message}`,
             meta: "Error",
@@ -1738,7 +3342,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     setIsStreaming(true);
 
     try {
-      const response = await fetch(`${backendUrl}/ask_stream_valuation?question=${encodeURIComponent(trimmed)}`, {
+      const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}&comparable_source=both`), {
         signal: abortRef.current.signal,
       });
 
@@ -1784,19 +3388,52 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
             const coords = ents?.coordinates;
 
             // Store subject data for later use in listing fetch
-            setSubjectData({
+            const subjectObj = {
+              ...ents,
               project_name: ents?.project_name || "Subject Property",
               location_name: ents?.location_name || "",
               country: ents?.country || "India",
               currency: ents?.currency || "INR",
               property_type: ents?.property_type || "apartment",
+              recommended_approach: ents?.recommended_approach || "market",
               lat: coords?.lat || 0,
               lng: coords?.lng || 0,
-            });
+            };
+            setSubjectData(subjectObj);
+            subjectDataRef.current = subjectObj;
 
             if (coords?.lat && coords?.lng && !isNaN(Number(coords.lat)) && !isNaN(Number(coords.lng)) && Number(coords.lat) !== 0 && Number(coords.lng) !== 0) {
               // useEffect will handle marker update
             }
+          }
+
+          if (event.type === "cost_inputs_required") {
+            setCostInputsSchema(event.content);
+            const defaults = {};
+            event.content.inputs?.forEach(inp => {
+              let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
+              if (inp.field === "total_life_of_building") {
+                val = 60;
+              }
+              const sData = subjectDataRef.current;
+              if (sData) {
+                if (inp.field === "age_of_property") {
+                  const extractedAge = sData.age_of_property ?? sData.age_years ?? sData.age ?? sData.age_of_building;
+                  if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
+                } else if (inp.field === "construction_rate_per_sqft") {
+                  const extractedUds = sData.construction_rate_per_sqft ?? sData.construction_rate ?? sData.build_rate;
+                  if (extractedUds != null && extractedUds !== "") val = Number(extractedUds);
+                } else if (inp.field === "age_of_property") {
+                  const extractedPlot = sData.age_of_property ?? sData.age ?? sData.building_age;
+                  if (extractedPlot != null && extractedPlot !== "") val = Number(extractedPlot);
+                } else if (inp.field === "total_life_of_building") {
+                  const extractedLife = sData.total_life_of_building ?? sData.economic_life ?? sData.building_life;
+                  if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
+                }
+              }
+              defaults[inp.field] = val;
+            });
+            setCostInputsValues(defaults);
           }
 
           if (event.type === "clarification_needed") {
@@ -1809,7 +3446,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
             setClarificationPrompt(event.content?.question || event.content?.message || "");
             setClarificationFields(schemas);
-            setClarificationValues(Object.fromEntries(schemas.map((s) => [s.field, s.default || ""])));
+            setClarificationValues(Object.fromEntries(schemas.map((s) => {
+              let val = s.default || "";
+              if (s.field === "property_type" && val) {
+                const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === val);
+                if (!hasOpt) val = "";
+              }
+              return [s.field, val];
+            })));
           }
 
           if (event.type === "map_confirmation") {
@@ -1845,8 +3489,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
 
+            // Determine property type to decide if project_name should be shown
+            const propType = ents?.property_type;
+            const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
+
             const fields = Object.entries(ents)
-              .filter(([k, v]) => v !== null && v !== "" && typeof v !== 'object' && !ignoreKeys.includes(k) && !k.startsWith("_"))
+              .filter(([k, v]) => {
+                if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
+                if (v === null || v === "" || typeof v === 'object') return false;
+                // Hide project_name for plot types (not applicable)
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                return true;
+              })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
 
             if (ents.coordinates && typeof ents.coordinates === 'object') {
@@ -1866,8 +3520,40 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
-            // Pre-select all comparables by default
-            setSelectedComps(new Set(comps.map((_, i) => i)));
+            // Store subject's DB entry (if found) for listing fetch
+            const subjectDbProject = event.content?.subject_db_project || null;
+            if (subjectDbProject) {
+              setSubjectData(prev => prev ? { ...prev, subject_db_project: subjectDbProject } : prev);
+              subjectDataRef.current = subjectDataRef.current
+                ? { ...subjectDataRef.current, subject_db_project: subjectDbProject }
+                : subjectDataRef.current;
+            }
+            // Pre-select only comparables within the initial radius by default
+            const initialSelected = comps
+              .map((comp, i) => {
+                const dist = getComparableDistanceKm(comp);
+                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
+                  return i;
+                }
+                return -1;
+              })
+              .filter((i) => i !== -1);
+            setSelectedComps(new Set(initialSelected));
+          }
+
+          if (event.type === "db_comparable_status") {
+            if (event.content?.status === "no_results" || event.content?.status === "error") {
+              setDbNoResults(true);
+              // Also stamp it onto the current last message so the flag survives the 'done' meta overwrite
+              setMessages((prev) => {
+                const next = [...prev];
+                const lastIndex = next.length - 1;
+                if (lastIndex >= 0) {
+                  next[lastIndex] = { ...next[lastIndex], db_no_results: true };
+                }
+                return next;
+              });
+            }
           }
 
           if (event.type === "done") {
@@ -1888,6 +3574,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   content: summary,
                   meta: event.type.replaceAll("_", " "),
                   ...(event.type === "comparable_results" ? { comparables: event.content?.comparables || null } : {}),
+                  // Preserve db_no_results flag across meta overwrites
+                  db_no_results: next[lastIndex]?.db_no_results || false,
                 };
               }
               return next;
@@ -1985,6 +3673,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     if (!approachChoiceNeeded) return;
     const approach = confirmed ? approachChoiceNeeded.recommended_approach : alternative;
     setApproachChoiceNeeded(null);
+    setSubjectData(prev => prev ? { ...prev, recommended_approach: approach } : { recommended_approach: approach });
     submitQuestion(`${currentQuestion}. Proceed with the ${approach} approach.`, true, `Proceeding with ${approach} approach`);
   };
 
@@ -1994,7 +3683,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     onClear?.();
     setMessages([]);
     clearInteractiveState();
-    const lastFactorDataRef = { current: null };
 
     // Create the subject and comparables data
     const subj = {
@@ -2064,15 +3752,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     ]);
 
     try {
-      const response = await fetch(`${backendUrl}/factorial_stream`, {
+      const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cleaned_listings: mockCleaned,
           subject: subj,
           comparables: comps,
-          currency: "INR",
-          area_unit: "sqft",
+          currency: subj.currency,
+          area_unit: subj.area_unit || "sqft",
         }),
       });
 
@@ -2107,7 +3795,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
-            lastFactorDataRef.current = event.content;
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -2157,38 +3844,33 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
     } finally {
       setIsFactorialStreaming(false);
       setStreamingNote("");
-      // Automatically trigger Step 5: LLM Factorial Analysis for special flow too
-      if (lastFactorDataRef.current) {
-        submitFactorialAnalysis(lastFactorDataRef.current, subj, comps);
-      }
     }
   };
 
   const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
 
   return (
-    <section className="panel-shell">
-      <div className="panel-header-shell">
+    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+      <div className="panel-header-shell border-b border-border/60">
         <div className="panel-title-shell">
-          <div className="icon-chip">💬</div>
-          <div>
-            <p className="panel-kicker">AI Assistant</p>
-            <h2 className="panel-heading">Chat With The LLM</h2>
+          <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
+            <MessageSquareCode className="h-5 w-5 text-accent" />
           </div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
-        <div className="panel-pill">{anyStreaming ? "LIVE" : "READY"}</div>
+        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-border bg-bg-card text-3xl shadow-panel">
-              🤖
+          <div className="flex h-full flex-col items-center justify-center text-center py-6">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
+              <Bot className="h-8 w-8 text-accent" />
             </div>
-            <h3 className="font-display text-base uppercase tracking-[0.14em] text-text-primary">
+            <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
               Start A Valuation Conversation
             </h3>
-            <p className="mt-2 max-w-xs text-sm text-text-secondary">
+            <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
               Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
             </p>
             <div className="mt-6 grid gap-3 w-full max-w-lg">
@@ -2197,16 +3879,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   key={prompt}
                   type="button"
                   onClick={() => submitQuestion(prompt)}
-                  className="rounded-2xl border border-border bg-bg-card px-4 py-3 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary"
+                  className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
                 >
                   {prompt}
                 </button>
               ))}
             </div>
 
-            <div className="mt-8 border-t border-border pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
+            <div className="mt-8 border-t border-border/50 pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-[11px] font-bold text-accent uppercase tracking-widest">⚡ Special Factorial Analysis</h4>
+                <h4 className="text-xs font-bold text-accent uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-accent animate-pulse" /> Special Factorial Analysis
+                </h4>
                 <button onClick={() => setShowSpecialForm(!showSpecialForm)} className="text-[10px] font-bold uppercase tracking-wider text-text-dim hover:text-white transition">
                   {showSpecialForm ? "Close" : "Setup Coordinates"}
                 </button>
@@ -2244,7 +3928,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                 key={`${message.role}-${index}`}
                 className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
               >
-                <p className="mb-1 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
+                <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
                   {message.role === "user" ? "You" : `Assistant · ${message.meta}`}
                 </p>
                 <div
@@ -2263,14 +3947,72 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       selectable={pipelineDone && !isListingStreaming && !listingData}
                     />
                   )}
-                  {message.listings && <ListingTable listings={message.listings} />}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} />}
-                  {message.factorial_data && (
-                    <div className="flex flex-col gap-3">
-                      <FactorialTable data={message.factorial_data} />
+                  {/* DB found nothing but web results exist — amber warning */}
+                  {message.db_no_results && message.comparables && (
+                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Internal DB</p>
+                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
+                      </div>
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} />}
+                  {/* DB found nothing AND no web comparables either */}
+                  {message.db_no_results && !message.comparables && (
+                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                      <Database className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Project Found in DB</p>
+                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type.</p>
+                      </div>
+                    </div>
+                  )}
+                  {(message.listings || message.db_transactions) && (
+                    <ListingTable
+                      listings={message.listings || []}
+                      dbTransactions={message.db_transactions || []}
+                    />
+                  )}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
+                  {message.factorial_data && (
+                    <div className="flex flex-col gap-3">
+                      <FactorialTable
+                        data={message.factorial_data}
+                        onCalculateRate={() => handleCalculateRate(message.factorial_data)}
+                        isCalculatingRate={isFactorialAnalysisStreaming}
+                        canCalculateRate={Boolean(subjectData && selectedComparablePayload().length > 0)}
+                      />
+                    </div>
+                  )}
+                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
+                  {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
+
+                  {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
+                    <>
+                      {costCalculationData ? (
+                        <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
+                            <CheckCircle className="h-4.5 w-4.5 text-success" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
+                            <p className="text-[9px] text-text-dim mt-0.5">Please review the complete step-by-step appraisal report card appended below.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        costInputsSchema && (
+                          <CostInputsForm
+                            schema={costInputsSchema}
+                            values={costInputsValues}
+                            onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
+                            onSubmit={handleCostCalculate}
+                            isCalculating={isCostCalculating}
+                            subjectData={subjectData}
+                          />
+                        )
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -2290,14 +4032,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
         )}
       </div>
 
-      <div className="border-t border-border bg-bg-card px-4 py-3 backdrop-blur">
+      <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && !cleanedData && !factorialData && !isListingStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(34,211,238,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(34,211,238,0.16)] bg-[rgba(34,211,238,0.06)] px-4 py-3">
+        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(34,211,238,0.24)] bg-[rgba(34,211,238,0.12)] text-base font-semibold text-accent-light">
-                  📄
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                  <FileSearch className="h-5 w-5 text-accent-light" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
@@ -2319,7 +4061,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                 type="button"
                 onClick={submitListingFetch}
                 disabled={selectedComps.size === 0}
-                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               >
                 Proceed to Next Step →
               </button>
@@ -2328,19 +4070,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
         )}
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-        {listingData && listingData.length > 0 && !cleanedData && !isCleaningStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,146,60,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(251,146,60,0.16)] bg-[rgba(251,146,60,0.06)] px-4 py-3">
+        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(251,146,60,0.24)] bg-[rgba(251,146,60,0.12)] text-base font-semibold text-[#fb923c]">
-                  🧹
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                  <Sparkles className="h-5 w-5 text-[#fb923c]" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
                     Step 3 — Clean Raw Listings
                   </p>
                   <p className="mt-1 text-sm text-text-secondary">
-                    {listingData.length} raw listings found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                    {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
                   </p>
                 </div>
               </div>
@@ -2352,7 +4094,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               <button
                 type="button"
                 onClick={submitCleaning}
-                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110"
+                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
               >
                 Start Data Cleaning →
               </button>
@@ -2362,11 +4104,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
         {/* ── Proceed to Factorial Table CTA ────────────────── */}
         {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(167,139,250,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(167,139,250,0.16)] bg-[rgba(167,139,250,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
+            <div className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(167,139,250,0.24)] bg-[rgba(167,139,250,0.12)] text-base font-semibold text-[#a78bfa]">
-                  📈
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                  <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
@@ -2385,7 +4127,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               <button
                 type="button"
                 onClick={submitFactorial}
-                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110"
+                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
               >
                 Generate Factorial Table →
               </button>
@@ -2394,12 +4136,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
         )}
 
         {(clarificationFields.length > 0 || mapConfirmation || approachChoiceNeeded || extractionVerification) && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[rgba(251,191,36,0.28)] bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(11,14,20,0.92))] shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-            <div className="border-b border-[rgba(251,191,36,0.16)] bg-[rgba(251,191,36,0.06)] px-4 py-3">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
+            <div className="border-b border-warning/15 bg-warning/5 px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(251,191,36,0.24)] bg-[rgba(251,191,36,0.12)] text-base font-semibold text-warning">
-                    {mapConfirmation ? "◎" : approachChoiceNeeded ? "⚙️" : extractionVerification ? "✓" : "!"}
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
+                    {mapConfirmation ? (
+                      <MapPin className="h-5 w-5 text-warning" />
+                    ) : approachChoiceNeeded ? (
+                      <SlidersHorizontal className="h-5 w-5 text-warning" />
+                    ) : extractionVerification ? (
+                      <ShieldCheck className="h-5 w-5 text-warning" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-warning" />
+                    )}
                   </div>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
@@ -2419,7 +4169,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                     setMapConfirmation(null);
                     setApproachChoiceNeeded(null);
                   }}
-                  className="text-sm text-text-dim transition hover:text-danger"
+                  className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
                 >
                   ×
                 </button>
@@ -2436,22 +4186,22 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       </span>
                       {schema.type === "select" ? (
                         <select
-                          value={clarificationValues[schema.field] || ""}
-                          onChange={(event) =>
-                            setClarificationValues((prev) => ({
-                              ...prev,
-                              [schema.field]: event.target.value,
-                            }))
-                          }
-                          className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                           value={clarificationValues[schema.field] || ""}
+                           onChange={(event) =>
+                             setClarificationValues((prev) => ({
+                               ...prev,
+                               [schema.field]: event.target.value,
+                             }))
+                           }
+                           className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
                         >
-                          <option value="" disabled>Select {schema.label}...</option>
+                          <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
                           {schema.options?.map(opt => {
                             const isObj = typeof opt === 'object';
                             const optValue = isObj ? opt.value : opt;
                             const optLabel = isObj ? opt.label : humanizeFieldName(opt);
                             return (
-                              <option key={optValue} value={optValue} className="bg-bg-dark">{optLabel}</option>
+                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>
                             );
                           })}
                         </select>
@@ -2473,7 +4223,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                               }
                             }}
                             placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-                            className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                           />
                           {schema.field === "age_years" && String(clarificationValues[schema.field]) === "0" && (
                             <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">
@@ -2510,7 +4260,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                         }))
                       }
                       placeholder={PLACEHOLDER_MAP.coordinates}
-                      className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-[rgba(251,191,36,0.06)]"
+                      className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
                   </label>
                   <button
@@ -2527,7 +4277,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   <button
                     type="button"
                     onClick={() => submitApproachChoice(true)}
-                    className="rounded-xl border border-warning bg-[rgba(251,191,36,0.1)] px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-[rgba(251,191,36,0.2)]"
+                    className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
                   >
                     Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach
                   </button>
@@ -2540,11 +4290,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                       onChange={(e) =>
                         setClarificationValues({ ...clarificationValues, override_approach: e.target.value })
                       }
-                      className="rounded-xl border border-border bg-[rgba(255,255,255,0.04)] px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning"
+                      className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
                     >
-                      <option value="" disabled>Select approach...</option>
-                      <option key="market" value="market" className="bg-bg-dark">Market Approach</option>
-                      <option key="cost" value="cost" disabled className="bg-bg-dark opacity-50">Cost Approach (Coming Soon)</option>
+                      <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                      <option key="market" value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                      <option
+                        key="cost"
+                        value="cost"
+                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                        disabled={subjectData?.property_type !== "villa"}
+                      >
+                        Cost Approach {subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
+                      </option>
                     </select>
                   </label>
                   <button
@@ -2606,14 +4363,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
 
         {/* ── Token Breakdown UI ────────────────── */}
         {showTokenBreakdown && (
-          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-[rgba(15,23,42,0.8)] p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
               <div className="flex items-center gap-2">
-                <span className="text-lg">💎</span>
+                <Sparkles className="h-4 w-4 text-accent animate-pulse" />
                 <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
               </div>
               <div className="text-right">
-                <p className="text-[10px] uppercase tracking-widest text-text-dim">Estimated Cost</p>
+                <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
                 <p className="text-sm font-mono font-bold text-success">${tokenStats.cost_usd.toFixed(4)}</p>
                 {tokenStats.last_stage_tokens && (
                   <p className="text-[8px] text-accent-light font-bold mt-0.5">
@@ -2630,14 +4387,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   <p className="text-[11px] text-text-dim italic">No model data yet...</p>
                 ) : (
                   Object.entries(tokenStats.model_breakdown).map(([model, usage]) => (
-                    <div key={model} className="rounded-xl bg-white/5 p-2.5 border border-white/5">
+                    <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[11px] font-bold text-accent-light">{model}</span>
                         <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
                       </div>
                       <div className="flex gap-3">
                         <div className="flex-1">
-                          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-accent"
                               style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
@@ -2649,7 +4406,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                           </div>
                         </div>
                         <div className="flex-1">
-                          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-accent-purple"
                               style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
@@ -2669,7 +4426,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
               <div className="space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
                 {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
-                  <div className="rounded-xl bg-white/5 p-3 text-center border border-dashed border-white/10">
+                  <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
                     <p className="text-[10px] text-text-dim">No tools called in this run.</p>
                   </div>
                 ) : (
@@ -2677,10 +4434,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                     <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs">🌐</span>
+                          <SlidersHorizontal className="h-4 w-4 text-accent" />
                           <div>
                             <p className="text-[10px] font-bold text-text-primary">{tool}</p>
-                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'call' : 'calls'}</p>
+                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -2692,9 +4449,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, bac
                   ))
                 )}
 
-                <div className="mt-4 rounded-xl bg-bg-deep p-3 border border-white/5">
+                <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest text-text-dim">Efficiency</span>
+                    <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
                     <span className="text-[10px] font-bold text-success">Optimal</span>
                   </div>
                   <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">

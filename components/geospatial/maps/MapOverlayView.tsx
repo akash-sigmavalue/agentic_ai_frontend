@@ -36,7 +36,7 @@ const CircleDyn = dynamic(() => import('react-leaflet').then((m) => m.Circle), {
 import AmenitiesOverlayLogic from './overlays/AmenitiesOverlay';
 import MetroCorridorLogic from './overlays/MetroCorridor';
 import RoadWidthLogic, { RoadWidthRef } from './overlays/RoadWidth';
-import { API_BASE } from '@/lib/dashboard/geospatial/api';
+import { apiUrl } from '@/lib/api-client';
 
 // ── Configuration ──────────────────────────────────────────
 const CITY_CENTERS: Record<string, [number, number]> = {
@@ -145,9 +145,14 @@ function createRateMarkerHtml(rate: number | null): string {
 interface MapOverlayViewProps {
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
-const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFullscreen }) => {
+const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFullscreen, onInsightDataReady }) => {
   const [isMounted, setIsMounted] = useState(false);
   const [L, setL] = useState<any>(null);
 
@@ -227,6 +232,76 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
   }, []);
   const handleRoadDataLoaded = useCallback((roads: RoadMapData[]) => { setRoadData(roads); }, []);
 
+  useEffect(() => {
+    if (!onInsightDataReady) return;
+
+    const base = {
+      city: selectedCity,
+      section: activeSection,
+      map_family: '2d',
+    };
+    if (overlayMode === 'amenities' && allAmenities.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:amenities',
+        mapLabel: 'Default Amenities Overlay',
+        plottedData: { ...base, records: allAmenities },
+      });
+      return;
+    }
+    if (overlayMode === 'metro' && highwaysData.length + metroLinesData.length + metroStationsData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:metro-corridors',
+        mapLabel: 'Default Metro Lines and Highway Corridors',
+        plottedData: {
+          ...base,
+          highways: highwaysData,
+          metro_lines: metroLinesData,
+          metro_stations: metroStationsData,
+        },
+      });
+      return;
+    }
+    if (overlayMode === 'price' && priceData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:price-momentum',
+        mapLabel: 'Default Price Momentum',
+        plottedData: { ...base, records: priceData, metric: priceRateType },
+      });
+      return;
+    }
+    if (overlayMode === 'road' && roadData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:road-width',
+        mapLabel: 'Default Road Width Analysis',
+        plottedData: { ...base, records: roadData },
+      });
+      return;
+    }
+    if (overlayMode === 'rate' && rateData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:rate-analysis',
+        mapLabel: 'Default Rate Analysis',
+        plottedData: { ...base, records: rateData, metric: rateRateType },
+      });
+      return;
+    }
+    onInsightDataReady(null);
+  }, [
+    activeSection,
+    allAmenities,
+    highwaysData,
+    metroLinesData,
+    metroStationsData,
+    onInsightDataReady,
+    overlayMode,
+    priceData,
+    priceRateType,
+    rateData,
+    rateRateType,
+    roadData,
+    selectedCity,
+  ]);
+
   // ── Filtering ────────────────────────────────────────────
   useEffect(() => {
     const pointInPolygon = (pt: [number, number], vs: [number, number][]) => {
@@ -261,7 +336,7 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
   useEffect(() => {
     if (activeSection !== 'Price Momentum' && activeSection !== 'Rate Analysis') return;
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
-    fetch(`${API_BASE}/map-overlays/villages-for-city?city_id=${cityId}`)
+    fetch(apiUrl(`/map-overlays/villages-for-city?city_id=${cityId}`))
       .then((r) => r.json())
       .then((data) => { if (activeSection === 'Price Momentum') setVillagesList(data.villages || []); else setRateVillagesList(data.villages || []); })
       .catch(() => {});
@@ -269,13 +344,13 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
 
   const handlePriceFetch = useCallback(async () => {
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
-    try { let url = `${API_BASE}/map-overlays/price-momentum?city_id=${cityId}`; if (selectedVillage !== 'All') url += `&village_name=${encodeURIComponent(selectedVillage)}`; const r = await fetch(url); const data = await r.json(); setPriceData(Array.isArray(data) ? data : []); } catch { setPriceData([]); }
+    try { let url = apiUrl(`/map-overlays/price-momentum?city_id=${cityId}`); if (selectedVillage !== 'All') url += `&village_name=${encodeURIComponent(selectedVillage)}`; const r = await fetch(url); const data = await r.json(); setPriceData(Array.isArray(data) ? data : []); } catch { setPriceData([]); }
   }, [selectedCity, selectedVillage]);
 
   const handleRateFetch = useCallback(async () => {
     const cityId = CITY_IDS[selectedCity]; if (!cityId) return;
     setRateLoading(true);
-    try { let url = `${API_BASE}/map-overlays/price-momentum?city_id=${cityId}`; if (rateSelectedVillage !== 'All') url += `&village_name=${encodeURIComponent(rateSelectedVillage)}`; const r = await fetch(url); const data = await r.json(); setRateData(Array.isArray(data) ? data : []); } catch { setRateData([]); }
+    try { let url = apiUrl(`/map-overlays/price-momentum?city_id=${cityId}`); if (rateSelectedVillage !== 'All') url += `&village_name=${encodeURIComponent(rateSelectedVillage)}`; const r = await fetch(url); const data = await r.json(); setRateData(Array.isArray(data) ? data : []); } catch { setRateData([]); }
     finally { setRateLoading(false); }
   }, [selectedCity, rateSelectedVillage]);
 

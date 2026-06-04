@@ -1,6 +1,6 @@
 'use client';
 
-import { API_BASE } from './api';
+import { apiUrl } from '@/lib/api-client';
 import type {
   ThreeDMapRequest,
   ThreeDMapResponse,
@@ -23,14 +23,12 @@ export const SAMPLE_MAP_OPTIONS = [
   { value: '3d', label: '3D Maps' },
   { value: '3d-timelapse', label: '3D map - timelapse' },
   { value: 'visualization', label: 'Spatial Analysis' },
-  { value: 'project_rate_growth_timelapse', label: 'Project Timelapse - Rate + Growth Velocity' },
-  { value: 'location_rate_volume_timelapse', label: 'Location Timelapse - Rate Heatmap + Volume Pulse' },
   { value: 'heatmap-timelapse', label: 'Heatmap - Timelapse' },
 ] as const;
 
 
 export async function fetchThreeDMap(payload: ThreeDMapRequest): Promise<ThreeDMapResponse> {
-  const response = await fetch(`${API_BASE}/maps/3d`, {
+  const response = await fetch(apiUrl('/maps/3d'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -49,7 +47,7 @@ export async function fetchThreeDMap(payload: ThreeDMapRequest): Promise<ThreeDM
 export async function fetchThreeDMapTimelapse(
   payload: ThreeDMapTimelapseRequest
 ): Promise<ThreeDMapTimelapseResponse> {
-  const response = await fetch(`${API_BASE}/maps/3d-timelapse`, {
+  const response = await fetch(apiUrl('/maps/3d-timelapse'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -68,7 +66,7 @@ export async function fetchThreeDMapTimelapse(
 export async function fetchSpatialAnalysis(
   payload: SpatialAnalysisRequest
 ): Promise<SpatialAnalysisResponse> {
-  const response = await fetch(`${API_BASE}/maps/spatial-analysis`, {
+  const response = await fetch(apiUrl('/maps/spatial-analysis'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -87,7 +85,7 @@ export async function fetchSpatialAnalysis(
 export async function fetchProjectRateTimelapse(
   payload: ProjectRateTimelapseRequest
 ): Promise<ProjectRateTimelapseResponse> {
-  const response = await fetch(`${API_BASE}/maps/project-rate-growth`, {
+  const response = await fetch(apiUrl('/maps/project-rate-growth'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -102,7 +100,7 @@ export async function fetchProjectRateTimelapse(
 export async function fetchLocationRateTimelapse(
   payload: LocationRateTimelapseRequest
 ): Promise<LocationRateTimelapseResponse> {
-  const response = await fetch(`${API_BASE}/maps/location-rate-volume`, {
+  const response = await fetch(apiUrl('/maps/location-rate-volume'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -117,7 +115,7 @@ export async function fetchLocationRateTimelapse(
 export async function fetchHeatmapTimelapse(
   payload: HeatmapTimelapseRequest
 ): Promise<HeatmapTimelapseResponse> {
-  const response = await fetch(`${API_BASE}/maps/heatmap-timelapse`, {
+  const response = await fetch(apiUrl('/maps/heatmap-timelapse'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
