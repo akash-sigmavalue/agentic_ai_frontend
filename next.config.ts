@@ -11,6 +11,23 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  webpack: (config) => {
+    config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
+    
+    const plugin = config.plugins.find(
+      (p: any) => p?.constructor?.name === "EvalSourceMapDevToolPlugin"
+    );
+    if (plugin) {
+      const currentExclude = plugin.options.exclude || [];
+      plugin.options.exclude = [
+        ...(Array.isArray(currentExclude) ? currentExclude : [currentExclude]),
+        ...PDFJS_EXCLUDE,
+      ].filter(Boolean);
+    }
+    
+    return config;
+  },
 };
 
 export default nextConfig;

@@ -134,7 +134,7 @@ function getSearchTerm(chunkContent?: string) {
     .replace(/\s+/g, " ")
     .trim();
   // PDF text layers use small fragments; a shorter snippet matches more reliably
-  return cleaned.slice(0, 240);
+  return cleaned;  //cleaned.slice(0, 100);
 }
 
 function isPdfFile(file: File) {
@@ -155,7 +155,7 @@ function StepperPipelineGraph({
   const nodes: { id: GraphNodeId; label: string; sub?: string }[] = [
     { id: "start", label: "Load", sub: "Document ready" },
     { id: "retrieve", label: "Retrieve", sub: "FAISS + BM25 + Rerank" },
-    { id: "generate", label: "Generate", sub: "GPT-4o-mini · temp 0.1" },
+    { id: "generate", label: "Generate", sub: "Kimi 2.5 · temp 0.1" },
     { id: "end", label: "Complete", sub: "Answer delivered" },
   ];
   const activeIndex = active ? nodes.findIndex((node) => node.id === active) : -1;
@@ -583,7 +583,7 @@ export default function DocumentReader() {
               {!askResult?.chunks.length && (
                 <p className="mt-12 text-center text-sm text-slate-400">Relevant excerpts will appear here</p>
               )}
-              {askResult?.chunks.map((chunk, idx) => (
+              {askResult?.chunks.slice(0, 10).map((chunk, idx) => (
                 <div
                   key={idx}
                   role="button"
@@ -617,7 +617,7 @@ export default function DocumentReader() {
                   {chunk.type === "image" && chunk.image_base64 ? (
                     <img src={chunkImageSrc(chunk)} alt="chunk visual" className="max-h-32 w-full rounded-lg border object-contain bg-white" />
                   ) : (
-                    <p className="line-clamp-3 font-mono text-xs leading-relaxed text-slate-600">{chunk.content}</p>
+                    <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-600">{chunk.content}</div>
                   )}
                 </div>
               ))}
