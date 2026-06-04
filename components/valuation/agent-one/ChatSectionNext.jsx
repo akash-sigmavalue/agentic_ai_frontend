@@ -3096,6 +3096,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   content: summary,
                   meta: "cleaning results",
                   cleaned_listings: event.content.listings,
+                  // Backend returns the authoritative full set after segregating
+                  // negative-rate listings — update both tabs in one shot.
+                  dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
+                  review_listings:  event.content.review_listings  ?? next[lastIndex].review_listings  ?? [],
                 };
               }
               return next;
