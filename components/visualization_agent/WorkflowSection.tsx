@@ -392,7 +392,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
         </div>
       </div>
 
-      <div className="workspace-canvas relative flex-1 bg-white overflow-hidden">
+      <div className="workspace-canvas relative flex min-h-0 flex-1 flex-col bg-white overflow-hidden">
         {activeView === 'module2' ? (
           <Module2Section
             moduleOutput={moduleOutput}

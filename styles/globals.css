@@ -126,6 +126,28 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
   }
+
+  /* Global header LLM provider/model selects (light mode readable) */
+  .site-header select.reai-native-select {
+    color: #475569 !important;
+    background-color: transparent !important;
+    color-scheme: light;
+  }
+
+  .site-header select.reai-native-select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  html.dark-mode .site-header select.reai-native-select {
+    color: #e2e8f0 !important;
+    color-scheme: dark;
+  }
+
+  html.dark-mode .site-header select.reai-native-select option {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+  }
 }
 
 /* React Flow Light Theme */
