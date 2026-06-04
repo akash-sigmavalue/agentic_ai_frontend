@@ -33,6 +33,7 @@ type OutputSectionConnectorProps = {
   response: WorkflowResponse | null;
   completionResult?: CompletionResult | null;
   onSendPrompt?: (prompt: string) => void;
+  pendingPrompt?: string | null;
   partialIntent?: Record<string, unknown> | null;
   convStep?: ConvStep;
 };
@@ -41,6 +42,7 @@ export default function OutputSectionConnector({
   response,
   completionResult,
   onSendPrompt,
+  pendingPrompt,
   partialIntent,
   convStep,
 }: OutputSectionConnectorProps) {
@@ -50,11 +52,20 @@ export default function OutputSectionConnector({
   const [rawCopied, setRawCopied] = useState(false);
   const [selectedThread, setSelectedThread] = useState<any | null>(null);
   const [isThreadViewOpen, setIsThreadViewOpen] = useState(false);
+  const [senderInput, setSenderInput] = useState("");
+  const [senderConfirmed, setSenderConfirmed] = useState(false);
+  const [senderError, setSenderError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedThread(null);
     setIsThreadViewOpen(false);
   }, [response]);
+
+  useEffect(() => {
+    setSenderInput("");
+    setSenderConfirmed(false);
+    setSenderError(null);
+  }, [response?.plan?.goal, response?.status, response?.missing_field, response?.execution_type]);
 
   const completionTitle =
     completionResult?.status === "automation_rule_created"
@@ -128,6 +139,28 @@ export default function OutputSectionConnector({
         return "send";
     }
   })() as WorkflowOperationType;
+
+  const senderGateOperations = ["fetch", "reply", "send", "automate"];
+  const needsSender =
+    !senderConfirmed &&
+    senderGateOperations.includes(operationType) &&
+    (response?.needs_sender_email === true ||
+      response?.missing_field === "sender_email");
+  const originalPrompt = (
+    pendingPrompt || response?.plan?.goal || response?.message || ""
+  ).trim();
+
+  const handleConfirmSender = () => {
+    const trimmedSender = senderInput.trim();
+    if (!trimmedSender) {
+      setSenderError("Please enter a sender name or email address.");
+      return;
+    }
+
+    setSenderError(null);
+    setSenderConfirmed(true);
+    onSendPrompt?.(`${originalPrompt} from ${trimmedSender}`.trim());
+  };
 
   const repliesSent = (() => {
     const sendSteps =
@@ -225,6 +258,66 @@ export default function OutputSectionConnector({
     response?.raw_mcp_results && response.raw_mcp_results.length > 0
       ? JSON.stringify(response.raw_mcp_results, null, 2)
       : "";
+
+  if (needsSender) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden rounded-tl-3xl border-l border-t border-slate-200/60 bg-white p-6 shadow-[0_0_40px_-15px_rgba(0,0,0,0.05)]">
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
+            OUTPUT
+          </h3>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Sender required
+            </p>
+            <h4 className="mt-2 text-xl font-black tracking-tight text-slate-900">
+              Before I run this, who is the email from?
+            </h4>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {response?.sender_email_question ||
+                response?.missing_field_question ||
+                "Share the sender name or email address so I can target the right messages."}
+            </p>
+
+            <div className="mt-5">
+              <label className="flex flex-col gap-2">
+                <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-500">
+                  Sender name or email
+                </span>
+                <input
+                  value={senderInput}
+                  onChange={(event) => {
+                    setSenderInput(event.target.value);
+                    setSenderError(null);
+                  }}
+                  type="text"
+                  placeholder="avinash@sigmavalue.co.in"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
+                />
+              </label>
+
+              {senderError ? (
+                <p className="mt-2 text-xs font-medium text-rose-600">{senderError}</p>
+              ) : null}
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleConfirmSender}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-[#434dd8]"
+                >
+                  Confirm &amp; Run
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleCopyRawOutput = async () => {
     if (!rawOutputDebug) return;

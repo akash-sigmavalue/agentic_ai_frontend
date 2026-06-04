@@ -293,7 +293,11 @@ export default function ConnectorPageClient() {
             activateFlowResult={activateFlowResult}
           />
 
-          <OutputSectionConnector response={normalizedResponse} />
+          <OutputSectionConnector
+            response={normalizedResponse}
+            pendingPrompt={pendingPrompt}
+            onSendPrompt={(nextPrompt) => void handleRunWorkflow(nextPrompt)}
+          />
         </section>
       </div>
     </main>

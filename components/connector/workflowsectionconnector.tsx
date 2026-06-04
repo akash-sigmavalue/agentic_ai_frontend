@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -635,6 +635,8 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isGmailPopoverOpen, setIsGmailPopoverOpen] = useState(false);
+  const gmailBadgeRef = useRef<HTMLDivElement | null>(null);
 
   const isStreaming =
     convStep === "streaming" ||
@@ -650,6 +652,35 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
       isStreaming,
     });
   }, [response, streamingSteps, convStep, isStreaming]);
+
+  useEffect(() => {
+    if (!needsGmail) {
+      setIsGmailPopoverOpen(false);
+    }
+  }, [needsGmail]);
+
+  useEffect(() => {
+    if (!isGmailPopoverOpen) {
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        gmailBadgeRef.current &&
+        !gmailBadgeRef.current.contains(target)
+      ) {
+        setIsGmailPopoverOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+    };
+  }, [isGmailPopoverOpen]);
 
   const workflowGraphSignature = useMemo(() => {
     const responseSignature = response
@@ -975,6 +1006,83 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
             </div>
 
             <div className="flex items-center gap-3">
+              {needsGmail && (
+                <div ref={gmailBadgeRef} className="relative flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsGmailPopoverOpen((current) => !current)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition ${
+                      gmailConnected
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                    }`}
+                    title={gmailConnected ? "Gmail connected" : "Gmail not connected"}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        gmailConnected ? "bg-emerald-500" : "bg-rose-500"
+                      }`}
+                    />
+                    <span className="max-w-[180px] truncate normal-case tracking-normal">
+                      {gmailConnected ? (gmailEmail || "Gmail connected") : "Gmail not connected"}
+                    </span>
+                  </button>
+
+                  {!gmailConnected && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleConnectGmail();
+                      }}
+                      className="text-[10px] font-semibold text-[#525ceb] underline-offset-2 transition hover:underline"
+                    >
+                      Connect
+                    </button>
+                  )}
+
+                  {isGmailPopoverOpen && (
+                    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/80">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsGmailPopoverOpen(false);
+                          handleRecheckGmailConnection();
+                        }}
+                        disabled={connectorStatusLoading}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span>
+                          {connectorStatusLoading ? "Rechecking..." : "Recheck connection"}
+                        </span>
+                      </button>
+
+                      {gmailConnected && pendingPrompt && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGmailPopoverOpen(false);
+                            handleContinueWorkflow();
+                          }}
+                          disabled={isLoading}
+                          className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span>{isLoading ? "Continuing..." : "Continue Workflow"}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setIsGmailPopoverOpen(false)}
+                        className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                      >
+                        <span>Disconnect</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div
                 className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
                   isStreaming
@@ -1124,54 +1232,6 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Workflow</p>
-
-      {/* Gmail connection banner */}
-      {needsGmail && (
-        <div className="mt-4 rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700">
-            Gmail Connection Required
-          </p>
-          <h3 className="mt-2 text-base font-semibold text-slate-900">
-            {gmailConnected
-              ? `Gmail connected as ${gmailEmail || "the signed-in account"}`
-              : "Connect Gmail to continue this workflow"}
-          </h3>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            {gmailConnected
-              ? "Your Gmail account is connected. You can recheck the connection or continue the pending workflow."
-              : "This prompt cannot be processed yet. Please connect Gmail now so the assistant can read mail and complete the workflow."}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            {!gmailConnected && (
-              <button
-                type="button"
-                onClick={handleConnectGmail}
-                className="inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-[#434dd8]"
-              >
-                Connect Gmail Now
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleRecheckGmailConnection}
-              disabled={connectorStatusLoading}
-              className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {connectorStatusLoading ? "Rechecking..." : "Recheck connection"}
-            </button>
-            {gmailConnected && pendingPrompt && (
-              <button
-                type="button"
-                onClick={handleContinueWorkflow}
-                disabled={isLoading}
-                className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isLoading ? "Continuing..." : "Continue Workflow"}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
         {renderCanvas(false, true)}

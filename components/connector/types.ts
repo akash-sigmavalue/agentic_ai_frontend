@@ -9,6 +9,8 @@ export type WorkflowResponse = {
   missing_field?: string;
   missing_field_question?: string;
   question?: string;
+  needs_sender_email?: boolean;
+  sender_email_question?: string;
   partial_intent?: Record<string, unknown>;
   field_type?: "email" | "choice" | "text" | "text_optional";
   field_options?: string[];
