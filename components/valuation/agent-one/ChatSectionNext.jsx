@@ -215,7 +215,11 @@ function summarizeEvent(event) {
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    return `[SUCCESS] Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
+    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Select comparables below and proceed to fetch listings.`;
+    if (c?.web_error) {
+      baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
+    }
+    return baseMsg;
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
@@ -520,9 +524,14 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
-            {hasMixedSources && (
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                {["all", "Web", "Internal DB"].map(opt => (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+              {["all", "Web", "Internal DB"].map(opt => {
+                const count = opt === "all"
+                  ? comparables.length
+                  : opt === "Web"
+                    ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                    : comparables.filter(c => c.data_source === "Internal DB").length;
+                return (
                   <button
                     key={opt}
                     onClick={() => setSourceFilter(opt)}
@@ -531,11 +540,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         : "text-text-dim hover:text-text-primary"
                       }`}
                   >
-                    {opt === "all" ? "All Sources" : opt}
+                    {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -562,9 +571,14 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
-              {hasMixedSources && (
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                  {["all", "Web", "Internal DB"].map(opt => (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                {["all", "Web", "Internal DB"].map(opt => {
+                  const count = opt === "all"
+                    ? comparables.length
+                    : opt === "Web"
+                      ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                      : comparables.filter(c => c.data_source === "Internal DB").length;
+                  return (
                     <button
                       key={opt}
                       onClick={() => setSourceFilter(opt)}
@@ -573,11 +587,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                           : "text-text-dim hover:text-text-primary"
                         }`}
                     >
-                      {opt === "all" ? "All Sources" : opt}
+                      {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -3765,17 +3779,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 ? { ...subjectDataRef.current, subject_db_project: subjectDbProject }
                 : subjectDataRef.current;
             }
-            // Pre-select only comparables within the initial radius by default
-            const initialSelected = comps
-              .map((comp, i) => {
-                const dist = getComparableDistanceKm(comp);
-                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
-                  return i;
-                }
-                return -1;
-              })
-              .filter((i) => i !== -1);
-            setSelectedComps(new Set(initialSelected));
+            // Do not auto-select comparables by default to prevent accidental massive token consumption.
+            // But we show them all on the map by default.
+            setSelectedComps(new Set());
           }
 
           if (event.type === "db_comparable_status") {
