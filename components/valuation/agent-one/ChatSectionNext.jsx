@@ -2643,14 +2643,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     ]);
 
     try {
-      // ── 1. Fetch transactions for each Internal DB comparable ──────────
-      const allDbTransactions = [];
-      for (const comp of dbComps) {
+      // ── 1. Fetch transactions for each Internal DB comparable in parallel ──
+      const fetchProjectTransactions = async (comp, isSubject = false) => {
         const projId = comp.project_id || comp.id || comp.project_name;
         const propType = comp.property_type || subjectData.property_type || "apartment";
-        if (!projId) continue;
+        if (!projId) return [];
 
         setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
             method: "POST",
@@ -2661,7 +2661,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               project_name: comp.project_name || "",
             }),
           });
-          if (!res.ok || !res.body) continue;
+          if (!res.ok || !res.body) return [];
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -2677,60 +2677,137 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const ev = JSON.parse(chunk.slice(6));
               onEvent?.(ev);
               if (ev.type === "transaction_results") {
-                allDbTransactions.push(...(ev.content?.transactions || []));
-                setStreamingNote(`✅ Got ${ev.content?.total || 0} transactions for "${comp.project_name}"`);
+                const txs = ev.content?.transactions || [];
+                const mapped = isSubject ? txs.map(t => ({ ...t, is_subject: true })) : txs;
+                projectTx.push(...mapped);
+                setStreamingNote(`✅ Got ${ev.content?.total || 0} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
               }
             }
           }
         } catch (e) {
           console.warn("DB transaction fetch failed for", comp.project_name, e);
         }
-      }
+        return projectTx;
+      };
 
-      // Also fetch subject's own DB transactions if it was found in the internal DB
-      if (subjectDbProject) {
-        const projId = subjectDbProject.project_id || subjectDbProject.id || subjectDbProject.project_name;
-        const propType = subjectDbProject.property_type || subjectData.property_type || "apartment";
-        if (projId) {
-          setStreamingNote(`🗄️ Fetching DB transactions for subject "${subjectDbProject.project_name}"...`);
-          try {
-            const res = await fetch(apiUrl("/transaction_stream"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                project_id: String(projId),
-                property_type: propType,
-                project_name: subjectDbProject.project_name || "",
-              }),
-            });
-            if (res.ok && res.body) {
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder();
-              let buf = "";
-              while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                const chunks = buf.split("\n\n");
-                buf = chunks.pop() || "";
-                for (const chunk of chunks) {
-                  if (!chunk.startsWith("data: ")) continue;
-                  const ev = JSON.parse(chunk.slice(6));
-                  onEvent?.(ev);
-                  if (ev.type === "transaction_results") {
-                    // Mark subject transactions with is_subject flag
-                    const subjectTx = (ev.content?.transactions || []).map(t => ({ ...t, is_subject: true }));
-                    allDbTransactions.push(...subjectTx);
-                    setStreamingNote(`✅ Got ${ev.content?.total || 0} subject transactions from Internal DB`);
+      const fetchWebListings = async () => {
+        const webFetchNote = webComps.length > 0 
+          ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+          : `🌐 Fetching web listings for Subject Project...`;
+        setStreamingNote(webFetchNote);
+
+        try {
+          const response = await fetch(apiUrl("/listing_stream"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: subjectData,
+              selected_comparables: webComps,
+              property_type: subjectData.property_type || "apartment",
+            }),
+          });
+
+          if (!response.ok || !response.body) return [];
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let listings = [];
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop() || "";
+
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const event = JSON.parse(chunk.slice(6));
+              onEvent?.(event);
+              const summary = summarizeEvent(event);
+              setStreamingNote(summary);
+
+              if (event.type === "listing_results") {
+                listings = event.content?.listings || [];
+                const newUsage = event.content?.token_usage || {};
+                const total = newUsage.total_tokens || 0;
+                const model = newUsage.model || "gpt-4o-mini";
+                setListingData(listings);
+                setTokenStats((prev) => {
+                  const nextModelBreakdown = { ...prev.model_breakdown };
+                  const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                  
+                  const promptDiff = (newUsage.prompt_tokens || 0);
+                  const completionDiff = (newUsage.completion_tokens || 0);
+
+                  nextModelBreakdown[model] = {
+                    prompt: currentModelStats.prompt + promptDiff,
+                    completion: currentModelStats.completion + completionDiff,
+                    total: currentModelStats.total + total
+                  };
+
+                  const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+                  return {
+                    ...prev,
+                    total_tokens: prev.total_tokens + total,
+                    model_breakdown: nextModelBreakdown,
+                    cost_usd: (prev.cost_usd || 0) + addedCost
+                  };
+                });
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0) {
+                    next[lastIndex] = {
+                      ...next[lastIndex],
+                      role: "assistant",
+                      content: summary,
+                      meta: "listing results",
+                      listings,
+                      // Preserve any DB transactions stamped in the same message
+                      db_transactions: next[lastIndex].db_transactions || [],
+                    };
                   }
-                }
+                  return next;
+                });
+              }
+
+              if (event.type === "listing_done" || event.type === "error") {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0 && !next[lastIndex].listings) {
+                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                  }
+                  return next;
+                });
               }
             }
-          } catch (e) {
-            console.warn("DB transaction fetch failed for subject", subjectDbProject.project_name, e);
           }
+          return listings;
+        } catch (error) {
+          console.warn("Web listing fetch failed", error);
+          throw error;
         }
+      };
+
+      const fetchPromises = [];
+      for (const comp of dbComps) {
+        fetchPromises.push(fetchProjectTransactions(comp, false));
       }
+      if (subjectDbProject) {
+        fetchPromises.push(fetchProjectTransactions(subjectDbProject, true));
+      }
+
+      // Execute all DB fetches and Web listings fetch concurrently in parallel
+      const [dbResults, _] = await Promise.all([
+        Promise.all(fetchPromises),
+        fetchWebListings()
+      ]);
+
+      const allDbTransactions = dbResults.flat();
 
       // Store DB transactions and stamp on the message
       if (allDbTransactions.length > 0) {
@@ -2746,101 +2823,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           }
           return next;
         });
-      }
-
-      // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
-      const webFetchNote = webComps.length > 0 
-        ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
-        : `🌐 Fetching web listings for Subject Project...`;
-      setStreamingNote(webFetchNote);
-
-      const response = await fetch(apiUrl("/listing_stream"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectData,
-          selected_comparables: webComps,
-          property_type: subjectData.property_type || "apartment",
-        }),
-      });
-
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const chunks = buffer.split("\n\n");
-          buffer = chunks.pop() || "";
-
-          for (const chunk of chunks) {
-            if (!chunk.startsWith("data: ")) continue;
-            const event = JSON.parse(chunk.slice(6));
-            onEvent?.(event);
-            const summary = summarizeEvent(event);
-            setStreamingNote(summary);
-
-            if (event.type === "listing_results") {
-              const listings = event.content?.listings || [];
-              const newUsage = event.content?.token_usage || {};
-              const total = newUsage.total_tokens || 0;
-              const model = newUsage.model || "gpt-4o-mini";
-              setListingData(listings);
-              setTokenStats((prev) => {
-                const nextModelBreakdown = { ...prev.model_breakdown };
-                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                
-                const promptDiff = (newUsage.prompt_tokens || 0);
-                const completionDiff = (newUsage.completion_tokens || 0);
-
-                nextModelBreakdown[model] = {
-                  prompt: currentModelStats.prompt + promptDiff,
-                  completion: currentModelStats.completion + completionDiff,
-                  total: currentModelStats.total + total
-                };
-
-                const addedCost = getModelCost(model, promptDiff, completionDiff);
-
-                return {
-                  ...prev,
-                  total_tokens: prev.total_tokens + total,
-                  model_breakdown: nextModelBreakdown,
-                  cost_usd: (prev.cost_usd || 0) + addedCost
-                };
-              });
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0) {
-                  next[lastIndex] = {
-                    ...next[lastIndex],
-                    role: "assistant",
-                    content: summary,
-                    meta: "listing results",
-                    listings,
-                    // Preserve any DB transactions stamped in the same message
-                    db_transactions: next[lastIndex].db_transactions || [],
-                  };
-                }
-                return next;
-              });
-            }
-
-            if (event.type === "listing_done" || event.type === "error") {
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0 && !next[lastIndex].listings) {
-                  next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
-                }
-                return next;
-              });
-            }
-          }
-        }
       }
 
     } catch (error) {
