@@ -10,6 +10,32 @@
   
   --color-accent-blue: #4f46e5;
   --color-accent-violet: #7c3aed;
+
+  /* Custom Theme Mappings for Valuation & Data Retrieval Views */
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-card: var(--bg-card);
+  --color-bg-input: var(--bg-input);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-header: var(--bg-header);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+
+  --color-border: var(--border-soft);
+  --color-border-soft: var(--border-soft);
+  --color-border-dim: var(--border-dim);
+  --color-border-glow: var(--border-glow);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-purple: var(--accent-purple);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 }
 
 @layer base {
@@ -40,13 +66,32 @@
     --radius: 0.5rem;
   }
 
+  html {
+    font-size: 16.5px !important;
+  }
+
   body {
     background-color: var(--panel-bg-soft);
     color: #0f172a;
     overflow-x: hidden;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 15.5px !important;
   }
 }
+
+/* Global Font Scaling and Readability Overrides */
+.text-\[8px\], [class*="text-[8px]"] { font-size: 10.5px !important; }
+.text-\[9px\], [class*="text-[9px]"] { font-size: 11.5px !important; }
+.text-\[10px\], [class*="text-[10px]"] { font-size: 12.5px !important; }
+.text-\[11px\], [class*="text-[11px]"] { font-size: 13.5px !important; }
+.text-\[12px\], [class*="text-[12px]"] { font-size: 14.5px !important; }
+.text-xs, [class*="text-xs"] { font-size: 13.5px !important; }
+.text-sm, [class*="text-sm"] { font-size: 15.5px !important; }
+.text-base, [class*="text-base"] { font-size: 17.5px !important; }
+.text-lg, [class*="text-lg"] { font-size: 19.5px !important; }
+.text-xl, [class*="text-xl"] { font-size: 22px !important; }
+.text-2xl, [class*="text-2xl"] { font-size: 26px !important; }
+.text-3xl, [class*="text-3xl"] { font-size: 32px !important; }
 
 @layer utilities {
   .glass {
@@ -80,6 +125,28 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
+  }
+
+  /* Global header LLM provider/model selects (light mode readable) */
+  .site-header select.reai-native-select {
+    color: #475569 !important;
+    background-color: transparent !important;
+    color-scheme: light;
+  }
+
+  .site-header select.reai-native-select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  html.dark-mode .site-header select.reai-native-select {
+    color: #e2e8f0 !important;
+    color-scheme: dark;
+  }
+
+  html.dark-mode .site-header select.reai-native-select option {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
   }
 }
 
