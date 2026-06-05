@@ -37,6 +37,28 @@ export interface VisualizationRetrievalResultSet {
   row_count?: number;
 }
 
+export interface VisualizationRetrievalClarificationField {
+  field: string;
+  type?: 'text' | 'textarea' | 'select' | string;
+  label?: string;
+  placeholder?: string;
+  help_text?: string;
+  required?: boolean;
+  options?: Array<{ value: string; label: string }>;
+}
+
+export interface VisualizationRetrievalClarification {
+  message?: string;
+  questions?: string[];
+  clarification_question?: string;
+  clarification_type?: string;
+  original_query?: string;
+  stopped_at_stage?: string;
+  next_action?: string;
+  fields?: VisualizationRetrievalClarificationField[];
+  missing_fields?: string[];
+}
+
 export interface VisualizationRetrievalTokenEvent {
   stage?: string;
   prompt_tokens?: number;
@@ -47,11 +69,12 @@ export interface VisualizationRetrievalTokenEvent {
 }
 
 export interface VisualizationRetrievalState {
-  status: 'running' | 'success' | 'error';
+  status: 'running' | 'success' | 'error' | 'needs_clarification';
   agentRoute?: string;
   retrievalIntent?: Record<string, unknown>;
   sqlQuery?: string;
   resultSet?: VisualizationRetrievalResultSet;
+  clarification?: VisualizationRetrievalClarification;
   tokenEvents: VisualizationRetrievalTokenEvent[];
   metrics?: Record<string, unknown>;
   error?: string;
@@ -250,8 +273,17 @@ export interface Module31Readiness {
 }
 
 export interface Module31UsageLedgerEntry {
+  call_id?: number;
   call_name: string;
+  step?: string;
+  purpose?: string;
+  timestamp?: string;
+  provider?: string;
+  region?: string;
+  endpoint_type?: string;
   model: string;
+  api_model?: string;
+  processing_time_seconds?: number;
   input_tokens: number;
   cached_input_tokens: number;
   output_tokens: number;
@@ -260,6 +292,10 @@ export interface Module31UsageLedgerEntry {
   cached_input_cost?: number;
   output_cost?: number;
   total_cost?: number;
+  input_cost_usd?: number;
+  cached_input_cost_usd?: number;
+  output_cost_usd?: number;
+  total_cost_usd?: number;
 }
 
 export interface Module31Usage {
@@ -268,6 +304,9 @@ export interface Module31Usage {
   total_cached_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
+  total_input_cost_usd?: number;
+  total_cached_input_cost_usd?: number;
+  total_output_cost_usd?: number;
   total_cost_usd: number;
   ledger: Module31UsageLedgerEntry[];
 }
