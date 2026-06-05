@@ -955,7 +955,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <th className="px-3 py-2.5 font-semibold">Matched Project</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
             <th className="px-3 py-2.5 font-semibold">Config</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Raw Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Standardized Price</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Exchange Rate</th>
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
@@ -992,9 +994,26 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               </td>
               <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-              <td className="px-3 py-2 text-right font-mono text-text-primary">
+              
+              {/* Raw Price Column */}
+              <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">
+                {lst.original_price_value !== undefined && lst.original_price_value !== null
+                  ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
+                  : formatPrice(lst.price_value, lst.currency)}
+              </td>
+              
+              {/* Standardized Price Column */}
+              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
                 {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
               </td>
+              
+              {/* Exchange Rate Column */}
+              <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
+                  ? lst.exchange_rate_remark
+                  : "1.0"}
+              </td>
+
               <td className="px-3 py-2 text-right font-mono text-text-secondary">
                 {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
               </td>
