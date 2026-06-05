@@ -182,6 +182,8 @@ function StepDetails({ step }) {
         <DetailRow label="Location" value={content.location_name} />
         <DetailRow label="Country" value={content.country} />
         <DetailRow label="Project" value={content.project_name} />
+        <DetailRow label="Latitude" value={content.coordinates?.lat !== undefined ? content.coordinates.lat : (content.lat !== undefined ? content.lat : null)} />
+        <DetailRow label="Longitude" value={content.coordinates?.lng !== undefined ? content.coordinates.lng : (content.lng !== undefined ? content.lng : null)} />
         <DetailRow label="Salable Area" value={content.salable_area_sqft ? `${content.salable_area_sqft} sqft` : null} />
         <DetailRow label="Carpet Area" value={content.carpet_area_sqft ? `${content.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={content.builtup_area_sqft ? `${content.builtup_area_sqft} sqft` : null} />
@@ -231,6 +233,8 @@ function StepDetails({ step }) {
         <DetailRow label="Location" value={ent.location_name} />
         <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
+        <DetailRow label="Latitude" value={ent.coordinates?.lat !== undefined ? ent.coordinates.lat : (ent.lat !== undefined ? ent.lat : null)} />
+        <DetailRow label="Longitude" value={ent.coordinates?.lng !== undefined ? ent.coordinates.lng : (ent.lng !== undefined ? ent.lng : null)} />
         <DetailRow label="Salable Area" value={ent.salable_area_sqft ? `${ent.salable_area_sqft} sqft` : null} />
         <DetailRow label="Carpet Area" value={ent.carpet_area_sqft ? `${ent.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />

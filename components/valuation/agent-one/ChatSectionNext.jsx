@@ -2327,6 +2327,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [gateMode, setGateMode] = useState(null);
   const [gateAllFields, setGateAllFields] = useState([]);
   const [gateValues, setGateValues] = useState({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
@@ -3894,6 +3896,55 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}.`, true, `Updated coordinates to ${corrected}`);
   };
 
+  const handleGeocodeRefresh = async () => {
+    const locName = gateValues["location_name"] || "";
+    const projName = gateValues["project_name"] || "";
+    const country = gateValues["country"] || "India";
+
+    if (!locName.trim()) {
+      setGeocodeError("Please enter a locality name first (e.g. Sus, Pune).");
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError("");
+
+    try {
+      const response = await fetch(apiUrl("/geocode"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location_name: locName,
+          project_name: projName,
+          country: country
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to contact geocoder API.");
+      }
+
+      const result = await response.json();
+      if (result.lat && result.lng) {
+        setGateValues(prev => ({
+          ...prev,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          coordinates: `${result.lat}, ${result.lng}`
+        }));
+        setGeocodeError("");
+      } else if (result.error) {
+        setGeocodeError(`Error: ${result.error}. Please adjust the Location Name and try again.`);
+      } else {
+        setGeocodeError("Coordinates not found. Please enter them manually or check location name formatting.");
+      }
+    } catch (err) {
+      setGeocodeError(`Failed to fetch coordinates: ${err.message}`);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   const submitApproachChoice = (confirmed, alternative) => {
     if (!approachChoiceNeeded) return;
     const approach = confirmed ? approachChoiceNeeded.recommended_approach : alternative;
@@ -4177,7 +4228,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   // ── Stage1GateWizard render ───────────────────────────────────────
   const renderGateField = (schema) => {
     const val = gateValues[schema.field] ?? "";
-    const update = (v) => setGateValues(prev => ({ ...prev, [schema.field]: v }));
+    const update = (v) => {
+      setGateValues(prev => {
+        const next = { ...prev, [schema.field]: v };
+        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "country") {
+          next.lat = "";
+          next.lng = "";
+          next.coordinates = "";
+        }
+        return next;
+      });
+    };
     const isFilled = String(val).trim() !== "";
 
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
@@ -4394,7 +4455,23 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               <div className="space-y-4">
                 <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
                 <div className="flex flex-wrap gap-3">
-                  {[...identityFields, ...typeFields, ...approachFields, ...detailFields].map(f => renderGateField(f))}
+                  {(() => {
+                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                    const finalFields = [...standardFields, ...extraFields].map(f => {
+                      if (f.field === "lat" || f.field === "lng") {
+                        return { ...f, type: "text" };
+                      }
+                      return f;
+                    });
+                    if (!finalFields.some(f => f.field === "lat")) {
+                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
+                    }
+                    if (!finalFields.some(f => f.field === "lng")) {
+                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                    }
+                    return finalFields.map(f => renderGateField(f));
+                  })()}
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
                   <button
@@ -4425,23 +4502,45 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
                       </span>
-                      {mapConfirmation && (
+                      <div className="flex gap-3 items-center">
+                        {mapConfirmation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const latVal = mapConfirmation.lat || "";
+                              const lngVal = mapConfirmation.lng || "";
+                              setGateValues(prev => ({
+                                ...prev,
+                                lat: latVal,
+                                lng: lngVal,
+                                coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                              }));
+                            }}
+                            className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                          >
+                            Pull from Map Confirmation
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            const latVal = mapConfirmation.lat || "";
-                            const lngVal = mapConfirmation.lng || "";
-                            setGateValues(prev => ({
-                              ...prev,
-                              lat: latVal,
-                              lng: lngVal,
-                              coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
-                            }));
-                          }}
-                          className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                          disabled={isGeocoding}
+                          onClick={handleGeocodeRefresh}
+                          className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
                         >
-                          Pull from Map Confirmation
+                          {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Geocode Tip Remark & Errors */}
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
+                      <p className="text-[10px] text-text-dim leading-relaxed">
+                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">"Sus, Pune"</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                      </p>
+                      {geocodeError && (
+                        <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
+                          ⚠️ {geocodeError}
+                        </p>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-3">
