@@ -917,8 +917,8 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   // Detect if we have plot data and if the subject itself is a plot
   // Detect if the subject itself is a plot or villa
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
-  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase()?.trim());
-  const isVillaSubject = subjectPropertyType?.toLowerCase()?.trim() === "villa";
+  const isPlotSubject = ["plot", "villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
+  const isVillaSubject = ["villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
   // In Cost Approach, villa subject derives the PLOT/LAND rate (reverse residual: villa price - CC = land value)
   // In Market Approach, villa subject derives the VILLA built-up rate (plot comps × FSI + CC)
   const isCostApproach = valuationApproach?.toLowerCase?.() === "cost";
@@ -1886,7 +1886,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           if (["flat", "apartment", "shop", "retail", "office", "commercial_office"].includes(propType)) {
             selectedArea = Number(subjectData?.salable_area_sqft || 0);
             areaLabel = "Salable Area";
-          } else if (["villa", "house"].includes(propType)) {
+          } else if (["villa", "house", "building_land"].includes(propType)) {
             selectedArea = Number(subjectData?.builtup_area_sqft || 0);
             areaLabel = "Built-up Area";
           } else if (["land", "plot"].includes(propType)) {
@@ -2034,7 +2034,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
             const propType = (subjectData?.property_type || "").toLowerCase();
             if (propType === "apartment" || propType === "retail" || propType === "commercial_office") {
               helpText = "Remark: Please enter construction cost per sqft on Salable Area.";
-            } else if (propType === "villa") {
+            } else if (propType === "villa" || propType === "building_land") {
               helpText = "Remark: Please enter construction cost per sqft on Built-up Area.";
             }
           }
@@ -2384,7 +2384,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       derived_plot_rate_per_sqft: Number(derivedRate),
       plot_area_sqft: Number(plotArea),
       builtup_area_sqft: Number(builtupArea),
-      property_type: "villa",
+      property_type: subjectData?.property_type || "villa",
       construction_rate_per_sqft: Number(costInputsValues.construction_rate_per_sqft || 0),
       total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
       age_of_property: Number(ageYears),
@@ -3517,7 +3517,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const primaryArea = extractedBuiltup || extractedSalable || extractedCarpet || extractedPlot;
 
     if (primaryArea) {
-      if (propType === "villa") {
+      if (propType === "villa" || propType === "building_land") {
         initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || extractedCarpet || "";
         initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup/carpet for villa plot area
       } else if (propType === "plot") {
@@ -4285,8 +4285,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           { value: "plot", label: "Plot / Land" },
           { value: "retail", label: "Retail / Shop" },
           { value: "commercial_office", label: "Commercial Office" },
+          { value: "building_land", label: "Building + Land" },
         ]
-      }
+      },
+      ...(activeType === "building_land" ? [
+        {
+          field: "building_type", label: "Building Type", type: "select", options: [
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" },
+            { value: "industrial", label: "Industrial" }
+          ]
+        }
+      ] : [])
     ];
 
     const approachFields = activeType === "villa" ? [
@@ -4304,7 +4314,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
-    } else if (activeType === "villa") {
+    } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
@@ -4356,7 +4366,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const mandatoryStep = gateStep === 1
       ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
       : gateStep === 2
-        ? gateValues["property_type"]
+        ? (gateValues["property_type"] && (gateValues["property_type"] !== "building_land" || gateValues["building_type"]))
         : gateStep === 3
           ? gateValues["recommended_approach"]
           : gateStep === 4
@@ -4974,8 +4984,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   >
                     <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
                     <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                    <option value="cost" disabled={subjectData?.property_type !== "villa"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                      Cost Approach{subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
+                    <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                      Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
                     </option>
                   </select>
                 </label>
