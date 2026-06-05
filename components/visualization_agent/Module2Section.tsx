@@ -295,11 +295,23 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
   const stepSummaries = output?.debug_metadata?.step_summaries ?? [];
   const runtimeRowsCount = retrievalOutput?.resultSet?.rows?.length ?? 0;
   const runtimeRetrievalReady = retrievalOutput?.status === 'success' && runtimeRowsCount > 0;
+  const runtimeRetrievalRunning = retrievalOutput?.status === 'running';
+
+  const runBlockedReason = (() => {
+    if (isLoading) return null;
+    if (inputs.module_1_intent && !moduleOutput) {
+      return 'Run a Land GIS query in the chat panel first (Module 1 intent), or turn off the "module 1 intent" input toggle.';
+    }
+    if (runtimeRetrievalRunning) {
+      return 'Data retrieval is still running. Wait for it to finish, or turn off retrieval-related input toggles.';
+    }
+    return null;
+  })();
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* ---- Input Configuration ---- */}
-      <div className="shrink-0 p-5 space-y-4 border-b border-slate-100 bg-slate-50/30">
+      <div className="relative z-20 shrink-0 p-5 space-y-4 border-b border-slate-100 bg-slate-50/30">
         {/* Toggle switches */}
         <div>
           <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3">Inputs Considered</p>
@@ -326,12 +338,31 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
           </div>
         </div>
 
+        {runBlockedReason && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-800">
+            {runBlockedReason}
+          </div>
+        )}
+
         {/* Run button + status */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleRun}
-            disabled={isLoading || (inputs.module_1_intent && !moduleOutput)}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-extrabold text-white uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-50"
+            type="button"
+            onClick={() => {
+              if (runBlockedReason) {
+                setError(runBlockedReason);
+                return;
+              }
+              void handleRun();
+            }}
+            disabled={isLoading}
+            aria-disabled={Boolean(runBlockedReason)}
+            title={runBlockedReason || 'Run Module 2 data restructuring pipeline'}
+            className={`relative z-20 flex cursor-pointer items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-extrabold uppercase tracking-widest shadow-lg transition-all ${
+              runBlockedReason
+                ? 'border border-amber-300 bg-amber-100 text-amber-900 shadow-amber-100 hover:bg-amber-200'
+                : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'
+            } disabled:cursor-wait disabled:opacity-60`}
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {isLoading ? 'Processing...' : 'Run Module 2'}
@@ -425,7 +456,7 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
       )}
 
       {/* ---- Tab content ---- */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div className="relative z-0 min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
         {!output && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="relative mb-6">

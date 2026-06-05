@@ -77,10 +77,12 @@ interface Module1ResponseData {
   ledger_row?: TokenLedgerRow | null;
 }
 
-const MODULE1_RUNTIME_MODEL = 'moonshotai.kimi-k2.5';
-const MODULE7_RUNTIME_MODEL = 'moonshot.kimi-k2-thinking';
-const MODULE7_RUNTIME_PROVIDER = 'AWS Bedrock';
-const MODULE7_RUNTIME_REGION = 'ap-south-1';
+const DEFAULT_MODEL = 'gpt-4o-mini';
+
+function getGlobalLlmModel(): string {
+  if (typeof window === 'undefined') return DEFAULT_MODEL;
+  return window.localStorage.getItem('sigmavalue_llm_model') || DEFAULT_MODEL;
+}
 const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
@@ -802,9 +804,13 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          provider: usageRow?.provider || MODULE7_RUNTIME_PROVIDER,
-          region: usageRow?.region || MODULE7_RUNTIME_REGION,
-          model: usageRow?.model || MODULE7_RUNTIME_MODEL,
+          provider:
+            usageRow?.provider ||
+            (typeof window !== 'undefined'
+              ? window.localStorage.getItem('sigmavalue_llm_provider') || 'openai'
+              : 'openai'),
+          region: usageRow?.region || '',
+          model: usageRow?.model || getGlobalLlmModel(),
           query_preview: `Insights: ${query}`.substring(0, 80),
           input_tokens: output.usage.total_input_tokens,
           cached_input_tokens: output.usage.total_cached_input_tokens,
@@ -887,11 +893,13 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     startHiddenDataRetrieval(query, assistantId);
 
     try {
+      const activeModel = getGlobalLlmModel();
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
+          model: activeModel,
           demo_mode: DEMO_MODE_ENABLED,
         }),
       });
@@ -936,7 +944,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
           provider: 'AWS Bedrock',
           region: 'ap-south-1',
-          model: 'moonshotai.kimi-k2.5',
+          model: activeModel,
           query_preview: query.substring(0, 80),
           input_tokens: data.usage.input_tokens || 0,
           cached_input_tokens: data.usage.cached_input_tokens || 0,
@@ -1407,7 +1415,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                {isLandGisChat ? MODULE1_RUNTIME_MODEL : MODULE7_RUNTIME_MODEL}
+                {getGlobalLlmModel()}
               </span>
             </div>
           </div>

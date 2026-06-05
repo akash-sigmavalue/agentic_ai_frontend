@@ -42,6 +42,9 @@ export default function RootLayout({
                   var theme = localStorage.getItem('sigmavalue_theme');
                   if (theme === 'dark') {
                     document.documentElement.classList.add('dark-mode');
+                    document.documentElement.dataset.theme = 'dark';
+                  } else {
+                    document.documentElement.dataset.theme = 'light';
                   }
                 } catch (e) {}
               })();
