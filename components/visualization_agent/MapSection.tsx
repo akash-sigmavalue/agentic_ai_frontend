@@ -43,6 +43,7 @@ import type {
   Module1IntentOutput,
   Module2Output,
   RuntimeGeneratedMapOption,
+  VisualizationRetrievalState,
 } from './types';
 import {
   buildGeneratedMapConfig,
@@ -129,16 +130,101 @@ const MapResizeInvalidator = dynamic(
     }),
   { ssr: false },
 );
+const MapAutoView = dynamic(
+  () =>
+    import('react-leaflet').then((mod) => {
+      function AutoView({ center, zoom }: { center: [number, number]; zoom: number }) {
+        const map = mod.useMap();
+
+        useEffect(() => {
+          map.setView(center, zoom, { animate: true });
+        }, [center, map, zoom]);
+
+        return null;
+      }
+
+      return AutoView;
+    }),
+  { ssr: false },
+);
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629];
+const DEFAULT_INTERACTIVE_AMENITIES = ['railway_stations'];
+const MAX_INTERACTIVE_MARKERS = 1500;
 
-type ViewerMapCategory = '2d' | '3d' | 'spatial-analysis';
+const CITY_CENTERS: Record<string, [number, number]> = {
+  Pune: [18.5204, 73.8567],
+  Mumbai: [19.076, 72.8777],
+  Thane: [19.2183, 72.9781],
+  Hyderabad: [17.385, 78.4867],
+  Bengaluru: [12.9716, 77.5946],
+};
+
+const CITY_BBOXES: Record<string, [number, number, number, number]> = {
+  Pune: [18.4000, 73.7200, 18.6800, 74.0200],
+  Mumbai: [18.8900, 72.7600, 19.3000, 72.9900],
+  Thane: [19.1200, 72.9000, 19.3500, 73.1000],
+  Hyderabad: [17.2500, 78.3000, 17.6000, 78.6500],
+  Bengaluru: [12.8000, 77.4500, 13.1500, 77.8000],
+};
+
+const INTERACTIVE_AMENITY_OPTIONS = [
+  { value: 'railway_stations', label: 'Railway Stations', color: '#8b6b4f' },
+  { value: 'metro_stations', label: 'Metro Stations', color: '#f59e0b' },
+  { value: 'bus_stops', label: 'Bus Stops', color: '#2563eb' },
+  { value: 'schools', label: 'Schools', color: '#16a34a' },
+  { value: 'hospitals', label: 'Hospitals', color: '#dc2626' },
+  { value: 'gardens', label: 'Gardens', color: '#22c55e' },
+  { value: 'malls', label: 'Malls', color: '#7c3aed' },
+  { value: 'it_parks', label: 'IT Parks', color: '#0ea5e9' },
+  { value: 'restaurants_entertainment', label: 'Restaurants & Entertainment', color: '#f97316' },
+  { value: 'police_stations', label: 'Police Stations', color: '#0f766e' },
+  { value: 'fire_stations', label: 'Fire Stations', color: '#ef4444' },
+];
+
+interface InteractiveAmenityPoint {
+  name: string;
+  lat: number;
+  lon: number;
+  category: string;
+}
+
+interface InteractiveMapMarker {
+  id: string;
+  entity_type: 'project' | 'location';
+  name: string;
+  lat: number;
+  lon: number;
+  source_fields?: Record<string, string>;
+  raw?: Record<string, unknown>;
+}
+
+interface InteractiveEntityValidationResponse {
+  status: string;
+  validation_source: string;
+  entity_config: {
+    entity_type?: 'project' | 'location' | 'unknown';
+    name_field?: string | null;
+    latitude_field?: string | null;
+    longitude_field?: string | null;
+    confidence?: number;
+    reason?: string;
+  };
+  markers: InteractiveMapMarker[];
+  marker_count: number;
+  input_row_count: number;
+  deduped_row_count: number;
+  usage?: Record<string, unknown>;
+}
+
+type ViewerMapCategory = '2d' | '3d' | 'spatial-analysis' | 'interactive-map';
 type GeneratedBasemapMode = 'current' | 'road' | 'satellite' | 'dark';
 
 const DEFAULT_MAP_OPTIONS: { value: ViewerMapCategory; label: string }[] = [
   { value: '2d', label: '2D Maps' },
   { value: '3d', label: '3D Maps' },
   { value: 'spatial-analysis', label: 'Spatial Analysis' },
+  { value: 'interactive-map', label: 'Interactive Map' },
 ];
 
 const THREE_D_DEFAULT_OPTIONS: { value: GeneratedMapFamily; label: string }[] = [
@@ -197,6 +283,7 @@ const FAMILY_LABEL: Record<GeneratedMapFamily, string> = {
   '3d-timelapse': '3D Map - Timelapse',
   'spatial-analysis': 'Spatial Analysis',
   'heatmap-timelapse': 'Heatmap - Timelapse',
+  'interactive-map': 'Interactive Map',
 };
 
 const FAMILY_ACTION_LABEL: Record<GeneratedMapFamily, string> = {
@@ -205,6 +292,7 @@ const FAMILY_ACTION_LABEL: Record<GeneratedMapFamily, string> = {
   '3d-timelapse': '3D Timelapse',
   'spatial-analysis': 'Spatial Analysis',
   'heatmap-timelapse': 'Heatmap Timelapse',
+  'interactive-map': 'Interactive Map',
 };
 
 const SAMPLE_OPTION_VALUE = 'sample';
@@ -215,6 +303,7 @@ const GENERATED_FAMILIES = new Set<GeneratedMapFamily>([
   '3d-timelapse',
   'spatial-analysis',
   'heatmap-timelapse',
+  'interactive-map',
 ]);
 const GENERATED_RENDERERS = new Set<GeneratedMapRenderer>([
   'marker_map',
@@ -442,7 +531,12 @@ function getMapTypeForFamily(
     : '3d_heatmap';
   if (family === '3d-timelapse') return '3d_timelapse';
   if (family === 'spatial-analysis') return 'proximity_map';
+  if (family === 'interactive-map') return '2d_overlay';
   return '3d_heatmap';
+}
+
+function getGenerationFamilyForViewer(category: ViewerMapCategory): GeneratedMapFamily {
+  return category === 'interactive-map' ? '2d' : category;
 }
 
 function getAutomatic3DMapType(moduleOutput: Module1IntentOutput | null, module2Output: Module2Output | null): string {
@@ -474,7 +568,160 @@ function getAutomatic3DMapType(moduleOutput: Module1IntentOutput | null, module2
 
 function isMapInViewerCategory(map: GeneratedMapConfig, category: ViewerMapCategory): boolean {
   if (category === '3d') return ['3d', '3d-timelapse', 'heatmap-timelapse'].includes(map.family);
+  if (category === 'interactive-map') {
+    return map.family === 'interactive-map' || (map.family === '2d' && map.primaryMapType === '2d_overlay');
+  }
   return map.family === category;
+}
+
+function normalizeInteractiveKey(value: string) {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function toInteractiveNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/,/g, '').trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function findInteractiveField(record: Record<string, unknown>, candidates: string[]) {
+  const normalized = new Map(Object.keys(record).map((key) => [normalizeInteractiveKey(key), key]));
+  for (const candidate of candidates) {
+    const field = normalized.get(normalizeInteractiveKey(candidate));
+    if (field) return field;
+  }
+  return undefined;
+}
+
+function getInteractiveRows(
+  module2Output: Module2Output | null,
+  retrievalOutput: VisualizationRetrievalState | null,
+): Record<string, unknown>[] {
+  const visualizationRows = module2Output?.visualization_ready_output?.records;
+  if (Array.isArray(visualizationRows)) {
+    return visualizationRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  if (Array.isArray(module2Output?.analysis_ready_dataset)) {
+    return module2Output.analysis_ready_dataset.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  const retrievalRows = retrievalOutput?.resultSet?.rows;
+  if (Array.isArray(retrievalRows)) {
+    return retrievalRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  return [];
+}
+
+function extractIntentLocations(moduleOutput: Module1IntentOutput | null) {
+  const found: string[] = [];
+  const locationKeyPattern = /(city|location|locality|village|micromarket|micro_market|geography|area|place)/;
+  const pushText = (value: unknown) => {
+    if (typeof value !== 'string' && typeof value !== 'number') return;
+    const text = String(value).trim();
+    if (
+      text &&
+      text.length <= 80 &&
+      !/^(true|false|null|undefined)$/i.test(text) &&
+      !/^[a-z0-9_ -]+requirements$/i.test(text)
+    ) {
+      found.push(text);
+    }
+  };
+  const collectLocationValues = (value: unknown) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(collectLocationValues);
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.values(value as Record<string, unknown>).forEach(collectLocationValues);
+      return;
+    }
+    pushText(value);
+  };
+  const visit = (value: unknown) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.entries(value as Record<string, unknown>).forEach(([key, nested]) => {
+        const keyLower = key.toLowerCase();
+        if (locationKeyPattern.test(keyLower) && !/(field|column|schema|mapping|requirement|output)/.test(keyLower)) {
+          collectLocationValues(nested);
+        } else {
+          visit(nested);
+        }
+      });
+    }
+  };
+  visit(moduleOutput);
+  const matchedKnownCities = Object.keys(CITY_CENTERS).filter((city) =>
+    found.some((value) => value.toLowerCase().includes(city.toLowerCase())),
+  );
+  return Array.from(new Set([...matchedKnownCities, ...found]));
+}
+
+function resolveInteractiveCity(moduleOutput: Module1IntentOutput | null) {
+  const locations = extractIntentLocations(moduleOutput);
+  return Object.keys(CITY_CENTERS).find((city) =>
+    locations.some((value) => value.toLowerCase().includes(city.toLowerCase())),
+  ) || locations[0] || '';
+}
+
+function buildFallbackInteractiveMarkers(rows: Record<string, unknown>[]): InteractiveMapMarker[] {
+  const first = rows[0];
+  if (!first) return [];
+  const projectField = findInteractiveField(first, ['Project Name', 'project_name', 'project', 'property_name']);
+  const locationField = findInteractiveField(first, ['Location Name', 'location_name', 'locality', 'village', 'village_name', 'micromarket', 'city']);
+  const latField = findInteractiveField(first, ['latitude', 'lat', 'project_latitude', 'location_latitude', 'subject_lat', 'center_lat', 'y']);
+  const lonField = findInteractiveField(first, ['longitude', 'lng', 'lon', 'long', 'project_longitude', 'location_longitude', 'subject_lon', 'center_lng', 'x']);
+  const nameField = projectField || locationField;
+  const entityType: 'project' | 'location' = projectField ? 'project' : 'location';
+  if (!nameField || !latField || !lonField) return [];
+  const seen = new Set<string>();
+  return rows.flatMap((row, index) => {
+    const name = String(row[nameField] || '').trim();
+    const lat = toInteractiveNumber(row[latField]);
+    const lon = toInteractiveNumber(row[lonField]);
+    if (!name || lat == null || lon == null || lat < -90 || lat > 90 || lon < -180 || lon > 180) return [];
+    const key = `${name.toLowerCase()}|${lat.toFixed(7)}|${lon.toFixed(7)}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{
+      id: `fallback:${index}`,
+      entity_type: entityType,
+      name,
+      lat,
+      lon,
+      source_fields: { name: nameField, latitude: latField, longitude: lonField },
+      raw: row,
+    }];
+  });
+}
+
+async function requestInteractiveEntityValidation(
+  moduleOutput: Module1IntentOutput | null,
+  module2Output: Module2Output | null,
+  rows: Record<string, unknown>[],
+): Promise<InteractiveEntityValidationResponse> {
+  const response = await fetch(`${API_BASE}/visualization-agent/module31/interactive-map/validate-entities`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      module_1_intent_json: moduleOutput,
+      module_2_output_json: module2Output,
+      rows_json: rows,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(body.detail || `Interactive map validation failed with status ${response.status}`);
+  }
+  return response.json();
 }
 
 async function requestModule3Generation(
@@ -735,6 +982,7 @@ interface MapSectionProps {
   isExpanded?: boolean;
   moduleOutput?: Module1IntentOutput | null;
   module2Output?: Module2Output | null;
+  retrievalOutput?: VisualizationRetrievalState | null;
   onRuntimeGeneratedMapsChange?: (maps: RuntimeGeneratedMapOption[]) => void;
 }
 
@@ -2530,6 +2778,10 @@ function SampleMapView({
     return <MapOverlayView isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} onInsightDataReady={handleLoaded} />;
   }
 
+  if (activeFamily === 'interactive-map') {
+    return <MapOverlayView isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} onInsightDataReady={handleLoaded} />;
+  }
+
   if (activeFamily === '3d') {
     return <ThreeDMapView markers={[]} onInsightDataReady={handleLoaded} />;
   }
@@ -2699,6 +2951,659 @@ function Module7InsightsPanel({
   );
 }
 
+function InteractiveMapPendingState() {
+  return (
+    <section className="flex h-full min-h-[680px] flex-col items-center justify-center bg-white px-6 text-center">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">Interactive MapView</p>
+      <h3 className="mt-2 text-base font-extrabold text-slate-950">Waiting for resolved intent</h3>
+      <p className="mt-3 max-w-md text-xs font-semibold leading-5 text-slate-500">
+        Submit a query first. The interactive map will appear after Module 1 finishes intent resolution, then it will load amenities for the resolved city.
+      </p>
+    </section>
+  );
+}
+
+function InteractiveRuntimeMapView({
+  moduleOutput,
+  module2Output,
+  retrievalOutput,
+  module31Config = null,
+  isLoadingModule31 = false,
+}: {
+  moduleOutput: Module1IntentOutput | null;
+  module2Output: Module2Output | null;
+  retrievalOutput: VisualizationRetrievalState | null;
+  module31Config?: GeneratedMapConfig | null;
+  isLoadingModule31?: boolean;
+}) {
+  const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
+  const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
+  const rows = useMemo(() => getInteractiveRows(module2Output, retrievalOutput), [module2Output, retrievalOutput]);
+  const [selectedLocation, setSelectedLocation] = useState(resolvedCity);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(DEFAULT_INTERACTIVE_AMENITIES);
+  const [amenities, setAmenities] = useState<InteractiveAmenityPoint[]>([]);
+  const [amenitiesLoading, setAmenitiesLoading] = useState(false);
+  const [amenitiesStatus, setAmenitiesStatus] = useState('Railway stations selected by default');
+  const [validatedMarkers, setValidatedMarkers] = useState<InteractiveMapMarker[]>([]);
+  const [validationStatus, setValidationStatus] = useState('Waiting for retrieved data to plot markers');
+  const [validationSource, setValidationSource] = useState('pending');
+
+  // ── Module 3.1 timelapse state ─────────────────────────────────────────────
+  const [activeTimeFrame, setActiveTimeFrame] = useState<string | null>(null);
+  const [isTimelapsePlaying, setIsTimelapsePlaying] = useState(false);
+  const timelapseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Multi-heuristic city resolution to support micromarkets (like Hinjewadi, Baner, Wakad, Whitefield)
+  // that don't match Pune/Bengaluru/etc. directly by string comparison.
+  const selectedCity = useMemo(() => {
+    const searchStringSelected = selectedLocation ? selectedLocation.toLowerCase() : '';
+    const searchStringResolved = resolvedCity ? resolvedCity.toLowerCase() : '';
+
+    // 1. Check direct name match in selectedLocation
+    const directSelected = Object.keys(CITY_CENTERS).find((candidate) =>
+      searchStringSelected.includes(candidate.toLowerCase()),
+    );
+    if (directSelected) return directSelected;
+
+    // 2. Check direct name match in resolvedCity
+    const directResolved = Object.keys(CITY_CENTERS).find((candidate) =>
+      searchStringResolved.includes(candidate.toLowerCase()),
+    );
+    if (directResolved) return directResolved;
+
+    // 3. Fall back to coordinate bounding box detection if rows/markers exist
+    if (rows && rows.length > 0) {
+      const first = rows[0];
+      const latField = findInteractiveField(first, ['latitude', 'lat', 'project_latitude', 'location_latitude', 'subject_lat', 'center_lat', 'y']);
+      const lonField = findInteractiveField(first, ['longitude', 'lng', 'lon', 'long', 'project_longitude', 'location_longitude', 'subject_lon', 'center_lng', 'x']);
+      if (latField && lonField) {
+        let sumLat = 0;
+        let sumLon = 0;
+        let count = 0;
+        for (const row of rows.slice(0, 10)) {
+          const lat = toInteractiveNumber(row[latField]);
+          const lon = toInteractiveNumber(row[lonField]);
+          if (lat != null && lon != null) {
+            sumLat += lat;
+            sumLon += lon;
+            count++;
+          }
+        }
+        if (count > 0) {
+          const avgLat = sumLat / count;
+          const avgLon = sumLon / count;
+          const matched = Object.entries(CITY_BBOXES).find(([_, bbox]) => {
+            const [south, west, north, east] = bbox;
+            return avgLat >= south && avgLat <= north && avgLon >= west && avgLon <= east;
+          });
+          if (matched) return matched[0];
+        }
+      }
+    }
+
+    // 4. Fall back to searching stringified intent output for city name keywords
+    if (moduleOutput) {
+      const intentStr = JSON.stringify(moduleOutput).toLowerCase();
+      const matched = Object.keys(CITY_CENTERS).find((candidate) =>
+        intentStr.includes(candidate.toLowerCase()),
+      );
+      if (matched) return matched;
+    }
+
+    // Default fallback to first city in our list
+    return 'Pune';
+  }, [selectedLocation, resolvedCity, rows, moduleOutput]);
+
+  // Sync selectedLocation when Module 1 resolves or a new query changes the resolved city.
+  // This ensures amenities load for the correct city even when the component was already
+  // mounted before intent resolution completed.
+  useEffect(() => {
+    if (resolvedCity) {
+      setSelectedLocation(resolvedCity);
+    }
+  }, [resolvedCity]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const loadAmenities = async () => {
+      if (!selectedLocation || selectedAmenities.length === 0) {
+        setAmenities([]);
+        setAmenitiesStatus(!selectedLocation ? 'Waiting for resolved city to load amenities' : 'Select amenities to overlay');
+        return;
+      }
+      const city = selectedCity;
+      if (!city) {
+        setAmenities([]);
+        setAmenitiesStatus('Amenities need a supported resolved city');
+        return;
+      }
+      setAmenitiesLoading(true);
+      setAmenitiesStatus('Fetching amenities from OpenStreetMap...');
+      try {
+        const params = new URLSearchParams({
+          city,
+          categories: selectedAmenities.join(','),
+        });
+        const response = await fetch(`${API_BASE}/map-overlays/osm-amenities?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+        const data = await response.json() as {
+          points?: InteractiveAmenityPoint[];
+          category_metadata?: Record<string, { source?: string }>;
+        };
+        if (!active) return;
+        const sources = new Set(Object.values(data.category_metadata || {}).map((metadata) => metadata.source));
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        const points = Array.isArray(data.points) ? data.points : [];
+        setAmenities(points);
+        setAmenitiesStatus(`${points.length} amenities loaded${cacheUsed ? ' (soft cache)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setAmenities([]);
+        setAmenitiesStatus(error instanceof Error ? error.message : 'Unable to load amenities');
+      } finally {
+        if (active) setAmenitiesLoading(false);
+      }
+    };
+    loadAmenities();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [resolvedCity, selectedAmenities, selectedLocation, selectedCity]);
+
+  useEffect(() => {
+    let active = true;
+    const validateMarkers = async () => {
+      if (rows.length === 0) {
+        setValidatedMarkers([]);
+        setValidationSource('pending');
+        setValidationStatus(moduleOutput ? 'Intent resolved. Waiting for retrieved data to plot markers.' : 'Submit a query to resolve intent and load the map.');
+        return;
+      }
+      setValidationStatus('Kimi K2 Thinking is validating plotting entities...');
+      setValidationSource('kimi_k2_thinking');
+      try {
+        const result = await requestInteractiveEntityValidation(moduleOutput, module2Output, rows);
+        if (!active) return;
+        setValidatedMarkers(result.markers || []);
+        setValidationSource(result.validation_source);
+        const entityType = result.entity_config?.entity_type || 'entity';
+        setValidationStatus(`${result.marker_count} deduped ${entityType} markers ready from ${result.input_row_count} rows`);
+      } catch (error) {
+        if (!active) return;
+        const fallback = buildFallbackInteractiveMarkers(rows);
+        setValidatedMarkers(fallback);
+        setValidationSource('heuristic_fallback');
+        setValidationStatus(`${fallback.length} markers plotted with fallback validation${error instanceof Error ? ` (${error.message})` : ''}`);
+      }
+    };
+    validateMarkers();
+    return () => {
+      active = false;
+    };
+  }, [module2Output, moduleOutput, rows]);
+
+  // ── Module 3.1 derived markers ────────────────────────────────────────────
+  // Convert GeneratedMapRecord[] from the auto-triggered Module 3.1 into the
+  // same InteractiveMapMarker shape the rest of the component already uses.
+  const module31Markers = useMemo((): InteractiveMapMarker[] | null => {
+    if (!module31Config?.records?.length) return null;
+    const seen = new Set<string>();
+    return module31Config.records.flatMap((r, i) => {
+      if (!Number.isFinite(r.lat) || !Number.isFinite(r.lng)) return [];
+      const key = `${r.geoLabel}|${r.lat.toFixed(6)}|${r.lng.toFixed(6)}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{
+        id: `m31:${i}`,
+        entity_type: 'project' as const,
+        name: r.geoLabel || `Point ${i + 1}`,
+        lat: r.lat,
+        lon: r.lng,
+        raw: r.raw as Record<string, unknown>,
+      }];
+    });
+  }, [module31Config]);
+
+  const timeFrames = useMemo((): string[] => {
+    if (module31Config?.timeFrames?.length) {
+      return module31Config.timeFrames;
+    }
+    if (validatedMarkers.length > 0) {
+      const frames = new Set<string>();
+      for (const m of validatedMarkers) {
+        const raw = m.raw as Record<string, unknown> | undefined;
+        const tf = raw?.timeFrame || raw?.timelapse_frame || raw?.time_period || raw?.period || raw?.year;
+        if (tf) {
+          frames.add(String(tf));
+        }
+      }
+      if (frames.size > 1) {
+        return Array.from(frames).sort();
+      }
+    }
+    return [];
+  }, [module31Config, validatedMarkers]);
+
+  // Reset timelapse when a new Module 3.1 config arrives or when timeFrames change
+  useEffect(() => {
+    setActiveTimeFrame(timeFrames[0] ?? null);
+    setIsTimelapsePlaying(false);
+    if (timelapseIntervalRef.current) clearInterval(timelapseIntervalRef.current);
+  }, [module31Config, timeFrames]);
+
+  // Timelapse auto-advance
+  useEffect(() => {
+    if (timelapseIntervalRef.current) clearInterval(timelapseIntervalRef.current);
+    if (!isTimelapsePlaying || timeFrames.length < 2) return;
+    timelapseIntervalRef.current = setInterval(() => {
+      setActiveTimeFrame((prev) => {
+        const idx = timeFrames.indexOf(prev ?? timeFrames[0]);
+        return timeFrames[(idx + 1) % timeFrames.length];
+      });
+    }, 1500);
+    return () => { if (timelapseIntervalRef.current) clearInterval(timelapseIntervalRef.current); };
+  }, [isTimelapsePlaying, timeFrames]);
+
+  const visibleMarkers = useMemo(() => validatedMarkers.slice(0, MAX_INTERACTIVE_MARKERS), [validatedMarkers]);
+
+  // Prefer Module 3.1 markers if available; fall back to Kimi K2 validated markers
+  const displayMarkers = useMemo((): InteractiveMapMarker[] => {
+    const sourceMarkers = module31Markers || visibleMarkers;
+    if (activeTimeFrame && timeFrames.length > 1) {
+      const filtered = sourceMarkers.filter((m) => {
+        const raw = m.raw as Record<string, unknown> | undefined;
+        const tf = raw?.timeFrame || raw?.timelapse_frame || raw?.time_period || raw?.period || raw?.year;
+        return !tf || String(tf) === activeTimeFrame;
+      });
+      return filtered.slice(0, MAX_INTERACTIVE_MARKERS);
+    }
+    return sourceMarkers.slice(0, MAX_INTERACTIVE_MARKERS);
+  }, [module31Markers, activeTimeFrame, timeFrames, visibleMarkers]);
+
+  const activeFrameIndex = timeFrames.indexOf(activeTimeFrame ?? '');
+
+  const locationOptions = useMemo(() => {
+    return Array.from(new Set([resolvedCity, ...intentLocations].filter(Boolean)));
+  }, [intentLocations, resolvedCity]);
+  const focusedMarker = displayMarkers.find((marker) => marker.name.toLowerCase() === selectedLocation.toLowerCase());
+  const markerCenter: [number, number] | null = displayMarkers.length > 0
+    ? [
+        displayMarkers.reduce((sum, marker) => sum + marker.lat, 0) / displayMarkers.length,
+        displayMarkers.reduce((sum, marker) => sum + marker.lon, 0) / displayMarkers.length,
+      ]
+    : null;
+  const mapCenter: [number, number] = focusedMarker
+    ? [focusedMarker.lat, focusedMarker.lon]
+    : markerCenter || (selectedCity ? CITY_CENTERS[selectedCity] : undefined) || DEFAULT_CENTER;
+  const mapZoom = focusedMarker ? 14 : displayMarkers.length > 0 ? 11 : 12;
+
+  return (
+    <section className="flex h-full min-h-[680px] flex-col bg-white">
+      {/* ── Header bar ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-4">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">MapView</p>
+          <h3 className="text-sm font-extrabold text-slate-950">Interactive Runtime Map</h3>
+        </div>
+
+        {/* Module 3.1 loading badge */}
+        {isLoadingModule31 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Module 3.1 processing…
+          </span>
+        ) : module31Config ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+            <TrendingUp className="h-3 w-3" />
+            Module 3.1 data active
+          </span>
+        ) : null}
+
+        <label className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          Location
+          <select
+            value={selectedLocation}
+            onChange={(event) => setSelectedLocation(event.target.value)}
+            className="max-w-[190px] bg-transparent text-[10px] font-extrabold uppercase tracking-widest text-slate-700 outline-none"
+          >
+            {locationOptions.length > 0 ? (
+              locationOptions.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))
+            ) : (
+              <option value="">No resolved location</option>
+            )}
+          </select>
+        </label>
+
+        <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <summary className="cursor-pointer list-none select-none">
+            Amenities {selectedAmenities.length ? `(${selectedAmenities.length})` : ''}
+          </summary>
+          <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+            {INTERACTIVE_AMENITY_OPTIONS.map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={selectedAmenities.includes(option.value)}
+                  onChange={(event) => {
+                    setSelectedAmenities((previous) =>
+                      event.target.checked
+                        ? Array.from(new Set([...previous, option.value]))
+                        : previous.filter((value) => value !== option.value),
+                    );
+                  }}
+                  className="h-3 w-3 accent-emerald-600"
+                />
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: option.color }}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </details>
+      </div>
+
+      {/* ── Timelapse toolbar (only when multiple time frames are present) */}
+      {timeFrames.length > 1 ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-violet-100 bg-violet-50/60 px-5 py-2.5">
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-violet-600">Timelapse</span>
+
+          {/* Step backward */}
+          <button
+            type="button"
+            onClick={() =>
+              setActiveTimeFrame((prev) => {
+                const idx = timeFrames.indexOf(prev ?? timeFrames[0]);
+                return timeFrames[(idx - 1 + timeFrames.length) % timeFrames.length];
+              })
+            }
+            className="rounded-full border border-violet-200 bg-white p-1 text-violet-700 shadow-sm hover:bg-violet-100"
+            title="Previous frame"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+
+          {/* Play / Pause */}
+          <button
+            type="button"
+            onClick={() => setIsTimelapsePlaying((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest shadow-sm transition ${
+              isTimelapsePlaying
+                ? 'border-violet-300 bg-violet-600 text-white hover:bg-violet-700'
+                : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-100'
+            }`}
+          >
+            {isTimelapsePlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+            {isTimelapsePlaying ? 'Pause' : 'Play'}
+          </button>
+
+          {/* Step forward */}
+          <button
+            type="button"
+            onClick={() =>
+              setActiveTimeFrame((prev) => {
+                const idx = timeFrames.indexOf(prev ?? timeFrames[0]);
+                return timeFrames[(idx + 1) % timeFrames.length];
+              })
+            }
+            className="rounded-full border border-violet-200 bg-white p-1 text-violet-700 shadow-sm hover:bg-violet-100"
+            title="Next frame"
+          >
+            <Navigation className="h-3 w-3" />
+          </button>
+
+          {/* Range Slider */}
+          <input
+            type="range"
+            min={0}
+            max={timeFrames.length - 1}
+            step={1}
+            value={activeFrameIndex >= 0 ? activeFrameIndex : 0}
+            onChange={(event) => {
+              setIsTimelapsePlaying(false);
+              setActiveTimeFrame(timeFrames[Number(event.target.value)] || null);
+            }}
+            className="h-1.5 min-w-[140px] max-w-[240px] flex-1 accent-violet-600 cursor-pointer"
+            aria-label="Interactive map timelapse slider"
+          />
+
+          {/* Time frame chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {timeFrames.map((frame) => (
+              <button
+                key={frame}
+                type="button"
+                onClick={() => { setActiveTimeFrame(frame); setIsTimelapsePlaying(false); }}
+                className={`rounded-full border px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest transition ${
+                  activeTimeFrame === frame
+                    ? 'border-violet-400 bg-violet-600 text-white'
+                    : 'border-violet-200 bg-white text-violet-600 hover:bg-violet-100'
+                }`}
+              >
+                {frame}
+              </button>
+            ))}
+          </div>
+
+          <span className="ml-auto text-[10px] font-bold text-violet-500">
+            {displayMarkers.length} markers · frame {activeTimeFrame ?? '—'}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="relative min-h-[560px] flex-1">
+        <MapContainer
+          center={mapCenter}
+          zoom={mapZoom}
+          preferCanvas
+          className="h-full min-h-[560px] w-full"
+          scrollWheelZoom
+        >
+          <TileLayer
+            url={LEAFLET_BASEMAP_OPTIONS.current.url}
+            attribution={LEAFLET_BASEMAP_OPTIONS.current.attribution}
+          />
+          <MapResizeInvalidator />
+          <MapAutoView center={mapCenter} zoom={mapZoom} />
+
+          {amenities.map((amenity, index) => {
+            const option = INTERACTIVE_AMENITY_OPTIONS.find((candidate) => candidate.value === amenity.category);
+            return (
+              <CircleMarker
+                key={`amenity-${amenity.category}-${amenity.lat}-${amenity.lon}-${index}`}
+                center={[amenity.lat, amenity.lon]}
+                radius={5}
+                pathOptions={{
+                  color: option?.color || '#64748b',
+                  fillColor: option?.color || '#64748b',
+                  fillOpacity: 0.55,
+                  weight: 1,
+                }}
+              >
+                <Popup>
+                  <div className="text-xs">
+                    <strong>{amenity.name || 'Unnamed amenity'}</strong>
+                    <div>{option?.label || amenity.category}</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+
+          {displayMarkers.map((marker) => {
+            const raw = marker.raw as Record<string, unknown> | undefined;
+            // Fields to skip in the rich tooltip (internal / coordinate / meta fields) — all lowercase for comparison
+            const SKIP_FIELDS = new Set([
+              'latitude', 'lat', 'longitude', 'lng', 'lon', 'long',
+              'project_latitude', 'project_longitude', 'center_lat', 'center_lng',
+              'subject_lat', 'subject_lon', 'subject_lng', 'x', 'y',
+              'timelapse_frame', 'timeframe', 'time_period', 'period',
+              // internal derived / meta fields
+              'tooltip_data', 'tooltipdata', 'raw_fields', 'rawfields',
+              'raw', 'meta', 'metadata', 'extra', 'extras',
+            ]);
+            const rawEntries = raw
+              ? Object.entries(raw).filter(([k, v]) => {
+                  const norm = k.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                  if (SKIP_FIELDS.has(norm)) return false;
+                  if (v === null || v === undefined || v === '') return false;
+                  // Skip nested objects / arrays — they render as [object Object]
+                  if (typeof v === 'object') return false;
+                  return true;
+                })
+              : [];
+            const hasRichData = rawEntries.length > 0;
+
+            const isM31 = Boolean(module31Config);
+            const markerColor = isM31 ? '#7c3aed' : (marker.entity_type === 'project' ? '#059669' : '#2563eb');
+            const fillColor   = isM31 ? '#8b5cf6' : (marker.entity_type === 'project' ? '#10b981' : '#3b82f6');
+
+            return (
+              <CircleMarker
+                key={marker.id}
+                center={[marker.lat, marker.lon]}
+                radius={marker.entity_type === 'project' ? 8 : 7}
+                pathOptions={{ color: markerColor, fillColor, fillOpacity: 0.82, weight: 2 }}
+              >
+                <Popup maxWidth={320}>
+                  <div style={{ minWidth: 200, maxWidth: 300, fontFamily: 'inherit' }}>
+                    {/* Header */}
+                    <div style={{
+                      fontWeight: 800,
+                      fontSize: 12,
+                      color: isM31 ? '#6d28d9' : '#0f172a',
+                      borderBottom: `2px solid ${isM31 ? '#ede9fe' : '#f1f5f9'}`,
+                      paddingBottom: 4,
+                      marginBottom: 6,
+                    }}>
+                      {marker.name}
+                    </div>
+
+                    {/* Rich field table from raw data */}
+                    {hasRichData ? (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <tbody>
+                          {rawEntries.map(([key, val]) => (
+                            <tr key={key}>
+                              <td style={{
+                                paddingRight: 8,
+                                paddingBottom: 3,
+                                fontWeight: 700,
+                                color: '#64748b',
+                                whiteSpace: 'nowrap',
+                                verticalAlign: 'top',
+                              }}>
+                                {key.replace(/_/g, ' ')}:
+                              </td>
+                              <td style={{
+                                paddingBottom: 3,
+                                color: '#0f172a',
+                                wordBreak: 'break-word',
+                              }}>
+                                {typeof val === 'number'
+                                  ? Number.isInteger(val) ? val.toLocaleString() : val.toFixed(4)
+                                  : String(val)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      /* Fallback when no raw data */
+                      <div style={{ fontSize: 11, color: '#64748b' }}>
+                        <div style={{ marginBottom: 2 }}>
+                          <span style={{ fontWeight: 700 }}>lat: </span>
+                          {marker.lat.toFixed(5)}
+                        </div>
+                        <div>
+                          <span style={{ fontWeight: 700 }}>lng: </span>
+                          {marker.lon.toFixed(5)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Active time frame badge */}
+                    {activeTimeFrame ? (
+                      <div style={{
+                        marginTop: 6,
+                        paddingTop: 4,
+                        borderTop: '1px solid #ede9fe',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: '#7c3aed',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                      }}>
+                        Frame: {activeTimeFrame}
+                      </div>
+                    ) : null}
+
+                    {/* Source badge */}
+                    <div style={{
+                      marginTop: 5,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: isM31 ? '#a78bfa' : '#94a3b8',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                    }}>
+                      {isM31 ? '✦ Module 3.1 Final Dataset' : `${marker.entity_type} · retrieved data`}
+                    </div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+        </MapContainer>
+
+        <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Resolved Location</p>
+          <p className="mt-1 text-base font-extrabold text-slate-950">{selectedLocation || 'No resolved location'}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <span>{displayMarkers.length.toLocaleString()} markers</span>
+            <span>{amenities.length.toLocaleString()} amenities</span>
+          </div>
+          {timeFrames.length > 1 ? (
+            <p className="mt-2 text-[10px] font-semibold text-violet-600">
+              {activeTimeFrame ?? 'All frames'} · {timeFrames.length} time frames
+            </p>
+          ) : (displayMarkers.length > MAX_INTERACTIVE_MARKERS ? (
+            <p className="mt-2 text-[10px] font-semibold text-amber-600">
+              Showing first {MAX_INTERACTIVE_MARKERS.toLocaleString()} of {displayMarkers.length.toLocaleString()} markers for smooth rendering.
+            </p>
+          ) : null)}
+        </div>
+      </div>
+
+      <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-3">
+        <span>
+          {module31Config
+            ? `${displayMarkers.length} markers · module 3.1 finalized data`
+            : isLoadingModule31
+              ? 'Module 3.1 processing finalized data…'
+              : validationStatus}
+        </span>
+        <span>
+          {module31Config ? 'module_3_1_records' : `Validation: ${validationSource.replace(/_/g, ' ')}`}
+        </span>
+        <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
+      </div>
+    </section>
+  );
+}
+
 function GeneratedMapEmptyState({
   activeFamily,
   readiness,
@@ -2713,21 +3618,24 @@ function GeneratedMapEmptyState({
   onGenerate: () => void | Promise<void>;
 }) {
   const actionLabel = FAMILY_ACTION_LABEL[activeFamily];
+  const showGenerateButton = activeFamily !== 'interactive-map';
 
   return (
     <div className="flex h-full min-h-[540px] flex-col items-center justify-center bg-white px-6 text-center">
-      <button
-        type="button"
-        onClick={() => void onGenerate()}
-        disabled={!readiness.isReady || isGenerating}
-        title={readiness.isReady ? `Generate ${actionLabel} from the finalized Module 2 data` : readiness.reasons.join(' ')}
-        className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-      >
-        {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-        {hasCachedMap ? `View ${actionLabel}` : `Generate ${actionLabel}`}
-      </button>
+      {showGenerateButton ? (
+        <button
+          type="button"
+          onClick={() => void onGenerate()}
+          disabled={!readiness.isReady || isGenerating}
+          title={readiness.isReady ? `Generate ${actionLabel} from the finalized Module 2 data` : readiness.reasons.join(' ')}
+          className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        >
+          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          {hasCachedMap ? `View ${actionLabel}` : `Generate ${actionLabel}`}
+        </button>
+      ) : null}
       {!readiness.isReady ? (
-        <p className="mt-4 max-w-md text-xs font-semibold leading-5 text-slate-500">
+        <p className={`${showGenerateButton ? 'mt-4' : ''} max-w-md text-xs font-semibold leading-5 text-slate-500`}>
           Module 3.1 unlocks after runtime Module 1 intent and runtime Module 2 finalized data are ready.
         </p>
       ) : null}
@@ -2740,13 +3648,14 @@ const MapSection: React.FC<MapSectionProps> = ({
   isExpanded,
   moduleOutput = null,
   module2Output = null,
+  retrievalOutput = null,
   onRuntimeGeneratedMapsChange,
 }) => {
   const [leafletReady, setLeafletReady] = useState(false);
   const [activeViewerModule, setActiveViewerModule] = useState<'3.1' | '3'>('3.1');
   const [generatedBasemapMode, setGeneratedBasemapMode] = useState<GeneratedBasemapMode>('current');
-  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('2d');
-  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('2d');
+  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('interactive-map');
+  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('interactive-map');
   const [generatedMaps, setGeneratedMaps] = useState<GeneratedMapConfig[]>([]);
   const [activeGeneratedId, setActiveGeneratedId] = useState<string>(SAMPLE_OPTION_VALUE);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -2773,13 +3682,18 @@ const MapSection: React.FC<MapSectionProps> = ({
   const [mapStorageMessageTone, setMapStorageMessageTone] = useState<'success' | 'error'>('success');
   const insightPanelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Auto-trigger Module 3.1 for Interactive Map ─────────────────────────────
+  const [interactiveModule31Config, setInteractiveModule31Config] = useState<GeneratedMapConfig | null>(null);
+  const [isGeneratingInteractiveM31, setIsGeneratingInteractiveM31] = useState(false);
+  const prevModule2IdRef = useRef<string | null>(null);
+
   const readiness = useMemo(
     () => getModule31Readiness(moduleOutput, module2Output),
     [moduleOutput, module2Output],
   );
   const mapsForFamily = generatedMaps.filter((map) => isMapInViewerCategory(map, activeFamily));
   const selectedGenerationTarget = useMemo<Module31GenerationTarget>(() => ({
-    requested_map_family: activeFamily,
+    requested_map_family: getGenerationFamilyForViewer(activeFamily),
     requested_map_type: activeFamily === '3d'
       ? getAutomatic3DMapType(moduleOutput, module2Output)
       : getMapTypeForFamily(activeFamily, moduleOutput),
@@ -2928,6 +3842,7 @@ const MapSection: React.FC<MapSectionProps> = ({
     };
   }, []);
 
+  // Update parent registry about runtime maps
   useEffect(() => {
     onRuntimeGeneratedMapsChange?.(runtimeGeneratedMapOptions);
   }, [onRuntimeGeneratedMapsChange, runtimeGeneratedMapOptions]);
@@ -2955,13 +3870,6 @@ const MapSection: React.FC<MapSectionProps> = ({
           ...previous,
           ...savedFullMaps.filter((saved) => !previous.some((existing) => existing.output.cache_key === saved.output.cache_key)),
         ]);
-        if (savedGeneratedMaps[0]) {
-          setActiveGeneratedId((previous) => {
-            if (previous !== SAMPLE_OPTION_VALUE) return previous;
-            setActiveFamily(isMapInViewerCategory(savedGeneratedMaps[0], '3d') ? '3d' : savedGeneratedMaps[0].family as ViewerMapCategory);
-            return savedGeneratedMaps[0].id;
-          });
-        }
         if (savedFullMaps[0]) {
           setActiveFullMapKey((previous) => previous || savedFullMaps[0].output.cache_key);
         }
@@ -2977,6 +3885,34 @@ const MapSection: React.FC<MapSectionProps> = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!moduleOutput || !module2Output || !readiness.isReady) return;
+
+    const m2Id = (module2Output as unknown as Record<string, unknown>).cache_key as string
+      || JSON.stringify(module2Output).slice(0, 64);
+    if (m2Id === prevModule2IdRef.current) return;
+    prevModule2IdRef.current = m2Id;
+
+    setInteractiveModule31Config(null);
+    setIsGeneratingInteractiveM31(true);
+
+    requestModule31Generation(moduleOutput, module2Output, {
+      requested_map_family: '2d',
+      requested_map_type: 'marker_map',
+    })
+      .then((m31Output) => {
+        const baseConfig = buildGeneratedMapConfig(moduleOutput, module2Output);
+        const finalConfig = applyModule31Output(baseConfig, m31Output);
+        setInteractiveModule31Config(finalConfig);
+      })
+      .catch((err: unknown) => {
+        console.warn('[InteractiveMap] Auto Module 3.1 failed, falling back to Kimi K2 validation:', err);
+      })
+      .finally(() => {
+        setIsGeneratingInteractiveM31(false);
+      });
+  }, [module2Output, moduleOutput, readiness.isReady]);
 
   const handleSaveRuntimeMap = async () => {
     if (!activeRuntimeMapStorageId) return;
@@ -3345,7 +4281,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                 </select>
               </label>
 
-              {readiness.isReady ? (
+              {readiness.isReady && activeFamily !== 'interactive-map' ? (
                 <button
                   onClick={handleGenerateMap}
                   disabled={isGenerating}
@@ -3616,6 +4552,17 @@ const MapSection: React.FC<MapSectionProps> = ({
                 isFullscreen={isSampleFullscreen}
                 toggleFullscreen={() => setIsSampleFullscreen((prev) => !prev)}
                 onInsightDataReady={handleSampleMapLoaded}
+              />
+            ) : activeFamily === 'interactive-map' && !moduleOutput ? (
+              <InteractiveMapPendingState />
+            ) : activeFamily === 'interactive-map' ? (
+              <InteractiveRuntimeMapView
+                key="interactive-map-runtime"
+                moduleOutput={moduleOutput}
+                module2Output={module2Output}
+                retrievalOutput={retrievalOutput}
+                module31Config={interactiveModule31Config}
+                isLoadingModule31={isGeneratingInteractiveM31}
               />
             ) : (
               <GeneratedMapEmptyState

@@ -158,8 +158,8 @@ const MapSection: React.FC<MapSectionProps> = ({
   isCollapsed 
 }) => {
   const searchParams = useSearchParams();
-  const tabFromUrl = searchParams.get('tab') as SampleMapMode | null;
-  const tabName = tabFromUrl == "2d_map" ? "2d" : tabFromUrl;
+  const tabFromUrl = searchParams.get('tab') as string | null;
+  const tabName = (tabFromUrl == "2d_map" ? "2d" : tabFromUrl) as SampleMapMode | null;
   const [isMounted, setIsMounted] = useState(false);
   const [leafletReady, setLeafletReady] = useState(false);
   const [sampleMapMode, setSampleMapMode] = useState<SampleMapMode>(tabName || 'default');
