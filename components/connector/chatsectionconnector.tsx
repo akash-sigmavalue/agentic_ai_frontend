@@ -49,9 +49,12 @@ export default function ChatSectionConnector({
   partialIntent = null,
 }: ChatSectionConnectorProps) {
   const [inputValue, setInputValue] = useState("");
-  const [showTyping, setShowTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   void statusMessage;
+  const showTyping =
+    convStep === "waiting_email" ||
+    convStep === "waiting_frequency" ||
+    convStep === "waiting_field";
 
   const skippedEmail =
     extractEmailsFromText(prompt)[0] ||
@@ -66,21 +69,6 @@ export default function ChatSectionConnector({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [convMessages, showTyping]);
-
-  useEffect(() => {
-    if (
-      convStep === "waiting_email" ||
-      convStep === "waiting_frequency" ||
-      convStep === "waiting_field"
-    ) {
-      setShowTyping(true);
-      const t = setTimeout(() => setShowTyping(false), 900);
-      return () => clearTimeout(t);
-    }
-
-    setShowTyping(false);
-    return undefined;
-  }, [convStep]);
 
   useEffect(() => {
     if (convStep === "waiting_email" && skippedEmail) {
@@ -272,33 +260,40 @@ export default function ChatSectionConnector({
               )}
             </div>
           ) : currentFieldType === "email" || convStep === "waiting_email" ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="email"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && inputValue.trim()) {
-                    handleConvUserReply(inputValue.trim());
-                    setInputValue("");
-                  }
-                }}
-                placeholder="email@example.com"
-                className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-                autoFocus
-              />
-              <button
-                onClick={() => {
-                  if (inputValue.trim()) {
-                    handleConvUserReply(inputValue.trim());
-                    setInputValue("");
-                  }
-                }}
-                disabled={!inputValue.trim() || isLoading}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
-              >
-                <Send className="h-4 w-4" />
-              </button>
+            <div className="space-y-2">
+              {currentFieldQuestion ? (
+                <p className="text-xs font-medium leading-relaxed text-slate-500">
+                  {currentFieldQuestion}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && inputValue.trim()) {
+                      handleConvUserReply(inputValue.trim());
+                      setInputValue("");
+                    }
+                  }}
+                  placeholder="email@example.com"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    if (inputValue.trim()) {
+                      handleConvUserReply(inputValue.trim());
+                      setInputValue("");
+                    }
+                  }}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ) : currentFieldType === "text_optional" ? (
             <div className="space-y-2">
