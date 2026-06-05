@@ -216,7 +216,11 @@ function summarizeEvent(event) {
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    return `[SUCCESS] Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
+    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Select comparables below and proceed to fetch listings.`;
+    if (c?.web_error) {
+      baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
+    }
+    return baseMsg;
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
@@ -521,9 +525,14 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
-            {hasMixedSources && (
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                {["all", "Web", "Internal DB"].map(opt => (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+              {["all", "Web", "Internal DB"].map(opt => {
+                const count = opt === "all"
+                  ? comparables.length
+                  : opt === "Web"
+                    ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                    : comparables.filter(c => c.data_source === "Internal DB").length;
+                return (
                   <button
                     key={opt}
                     onClick={() => setSourceFilter(opt)}
@@ -532,11 +541,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       : "text-text-dim hover:text-text-primary"
                       }`}
                   >
-                    {opt === "all" ? "All Sources" : opt}
+                    {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -563,9 +572,14 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
-              {hasMixedSources && (
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                  {["all", "Web", "Internal DB"].map(opt => (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                {["all", "Web", "Internal DB"].map(opt => {
+                  const count = opt === "all"
+                    ? comparables.length
+                    : opt === "Web"
+                      ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                      : comparables.filter(c => c.data_source === "Internal DB").length;
+                  return (
                     <button
                       key={opt}
                       onClick={() => setSourceFilter(opt)}
@@ -574,11 +588,11 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         : "text-text-dim hover:text-text-primary"
                         }`}
                     >
-                      {opt === "all" ? "All Sources" : opt}
+                      {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -645,7 +659,7 @@ function ListingTable({ listings, dbTransactions }) {
             {lst.project_name || "—"}
             {lst.is_fallback && (
               <span
-                title="Data found via LLM search fallback (scraping failed)"
+                title="Data found via Agent search fallback (scraping failed)"
                 className="ml-2 inline-flex items-center rounded-full bg-orange-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-400 border border-orange-400/20"
               >
                 Fallback
@@ -947,7 +961,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <th className="px-3 py-2.5 font-semibold">Matched Project</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
             <th className="px-3 py-2.5 font-semibold">Config</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Raw Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Standardized Price</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Exchange Rate</th>
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
@@ -1008,9 +1024,26 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </td>
                 <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-                <td className="px-3 py-2 text-right font-mono text-text-primary">
+              
+              {/* Raw Price Column */}
+                <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">
+                {lst.original_price_value !== undefined && lst.original_price_value !== null
+                  ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
+                  : formatPrice(lst.price_value, lst.currency)}
+              </td>
+              
+              {/* Standardized Price Column */}
+              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
                   {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
                 </td>
+              
+              {/* Exchange Rate Column */}
+              <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
+                  ? lst.exchange_rate_remark
+                  : "1.0"}
+              </td>
+
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">
                   {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
                 </td>
@@ -1082,7 +1115,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
-                      {lst.plot_derived_by || "llm"}
+                      {lst.plot_derived_by || "Agent"}
                     </span>
                   </td>
                 </>
@@ -1944,7 +1977,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
         {raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
-              <span className="flex items-center gap-2">🧾 LLM Reasoning Report</span>
+              <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
               <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
             {showReport && (
@@ -2271,13 +2304,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
   // Helper for model-wise pricing:
-  // Kimi: Input $0.60/1M, Output $3.00/1M
+  // Mistral Large 3: Input $0.50/1M, Output $1.50/1M
+  // Kimi: Input $0.60/1M, Output $3.00/1M (commented out)
   // GPT-4o: Input $5.00/1M, Output $15.00/1M
   // GPT-4o-mini/others: Input $0.15/1M, Output $0.60/1M
   const getModelCost = (model, prompt, completion) => {
     const modelLower = model.toLowerCase();
-    if (modelLower.includes("kimi") || modelLower.includes("moonshot")) {
-      return (prompt / 1000000 * 0.60) + (completion / 1000000 * 3.00);
+    if (modelLower.includes("mistral.mistral-large-3-675b-instruct") || modelLower.includes("mistral-large-3")) {
+      return (prompt / 1000000 * 0.50) + (completion / 1000000 * 1.50);
     } else if (modelLower.includes("gpt-4o") && !modelLower.includes("mini")) {
       return (prompt / 1000000 * 5.00) + (completion / 1000000 * 15.00);
     } else {
@@ -2317,6 +2351,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [gateMode, setGateMode] = useState(null);
   const [gateAllFields, setGateAllFields] = useState([]);
   const [gateValues, setGateValues] = useState({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
@@ -2633,14 +2669,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     ]);
 
     try {
-      // ── 1. Fetch transactions for each Internal DB comparable ──────────
-      const allDbTransactions = [];
-      for (const comp of dbComps) {
+      // ── 1. Fetch transactions for each Internal DB comparable in parallel ──
+      const fetchProjectTransactions = async (comp, isSubject = false) => {
         const projId = comp.project_id || comp.id || comp.project_name;
         const propType = comp.property_type || subjectData.property_type || "apartment";
-        if (!projId) continue;
+        if (!projId) return [];
 
         setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
             method: "POST",
@@ -2651,7 +2687,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               project_name: comp.project_name || "",
             }),
           });
-          if (!res.ok || !res.body) continue;
+          if (!res.ok || !res.body) return [];
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -2667,60 +2703,137 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const ev = JSON.parse(chunk.slice(6));
               onEvent?.(ev);
               if (ev.type === "transaction_results") {
-                allDbTransactions.push(...(ev.content?.transactions || []));
-                setStreamingNote(`✅ Got ${ev.content?.total || 0} transactions for "${comp.project_name}"`);
+                const txs = ev.content?.transactions || [];
+                const mapped = isSubject ? txs.map(t => ({ ...t, is_subject: true })) : txs;
+                projectTx.push(...mapped);
+                setStreamingNote(`✅ Got ${ev.content?.total || 0} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
               }
             }
           }
         } catch (e) {
           console.warn("DB transaction fetch failed for", comp.project_name, e);
         }
-      }
+        return projectTx;
+      };
 
-      // Also fetch subject's own DB transactions if it was found in the internal DB
-      if (subjectDbProject) {
-        const projId = subjectDbProject.project_id || subjectDbProject.id || subjectDbProject.project_name;
-        const propType = subjectDbProject.property_type || subjectData.property_type || "apartment";
-        if (projId) {
-          setStreamingNote(`🗄️ Fetching DB transactions for subject "${subjectDbProject.project_name}"...`);
-          try {
-            const res = await fetch(apiUrl("/transaction_stream"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                project_id: String(projId),
-                property_type: propType,
-                project_name: subjectDbProject.project_name || "",
-              }),
-            });
-            if (res.ok && res.body) {
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder();
-              let buf = "";
-              while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                const chunks = buf.split("\n\n");
-                buf = chunks.pop() || "";
-                for (const chunk of chunks) {
-                  if (!chunk.startsWith("data: ")) continue;
-                  const ev = JSON.parse(chunk.slice(6));
-                  onEvent?.(ev);
-                  if (ev.type === "transaction_results") {
-                    // Mark subject transactions with is_subject flag
-                    const subjectTx = (ev.content?.transactions || []).map(t => ({ ...t, is_subject: true }));
-                    allDbTransactions.push(...subjectTx);
-                    setStreamingNote(`✅ Got ${ev.content?.total || 0} subject transactions from Internal DB`);
+      const fetchWebListings = async () => {
+        const webFetchNote = webComps.length > 0 
+          ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+          : `🌐 Fetching web listings for Subject Project...`;
+        setStreamingNote(webFetchNote);
+
+        try {
+          const response = await fetch(apiUrl("/listing_stream"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: subjectData,
+              selected_comparables: webComps,
+              property_type: subjectData.property_type || "apartment",
+            }),
+          });
+
+          if (!response.ok || !response.body) return [];
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let listings = [];
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop() || "";
+
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const event = JSON.parse(chunk.slice(6));
+              onEvent?.(event);
+              const summary = summarizeEvent(event);
+              setStreamingNote(summary);
+
+              if (event.type === "listing_results") {
+                listings = event.content?.listings || [];
+                const newUsage = event.content?.token_usage || {};
+                const total = newUsage.total_tokens || 0;
+                const model = newUsage.model || "gpt-4o-mini";
+                setListingData(listings);
+                setTokenStats((prev) => {
+                  const nextModelBreakdown = { ...prev.model_breakdown };
+                  const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                  
+                  const promptDiff = (newUsage.prompt_tokens || 0);
+                  const completionDiff = (newUsage.completion_tokens || 0);
+
+                  nextModelBreakdown[model] = {
+                    prompt: currentModelStats.prompt + promptDiff,
+                    completion: currentModelStats.completion + completionDiff,
+                    total: currentModelStats.total + total
+                  };
+
+                  const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+                  return {
+                    ...prev,
+                    total_tokens: prev.total_tokens + total,
+                    model_breakdown: nextModelBreakdown,
+                    cost_usd: (prev.cost_usd || 0) + addedCost
+                  };
+                });
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0) {
+                    next[lastIndex] = {
+                      ...next[lastIndex],
+                      role: "assistant",
+                      content: summary,
+                      meta: "listing results",
+                      listings,
+                      // Preserve any DB transactions stamped in the same message
+                      db_transactions: next[lastIndex].db_transactions || [],
+                    };
                   }
-                }
+                  return next;
+                });
+              }
+
+              if (event.type === "listing_done" || event.type === "error") {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0 && !next[lastIndex].listings) {
+                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                  }
+                  return next;
+                });
               }
             }
-          } catch (e) {
-            console.warn("DB transaction fetch failed for subject", subjectDbProject.project_name, e);
           }
+          return listings;
+        } catch (error) {
+          console.warn("Web listing fetch failed", error);
+          throw error;
         }
+      };
+
+      const fetchPromises = [];
+      for (const comp of dbComps) {
+        fetchPromises.push(fetchProjectTransactions(comp, false));
       }
+      if (subjectDbProject) {
+        fetchPromises.push(fetchProjectTransactions(subjectDbProject, true));
+      }
+
+      // Execute all DB fetches and Web listings fetch concurrently in parallel
+      const [dbResults, _] = await Promise.all([
+        Promise.all(fetchPromises),
+        fetchWebListings()
+      ]);
+
+      const allDbTransactions = dbResults.flat();
 
       // Store DB transactions and stamp on the message
       if (allDbTransactions.length > 0) {
@@ -2736,101 +2849,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           }
           return next;
         });
-      }
-
-      // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
-      const webFetchNote = webComps.length > 0
-        ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
-        : `🌐 Fetching web listings for Subject Project...`;
-      setStreamingNote(webFetchNote);
-
-      const response = await fetch(apiUrl("/listing_stream"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectData,
-          selected_comparables: webComps,
-          property_type: subjectData.property_type || "apartment",
-        }),
-      });
-
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const chunks = buffer.split("\n\n");
-          buffer = chunks.pop() || "";
-
-          for (const chunk of chunks) {
-            if (!chunk.startsWith("data: ")) continue;
-            const event = JSON.parse(chunk.slice(6));
-            onEvent?.(event);
-            const summary = summarizeEvent(event);
-            setStreamingNote(summary);
-
-            if (event.type === "listing_results") {
-              const listings = event.content?.listings || [];
-              const newUsage = event.content?.token_usage || {};
-              const total = newUsage.total_tokens || 0;
-              const model = newUsage.model || "gpt-4o-mini";
-              setListingData(listings);
-              setTokenStats((prev) => {
-                const nextModelBreakdown = { ...prev.model_breakdown };
-                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                
-                const promptDiff = (newUsage.prompt_tokens || 0);
-                const completionDiff = (newUsage.completion_tokens || 0);
-
-                nextModelBreakdown[model] = {
-                  prompt: currentModelStats.prompt + promptDiff,
-                  completion: currentModelStats.completion + completionDiff,
-                  total: currentModelStats.total + total
-                };
-
-                const addedCost = getModelCost(model, promptDiff, completionDiff);
-
-                return {
-                  ...prev,
-                  total_tokens: prev.total_tokens + total,
-                  model_breakdown: nextModelBreakdown,
-                  cost_usd: (prev.cost_usd || 0) + addedCost
-                };
-              });
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0) {
-                  next[lastIndex] = {
-                    ...next[lastIndex],
-                    role: "assistant",
-                    content: summary,
-                    meta: "listing results",
-                    listings,
-                    // Preserve any DB transactions stamped in the same message
-                    db_transactions: next[lastIndex].db_transactions || [],
-                  };
-                }
-                return next;
-              });
-            }
-
-            if (event.type === "listing_done" || event.type === "error") {
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0 && !next[lastIndex].listings) {
-                  next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
-                }
-                return next;
-              });
-            }
-          }
-        }
       }
 
     } catch (error) {
@@ -3266,25 +3284,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (!factData || !subject || isFactorialAnalysisStreaming) return;
 
     setIsFactorialAnalysisStreaming(true);
-    setStreamingNote("Sending factorial data to LLM for adjustment analysis...");
-    setCurrentStage("Stage 5: LLM Factorial Analysis");
+    setStreamingNote("Sending factorial data to Agent for adjustment analysis...");
+    setCurrentStage("Stage 5: Agent Factorial Analysis");
 
     setMessages((prev) => {
       const existingIndex = prev.findIndex(m =>
         m.meta === "factorial analysis results" ||
         m.meta === "factorial analysis done" ||
         m.meta === "factorial analysis start" ||
-        m.content === "Running LLM Factoring..."
+        m.content === "Running Agent Factoring..."
       );
 
       if (existingIndex !== -1) {
         const next = [...prev];
-        next[existingIndex] = { role: "assistant", content: "Running LLM Factoring...", meta: "Live" };
+        next[existingIndex] = { role: "assistant", content: "Running Agent Factoring...", meta: "Live" };
         return next;
       }
       return [
         ...prev,
-        { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
+        { role: "assistant", content: "Running Agent Factoring...", meta: "Live" }
       ];
     });
 
@@ -3301,7 +3319,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`LLM Factoring request failed with status ${response.status}`);
+        throw new Error(`Agent Factoring request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -3322,9 +3340,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           onEvent?.(event);
           let summary = "Pipeline update received.";
-          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running LLM factoring analysis...";
-          else if (event.type === "factorial_analysis_result") summary = `🤖 LLM Factoring ready.`;
-          else if (event.type === "factorial_analysis_done") summary = "LLM Factoring completed.";
+          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Agent factoring analysis...";
+          else if (event.type === "factorial_analysis_result") summary = `🤖 Agent Factoring ready.`;
+          else if (event.type === "factorial_analysis_done") summary = "Agent Factoring completed.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
@@ -3358,7 +3376,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   model_breakdown: nextModelBreakdown,
                   cost_usd: (prev.cost_usd || 0) + addedCost,
                   last_stage_tokens: total,
-                  last_stage_name: "LLM Factoring (Stage 5)"
+                  last_stage_name: "Agent Factoring (Stage 5)"
                 };
               });
             }
@@ -3404,7 +3422,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           next[targetIndex] = {
             ...next[targetIndex],
             role: "assistant",
-            content: `LLM Factoring error: ${error.message}`,
+            content: `Agent Factoring error: ${error.message}`,
             meta: "Error",
           };
         }
@@ -3787,17 +3805,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 ? { ...subjectDataRef.current, subject_db_project: subjectDbProject }
                 : subjectDataRef.current;
             }
-            // Pre-select only comparables within the initial radius by default
-            const initialSelected = comps
-              .map((comp, i) => {
-                const dist = getComparableDistanceKm(comp);
-                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
-                  return i;
-                }
-                return -1;
-              })
-              .filter((i) => i !== -1);
-            setSelectedComps(new Set(initialSelected));
+            // Do not auto-select comparables by default to prevent accidental massive token consumption.
+            // But we show them all on the map by default.
+            setSelectedComps(new Set());
           }
 
           if (event.type === "db_comparable_status") {
@@ -3926,6 +3936,55 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setMapConfirmation(null);
     setClarificationValues((prev) => ({ ...prev, coordinates: "" }));
     submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}.`, true, `Updated coordinates to ${corrected}`);
+  };
+
+  const handleGeocodeRefresh = async () => {
+    const locName = gateValues["location_name"] || "";
+    const projName = gateValues["project_name"] || "";
+    const country = gateValues["country"] || "India";
+
+    if (!locName.trim()) {
+      setGeocodeError("Please enter a locality name first (e.g. Sus, Pune).");
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError("");
+
+    try {
+      const response = await fetch(apiUrl("/geocode"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location_name: locName,
+          project_name: projName,
+          country: country
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to contact geocoder API.");
+      }
+
+      const result = await response.json();
+      if (result.lat && result.lng) {
+        setGateValues(prev => ({
+          ...prev,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          coordinates: `${result.lat}, ${result.lng}`
+        }));
+        setGeocodeError("");
+      } else if (result.error) {
+        setGeocodeError(`Error: ${result.error}. Please adjust the Location Name and try again.`);
+      } else {
+        setGeocodeError("Coordinates not found. Please enter them manually or check location name formatting.");
+      }
+    } catch (err) {
+      setGeocodeError(`Failed to fetch coordinates: ${err.message}`);
+    } finally {
+      setIsGeocoding(false);
+    }
   };
 
   const submitApproachChoice = (confirmed, alternative) => {
@@ -4211,7 +4270,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   // ── Stage1GateWizard render ───────────────────────────────────────
   const renderGateField = (schema) => {
     const val = gateValues[schema.field] ?? "";
-    const update = (v) => setGateValues(prev => ({ ...prev, [schema.field]: v }));
+    const update = (v) => {
+      setGateValues(prev => {
+        const next = { ...prev, [schema.field]: v };
+        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "country") {
+          next.lat = "";
+          next.lng = "";
+          next.coordinates = "";
+        }
+        return next;
+      });
+    };
     const isFilled = String(val).trim() !== "";
 
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
@@ -4446,7 +4515,23 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               <div className="space-y-4">
                 <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
                 <div className="flex flex-wrap gap-3">
-                  {[...identityFields, ...typeFields, ...approachFields, ...detailFields].map(f => renderGateField(f))}
+                  {(() => {
+                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                    const finalFields = [...standardFields, ...extraFields].map(f => {
+                      if (f.field === "lat" || f.field === "lng") {
+                        return { ...f, type: "text" };
+                      }
+                      return f;
+                    });
+                    if (!finalFields.some(f => f.field === "lat")) {
+                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
+                    }
+                    if (!finalFields.some(f => f.field === "lng")) {
+                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                    }
+                    return finalFields.map(f => renderGateField(f));
+                  })()}
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
                   <button
@@ -4477,23 +4562,45 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
                       </span>
-                      {mapConfirmation && (
+                      <div className="flex gap-3 items-center">
+                        {mapConfirmation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const latVal = mapConfirmation.lat || "";
+                              const lngVal = mapConfirmation.lng || "";
+                              setGateValues(prev => ({
+                                ...prev,
+                                lat: latVal,
+                                lng: lngVal,
+                                coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                              }));
+                            }}
+                            className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                          >
+                            Pull from Map Confirmation
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            const latVal = mapConfirmation.lat || "";
-                            const lngVal = mapConfirmation.lng || "";
-                            setGateValues(prev => ({
-                              ...prev,
-                              lat: latVal,
-                              lng: lngVal,
-                              coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
-                            }));
-                          }}
-                          className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                          disabled={isGeocoding}
+                          onClick={handleGeocodeRefresh}
+                          className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
                         >
-                          Pull from Map Confirmation
+                          {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Geocode Tip Remark & Errors */}
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
+                      <p className="text-[10px] text-text-dim leading-relaxed">
+                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">"Sus, Pune"</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                      </p>
+                      {geocodeError && (
+                        <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
+                          ⚠️ {geocodeError}
+                        </p>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-3">
