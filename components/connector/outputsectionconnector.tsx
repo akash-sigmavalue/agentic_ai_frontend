@@ -12,10 +12,15 @@ import {
   Send,
 } from "lucide-react";
 import EmailCard from "./EmailCard";
-import WorkflowFormBox from "./WorkflowFormBox";
 import ThreadView from "./ThreadView";
 import type { CompletionResult, ConvStep, WorkflowResponse } from "./types";
 import MonitoringPanel from "./MonitoringPanel";
+import ReplyCustomizerPanel from "./ReplyCustomizerPanel";
+import { toggleAutomationRule } from "./api";
+import {
+  detectGroupType,
+  extractEmailsFromText,
+} from "./types";
 
 type WorkflowOperationType =
   | "reply"
@@ -34,7 +39,7 @@ type OutputSectionConnectorProps = {
   completionResult?: CompletionResult | null;
   onSendPrompt?: (prompt: string) => void;
   pendingPrompt?: string | null;
-  partialIntent?: Record<string, unknown> | null;
+  currentPrompt?: string;
   convStep?: ConvStep;
 };
 
@@ -43,7 +48,7 @@ export default function OutputSectionConnector({
   completionResult,
   onSendPrompt,
   pendingPrompt,
-  partialIntent,
+  currentPrompt,
   convStep,
 }: OutputSectionConnectorProps) {
   const responseExtras = response as
@@ -55,6 +60,8 @@ export default function OutputSectionConnector({
   const [senderInput, setSenderInput] = useState("");
   const [senderConfirmed, setSenderConfirmed] = useState(false);
   const [senderError, setSenderError] = useState<string | null>(null);
+  const [showReplyCustomizer, setShowReplyCustomizer] = useState(false);
+  const [replyValues, setReplyValues] = useState({ tone: "", customInstruction: "", rewrittenMessage: "" });
 
   useEffect(() => {
     setSelectedThread(null);
@@ -65,6 +72,7 @@ export default function OutputSectionConnector({
     setSenderInput("");
     setSenderConfirmed(false);
     setSenderError(null);
+    setShowReplyCustomizer(false);
   }, [response?.plan?.goal, response?.status, response?.missing_field, response?.execution_type]);
 
   const completionTitle =
@@ -140,6 +148,15 @@ export default function OutputSectionConnector({
     }
   })() as WorkflowOperationType;
 
+  const currentPromptValue = (
+    currentPrompt || pendingPrompt || response?.plan?.goal || response?.message || ""
+  ).trim();
+  const groupType = detectGroupType(
+    currentPromptValue,
+    operationType,
+    response?.execution_type,
+  );
+
   const senderGateOperations = ["fetch", "reply", "send", "automate"];
   const needsSender =
     !senderConfirmed &&
@@ -203,6 +220,20 @@ export default function OutputSectionConnector({
 
   const processedEmails = extractProcessedEmails(response);
 
+  useEffect(() => {
+    if (groupType !== "read") {
+      return;
+    }
+
+    const firstEmail = processedEmails[0];
+    if (!firstEmail || !hasThreadMessages(firstEmail)) {
+      return;
+    }
+
+    setSelectedThread(normalizeThreadForView(firstEmail));
+    setIsThreadViewOpen(true);
+  }, [processedEmails.length, groupType]);
+
   const handleViewThread = (threadId: string, email?: any) => {
     const threadSource = hasThreadMessages(email) ? normalizeThreadForView(email) : null;
     if (threadSource) {
@@ -258,6 +289,8 @@ export default function OutputSectionConnector({
     response?.raw_mcp_results && response.raw_mcp_results.length > 0
       ? JSON.stringify(response.raw_mcp_results, null, 2)
       : "";
+  const showAutomationCompletionBanner =
+    groupType === "automate" && completionResult?.status === "automation_rule_created";
 
   if (needsSender) {
     return (
@@ -384,7 +417,27 @@ export default function OutputSectionConnector({
       </div>
 
       <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
-        {completionResult?.status && (
+        {showAutomationCompletionBanner ? (
+          <div className="mb-8 rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+            <h4 className="mb-1 text-xs font-black uppercase tracking-wider text-violet-700">
+              AUTOMATION ACTIVE
+            </h4>
+            <p className="mt-2 text-sm text-slate-700">{completionResult?.message}</p>
+            {completionResult?.rule_id ? (
+              <p className="mt-1 text-xs text-slate-500">
+                Rule ID: #{completionResult.rule_id}
+              </p>
+            ) : null}
+            {typeof completionResult?.rule_id === "number" ? (
+              <div className="mt-4">
+                <AutomationToggle
+                  ruleId={completionResult.rule_id}
+                  initialActive={true}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : completionResult?.status ? (
           <div
             className="mb-8 rounded-2xl border border-green-100 bg-green-50/80 p-4"
             style={{ borderLeft: "4px solid #22c55e" }}
@@ -422,7 +475,7 @@ export default function OutputSectionConnector({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {response ? (
           <>
@@ -568,6 +621,12 @@ export default function OutputSectionConnector({
                         : "This is the message your agent prepared for review."}
                     </p>
 
+                    {(operationType === "reply" || operationType === "send" || operationType === "reply_to_thread") && (
+                      <div className="mt-4 mb-2 text-xs font-semibold text-slate-500">
+                        To: {responseExtras?.to || (response as any)?.recipient || response?.from_email || "Recipient"}
+                        {response?.subject && <span> | Subject: {response.subject}</span>}
+                      </div>
+                    )}
                     <blockquote
                       className={`mt-4 rounded-2xl border bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm ${
                         replyLabel === "AGENT REPLY SENT"
@@ -583,68 +642,76 @@ export default function OutputSectionConnector({
             </div>
           ) : null}
 
-          {(convStep === "done" ||
-            convStep === "waiting_email" ||
-            convStep === "waiting_field" ||
-            response?.status === "needs_confirmation") &&
-            response &&
-            (response.from_email ||
-              response.subject ||
-              response.execution_type ||
-              responseExtras?.to ||
-              responseExtras?.recipient ||
-              response.step_results?.some(
-                (s) =>
-                  s.tool === "gmail.send_email" ||
-                  s.tool === "send_gmail_email" ||
-                  s.tool === "gmail.reply_to_thread"
-              ) ||
-              partialIntent?.filters ||
-              partialIntent?.original_prompt) && (
-              <div className="mb-8">
-                <WorkflowFormBox
-                  key={[
-                    operationType,
-                    response.from_email || "",
-                    response.subject || "",
-                    response.execution_type || "",
-                    partialIntent?.max_results ?? "",
-                    partialIntent?.reply_tone ?? "",
-                  ].join("|")}
-                  response={response}
-                  partialIntent={partialIntent}
-                  operationType={operationType}
-                  onRerun={onSendPrompt || (() => {})}
-                />
+          {groupType === "analyze" &&
+          (response?.final_answer || response?.analysis) ? (
+            <div className="mb-8 rounded-2xl border border-teal-200 bg-teal-50/60 p-5">
+              <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-teal-700">
+                ANALYSIS RESULT
+              </h4>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+                {response.final_answer || response.analysis}
               </div>
-            )}
+            </div>
+          ) : null}
 
-          <div className="mb-8">
-            <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
-              RECENT EMAILS PROCESSED
-            </h4>
-
-            {isThreadViewOpen && selectedThread ? (
-              <div className="mb-4">
-                <ThreadView
-                  {...({
-                    thread: selectedThread,
-                    onClose: () => {
-                      setIsThreadViewOpen(false);
-                      setSelectedThread(null);
-                    },
-                  } as any)}
+          {(groupType === "reply" || groupType === "send") &&
+          (response?.reply_draft || response?.reply) &&
+          convStep !== "done" &&
+          !completionResult?.reply_sent ? (
+            <div className="mb-8">
+              {showReplyCustomizer ? (
+                <ReplyCustomizerPanel
+                  draftReply={sentReplyText || response?.reply_draft || ""}
+                  values={replyValues}
+                  onChange={setReplyValues}
+                  onApply={(v) => {
+                    let cmd = `Looks good, send it. Reapply with tone: ${v.tone}`;
+                    if (v.customInstruction) cmd += `, instructions: ${v.customInstruction}`;
+                    if (v.rewrittenMessage) cmd += `, using this message instead: ${v.rewrittenMessage}`;
+                    onSendPrompt?.(cmd);
+                    setShowReplyCustomizer(false);
+                  }}
+                  onSkip={() => onSendPrompt?.(currentPromptValue || "")}
+                  isLoading={false}
                 />
-              </div>
-            ) : null}
+              ) : (
+                <PreflightEmailCard
+                  to={
+                    response?.to ||
+                    response?.from_email ||
+                    extractEmailsFromText(currentPromptValue)[0] ||
+                    ""
+                  }
+                  subject={response?.subject || ""}
+                  cc={response?.cc || null}
+                  bcc={response?.bcc || null}
+                  body={sentReplyText || response?.reply_draft || response?.reply || ""}
+                  onSend={() => onSendPrompt?.(currentPromptValue || "")}
+                  onEdit={() => setShowReplyCustomizer(true)}
+                />
+              )}
+            </div>
+          ) : null}
 
-            <EmailList
-              emails={processedEmails}
-              onSendPrompt={onSendPrompt}
-              onViewThread={handleViewThread}
-            />
-          </div>
+          {isThreadViewOpen && selectedThread ? (
+            <div className="mb-4">
+              <ThreadView
+                {...({
+                  thread: selectedThread,
+                  onClose: () => {
+                    setIsThreadViewOpen(false);
+                    setSelectedThread(null);
+                  },
+                } as any)}
+              />
+            </div>
+          ) : null}
 
+          <EmailList
+            emails={processedEmails}
+            onSendPrompt={onSendPrompt}
+            onViewThread={handleViewThread}
+          />
             <MonitoringPanel />
 
             {response.raw_mcp_results && response.raw_mcp_results.length > 0 && (
@@ -750,6 +817,114 @@ function TokenCard({
         {value}
       </div>
     </div>
+  );
+}
+
+function PreflightEmailCard({
+  to,
+  subject,
+  cc,
+  bcc,
+  body,
+  onSend,
+  onEdit,
+}: {
+  to: string;
+  subject: string;
+  cc?: string | null;
+  bcc?: string | null;
+  body: string;
+  onSend: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-[20px] border border-indigo-100 bg-white p-5 shadow-sm">
+      <div className="mb-2 border-b border-slate-100 pb-3">
+        <h4 className="text-sm font-black text-slate-800">Preflight Review</h4>
+        <p className="text-xs text-slate-500">Review the drafted reply before sending.</p>
+      </div>
+      <div className="text-sm text-slate-600">
+        <span className="font-semibold">To:</span> {to || "Recipient"}
+      </div>
+      <div className="text-sm border-b border-slate-100 pb-3 text-slate-600">
+        <span className="font-semibold">Subject:</span> {subject || "No subject"}
+      </div>
+      {cc ? (
+        <div className="text-sm text-slate-600">
+          <span className="font-semibold">CC:</span> {cc}
+        </div>
+      ) : null}
+      {bcc ? (
+        <div className="text-sm text-slate-600">
+          <span className="font-semibold">BCC:</span> {bcc}
+        </div>
+      ) : null}
+      <blockquote className="mt-2 rounded-xl border border-slate-100 bg-white p-3 text-sm italic text-slate-700 shadow-sm">
+        {body || "Draft content..."}
+      </blockquote>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          onClick={onSend}
+          className="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-600"
+        >
+          ✓ Looks good, send it
+        </button>
+        <button
+          onClick={onEdit}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+        >
+          ✏ Edit before sending
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AutomationToggle({
+  ruleId,
+  initialActive,
+}: {
+  ruleId: number;
+  initialActive: boolean;
+}) {
+  const [active, setActive] = useState(initialActive);
+
+  const handleToggle = async () => {
+    const nextState = !active;
+    setActive(nextState);
+
+    try {
+      await toggleAutomationRule(ruleId, nextState);
+    } catch {
+      setActive(!nextState);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleToggle}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+        active
+          ? "border-violet-200 bg-violet-600 text-white"
+          : "border-slate-200 bg-slate-100 text-slate-600"
+      }`}
+    >
+      <span className="text-[10px] uppercase tracking-[0.15em]">
+        {active ? "On" : "Off"}
+      </span>
+      <span
+        className={`relative inline-flex h-4 w-8 items-center rounded-full transition ${
+          active ? "bg-white/20" : "bg-slate-300"
+        }`}
+      >
+        <span
+          className={`inline-block h-3 w-3 transform rounded-full bg-white transition ${
+            active ? "translate-x-4" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+    </button>
   );
 }
 
@@ -1174,3 +1349,4 @@ function firstString(...values: any[]) {
 
   return "";
 }
+

@@ -35,6 +35,10 @@ export type WorkflowResponse = {
   rule_id?: number;
   execution_type?: string;
   from_email?: string;
+  to?: string | null;
+  cc?: string | null;
+  bcc?: string | null;
+  automation_frequency?: "one_time" | "automated" | null;
   subject?: string;
   prompt_tokens?: number;
   completion_tokens?: number;
@@ -131,4 +135,45 @@ export function resolveGmailIntent(value: WorkflowResponse["plan"]): string {
     return String(record.intent ?? record.type ?? record.operation ?? record.name ?? "").trim();
   }
   return "";
+}
+
+export function detectGroupType(
+  prompt: string,
+  operationType?: string,
+  executionType?: string,
+): string {
+  const lower = (prompt || "").toLowerCase();
+  const op = (operationType || "").toLowerCase();
+  const exec = (executionType || "").toLowerCase();
+
+  if (
+    op === "automate" ||
+    exec === "automated" ||
+    /\b(when|whenever|every time|automatically|always)\b/.test(lower)
+  ) {
+    return "automate";
+  }
+  if (op === "reply" || op === "reply_to_thread" || /\breply\b/.test(lower)) return "reply";
+  if (op === "send" || /\bsend email\b/.test(lower)) return "send";
+  if (/\b(read the pdf|open attachment|download attachment)\b/.test(lower)) return "attachment";
+  if (/\b(extract|analyze|classify|summarize|key details)\b/.test(lower)) return "analyze";
+  if (/\b(show full thread|read thread|full thread)\b/.test(lower)) return "read";
+  if (/\b(find emails|search emails|search for|emails about)\b/.test(lower)) return "search";
+  return "fetch";
+}
+
+export function extractEmailsFromText(text: string): string[] {
+  return (text || "").match(/[\w.+-]+@[\w.-]+\.\w+/g) || [];
+}
+
+export function inferExecutionType(
+  prompt: string,
+  responseExecType?: string | null,
+): "one_time" | "automated" | null {
+  if (responseExecType === "one_time" || responseExecType === "automated") return responseExecType;
+
+  const lower = (prompt || "").toLowerCase();
+  if (/\b(when|whenever|every time|automatically|always)\b/.test(lower)) return "automated";
+  if (/\b(reply to|send email|reply saying|send saying)\b/.test(lower)) return "one_time";
+  return null;
 }

@@ -123,7 +123,10 @@ function fallbackStepTitle(stepName: string, operation?: string | null) {
   return humanStepName((stepName || operation || "Workflow Step").trim());
 }
 
-function getStepDisplayMeta(stepName?: string | null, operation?: string | null): StepDisplayMeta {
+function getStepDisplayMeta(
+  stepName?: string | null,
+  operation?: string | null,
+): StepDisplayMeta {
   const composite = `${operation || ""} ${stepName || ""}`;
   const normalized = normalizeStepKey(composite);
 
@@ -136,7 +139,7 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "intent",
       stageLabel: "Intent Understanding",
       title: "Understanding User Request",
-      subtitle: "Analyzing the prompt and extracting the Gmail intent.",
+      subtitle: "Understanding what you want to do with Gmail.",
       icon: <Brain className="h-4 w-4" />,
     };
   }
@@ -158,7 +161,7 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "search",
       stageLabel: "Gmail Search",
       title: "Searching Gmail Inbox",
-      subtitle: "Looking for matching threads and relevant emails.",
+      subtitle: "Searching your Gmail inbox for matching messages.",
       icon: <Search className="h-4 w-4" />,
     };
   }
@@ -178,7 +181,7 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "read",
       stageLabel: "Email Reading",
       title: "Reading Email Content",
-      subtitle: "Opening the thread and reviewing the message details.",
+      subtitle: "Opening the latest thread and reading the message.",
       icon: <Mail className="h-4 w-4" />,
     };
   }
@@ -198,7 +201,7 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "extract",
       stageLabel: "AI Extraction",
       title: "Extracting Key Details",
-      subtitle: "Pulling out the important context and action points.",
+      subtitle: "Extracting the key details and action items.",
       icon: <Sparkles className="h-4 w-4" />,
     };
   }
@@ -216,7 +219,7 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "reply",
       stageLabel: "AI Reply",
       title: "Preparing AI Reply",
-      subtitle: "Drafting a response with the right tone and context.",
+      subtitle: "Composing and sending your reply.",
       icon: <PenLine className="h-4 w-4" />,
     };
   }
@@ -226,17 +229,24 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "draft",
       stageLabel: "Gmail Draft",
       title: "Creating Gmail Draft",
-      subtitle: "Saving the generated reply as a draft in Gmail.",
+      subtitle: "Preparing a draft for later review.",
       icon: <PenLine className="h-4 w-4" />,
     };
   }
 
-  if (matchesStep(normalized, ["send_reply", "send_email", "dispatch_reply", "deliver_reply"])) {
+  if (
+    matchesStep(normalized, [
+      "send_reply",
+      "send_email",
+      "dispatch_reply",
+      "deliver_reply",
+    ])
+  ) {
     return {
       stage: "send",
       stageLabel: "Email Delivery",
       title: "Sending Email Reply",
-      subtitle: "Delivering the response to the recipient.",
+      subtitle: "Dispatching your email through Gmail.",
       icon: <Send className="h-4 w-4" />,
     };
   }
@@ -254,17 +264,25 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
       stage: "automation",
       stageLabel: "Automation",
       title: "Activating Automation Rule",
-      subtitle: "Turning the workflow into a reusable automation.",
+      subtitle: "Registering a persistent automation rule.",
       icon: <Sparkles className="h-4 w-4" />,
     };
   }
 
-  if (matchesStep(normalized, ["complete", "completed", "finalize", "finish", "done"])) {
+  if (
+    matchesStep(normalized, [
+      "complete",
+      "completed",
+      "finalize",
+      "finish",
+      "done",
+    ])
+  ) {
     return {
       stage: "completed",
       stageLabel: "Completed",
       title: "Workflow Completed",
-      subtitle: "The live execution trail has finished.",
+      subtitle: "The workflow run has finished.",
       icon: <CheckCircle2 className="h-4 w-4" />,
     };
   }
@@ -281,15 +299,22 @@ function getStepDisplayMeta(stepName?: string | null, operation?: string | null)
 function getStepIcon(stepName?: string | null, operation?: string | null) {
   const text = `${operation || ""} ${stepName || ""}`.toLowerCase();
   if (text.includes("search")) return <Search className="h-4 w-4" />;
-  if (text.includes("thread") || text.includes("mail")) return <Mail className="h-4 w-4" />;
-  if (text.includes("reply") || text.includes("send")) return <Send className="h-4 w-4" />;
+  if (text.includes("thread") || text.includes("mail"))
+    return <Mail className="h-4 w-4" />;
+  if (text.includes("reply") || text.includes("send"))
+    return <Send className="h-4 w-4" />;
   if (text.includes("draft")) return <PenLine className="h-4 w-4" />;
-  if (text.includes("summar") || text.includes("report")) return <FileText className="h-4 w-4" />;
-  if (text.includes("generat") || text.includes("llm")) return <Sparkles className="h-4 w-4" />;
+  if (text.includes("summar") || text.includes("report"))
+    return <FileText className="h-4 w-4" />;
+  if (text.includes("generat") || text.includes("llm"))
+    return <Sparkles className="h-4 w-4" />;
   return <Sparkles className="h-4 w-4" />;
 }
 
-function getFallbackStepIcon(stepName?: string | null, operation?: string | null) {
+function getFallbackStepIcon(
+  stepName?: string | null,
+  operation?: string | null,
+) {
   return getStepIcon(stepName, operation);
 }
 
@@ -331,13 +356,18 @@ function humanStepName(raw: string): string {
 function normalizeStatus(status?: string | null): FlowNodeStatus {
   const value = String(status || "").toLowerCase();
   if (value === "running") return "running";
-  if (value === "completed" || value === "success" || value === "done") return "completed";
+  if (value === "completed" || value === "success" || value === "done")
+    return "completed";
   if (value === "failed" || value === "error") return "failed";
   return "pending";
 }
 
 function resolveIntentDetails(intentValue: unknown): IntentDetails {
-  if (!intentValue || typeof intentValue !== "object" || Array.isArray(intentValue)) {
+  if (
+    !intentValue ||
+    typeof intentValue !== "object" ||
+    Array.isArray(intentValue)
+  ) {
     return {
       operation: "",
       executionType: "",
@@ -408,7 +438,8 @@ function buildDisplaySteps(
 }
 
 function getExecutionNodeTitle(status: FlowNodeStatus) {
-  if (status === "running") return "AI agent is currently executing this step...";
+  if (status === "running")
+    return "AI agent is currently executing this step...";
   if (status === "completed") return "Execution completed successfully.";
   if (status === "failed") return "Execution stopped because of an error.";
   return "Waiting for execution to begin.";
@@ -459,8 +490,14 @@ function StatusBadge({
 
   if (status === "running") {
     return (
-      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
-        {showSpinner ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Clock className="h-2.5 w-2.5" />}
+      <span
+        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}
+      >
+        {showSpinner ? (
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        ) : (
+          <Clock className="h-2.5 w-2.5" />
+        )}
         {badgeLabel}
       </span>
     );
@@ -468,7 +505,9 @@ function StatusBadge({
 
   if (status === "completed") {
     return (
-      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+      <span
+        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}
+      >
         <CheckCircle2 className="h-2.5 w-2.5" />
         {badgeLabel}
       </span>
@@ -477,7 +516,9 @@ function StatusBadge({
 
   if (status === "failed") {
     return (
-      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+      <span
+        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}
+      >
         <XCircle className="h-2.5 w-2.5" />
         {badgeLabel}
       </span>
@@ -485,7 +526,9 @@ function StatusBadge({
   }
 
   return (
-    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}>
+    <span
+      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${theme.badgeBg}`}
+    >
       <Clock className="h-2.5 w-2.5" />
       {badgeLabel}
     </span>
@@ -517,10 +560,23 @@ function WorkflowNodeCard({
   const isRunning = status === "running";
 
   return (
-    <div
-      className="min-w-[320px] max-w-[400px] rounded-[14px] border bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-      style={{ borderColor: theme.border }}
-    >
+    <>
+      <style>{`
+        @keyframes pulseRing {
+          0%,100%{box-shadow:0 0 0 3px rgba(99,102,241,0.15)}
+          50%{box-shadow:0 0 0 7px rgba(99,102,241,0.35)}
+        }
+      `}</style>
+      <div
+        className={`min-w-[320px] max-w-[400px] rounded-[14px] border bg-white px-4 py-3 ${
+          isRunning ? "" : "shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+        }`}
+        style={{
+          borderColor: theme.border,
+          boxShadow: isRunning ? "0 0 0 4px rgba(99,102,241,0.2)" : undefined,
+          animation: isRunning ? "pulseRing 1.5s ease infinite" : "none",
+        }}
+      >
       <div className="flex items-start gap-3">
         <div
           className={`flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] ${theme.iconBg}`}
@@ -539,7 +595,9 @@ function WorkflowNodeCard({
           <h4 className="mt-1 text-sm font-semibold text-slate-900">{title}</h4>
 
           {subtitle ? (
-            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              {subtitle}
+            </p>
           ) : null}
 
           <p
@@ -573,6 +631,7 @@ function WorkflowNodeCard({
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -767,7 +826,9 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
       : activeDisplaySteps;
 
     const requestStatus: FlowNodeStatus =
-      activeDisplaySteps.length > 0 || response?.plan?.goal ? "completed" : "pending";
+      activeDisplaySteps.length > 0 || response?.plan?.goal
+        ? "completed"
+        : "pending";
     const requestSubtitle =
       pendingPrompt ||
       response?.plan?.goal ||
@@ -800,19 +861,28 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
 
     let previousNodeId = "node-request";
 
-    const intentStatus: FlowNodeStatus = intentStep?.status || (activeDisplaySteps.length > 0 ? "completed" : "pending");
+    const intentStatus: FlowNodeStatus =
+      intentStep?.status ||
+      (activeDisplaySteps.length > 0 ? "completed" : "pending");
     const intentSubtitleParts: string[] = [];
 
-    if (intentDetails.operation) intentSubtitleParts.push(intentDetails.operation);
-    if (intentDetails.fromEmail) intentSubtitleParts.push(`from ${intentDetails.fromEmail}`);
+    if (intentDetails.operation)
+      intentSubtitleParts.push(intentDetails.operation);
+    if (intentDetails.fromEmail)
+      intentSubtitleParts.push(`from ${intentDetails.fromEmail}`);
     if (intentDetails.executionType) {
       intentSubtitleParts.push(intentDetails.executionType.replace(/_/g, " "));
     }
     if (typeof intentDetails.sendDirectly === "boolean") {
-      intentSubtitleParts.push(intentDetails.sendDirectly ? "send directly" : "draft first");
+      intentSubtitleParts.push(
+        intentDetails.sendDirectly ? "send directly" : "draft first",
+      );
     }
 
-    const intentMeta = getStepDisplayMeta(intentStep?.name, intentStep?.operation);
+    const intentMeta = getStepDisplayMeta(
+      intentStep?.name,
+      intentStep?.operation,
+    );
     nextNodes.push({
       id: "node-intent",
       type: "default",
@@ -865,7 +935,7 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
       nextNodes.push({
         id: stepId,
         type: "default",
-      position: { x: 300, y: (index + 2) * 150 },
+        position: { x: 300, y: (index + 2) * 150 },
         style: {
           background: "transparent",
           border: "none",
@@ -909,10 +979,15 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
     });
 
     const shouldShowCompletionNode =
-      activeDisplaySteps.length > 0 || Boolean(completionResult) || convStep === "done" || response?.can_execute;
+      activeDisplaySteps.length > 0 ||
+      Boolean(completionResult) ||
+      convStep === "done" ||
+      response?.can_execute;
     if (shouldShowCompletionNode) {
       const completionStatus: FlowNodeStatus =
-        convStep === "done" || Boolean(completionResult) ? "completed" : "pending";
+        convStep === "done" || Boolean(completionResult)
+          ? "completed"
+          : "pending";
       const completionNodeId = "node-completed";
       nextNodes.push({
         id: completionNodeId,
@@ -931,7 +1006,9 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
               title="Workflow Completed"
               subtitle="The live execution trail has finished."
               statusDetail={getExecutionNodeTitle(completionStatus)}
-              output={completionResult?.message || response?.summary || undefined}
+              output={
+                completionResult?.message || response?.summary || undefined
+              }
               status={completionStatus}
               icon={<CheckCircle2 className="h-4 w-4" />}
             />
@@ -982,7 +1059,9 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
   }, [isFullscreen]);
 
   const renderCanvas = (fullscreen = false, showHeader = true) => (
-    <div className={`relative flex min-h-0 flex-1 flex-col ${fullscreen ? "h-full" : ""}`}>
+    <div
+      className={`relative flex min-h-0 flex-1 flex-col ${fullscreen ? "h-full" : ""}`}
+    >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {showHeader && (
           <div className="flex items-center justify-between border-b border-slate-100 bg-[#f8fafc] px-5 py-4">
@@ -1007,42 +1086,50 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
 
             <div className="flex items-center gap-3">
               {needsGmail && (
-                <div ref={gmailBadgeRef} className="relative flex items-center gap-2">
+                <div ref={gmailBadgeRef} className="relative flex items-center">
                   <button
                     type="button"
                     onClick={() => setIsGmailPopoverOpen((current) => !current)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition ${
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-medium transition ${
                       gmailConnected
                         ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                         : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
                     }`}
-                    title={gmailConnected ? "Gmail connected" : "Gmail not connected"}
+                    title={
+                      gmailConnected ? "Gmail connected" : "Gmail not connected"
+                    }
                   >
                     <span
-                      className={`h-2 w-2 rounded-full ${
+                      className={`h-1.5 w-1.5 rounded-full ${
                         gmailConnected ? "bg-emerald-500" : "bg-rose-500"
                       }`}
                     />
-                    <span className="max-w-[180px] truncate normal-case tracking-normal">
-                      {gmailConnected ? (gmailEmail || "Gmail connected") : "Gmail not connected"}
+
+                    <Mail className="h-3.5 w-3.5" />
+
+                    <span className="max-w-[130px] truncate">
+                      {gmailConnected
+                        ? gmailEmail || "Connected"
+                        : "Not connected"}
                     </span>
                   </button>
 
-                  {!gmailConnected && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleConnectGmail();
-                      }}
-                      className="text-[10px] font-semibold text-[#525ceb] underline-offset-2 transition hover:underline"
-                    >
-                      Connect
-                    </button>
-                  )}
-
                   {isGmailPopoverOpen && (
-                    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/80">
+                    <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg shadow-slate-200/70">
+                      {!gmailConnected && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGmailPopoverOpen(false);
+                            handleConnectGmail();
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-[#525ceb] transition hover:bg-indigo-50"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          Connect Gmail
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => {
@@ -1050,10 +1137,16 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
                           handleRecheckGmailConnection();
                         }}
                         disabled={connectorStatusLoading}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
+                        {connectorStatusLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+
                         <span>
-                          {connectorStatusLoading ? "Rechecking..." : "Recheck connection"}
+                          {connectorStatusLoading ? "Checking..." : "Recheck"}
                         </span>
                       </button>
 
@@ -1065,19 +1158,30 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
                             handleContinueWorkflow();
                           }}
                           disabled={isLoading}
-                          className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <span>{isLoading ? "Continuing..." : "Continue Workflow"}</span>
+                          {isLoading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Send className="h-3.5 w-3.5" />
+                          )}
+
+                          <span>
+                            {isLoading ? "Continuing..." : "Continue"}
+                          </span>
                         </button>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => setIsGmailPopoverOpen(false)}
-                        className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                      >
-                        <span>Disconnect</span>
-                      </button>
+                      {gmailConnected && (
+                        <button
+                          type="button"
+                          onClick={() => setIsGmailPopoverOpen(false)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-rose-600 transition hover:bg-rose-50"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Disconnect
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1113,7 +1217,11 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
                 className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600"
                 title={fullscreen ? "Exit fullscreen" : "Fullscreen workflow"}
               >
-                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {fullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
@@ -1142,7 +1250,11 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
             </ReactFlow>
           ) : (
             <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-              <i className="ti ti-git-branch text-slate-300" style={{ fontSize: 32 }} aria-hidden="true" />
+              <i
+                className="ti ti-git-branch text-slate-300"
+                style={{ fontSize: 32 }}
+                aria-hidden="true"
+              />
               <p className="mt-3 text-sm font-medium text-slate-400">
                 Workflow steps will appear here
               </p>
@@ -1152,6 +1264,37 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
             </div>
           )}
         </div>
+
+        {streamingSteps.length > 0 && (
+          <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 max-h-[180px] overflow-y-auto">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Live Execution Log
+            </p>
+            <div className="space-y-1 font-mono text-[11px]">
+              {streamingSteps.map((step, i) => (
+                <div
+                  key={step.step_id || i}
+                  className={
+                    step.status === "completed"
+                      ? "text-emerald-700"
+                      : step.status === "running"
+                        ? "text-indigo-600 font-bold"
+                        : step.status === "failed"
+                          ? "text-rose-600"
+                          : "text-slate-400"
+                  }
+                >
+                  {step.status === "completed" &&
+                    `[${step.step}] ✓ ${step.name}${step.duration_ms != null ? ` — ${step.duration_ms}ms` : ""}`}
+                  {step.status === "running" && `[${step.step}] ⟳ ${step.name}...`}
+                  {step.status === "failed" &&
+                    `[${step.step}] ✗ ${step.name}${step.error ? ` — ${step.error}` : ""}`}
+                  {step.status === "pending" && `[${step.step}] · ${step.name}`}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1171,7 +1314,9 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
                 </span>
               )}
             </div>
-            <p className="mt-2 text-sm font-medium text-slate-900">{response.plan.goal}</p>
+            <p className="mt-2 text-sm font-medium text-slate-900">
+              {response.plan.goal}
+            </p>
           </div>
         )}
 
@@ -1190,10 +1335,16 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
                 disabled={activatingFlow || activateFlowResult?.ok === true}
                 className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {activatingFlow ? "Activating..." : activateFlowResult?.ok ? "Activated ✓" : "Activate automation"}
+                {activatingFlow
+                  ? "Activating..."
+                  : activateFlowResult?.ok
+                    ? "Activated ✓"
+                    : "Activate automation"}
               </button>
               {activateFlowResult && (
-                <p className={`text-sm font-medium ${activateFlowResult.ok ? "text-emerald-700" : "text-rose-600"}`}>
+                <p
+                  className={`text-sm font-medium ${activateFlowResult.ok ? "text-emerald-700" : "text-rose-600"}`}
+                >
                   {activateFlowResult.message}
                 </p>
               )}
@@ -1231,7 +1382,9 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Workflow</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+        Workflow
+      </p>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
         {renderCanvas(false, true)}
@@ -1278,10 +1431,13 @@ function WorkflowSectionConnectorInner(props: WorkflowSectionConnectorProps) {
   );
 }
 
-export default function WorkflowSectionConnector(props: WorkflowSectionConnectorProps) {
+export default function WorkflowSectionConnector(
+  props: WorkflowSectionConnectorProps,
+) {
   return (
     <ReactFlowProvider>
       <WorkflowSectionConnectorInner {...props} />
     </ReactFlowProvider>
   );
 }
+

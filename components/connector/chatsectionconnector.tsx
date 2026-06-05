@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Mail, Send } from "lucide-react";
-import type { ConvMessage, ConvStep } from "./types";
+import {
+  extractEmailsFromText,
+  inferExecutionType,
+} from "./types";
+import type { ConvMessage, ConvStep, WorkflowResponse } from "./types";
 
 type ChatSectionConnectorProps = {
   prompt: string;
@@ -18,6 +22,13 @@ type ChatSectionConnectorProps = {
   currentFieldOptions?: string[];
   currentFieldSkippable?: boolean;
   currentFieldQuestion?: string | null;
+  response?: Pick<
+    WorkflowResponse,
+    "from_email" | "to" | "execution_type" | "analysis" | "final_answer" | "reply_draft" | "reply"
+  > | null;
+  partialIntent?: {
+    to?: string | null;
+  } | null;
 };
 
 export default function ChatSectionConnector({
@@ -34,11 +45,21 @@ export default function ChatSectionConnector({
   currentFieldOptions = [],
   currentFieldSkippable = false,
   currentFieldQuestion = null,
+  response = null,
+  partialIntent = null,
 }: ChatSectionConnectorProps) {
   const [inputValue, setInputValue] = useState("");
   const [showTyping, setShowTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   void statusMessage;
+
+  const skippedEmail =
+    extractEmailsFromText(prompt)[0] ||
+    response?.from_email ||
+    response?.to ||
+    partialIntent?.to ||
+    "";
+  const skippedFrequency = inferExecutionType(prompt, response?.execution_type);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -56,9 +77,21 @@ export default function ChatSectionConnector({
       const t = setTimeout(() => setShowTyping(false), 900);
       return () => clearTimeout(t);
     }
+
     setShowTyping(false);
     return undefined;
   }, [convStep]);
+
+  useEffect(() => {
+    if (convStep === "waiting_email" && skippedEmail) {
+      handleConvUserReply(skippedEmail);
+      return;
+    }
+
+    if (convStep === "waiting_frequency" && skippedFrequency) {
+      handleConvUserReply(skippedFrequency);
+    }
+  }, [convStep, handleConvUserReply, skippedEmail, skippedFrequency]);
 
   return (
     <div
@@ -72,7 +105,7 @@ export default function ChatSectionConnector({
         }
         @keyframes typingBounce {
           0%, 60%, 100% { transform: translateY(0); }
-          30%           { transform: translateY(-4px); }
+          30% { transform: translateY(-4px); }
         }
       `}</style>
 
@@ -82,9 +115,7 @@ export default function ChatSectionConnector({
         </div>
 
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">
-            Workflow Assistant
-          </p>
+          <p className="text-sm font-semibold text-slate-900">Workflow Assistant</p>
           <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-500">
             {convStep === "idle" ? (
               <>
@@ -133,7 +164,7 @@ export default function ChatSectionConnector({
               message.role === "agent" || message.role === "assistant" ? (
                 <div
                   key={`${message.role}-${index}`}
-                  className="flex items-end gap-2 justify-start"
+                  className="flex items-end justify-start gap-2"
                 >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
                     AI
@@ -146,10 +177,7 @@ export default function ChatSectionConnector({
                   </div>
                 </div>
               ) : (
-                <div
-                  key={`${message.role}-${index}`}
-                  className="flex justify-end"
-                >
+                <div key={`${message.role}-${index}`} className="flex justify-end">
                   <div
                     className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#525ceb] px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm shadow-indigo-200"
                     style={{ animation: "fadeSlideUp 0.2s ease" }}
@@ -161,7 +189,7 @@ export default function ChatSectionConnector({
             )}
 
             {showTyping && (
-              <div className="flex items-end gap-2 justify-start">
+              <div className="flex items-end justify-start gap-2">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
                   AI
                 </div>
@@ -172,15 +200,11 @@ export default function ChatSectionConnector({
                   />
                   <span
                     className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
-                    style={{
-                      animation: "typingBounce 0.9s ease infinite 0.15s",
-                    }}
+                    style={{ animation: "typingBounce 0.9s ease infinite 0.15s" }}
                   />
                   <span
                     className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
-                    style={{
-                      animation: "typingBounce 0.9s ease infinite 0.3s",
-                    }}
+                    style={{ animation: "typingBounce 0.9s ease infinite 0.3s" }}
                   />
                 </div>
               </div>
@@ -193,7 +217,15 @@ export default function ChatSectionConnector({
         {convStep === "waiting_field" ||
         convStep === "waiting_email" ||
         convStep === "waiting_frequency" ? (
-          currentFieldType === "choice" ? (
+          convStep === "waiting_email" && skippedEmail ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+              <span>✓</span> Email skipped: Using {skippedEmail}
+            </div>
+          ) : convStep === "waiting_frequency" && skippedFrequency ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+              <span>✓</span> Frequency skipped: Running as {skippedFrequency.replace("_", "-")}
+            </div>
+          ) : currentFieldType === "choice" ? (
             <div className="space-y-2">
               <div className="flex gap-2">
                 {(currentFieldOptions.length > 0
@@ -227,6 +259,7 @@ export default function ChatSectionConnector({
                   </button>
                 ))}
               </div>
+
               {currentFieldSkippable && (
                 <button
                   type="button"
@@ -343,7 +376,7 @@ export default function ChatSectionConnector({
           <div className="flex items-center gap-2 px-1 text-sm text-slate-500">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
             {convStep === "streaming"
-              ? "Watching agent steps live…"
+              ? "Watching agent steps live..."
               : "Setting up your workflow..."}
           </div>
         ) : (
@@ -360,7 +393,7 @@ export default function ChatSectionConnector({
               className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
               placeholder={
                 convStep === "done"
-                  ? "Ask another question or describe a new workflow…"
+                  ? "Ask another question or describe a new workflow..."
                   : "Describe your Gmail workflow... (e.g. when John sends me email analyze and reply)"
               }
               rows={3}
