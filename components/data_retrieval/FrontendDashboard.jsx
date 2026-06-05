@@ -12,30 +12,7 @@ import { downloadStageWordReport } from "@/lib/data-retrieval/stageWordReport";
 export default function FrontendDashboard() {
   const apiBaseUrl = useMemo(() => API_BASE_URL, []);
 
-  const agentOptions = useMemo(
-    () => [
-      { value: "auto", label: "Auto Agent" },
-      { value: "transaction", label: "Transaction" },
-      { value: "project", label: "Project" },
-    ],
-    [],
-  );
-  const pipelineOptions = useMemo(
-    () => [
-      { value: "v1", label: "Agent v1" },
-      { value: "v2", label: "Agent v2" },
-    ],
-    [],
-  );
-  const modelOptions = useMemo(
-    () => [
-      { value: "gpt-4o-mini", label: "GPT-4o mini" },
-      { value: "gpt-5.1", label: "GPT-5.1" },
-      { value: "deepseek.v3.2", label: "AWS Bedrock - DeepSeek V3.2" },
-      { value: "moonshotai.kimi-k2.5", label: "AWS Bedrock - Kimi K2.5" },
-    ],
-    [],
-  );
+  // Always uses data_retrieval_agent_v2; provider/model from global navbar (Header.tsx).
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -44,9 +21,6 @@ export default function FrontendDashboard() {
   const [totalTokens, setTotalTokens] = useState(0);
   const [tokenEvents, setTokenEvents] = useState([]);
   const [sessionId, setSessionId] = useState("");
-  const [selectedAgent, setSelectedAgent] = useState("auto");
-  const [selectedPipeline, setSelectedPipeline] = useState("v1");
-  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const [stageCards, setStageCards] = useState([]);
   const [pipelineStages, setPipelineStages] = useState([]);
   const [pipelineCatalog, setPipelineCatalog] = useState([]);
@@ -64,42 +38,12 @@ export default function FrontendDashboard() {
   useEffect(() => {
     queueMicrotask(() => {
       const stored = window.localStorage.getItem("reai-session-id") || "";
-      const storedAgent =
-        window.localStorage.getItem("reai-selected-agent") || "auto";
-      const storedPipeline =
-        window.localStorage.getItem("reai-selected-pipeline") || "v1";
-      const storedModel =
-        window.localStorage.getItem("reai-selected-v2-model") || "gpt-4o-mini";
       setSessionId(stored);
-      if (["auto", "transaction", "project"].includes(storedAgent)) {
-        setSelectedAgent(storedAgent);
-      }
-      if (["v1", "v2"].includes(storedPipeline)) {
-        setSelectedPipeline(storedPipeline);
-      }
-      if (modelOptions.some((option) => option.value === storedModel)) {
-        setSelectedModel(storedModel);
-      }
     });
     return () => {
       eventSourceRef.current?.close();
     };
-  }, [modelOptions]);
-
-  function handleAgentChange(nextAgent) {
-    setSelectedAgent(nextAgent);
-    window.localStorage.setItem("reai-selected-agent", nextAgent);
-  }
-
-  function handlePipelineChange(nextPipeline) {
-    setSelectedPipeline(nextPipeline);
-    window.localStorage.setItem("reai-selected-pipeline", nextPipeline);
-  }
-
-  function handleModelChange(nextModel) {
-    setSelectedModel(nextModel);
-    window.localStorage.setItem("reai-selected-v2-model", nextModel);
-  }
+  }, []);
 
   function resetRunState() {
     setStageCards([]);
@@ -253,7 +197,7 @@ export default function FrontendDashboard() {
   function buildSubmissionPayload() {
     const freeText = input.trim();
 
-    if (clarificationState.awaiting && selectedPipeline === "v2") {
+    if (clarificationState.awaiting) {
       const structuredLines = formatClarificationAnswerLines(
         clarificationState.fieldValues,
         clarificationState.meta?.fields,
@@ -377,20 +321,15 @@ export default function FrontendDashboard() {
     resetRunState();
 
     const params = new URLSearchParams({ question: submission.requestText });
-    if (selectedPipeline === "v1" && selectedAgent !== "auto") {
-      params.set("selected_domain", selectedAgent);
-    }
     if (sessionId) {
       params.set("session_id", sessionId);
     }
-    if (selectedPipeline === "v2") {
-      params.set("model", selectedModel);
-    }
+    params.set(
+      "model",
+      window.localStorage.getItem("sigmavalue_llm_model") || "gpt-4o-mini",
+    );
 
-    const streamPath =
-      selectedPipeline === "v2"
-        ? "/aks_stream_data_retrieval_agent_v2"
-        : "/ask_stream_data_retrieval";
+    const streamPath = "/aks_stream_data_retrieval_agent_v2";
     const source = new EventSource(
       apiUrl(`${streamPath}?${params.toString()}`),
     );
@@ -418,38 +357,16 @@ export default function FrontendDashboard() {
           );
           break;
         case "start":
-          if (selectedPipeline !== "v2") {
-            addStageCard(
-              "start",
-              "Request Started",
-              "Incoming query accepted by backend.",
-              "Incoming query accepted by backend.",
-              "🚀",
-            );
-          }
           break;
         case "pipeline_catalog":
-          if (selectedPipeline === "v2") {
-            setPipelineCatalog(
-              Array.isArray(data.content?.stages) ? data.content.stages : [],
-            );
-          }
+          setPipelineCatalog(
+            Array.isArray(data.content?.stages) ? data.content.stages : [],
+          );
           break;
         case "pipeline_stage":
-          if (selectedPipeline === "v2" && data.content) {
-            upsertPipelineStage(data.content);
-          }
+          if (data.content) upsertPipelineStage(data.content);
           break;
         case "stage":
-          if (selectedPipeline !== "v2") {
-            addStageCard(
-              "stage",
-              data.content,
-              "Waiting for stage details...",
-              "Pipeline progress update.",
-              "⚡",
-            );
-          }
           break;
         case "intent":
           appendStageDetail(
@@ -484,21 +401,6 @@ export default function FrontendDashboard() {
           appendStageDetail(`Action: ${data.content}`);
           break;
         case "debug_trace":
-          if (selectedPipeline === "v2") {
-            break;
-          }
-          appendStageDetail(
-            `Debug: ${data.content?.step || "trace"}\nPhase: ${data.content?.phase || "unknown"}\n${data.content?.summary || "No summary available."}${
-              Array.isArray(data.content?.plan_steps) &&
-              data.content.plan_steps.length
-                ? `\nPlan: ${data.content.plan_steps.join(" -> ")}`
-                : ""
-            }${
-              Array.isArray(data.content?.tools) && data.content.tools.length
-                ? `\nTools: ${data.content.tools.join(", ")}`
-                : ""
-            }${typeof data.content?.row_count === "number" ? `\nRows: ${data.content.row_count}` : ""}`,
-          );
           break;
         case "token_usage":
           if (data.content) {
@@ -585,11 +487,11 @@ export default function FrontendDashboard() {
           );
           break;
         case "stage_report":
-          if (selectedPipeline === "v2" && data.content) {
+          if (data.content) {
             setStageReport(data.content);
             const modelLabel =
-              modelOptions.find((option) => option.value === selectedModel)
-                ?.label || selectedModel;
+              window.localStorage.getItem("sigmavalue_llm_model") ||
+              "gpt-4o-mini";
             downloadStageWordReport(data.content, modelLabel);
             setMetricsText(
               (current) => `${current} | Stage Word report downloaded`,
@@ -597,15 +499,6 @@ export default function FrontendDashboard() {
           }
           break;
         case "done":
-          if (selectedPipeline !== "v2") {
-            addStageCard(
-              "done",
-              "Pipeline Complete",
-              `Run finished in ${data.metrics?.duration_seconds ?? "--"}s with ${data.metrics?.total_tokens ?? 0} total tokens.`,
-              "Backend finished this request.",
-              "🏁",
-            );
-          }
           finalizeStream(data.metrics);
           break;
         default:
@@ -712,105 +605,17 @@ export default function FrontendDashboard() {
             </div> */}
 
             <div className="flex items-center gap-3">
-              <label
-                className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+              <span
+                className="rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]"
                 style={{
                   borderColor: "var(--border-soft)",
                   background: "var(--bg-card)",
+                  color: "var(--text-muted)",
                 }}
+                title="Uses global navbar provider/model selection"
               >
-                <span
-                  className="font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Pipeline
-                </span>
-                <select
-                  value={selectedPipeline}
-                  onChange={(event) => handlePipelineChange(event.target.value)}
-                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
-                  style={{
-                    borderColor: "var(--border-soft)",
-                    color: "var(--text-primary)",
-                    backgroundColor: "var(--bg-input)",
-                  }}
-                  aria-label="Select data retrieval pipeline"
-                  disabled={isStreaming}
-                >
-                  {pipelineOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
-                style={{
-                  borderColor: "var(--border-soft)",
-                  background: "var(--bg-card)",
-                  opacity: selectedPipeline === "v2" ? 0.55 : 1,
-                }}
-              >
-                <span
-                  className="font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Agent
-                </span>
-                <select
-                  value={selectedAgent}
-                  onChange={(event) => handleAgentChange(event.target.value)}
-                  className="reai-native-select cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
-                  style={{
-                    borderColor: "var(--border-soft)",
-                    color: "var(--text-primary)",
-                    backgroundColor: "var(--bg-input)",
-                  }}
-                  aria-label="Select domain agent"
-                  disabled={isStreaming || selectedPipeline === "v2"}
-                >
-                  {agentOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selectedPipeline === "v2" ? (
-                <label
-                  className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
-                  style={{
-                    borderColor: "var(--border-soft)",
-                    background: "var(--bg-card)",
-                  }}
-                >
-                  <span
-                    className="font-semibold uppercase tracking-[0.14em]"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Model
-                  </span>
-                  <select
-                    value={selectedModel}
-                    onChange={(event) => handleModelChange(event.target.value)}
-                    className="reai-native-select max-w-[210px] cursor-pointer rounded-lg border bg-transparent px-2.5 py-1 text-xs font-semibold outline-none"
-                    style={{
-                      borderColor: "var(--border-soft)",
-                      color: "var(--text-primary)",
-                      backgroundColor: "var(--bg-input)",
-                    }}
-                    aria-label="Select data retrieval agent v2 model"
-                    disabled={isStreaming}
-                  >
-                    {modelOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+                Agent v2
+              </span>
               {/* <div
                 className="rounded-lg border px-3 py-2 font-mono text-xs"
                 style={{
@@ -823,7 +628,7 @@ export default function FrontendDashboard() {
                   className="font-semibold"
                   style={{ color: "var(--accent-light)" }}
                 >
-                  {selectedPipeline === "v2" ? "FastAPI SSE v2" : "FastAPI SSE"}
+                  FastAPI SSE v2
                 </span>
               </div>
               <div className="hidden gap-1 md:flex">
@@ -874,20 +679,20 @@ export default function FrontendDashboard() {
                 }))
               }
               onClear={clearConversation}
-              backendLabel={`${apiBaseUrl} · ${selectedPipeline === "v2" ? "agent v2" : "agent v1"}`}
+              backendLabel={`${apiBaseUrl} · agent v2`}
             />
           }
           center={
             <WorkflowSection
-              variant={selectedPipeline === "v2" ? "v2" : "v1"}
+              variant="v2"
               stageCards={stageCards}
               pipelineStages={pipelineStages}
               pipelineCatalog={pipelineCatalog}
               stageReport={stageReport}
               onDownloadStageReport={() => {
                 const modelLabel =
-                  modelOptions.find((option) => option.value === selectedModel)
-                    ?.label || selectedModel;
+                  window.localStorage.getItem("sigmavalue_llm_model") ||
+                  "gpt-4o-mini";
                 if (stageReport) {
                   downloadStageWordReport(stageReport, modelLabel);
                 }
