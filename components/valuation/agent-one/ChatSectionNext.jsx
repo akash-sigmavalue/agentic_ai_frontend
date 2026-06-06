@@ -2945,7 +2945,7 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData }) {
+export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -3129,6 +3129,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "cost_calculation_result") {
             setCostCalculationData(event.content);
+            // Bubble cost valuation result up for the Report tab in Visual Layer
+            onValuationResult?.({
+              type: "cost",
+              factorialAnalysis: factorialAnalysisData,
+              costCalculation: event.content,
+              subjectData: subjectDataRef.current || subjectData,
+              factorialData: factorialData,
+              timestamp: new Date().toISOString(),
+            });
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -4007,6 +4016,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "factorial_analysis_result") {
             setFactorialAnalysisData(event.content);
+            // Bubble valuation result up for the Report tab in Visual Layer
+            onValuationResult?.({
+              type: "market",
+              factorialAnalysis: event.content,
+              subjectData: subjectDataRef.current || subjectData,
+              factorialData: factorialData,
+              timestamp: new Date().toISOString(),
+            });
 
             // Handle audit stats
             const usage = event.content?._token_usage;
