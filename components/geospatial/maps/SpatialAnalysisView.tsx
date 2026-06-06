@@ -29,6 +29,7 @@ import 'leaflet/dist/leaflet.css';
 const MapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((mod) => mod.Marker), { ssr: false });
+const Circle = dynamic(() => import('react-leaflet').then((mod) => mod.Circle), { ssr: false });
 const CircleMarker = dynamic(() => import('react-leaflet').then((mod) => mod.CircleMarker), { ssr: false });
 const Polyline = dynamic(() => import('react-leaflet').then((mod) => mod.Polyline), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then((mod) => mod.Popup), { ssr: false });
@@ -38,10 +39,17 @@ interface SpatialAnalysisViewProps {
   markers?: MarkerData[];
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
 const DEFAULT_QUERY =
   'based on few comparable projects give me what should the rate be of my subject project.';
+
+const DEFAULT_SUBJECT_RADIUS_M = 1000;
 
 type TabId = 'overlay' | 'plan' | 'steps' | 'output' | 'ledger';
 {/*
@@ -69,7 +77,8 @@ function zoneColor(zone: string | null | undefined): string {
 export default function SpatialAnalysisView({ 
   markers = [],
   isFullscreen = false,
-  toggleFullscreen
+  toggleFullscreen,
+  onInsightDataReady,
 }: SpatialAnalysisViewProps) {
   const defaultLat = markers[0]?.lat ?? 18.59260855107351;
   const defaultLng = markers[0]?.lng ?? 73.79994598999583;
@@ -77,7 +86,7 @@ export default function SpatialAnalysisView({
   const [subjectName, setSubjectName] = useState('My Subject Project');
   const [subjectLatStr, setSubjectLatStr] = useState(defaultLat.toFixed(6));
   const [subjectLngStr, setSubjectLngStr] = useState(defaultLng.toFixed(6));
-  const [useSubject, setUseSubject] = useState(false);
+  const [useSubject, setUseSubject] = useState(true);
   const [userQuery, setUserQuery] = useState(DEFAULT_QUERY);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +119,7 @@ export default function SpatialAnalysisView({
     setIsLoading(true);
     setError(null);
     setData(null);
+    onInsightDataReady?.(null);
 
     const lat = parseFloat(subjectLatStr);
     const lng = parseFloat(subjectLngStr);
@@ -121,10 +131,23 @@ export default function SpatialAnalysisView({
         subject_lat: useSubject && !isNaN(lat) ? lat : null,
         subject_lon: useSubject && !isNaN(lng) ? lng : null,
         use_subject: useSubject,
+        radius_m: DEFAULT_SUBJECT_RADIUS_M,
       };
 
       const result = await fetchSpatialAnalysis(payload);
       setData(result);
+      onInsightDataReady?.({
+        mapId: 'default:spatial-analysis',
+        mapLabel: 'Default Spatial Analysis',
+        plottedData: {
+          projects: result.projects,
+          roads: result.roads,
+          places: result.places,
+          stats: result.stats,
+          existing_insights: result.insights,
+          subject_info: result.subject_info,
+        },
+      });
       setActiveTab('overlay');
     } catch (err: any) {
       setError(err.message || 'Spatial analysis failed.');
@@ -380,6 +403,19 @@ export default function SpatialAnalysisView({
                         {/* SUBJECT PROJECT */}
                         {data.subject_info && (
                           <React.Fragment>
+                            <Circle
+                              center={[data.subject_info.lat, data.subject_info.lon]}
+                              radius={DEFAULT_SUBJECT_RADIUS_M}
+                              pathOptions={{
+                                color: '#2563eb',
+                                fillColor: '#60a5fa',
+                                fillOpacity: 0.08,
+                                weight: 2,
+                                dashArray: '6',
+                              }}
+                            >
+                              <Tooltip>{DEFAULT_SUBJECT_RADIUS_M / 1000} km subject data radius</Tooltip>
+                            </Circle>
                             <Marker position={[data.subject_info.lat, data.subject_info.lon]}>
                                <Popup>
                                  <div className="text-xs">

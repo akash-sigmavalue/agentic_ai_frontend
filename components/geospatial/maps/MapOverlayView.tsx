@@ -145,9 +145,14 @@ function createRateMarkerHtml(rate: number | null): string {
 interface MapOverlayViewProps {
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
+  onInsightDataReady?: (payload: {
+    mapId: string;
+    mapLabel: string;
+    plottedData: Record<string, unknown>;
+  } | null) => void;
 }
 
-const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFullscreen }) => {
+const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFullscreen, onInsightDataReady }) => {
   const [isMounted, setIsMounted] = useState(false);
   const [L, setL] = useState<any>(null);
 
@@ -226,6 +231,76 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
     setMetroVisibility((prev) => ({ ...prev, [layer]: !prev[layer] }));
   }, []);
   const handleRoadDataLoaded = useCallback((roads: RoadMapData[]) => { setRoadData(roads); }, []);
+
+  useEffect(() => {
+    if (!onInsightDataReady) return;
+
+    const base = {
+      city: selectedCity,
+      section: activeSection,
+      map_family: '2d',
+    };
+    if (overlayMode === 'amenities' && allAmenities.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:amenities',
+        mapLabel: 'Default Amenities Overlay',
+        plottedData: { ...base, records: allAmenities },
+      });
+      return;
+    }
+    if (overlayMode === 'metro' && highwaysData.length + metroLinesData.length + metroStationsData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:metro-corridors',
+        mapLabel: 'Default Metro Lines and Highway Corridors',
+        plottedData: {
+          ...base,
+          highways: highwaysData,
+          metro_lines: metroLinesData,
+          metro_stations: metroStationsData,
+        },
+      });
+      return;
+    }
+    if (overlayMode === 'price' && priceData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:price-momentum',
+        mapLabel: 'Default Price Momentum',
+        plottedData: { ...base, records: priceData, metric: priceRateType },
+      });
+      return;
+    }
+    if (overlayMode === 'road' && roadData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:road-width',
+        mapLabel: 'Default Road Width Analysis',
+        plottedData: { ...base, records: roadData },
+      });
+      return;
+    }
+    if (overlayMode === 'rate' && rateData.length > 0) {
+      onInsightDataReady({
+        mapId: 'default:2d:rate-analysis',
+        mapLabel: 'Default Rate Analysis',
+        plottedData: { ...base, records: rateData, metric: rateRateType },
+      });
+      return;
+    }
+    onInsightDataReady(null);
+  }, [
+    activeSection,
+    allAmenities,
+    highwaysData,
+    metroLinesData,
+    metroStationsData,
+    onInsightDataReady,
+    overlayMode,
+    priceData,
+    priceRateType,
+    rateData,
+    rateRateType,
+    roadData,
+    selectedCity,
+  ]);
 
   // ── Filtering ────────────────────────────────────────────
   useEffect(() => {

@@ -5,7 +5,7 @@ import { Activity, LayoutDashboard, Maximize2, Minimize2 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  ScatterChart, Scatter
+  ScatterChart, Scatter, Label, LabelList
 } from 'recharts';
 import { MarkerData } from '../../types/agents';
 
@@ -109,25 +109,38 @@ const createComponentFromJsx = (
     const constMatch = cleaned.match(/export\s+default\s+const\s+([A-Za-z0-9_$]+)\s*=/);
     if (funcMatch) componentName = funcMatch[1];
     else if (constMatch) componentName = constMatch[1];
-    else return null;
+    else {
+      console.error('No export default function/const found in JSX. Cleaned code:', cleaned.slice(0, 500));
+      return null;
+    }
 
     const codeWithoutExport = cleaned.replace(/export\s+default\s+/, '');
     const transformed = Babel.transform(codeWithoutExport, {
       presets: ['react'],
       filename: 'dynamicComponent.jsx',
     }).code;
-    if (!transformed) return null;
+    if (!transformed) {
+      console.error('Babel transform failed or returned empty code');
+      return null;
+    }
 
     const chartComponents = {
       BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
       CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-      ScatterChart, Scatter
+      ScatterChart, Scatter, Label, LabelList
     };
 
+    // Extract colors from backend response if provided
+    const backendColors = (runtimeData as any)?.colors || (runtimeData as any)?.COLORS;
+    
     const datasetNames = Array.from({ length: 10 }, (_, index) => `dataset_${index}`);
     const datasetValues = datasetNames.map((_, index) => getDatasetValue(runtimeData, index));
-    const paramNames = ['React', ...Object.keys(chartComponents), 'runtimeData', ...datasetNames];
-    const paramValues = [React, ...Object.values(chartComponents), runtimeData, ...datasetValues];
+    const paramNames = backendColors 
+      ? ['React', ...Object.keys(chartComponents), 'runtimeData', 'COLORS', ...datasetNames]
+      : ['React', ...Object.keys(chartComponents), 'runtimeData', ...datasetNames];
+    const paramValues = backendColors
+      ? [React, ...Object.values(chartComponents), runtimeData, backendColors, ...datasetValues]
+      : [React, ...Object.values(chartComponents), runtimeData, ...datasetValues];
 
     const factory = new Function(...paramNames, `
       ${transformed};
@@ -135,7 +148,10 @@ const createComponentFromJsx = (
     `);
 
     const Component = factory(...paramValues) as unknown;
-    if (typeof Component !== 'function') return null;
+    if (typeof Component !== 'function') {
+      console.error('Component factory did not return a function. Type:', typeof Component);
+      return null;
+    }
 
     const SafeGeneratedComponent: React.FC<GeneratedComponentProps> = ({ onError }) => {
       try {

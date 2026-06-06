@@ -7,8 +7,40 @@
   --font-orbitron: "Orbitron", sans-serif;
 }
 
+/* App shell defaults (light). Data-retrieval dark theme is scoped to [data-theme="dark"]. */
 :root,
-[data-theme="dark"] {
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-base: #f3f7fb;
+  --bg-deep: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.82);
+  --bg-surface: rgba(255, 255, 255, 0.78);
+  --bg-card: rgba(15, 23, 42, 0.03);
+  --bg-card-strong: rgba(15, 23, 42, 0.05);
+  --bg-input: rgba(255, 255, 255, 0.92);
+  --border-soft: rgba(15, 23, 42, 0.18);
+  --border-dim: rgba(15, 23, 42, 0.10);
+  --text-primary: #020617;
+  --text-secondary: #0f172a;
+  --text-muted: #334155;
+  --text-dim: #475569;
+  --accent: #0891b2;
+  --accent-light: #0ea5e9;
+  --accent-glow: rgba(14, 165, 233, 0.12);
+  --accent-secondary: #7c3aed;
+  --accent-secondary-glow: rgba(124, 58, 237, 0.12);
+  --success: #059669;
+  --success-glow: rgba(5, 150, 105, 0.14);
+  --warning: #d97706;
+  --warning-glow: rgba(217, 119, 6, 0.14);
+  --danger: #dc2626;
+  --danger-glow: rgba(220, 38, 38, 0.14);
+  --shadow-strong: 0 24px 80px rgba(15, 23, 42, 0.12);
+  --radius-panel: 28px;
+}
+
+[data-theme="dark"],
+html.dark-mode:not([data-theme="light"]) {
   color-scheme: dark;
   --bg-base: #02040a;
   --bg-deep: #0b0e14;
@@ -185,25 +217,27 @@ textarea {
   background: color-mix(in srgb, var(--accent) 55%, var(--border-soft));
 }
 
-/* Native selects in header/toolbars — avoid white option lists on Windows */
+/* Native selects — theme-aware (header + data retrieval toolbars) */
 select.reai-native-select {
-  color-scheme: dark;
-  background-color: var(--bg-input);
+  color-scheme: light;
+  background-color: transparent;
   color: var(--text-primary);
 }
 
-[data-theme="light"] select.reai-native-select {
-  color-scheme: light;
+[data-theme="dark"] select.reai-native-select,
+html.dark-mode:not([data-theme="light"]) select.reai-native-select {
+  color-scheme: dark;
 }
 
 select.reai-native-select option {
-  background-color: var(--bg-deep);
-  color: var(--text-primary);
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
-[data-theme="light"] select.reai-native-select option {
-  background-color: #ffffff;
-  color: var(--text-primary);
+[data-theme="dark"] select.reai-native-select option,
+html.dark-mode:not([data-theme="light"]) select.reai-native-select option {
+  background-color: #0f172a;
+  color: #f8fafc;
 }
 
 .cursor-blink::after {
