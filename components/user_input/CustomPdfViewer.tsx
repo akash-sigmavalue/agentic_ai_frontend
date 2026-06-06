@@ -9,14 +9,14 @@ import React, { useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 interface CustomPdfViewerProps {
   pdfUrl: string;
-  pageNumber: number;
+  pageNumbers: number[];
   searchText: string;
   highlightRects?: HighlightRect[];
 }
 
 export default function CustomPdfViewer({
   pdfUrl,
-  pageNumber,
+  pageNumbers,
   searchText,
   highlightRects = [],
 }: CustomPdfViewerProps) {
@@ -34,8 +34,10 @@ export default function CustomPdfViewer({
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [pdfModuleError, setPdfModuleError] = useState<string | null>(null);
 
-  const safePage = Math.min(Math.max(1, pageNumber), numPages ?? pageNumber);
-  const renderedPageWidth = containerWidth ? Math.max(containerWidth - 32, 0) : 0;
+  const [zoom, setZoom] = useState(1);
+  const safePages = pageNumbers.map(p => Math.min(Math.max(1, p), numPages ?? p));
+  const safePage = safePages[0] || 1;
+  const renderedPageWidth = containerWidth ? Math.max(containerWidth - 32, 0) * zoom : 0;
   const firstRect = highlightRects[0];
   const renderedPageHeight =
     renderedPageWidth && firstRect ? renderedPageWidth * (firstRect.page_height / firstRect.page_width) : undefined;
@@ -46,14 +48,17 @@ export default function CustomPdfViewer({
   }, [pdfUrl, safePage]);
 
   useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerWidth(entry.contentRect.width);
       }
-    };
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -137,7 +142,15 @@ export default function CustomPdfViewer({
   }
 
   return (
-    <div ref={containerRef} className="flex h-full w-full flex-col items-center overflow-auto bg-slate-100 p-4">
+    <div ref={containerRef} className="relative flex h-full w-full flex-col items-center overflow-auto bg-slate-100 p-4">
+      {pdfUrl && (
+        <div className="sticky top-2 right-2 z-[100] self-end flex gap-1 mb-2 bg-white/90 p-1.5 rounded-lg shadow-sm backdrop-blur-sm border border-slate-200">
+          <button onClick={() => setZoom(z => Math.max(0.4, z - 0.2))} className="px-2.5 py-1 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded">-</button>
+          <span className="px-2 py-1 text-xs font-semibold text-slate-500 flex items-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="px-2.5 py-1 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded">+</button>
+          <button onClick={() => setZoom(1)} className="px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded ml-1">Reset</button>
+        </div>
+      )}
       {pdfUrl ? (
         <Document
           file={pdfUrl}
@@ -146,43 +159,48 @@ export default function CustomPdfViewer({
           loading={<div className="flex items-center justify-center p-10 text-slate-400">Loading PDF...</div>}
           error={<div className="flex items-center justify-center p-10 text-red-500">Failed to load PDF.</div>}
         >
-          <div
-            className="relative overflow-hidden rounded-sm shadow-md"
-            style={{
-              width: renderedPageWidth || undefined,
-              height: renderedPageHeight,
-            }}
-          >
-            <Page
-              key={`page-${safePage}-${searchText.slice(0, 32)}`}
-              pageNumber={safePage}
-              width={renderedPageWidth || undefined}
-              renderAnnotationLayer={false}
-              renderTextLayer={true}
-              customTextRenderer={customTextRenderer as any}
-            />
-            {renderedPageWidth > 0 &&
-              highlightRects.map((rect, index) => {
-                const scaleX = renderedPageWidth / rect.page_width;
-                const scaleY = (renderedPageHeight || rect.page_height) / rect.page_height;
+          <div className="flex flex-col gap-6 items-center">
+            {safePages.map(page => (
+              <div
+                key={`page-wrapper-${page}`}
+                className="relative overflow-hidden rounded-sm shadow-md bg-white"
+                style={{
+                  width: renderedPageWidth || undefined,
+                  height: page === safePage ? renderedPageHeight : undefined,
+                }}
+              >
+                <Page
+                  key={`page-${page}-${searchText.slice(0, 32)}`}
+                  pageNumber={page}
+                  width={renderedPageWidth || undefined}
+                  renderAnnotationLayer={false}
+                  renderTextLayer={true}
+                  customTextRenderer={customTextRenderer as any}
+                />
+                {renderedPageWidth > 0 && page === safePage &&
+                  highlightRects.map((rect, index) => {
+                    const scaleX = renderedPageWidth / rect.page_width;
+                    const scaleY = (renderedPageHeight || rect.page_height) / rect.page_height;
 
-                return (
-                  <div
-                    key={`${index}-${rect.x0}-${rect.y0}`}
-                    id={index === 0 ? "highlight-rect-first" : undefined}
-                    className="pointer-events-none absolute rounded-[3px]"
-                    style={{
-                      left: rect.x0 * scaleX,
-                      top: rect.y0 * scaleY,
-                      width: (rect.x1 - rect.x0) * scaleX,
-                      height: (rect.y1 - rect.y0) * scaleY,
-                      background: "rgba(255, 255, 0, 0.45)",
-                      mixBlendMode: "multiply",
-                      zIndex: 20,
-                    }}
-                  />
-                );
-              })}
+                    return (
+                      <div
+                        key={`${index}-${rect.x0}-${rect.y0}`}
+                        id={index === 0 ? "highlight-rect-first" : undefined}
+                        className="pointer-events-none absolute rounded-[3px]"
+                        style={{
+                          left: rect.x0 * scaleX,
+                          top: rect.y0 * scaleY,
+                          width: (rect.x1 - rect.x0) * scaleX,
+                          height: (rect.y1 - rect.y0) * scaleY,
+                          background: "rgba(255, 255, 0, 0.45)",
+                          mixBlendMode: "multiply",
+                          zIndex: 20,
+                        }}
+                      />
+                    );
+                  })}
+              </div>
+            ))}
           </div>
         </Document>
       ) : (

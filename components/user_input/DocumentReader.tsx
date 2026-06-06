@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Upload, Send, FileText, Image, Loader2 } from "lucide-react";
@@ -119,12 +119,22 @@ function formatDuration(ms?: number | null) {
   return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
 }
 
-function parseChunkPage(chunk: Chunk | null): number {
-  if (!chunk) return 1;
-  const raw = chunk.page_range?.split("-")[0]?.trim() || chunk.page?.trim() || "1";
-  if (raw === "unknown") return 1;
-  const page = parseInt(raw, 10);
-  return Number.isFinite(page) && page > 0 ? page : 1;
+function parseChunkPages(chunk: Chunk | null): number[] {
+  if (!chunk) return [1];
+  const raw = chunk.page_range || chunk.page || "1";
+  if (raw === "unknown") return [1];
+  
+  const parts = raw.split("-").map(s => parseInt(s.trim(), 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    const pages = [];
+    for (let i = parts[0]; i <= parts[1]; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+  
+  const page = parseInt(parts[0], 10);
+  return Number.isFinite(page) && page > 0 ? [page] : [1];
 }
 
 function getSearchTerm(chunkContent?: string) {
@@ -135,6 +145,21 @@ function getSearchTerm(chunkContent?: string) {
     .trim();
   // PDF text layers use small fragments; a shorter snippet matches more reliably
   return cleaned;  //cleaned.slice(0, 100);
+}
+
+function highlightChunkText(text: string, searchTerm: string) {
+  if (!searchTerm || !text) return text;
+  
+  // Find the exact match or fall back to returning text
+  // Since searchTerm is a cleaned version, we do a simple case-insensitive match for words if possible
+  // For robustness, we will just use a simple regex for now.
+  const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${term})`, 'gi'));
+  return parts.map((part, i) => 
+    part.toLowerCase() === searchTerm.toLowerCase() 
+      ? <mark key={i} className="bg-yellow-200 text-black px-1 rounded">{part}</mark> 
+      : part
+  );
 }
 
 function isPdfFile(file: File) {
@@ -230,6 +255,46 @@ export default function DocumentReader() {
   const [highlightError, setHighlightError] = useState<string | null>(null);
   const highlightRequestIdRef = useRef(0);
   const router = useRouter();
+
+  const [leftWidth, setLeftWidth] = useState(24);
+  const [rightWidth, setRightWidth] = useState(30);
+  const leftResizingRef = useRef(false);
+  const rightResizingRef = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!leftResizingRef.current && !rightResizingRef.current) return;
+      const windowWidth = window.innerWidth;
+      if (leftResizingRef.current) {
+        let newWidth = (e.clientX / windowWidth) * 100;
+        if (newWidth < 15) newWidth = 15;
+        if (newWidth > 40) newWidth = 40;
+        setLeftWidth(newWidth);
+      }
+      if (rightResizingRef.current) {
+        let newWidth = ((windowWidth - e.clientX) / windowWidth) * 100;
+        if (newWidth < 20) newWidth = 20;
+        if (newWidth > 50) newWidth = 50;
+        setRightWidth(newWidth);
+      }
+    };
+    const handleMouseUp = () => {
+      leftResizingRef.current = false;
+      rightResizingRef.current = false;
+      document.body.style.cursor = '';
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      }
+    };
+  }, []);
 
   const tokenUsage = useMemo<TokenUsage>(
     () => askResult?.token_usage || uploadResult?.token_usage || { input: 0, output: 0 },
@@ -424,7 +489,8 @@ export default function DocumentReader() {
     const requestId = highlightRequestIdRef.current + 1;
     highlightRequestIdRef.current = requestId;
 
-    const pageNumber = parseChunkPage(chunk);
+    const pages = parseChunkPages(chunk);
+    const primaryPage = pages[0];
     const chunkText = chunk.text || chunk.content || "";
 
     if (!chunk.document_id || !chunkText.trim()) {
@@ -434,7 +500,7 @@ export default function DocumentReader() {
 
     try {
       setHighlightLoading(true);
-      const response = await highlightRectsRequest(chunk.document_id, pageNumber, chunkText);
+      const response = await highlightRectsRequest(chunk.document_id, primaryPage, chunkText);
       const data = (await response.json()) as HighlightResponse;
 
       if (highlightRequestIdRef.current !== requestId) return;
@@ -487,10 +553,10 @@ export default function DocumentReader() {
         </div>
       </div>
 
-      {/* 3-pane grid */}
-      <div className="grid h-[calc(100%-80px)] grid-cols-[24%_44%_30%] gap-5 min-h-0">
+      {/* 3-pane flex layout */}
+      <div className="flex h-[calc(100%-80px)] w-full gap-2 min-h-0">
         {/* LEFT PANEL: Upload & Chat */}
-        <div className="flex flex-col gap-5 min-h-0">
+        <div className="flex flex-col gap-5 min-h-0" style={{ width: `${leftWidth}%` }}>
           <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
             <form onSubmit={uploadDocument} className="space-y-3">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
@@ -573,8 +639,16 @@ export default function DocumentReader() {
           </div>
         </div>
 
+        <div 
+          className="w-1.5 cursor-col-resize hover:bg-blue-400 bg-slate-200/50 rounded transition-colors self-stretch"
+          onMouseDown={() => {
+            leftResizingRef.current = true;
+            document.body.style.cursor = 'col-resize';
+          }}
+        />
+
         {/* MIDDLE PANEL: Chunks + Output */}
-        <div className="flex flex-col gap-5 min-h-0">
+        <div className="flex flex-col gap-5 min-h-0 flex-1">
           <div className="flex h-2/5 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm min-h-0">
             <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Retrieved Chunks</h3>
@@ -627,9 +701,16 @@ export default function DocumentReader() {
           <div className="flex h-3/5 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm min-h-0">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-5 py-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Latest Answer</h3>
-              {askResult?.verified && (
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Verified</span>
-              )}
+              <div className="flex items-center gap-3">
+                {askResult?.token_usage && (askResult.token_usage.input > 0 || askResult.token_usage.output > 0) && (
+                  <span className="rounded-full bg-blue-50 border border-blue-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-600 shadow-sm">
+                    Tokens: {askResult.token_usage.input} in / {askResult.token_usage.output} out
+                  </span>
+                )}
+                {askResult?.verified && (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Verified</span>
+                )}
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
               {askResult ? (
@@ -674,8 +755,16 @@ export default function DocumentReader() {
           </div>
         </div>
 
+        <div 
+          className="w-1.5 cursor-col-resize hover:bg-blue-400 bg-slate-200/50 rounded transition-colors self-stretch"
+          onMouseDown={() => {
+            rightResizingRef.current = true;
+            document.body.style.cursor = 'col-resize';
+          }}
+        />
+
         {/* RIGHT PANEL: Document Viewer */}
-        <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm min-h-0">
+        <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm min-h-0" style={{ width: `${rightWidth}%` }}>
           <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Viewer</h3>
@@ -695,12 +784,26 @@ export default function DocumentReader() {
             {activePdfUrl ? (
               <div className="min-h-0 flex-1">
                 <CustomPdfViewer
-                  key={`${activeChunkIndex ?? "none"}-${parseChunkPage(activeChunk)}`}
+                  key={`${activeChunkIndex ?? "none"}-${parseChunkPages(activeChunk).join(",")}`}
                   pdfUrl={activePdfUrl}
-                  pageNumber={parseChunkPage(activeChunk)}
-                  searchText={getSearchTerm(activeChunk?.content)}
+                  pageNumbers={parseChunkPages(activeChunk)}
+                  searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
                   highlightRects={highlightRects}
                 />
+              </div>
+            ) : activeChunk ? (
+              <div className="min-h-0 flex-1 overflow-auto bg-slate-50 p-6">
+                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h4 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
+                    Document Text (Text Extraction)
+                  </h4>
+                  <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                    {highlightChunkText(
+                      activeChunk.content || activeChunk.text || "", 
+                      getSearchTerm(activeChunk.content || activeChunk.text)
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-sm text-slate-400">

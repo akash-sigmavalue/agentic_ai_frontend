@@ -763,8 +763,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             ledgerRow,
           },
         ]);
-        setTokenLedger((previous) => [...previous, ledgerRow]);
-        setTotalCost((previous) => previous + ledgerRow.total_cost_usd);
+        setTokenLedger([ledgerRow]);
+        setTotalCost(ledgerRow.total_cost_usd);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to generate map insights.';
         setMessages((previous) => [
@@ -886,8 +886,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           output_cost_usd: data.cost?.output_cost || 0,
           total_cost_usd: data.cost?.total_cost || 0,
         };
-        setTokenLedger((prev) => [...prev, newRow]);
-        setTotalCost((prev) => prev + (newRow.total_cost_usd || 0));
+        setTokenLedger([newRow]);
+        setTotalCost(newRow.total_cost_usd || 0);
       }
     } catch (error: unknown) {
       closeRetrievalSource(assistantId);
@@ -1041,6 +1041,18 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                             {m.content.split('\n\n').map((line, i) => (
                               <p key={i}>{renderFormattedLine(line)}</p>
                             ))}
+                            {m.intentOutput && m.ledgerRow && (
+                              <details className="mt-4 rounded-lg border border-violet-100 bg-violet-50/70 px-3 py-2 text-[11px] text-violet-900">
+                                <summary className="cursor-pointer select-none font-extrabold uppercase tracking-widest">
+                                  Module 1 Token Ledger - ${(m.ledgerRow.total_cost_usd || 0).toFixed(6)} / {(m.ledgerRow.total_tokens || 0).toLocaleString()} tokens
+                                </summary>
+                                <div className="mt-2 flex flex-wrap gap-4 font-semibold">
+                                  <span>Input: {(m.ledgerRow.input_tokens || 0).toLocaleString()}</span>
+                                  <span>Output: {(m.ledgerRow.output_tokens || 0).toLocaleString()}</span>
+                                  <span>Time: {m.elapsed ? m.elapsed.toFixed(2) : '0.00'}s</span>
+                                </div>
+                              </details>
+                            )}
                           </div>
                         )}
                         </div>
