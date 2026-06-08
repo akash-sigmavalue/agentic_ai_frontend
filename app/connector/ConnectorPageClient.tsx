@@ -50,10 +50,29 @@ function normalizeWorkflowResponse(
     return null;
   }
 
+  const tokenUsage =
+    value.token_usage && typeof value.token_usage === "object"
+      ? (value.token_usage as Record<string, unknown>)
+      : null;
+
   return {
     ...value,
     message: value.message ?? undefined,
     connector: value.connector ?? undefined,
+    prompt_tokens: value.prompt_tokens ?? Number(tokenUsage?.prompt_tokens ?? 0),
+    completion_tokens: value.completion_tokens ?? Number(tokenUsage?.completion_tokens ?? 0),
+    total_tokens: value.total_tokens ?? Number(tokenUsage?.total_tokens ?? 0),
+    estimated_cost_usd: value.estimated_cost_usd ?? Number(tokenUsage?.estimated_cost_usd ?? 0),
+    token_usage: tokenUsage
+      ? {
+          ...tokenUsage,
+          prompt_tokens: Number(tokenUsage.prompt_tokens ?? value.prompt_tokens ?? 0),
+          completion_tokens: Number(tokenUsage.completion_tokens ?? value.completion_tokens ?? 0),
+          total_tokens: Number(tokenUsage.total_tokens ?? value.total_tokens ?? 0),
+          estimated_cost_usd:
+            Number(tokenUsage.estimated_cost_usd ?? value.estimated_cost_usd ?? 0),
+        }
+      : undefined,
   };
 }
 
@@ -76,6 +95,11 @@ function getClarificationQuestion(
 }
 
 function toCompletionResult(response: WorkflowResponse): CompletionResult {
+  const tokenUsage =
+    response.token_usage && typeof response.token_usage === "object"
+      ? (response.token_usage as Record<string, unknown>)
+      : null;
+
   return {
     status: response.status === "automation_rule_created" ? "automation_rule_created" : "one_time_completed",
     message:
@@ -89,10 +113,10 @@ function toCompletionResult(response: WorkflowResponse): CompletionResult {
     reply: response.reply ?? undefined,
     reply_sent: response.reply_sent ?? undefined,
     reply_draft: response.reply_draft ?? undefined,
-    prompt_tokens: response.prompt_tokens,
-    completion_tokens: response.completion_tokens,
-    total_tokens: response.total_tokens,
-    estimated_cost_usd: response.estimated_cost_usd,
+    prompt_tokens: response.prompt_tokens ?? Number(tokenUsage?.prompt_tokens ?? 0),
+    completion_tokens: response.completion_tokens ?? Number(tokenUsage?.completion_tokens ?? 0),
+    total_tokens: response.total_tokens ?? Number(tokenUsage?.total_tokens ?? 0),
+    estimated_cost_usd: response.estimated_cost_usd ?? Number(tokenUsage?.estimated_cost_usd ?? 0),
   };
 }
 
@@ -173,7 +197,11 @@ export default function ConnectorPageClient() {
 
   const handleRunWorkflow = async (
     promptOverride?: string,
-    options?: { appendConversationMessage?: boolean },
+    options?: {
+      appendConversationMessage?: boolean;
+      partialIntent?: Record<string, unknown> | null;
+      executionMode?: "one_time_action" | "automation_rule" | null;
+    },
   ) => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
@@ -224,6 +252,8 @@ export default function ConnectorPageClient() {
 
       await streamWorkflowRun({
         prompt: cleaned,
+        partialIntent: options?.partialIntent ?? null,
+        executionMode: options?.executionMode ?? null,
         signal: abortRef.current.signal,
         onStep: (step) => {
           setStreamingSteps((prev) => {
@@ -248,8 +278,8 @@ export default function ConnectorPageClient() {
             setCurrentFieldSkippable(workflowResponse.field_skippable || false);
             setCurrentFieldQuestion(
               getClarificationQuestion(
-                workflowResponse.missing_field,
-                workflowResponse.question || workflowResponse.missing_field_question,
+                workflowResponse.missing_field || null,
+                workflowResponse.question || workflowResponse.missing_field_question || null,
               ),
             );
             setConvMessages((prev) => [
@@ -257,8 +287,8 @@ export default function ConnectorPageClient() {
               {
                 role: "agent",
                 text: getClarificationQuestion(
-                  workflowResponse.missing_field,
-                  workflowResponse.question || workflowResponse.missing_field_question,
+                  workflowResponse.missing_field || null,
+                  workflowResponse.question || workflowResponse.missing_field_question || null,
                 ),
               },
             ]);
@@ -391,7 +421,7 @@ export default function ConnectorPageClient() {
           setCurrentFieldOptions(result.field_options || []);
           setCurrentFieldSkippable(result.field_skippable || false);
           setCurrentFieldQuestion(
-            getClarificationQuestion(result.missing_field, result.question),
+          getClarificationQuestion(result.missing_field || null, result.question || null),
           );
           setConvStep("waiting_field");
           setStatusMessage("I need a bit more information to continue.");
@@ -399,7 +429,7 @@ export default function ConnectorPageClient() {
             ...prev,
             {
               role: "agent",
-              text: getClarificationQuestion(result.missing_field, result.question),
+              text: getClarificationQuestion(result.missing_field || null, result.question || null),
             },
           ]);
           setIsLoading(false);
@@ -623,6 +653,13 @@ export default function ConnectorPageClient() {
             currentPrompt={prompt}
             convStep={convStep}
             onSendPrompt={(nextPrompt) => void handleRunWorkflow(nextPrompt)}
+            onRunWorkflow={(payload) =>
+              void handleRunWorkflow(payload.prompt, {
+                partialIntent: payload.partialIntent,
+                executionMode: payload.executionMode,
+                appendConversationMessage: false,
+              })
+            }
           />
         </section>
       </div>

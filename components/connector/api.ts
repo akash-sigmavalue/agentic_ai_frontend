@@ -324,6 +324,8 @@ export interface StreamWorkflowOptions {
   onStep: (step: StreamStep) => void;
   onComplete: (result: Record<string, unknown>) => void;
   onError: (error: string) => void;
+  partialIntent?: Record<string, unknown> | null;
+  executionMode?: "one_time_action" | "automation_rule" | null;
   signal?: AbortSignal;
 }
 
@@ -332,6 +334,8 @@ export async function streamWorkflowRun({
   onStep,
   onComplete,
   onError,
+  partialIntent,
+  executionMode,
   signal,
 }: StreamWorkflowOptions): Promise<void> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
@@ -344,7 +348,11 @@ export async function streamWorkflowRun({
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        prompt,
+        partial_intent: partialIntent ?? undefined,
+        execution_mode: executionMode ?? undefined,
+      }),
       signal,
     });
   } catch (error) {
