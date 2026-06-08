@@ -1,149 +1,412 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Bot, Sparkles, Wand2, Send, Database } from 'lucide-react';
-import { ConnectorRegistryResponse, ConnectorWorkflowDraft } from '../../types/api';
+import { useEffect, useRef, useState } from "react";
+import { Mail, Send } from "lucide-react";
+import {
+  extractEmailsFromText,
+  inferExecutionType,
+} from "./types";
+import type { ConvMessage, ConvStep, WorkflowResponse } from "./types";
 
-interface ChatSectionConnectorProps {
-  value: string;
-  onChange: (value: string) => void;
-  onPlan?: (value: string) => void | Promise<void>;
-  workflowMode: 'prompt' | 'manual';
-  registry: ConnectorRegistryResponse | null;
-  draft: ConnectorWorkflowDraft | null;
-  isPlanning: boolean;
+type ChatSectionConnectorProps = {
+  prompt: string;
+  setPrompt: (value: string) => void;
+  isLoading: boolean;
   statusMessage: string;
-}
-
-const QUICK_PROMPTS = [
-  'Route form submissions into the best matching connector service',
-  'Create a workflow that detects missing config and asks only for essentials',
-  'Plan a publishable connector workflow from a natural language prompt',
-];
+  handleRunWorkflow: () => void;
+  convStep: ConvStep;
+  convMessages: ConvMessage[];
+  handleConvUserReply: (input: string) => void;
+  currentFieldName?: string | null;
+  currentFieldType?: "email" | "choice" | "text" | "text_optional";
+  currentFieldOptions?: string[];
+  currentFieldSkippable?: boolean;
+  currentFieldQuestion?: string | null;
+  response?: Pick<
+    WorkflowResponse,
+    "from_email" | "to" | "execution_type" | "analysis" | "final_answer" | "reply_draft" | "reply"
+  > | null;
+  partialIntent?: {
+    to?: string | null;
+  } | null;
+};
 
 export default function ChatSectionConnector({
-  value,
-  onChange,
-  onPlan,
-  workflowMode,
-  registry,
-  draft,
-  isPlanning,
+  prompt,
+  setPrompt,
+  isLoading,
   statusMessage,
+  handleRunWorkflow,
+  convStep,
+  convMessages,
+  handleConvUserReply,
+  currentFieldName = null,
+  currentFieldType = "text",
+  currentFieldOptions = [],
+  currentFieldSkippable = false,
+  currentFieldQuestion = null,
+  response = null,
+  partialIntent = null,
 }: ChatSectionConnectorProps) {
-  const connectorCount = registry?.connectors.length || 0;
-  const activeStepCount = draft?.steps.length || 0;
-  const readyState = draft?.can_execute ? 'Ready to execute' : 'Needs config';
+  const [inputValue, setInputValue] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  void statusMessage;
+  const showTyping =
+    convStep === "waiting_email" ||
+    convStep === "waiting_frequency" ||
+    convStep === "waiting_field";
+
+  const skippedEmail =
+    extractEmailsFromText(prompt)[0] ||
+    response?.from_email ||
+    response?.to ||
+    partialIntent?.to ||
+    "";
+  const skippedFrequency = inferExecutionType(prompt, response?.execution_type);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [convMessages, showTyping]);
+
+  useEffect(() => {
+    if (convStep === "waiting_email" && skippedEmail) {
+      handleConvUserReply(skippedEmail);
+      return;
+    }
+
+    if (convStep === "waiting_frequency" && skippedFrequency) {
+      handleConvUserReply(skippedFrequency);
+    }
+  }, [convStep, handleConvUserReply, skippedEmail, skippedFrequency]);
 
   return (
-    <section className="connector-panel flex h-full min-h-[620px] flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
-      <div className="connector-panel-header border-b border-slate-100 bg-[#f8fafc] px-8 py-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
-              <Bot className="h-5 w-5 text-slate-500" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Step 1</p>
-              <h2 className="mt-1 text-[13px] font-black uppercase tracking-tight text-[#1a1c3d]">Describe the workflow</h2>
-            </div>
-          </div>
-          <div className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-            {workflowMode === 'prompt' ? 'Planner mode' : 'Manual mode'}
+    <div
+      className="flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+      style={{ height: "100%" }}
+    >
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes typingBounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+      `}</style>
+
+      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+        <div className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-[#525ceb] text-sm font-semibold text-white">
+          AI
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">Workflow Assistant</p>
+          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-500">
+            {convStep === "idle" ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
+                <span>Ready</span>
+              </>
+            ) : convStep === "submitting" ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                <span>Processing...</span>
+              </>
+            ) : convStep === "streaming" ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
+                <span>Executing steps...</span>
+              </>
+            ) : convStep === "done" ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span>Done</span>
+              </>
+            ) : (
+              <>
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                <span>Thinking...</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-8">
-        <div className="connector-card rounded-[1.75rem] border border-slate-200 bg-[#f8fafc] p-5 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#525ceb]" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Connector brief</span>
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 space-y-3 overflow-y-auto px-4 py-4"
+      >
+        {convStep === "idle" && convMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Mail className="h-8 w-8 text-slate-300" />
+            <p className="mt-2 text-center text-sm text-slate-400">
+              Describe your Gmail workflow above
+            </p>
           </div>
-          <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
-            Describe the outcome you want. The backend planner will detect the connector, service, trigger, action,
-            and missing fields from the registry metadata.
-          </p>
+        ) : (
+          <>
+            {convMessages.map((message, index) =>
+              message.role === "agent" || message.role === "assistant" ? (
+                <div
+                  key={`${message.role}-${index}`}
+                  className="flex items-end justify-start gap-2"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
+                    AI
+                  </div>
+                  <div
+                    className="max-w-[78%] rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-2.5 text-sm leading-relaxed text-slate-800"
+                    style={{ animation: "fadeSlideUp 0.2s ease" }}
+                  >
+                    {message.text || message.content}
+                  </div>
+                </div>
+              ) : (
+                <div key={`${message.role}-${index}`} className="flex justify-end">
+                  <div
+                    className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#525ceb] px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm shadow-indigo-200"
+                    style={{ animation: "fadeSlideUp 0.2s ease" }}
+                  >
+                    {message.text || message.content}
+                  </div>
+                </div>
+              ),
+            )}
 
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="For example: plan a connector that routes lead form submissions to the right email action."
-            className="connector-input mt-4 min-h-[220px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-medium leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
-          />
+            {showTyping && (
+              <div className="flex items-end justify-start gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
+                  AI
+                </div>
+                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-3">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+                    style={{ animation: "typingBounce 0.9s ease infinite" }}
+                  />
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+                    style={{ animation: "typingBounce 0.9s ease infinite 0.15s" }}
+                  />
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+                    style={{ animation: "typingBounce 0.9s ease infinite 0.3s" }}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {QUICK_PROMPTS.map((prompt) => (
+      <div className="border-t border-slate-100 px-4 py-3">
+        {convStep === "waiting_field" ||
+        convStep === "waiting_email" ||
+        convStep === "waiting_frequency" ? (
+          convStep === "waiting_email" && skippedEmail ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+              <span>✓</span> Email skipped: Using {skippedEmail}
+            </div>
+          ) : convStep === "waiting_frequency" && skippedFrequency ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+              <span>✓</span> Frequency skipped: Running as {skippedFrequency.replace("_", "-")}
+            </div>
+          ) : currentFieldType === "choice" ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {(currentFieldOptions.length > 0
+                  ? currentFieldOptions
+                  : convStep === "waiting_frequency"
+                    ? ["one_time", "automated"]
+                    : []
+                ).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleConvUserReply(option)}
+                    disabled={isLoading}
+                    className="flex-1 rounded-2xl border border-[#525ceb] px-4 py-2.5 text-sm font-semibold text-[#525ceb] transition hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {currentFieldName === "action_mode"
+                      ? option === "send"
+                        ? "Send automatically"
+                        : option === "draft"
+                          ? "Save as draft"
+                          : option === "one_time"
+                            ? "Run once now"
+                            : option === "automated"
+                              ? "Automate (every new email)"
+                              : option
+                      : option === "one_time"
+                        ? "Run once now"
+                        : option === "automated"
+                          ? "Automate (every new email)"
+                          : option}
+                  </button>
+                ))}
+              </div>
+
+              {currentFieldSkippable && (
+                <button
+                  type="button"
+                  onClick={() => handleConvUserReply("skip")}
+                  disabled={isLoading}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Skip
+                </button>
+              )}
+            </div>
+          ) : currentFieldType === "email" || convStep === "waiting_email" ? (
+            <div className="space-y-2">
+              {currentFieldQuestion ? (
+                <p className="text-xs font-medium leading-relaxed text-slate-500">
+                  {currentFieldQuestion}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && inputValue.trim()) {
+                      handleConvUserReply(inputValue.trim());
+                      setInputValue("");
+                    }
+                  }}
+                  placeholder="email@example.com"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    if (inputValue.trim()) {
+                      handleConvUserReply(inputValue.trim());
+                      setInputValue("");
+                    }
+                  }}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : currentFieldType === "text_optional" ? (
+            <div className="space-y-2">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (inputValue.trim()) {
+                        handleConvUserReply(inputValue.trim());
+                        setInputValue("");
+                      }
+                    }
+                  }}
+                  className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+                  placeholder="Type your answer or skip..."
+                  rows={2}
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    if (inputValue.trim()) {
+                      handleConvUserReply(inputValue.trim());
+                      setInputValue("");
+                    }
+                  }}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="mb-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
               <button
-                key={prompt}
                 type="button"
-                onClick={() => onChange(prompt)}
-                className="connector-chip rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-colors hover:border-indigo-200 hover:text-indigo-700"
+                onClick={() => handleConvUserReply("skip")}
+                disabled={isLoading || !currentFieldSkippable}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
-                {prompt}
+                Skip
               </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-indigo-600" />
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Registry</p>
             </div>
-            <p className="mt-3 text-2xl font-black text-[#1a1c3d]">{connectorCount}</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">Connectors loaded from backend capability metadata.</p>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          ) : (
             <div className="flex items-center gap-2">
-              <Wand2 className="h-4 w-4 text-emerald-600" />
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Planner</p>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && inputValue.trim()) {
+                    handleConvUserReply(inputValue.trim());
+                    setInputValue("");
+                  }
+                }}
+                placeholder={currentFieldQuestion || "Type your answer..."}
+                className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+                autoFocus
+              />
+              <button
+                onClick={() => {
+                  if (inputValue.trim()) {
+                    handleConvUserReply(inputValue.trim());
+                    setInputValue("");
+                  }
+                }}
+                disabled={!inputValue.trim() || isLoading}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+              </button>
             </div>
-            <p className="mt-3 text-sm font-black text-[#1a1c3d]">{isPlanning ? 'Planning workflow...' : readyState}</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">{activeStepCount} workflow steps currently detected.</p>
+          )
+        ) : convStep === "submitting" || convStep === "streaming" ? (
+          <div className="flex items-center gap-2 px-1 text-sm text-slate-500">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+            {convStep === "streaming"
+              ? "Watching agent steps live..."
+              : "Setting up your workflow..."}
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Bot className="h-4 w-4 text-slate-600" />
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Status</p>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-600">{statusMessage}</p>
+        ) : (
+          <div className="flex items-end gap-2">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleRunWorkflow();
+                }
+              }}
+              className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+              placeholder={
+                convStep === "done"
+                  ? "Ask another question or describe a new workflow..."
+                  : "Describe your Gmail workflow... (e.g. when John sends me email analyze and reply)"
+              }
+              rows={3}
+            />
+            <button
+              onClick={() => handleRunWorkflow()}
+              disabled={isLoading}
+              className="mb-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
+            >
+              {isLoading ? (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </button>
           </div>
-        </div>
+        )}
       </div>
-
-      <div className="connector-panel-footer border-t border-slate-100 bg-white p-8">
-        <div className="connector-input-wrap flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-[#f8fafc] p-2 shadow-inner">
-          <input
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 bg-transparent px-4 py-3 text-sm font-semibold text-[#1a1c3d] outline-none placeholder:text-slate-400"
-            placeholder="Type your connector prompt..."
-          />
-          <button
-            type="button"
-            onClick={() => onPlan?.(value.trim())}
-            disabled={isPlanning}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#525ceb] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-[#434fd8] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Send className="h-4 w-4" />
-            {isPlanning ? 'Planning' : 'Plan'}
-          </button>
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">
-          <span>Prompt to workflow</span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-500">
-            <Wand2 className="h-3.5 w-3.5" />
-            Backend-planned draft
-          </span>
-        </div>
-        {draft?.notes?.length ? (
-          <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
-            {draft.notes[0]}
-          </p>
-        ) : null}
-      </div>
-    </section>
+    </div>
   );
 }

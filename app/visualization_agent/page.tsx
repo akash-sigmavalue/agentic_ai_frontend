@@ -175,6 +175,7 @@ export default function VisualizationAgentPage() {
               onToggleExpand={() => toggleExpandedPanel('map')}
               moduleOutput={moduleOutput}
               module2Output={module2Output}
+              retrievalOutput={retrievalOutput}
               onRuntimeGeneratedMapsChange={setRuntimeGeneratedMaps}
             />
           </div>

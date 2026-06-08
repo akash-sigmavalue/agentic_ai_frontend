@@ -21,7 +21,6 @@ import {
   School,
   Bus,
   Train,
-  Tram,
   Flower,
   Trees,
   ShoppingBag,
@@ -117,7 +116,7 @@ function getCategoryIcon(cat, className = "h-4 w-4") {
   if (key.includes("college")) return <School className={`${className} text-teal-500`} />;
   if (key.includes("bus")) return <Bus className={`${className} text-blue-500`} />;
   if (key.includes("metro")) return <Train className={`${className} text-amber-500`} />;
-  if (key.includes("railway")) return <Tram className={`${className} text-purple-500`} />;
+  if (key.includes("railway")) return <Train className={`${className} text-purple-500`} />;
   if (key.includes("garden")) return <Flower className={`${className} text-lime-500`} />;
   if (key.includes("park")) return <Trees className={`${className} text-green-500`} />;
   if (key.includes("mall")) return <ShoppingBag className={`${className} text-pink-500`} />;

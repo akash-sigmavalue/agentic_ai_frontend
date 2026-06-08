@@ -1,5 +1,7 @@
 'use client';
 
+import type { WorkflowResponse } from "../components/connector/types";
+
 export type ConnectorMode = 'prompt' | 'manual';
 export type ConnectorStage = 'prompt' | 'workflow' | 'config' | 'test' | 'publish';
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
@@ -95,12 +97,7 @@ export interface ConnectorWorkflowDraft {
   source_prompt?: string | null;
 }
 
-export interface PromptToWorkflowResponse {
-  draft: ConnectorWorkflowDraft;
-  validation_errors: string[];
-  available_connectors: ConnectorCapability[];
-  can_execute: boolean;
-}
+export type PromptToWorkflowResponse = WorkflowResponse;
 
 export interface ConnectorInstanceConfiguration {
   connector_key: string;

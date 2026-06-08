@@ -33,7 +33,7 @@ const STAGE_META = {
     icon: Box,
     accent: "#22d3ee",
     accentGlow: "rgba(34,211,238,0.18)",
-    description: "LLM extracts entities from query · 5-gate validation (type → approach → fields → map → verify)",
+    description: "3-step profiling (Extraction → Geocoding → Verification) · 5-gate sequential validation (identification → type → approach → details → verify)",
   },
   "Stage 1 Halt": {
     label: "Stage 1 — Approach Selection",
@@ -54,7 +54,7 @@ const STAGE_META = {
     icon: Search,
     accent: "#fb923c",
     accentGlow: "rgba(251,146,60,0.18)",
-    description: "LLM web search × 3 passes → geocode → confidence scoring → 15km filter",
+    description: "Agent web search × 2 passes → geocode → confidence scoring → 15km filter",
   },
   "Stage 3B": {
     label: "Stage 3B — Listing & Transaction Fetch",
@@ -68,21 +68,21 @@ const STAGE_META = {
     icon: Sparkles,
     accent: "#60a5fa",
     accentGlow: "rgba(96,165,250,0.15)",
-    description: "Dedup → LLM clean (batches of 10) → area conversion → IQR outlier detection",
+    description: "Dedup → Agent clean (batches of 10) → area conversion → IQR outlier detection",
   },
   "Stage 4": {
     label: "Stage 4 — Factorial Rate Table",
     icon: Table,
     accent: "#34d399",
     accentGlow: "rgba(52,211,153,0.18)",
-    description: "Compute avg rate per comparable project for LLM spatial adjustment",
+    description: "Compute avg rate per comparable project for Agent spatial adjustment",
   },
   "Stage 5": {
-    label: "Stage 5 — LLM Factoring & Final Valuation",
+    label: "Stage 5 — Agent Factoring & Final Valuation",
     icon: Brain,
     accent: "#f472b6",
     accentGlow: "rgba(244,114,182,0.18)",
-    description: "gpt-4o spatial adjustments (amenity · road · density · CBD) → subject final rate",
+    description: "Agent spatial adjustments (amenity · road · density · CBD) → subject final rate",
   },
   "Complete": {
     label: "Pipeline Complete",
@@ -182,6 +182,8 @@ function StepDetails({ step }) {
         <DetailRow label="Location" value={content.location_name} />
         <DetailRow label="Country" value={content.country} />
         <DetailRow label="Project" value={content.project_name} />
+        <DetailRow label="Latitude" value={content.coordinates?.lat !== undefined ? content.coordinates.lat : (content.lat !== undefined ? content.lat : null)} />
+        <DetailRow label="Longitude" value={content.coordinates?.lng !== undefined ? content.coordinates.lng : (content.lng !== undefined ? content.lng : null)} />
         <DetailRow label="Salable Area" value={content.salable_area_sqft ? `${content.salable_area_sqft} sqft` : null} />
         <DetailRow label="Carpet Area" value={content.carpet_area_sqft ? `${content.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={content.builtup_area_sqft ? `${content.builtup_area_sqft} sqft` : null} />
@@ -229,7 +231,16 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={ent.property_type} />
         <DetailRow label="Location" value={ent.location_name} />
+        <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
+        <DetailRow label="Latitude" value={ent.coordinates?.lat !== undefined ? ent.coordinates.lat : (ent.lat !== undefined ? ent.lat : null)} />
+        <DetailRow label="Longitude" value={ent.coordinates?.lng !== undefined ? ent.coordinates.lng : (ent.lng !== undefined ? ent.lng : null)} />
+        <DetailRow label="Salable Area" value={ent.salable_area_sqft ? `${ent.salable_area_sqft} sqft` : null} />
+        <DetailRow label="Carpet Area" value={ent.carpet_area_sqft ? `${ent.carpet_area_sqft} sqft` : null} />
+        <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />
+        <DetailRow label="Plot Area" value={ent.plot_area_sqft ? `${ent.plot_area_sqft} sqft` : null} />
+        <DetailRow label="Age" value={ent.age_years !== undefined ? `${ent.age_years} years` : null} />
+        <DetailRow label="Floor" value={ent.floor !== undefined ? String(ent.floor) : null} />
         <DetailRow label="Approach" value={ent.recommended_approach} />
       </div>
     );
@@ -283,10 +294,10 @@ function StepDetails({ step }) {
     // Note: final_radius_km and iterations are always null in current backend
     // (s3_market_execution.py sets them to None). Only show total_found and source.
     const sourceLabel = {
-      web: "LLM Web Search (gpt-4o-mini + web_search_preview × 3 passes)",
+      web: "Agent Web Search (gpt-4o-mini + web_search_preview × 2 passes)",
       db: "Internal Database",
-      both: "LLM Web Search + Internal Database",
-    }[content.comparable_source] || content.comparable_source || "LLM Web Search";
+      both: "Agent Web Search + Internal Database",
+    }[content.comparable_source] || content.comparable_source || "Agent Web Search";
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Total Found" value={content.total_found} />
@@ -632,7 +643,7 @@ function StageAccordion({ meta, steps, defaultOpen }) {
               border: `1px solid ${accent}35` 
             }}
           >
-            {steps.length} STAGE STEP{steps.length !== 1 ? "S" : ""}
+            {steps.length} STEP{steps.length !== 1 ? "S" : ""}
           </span>
           <ChevronDown
             className="text-text-dim h-4 w-4 transition-transform duration-300"
@@ -668,7 +679,7 @@ function EmptyState() {
     { label: "Stage 3B — Listing Fetch", icon: Database, color: "#f97316" },
     { label: "Stage 3C — Data Cleaning", icon: Sparkles, color: "#60a5fa" },
     { label: "Stage 4 — Factorial Table", icon: Table, color: "#34d399" },
-    { label: "Stage 5 — LLM Factoring & Value", icon: Brain, color: "#f472b6" },
+    { label: "Stage 5 — Agent Factoring & Value", icon: Brain, color: "#f472b6" },
   ];
 
   return (

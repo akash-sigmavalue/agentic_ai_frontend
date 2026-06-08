@@ -8,8 +8,17 @@ const { webpack } = require("next/dist/compiled/webpack/webpack");
 const PDFJS_EXCLUDE = [/node_modules[\\/]pdfjs-dist/, /node_modules[\\/]react-pdf/];
 
 const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
+  /* config options here */
+  allowedDevOrigins: ['192.168.1.76'],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.cache = false; // Disable webpack cache for frontend
+    }
+    return config;
+  },
+  onDemandEntries: {
+    maxInactiveAge: 60 * 1000, // Keep inactive pages in memory for 60s
+    pagesBufferLength: 5,
   },
   webpack: (config) => {
     config.resolve.alias.canvas = false;

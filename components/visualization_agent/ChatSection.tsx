@@ -13,6 +13,8 @@ import {
   Database,
   FileCode2,
   Map as MapIcon,
+  Save,
+  Trash2,
 } from 'lucide-react';
 import type {
   ExecutionPlanStep,
@@ -75,14 +77,8 @@ interface Module1ResponseData {
   ledger_row?: TokenLedgerRow | null;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
-
-function getGlobalLlmModel(): string {
-  if (typeof window === 'undefined') return DEFAULT_MODEL;
-  return window.localStorage.getItem('sigmavalue_llm_model') || DEFAULT_MODEL;
-}
 const DEMO_MODE_ENABLED = false;
-const EXAMPLE_QUERY = 'Give me average year on year rate for each floor of Kohinoor Emerald from 2021 to 2024';
+const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -421,6 +417,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [chatCategory, setChatCategory] = useState<ChatCategory>('land-gis');
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
   const [totalCost, setTotalCost] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -451,6 +448,72 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const isLandGisChat = chatCategory === 'land-gis';
   const isInsightChat = chatCategory === 'insight-generation';
   const selectedInsightMap = runtimeGeneratedMaps.find((map) => map.id === selectedInsightMapId) || null;
+
+  // Restore saved session on mount
+  const onModuleOutputRef = useRef(onModuleOutput);
+  const onRetrievalOutputRef = useRef(onRetrievalOutput);
+  useEffect(() => {
+    // Update refs whenever props change – refs are always current without triggering the effect
+    onModuleOutputRef.current = onModuleOutput;
+    onRetrievalOutputRef.current = onRetrievalOutput;
+  });
+
+  useEffect(() => {
+    // Runs once on mount only – localStorage restore should not re-trigger on every render
+    const saved = localStorage.getItem('visualization_agent_chat_saved');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+          // Find the last message that has intentOutput or retrieval and notify the parent component
+          const lastMsgWithIntent = [...parsed.messages].reverse().find((m) => m.intentOutput);
+          if (lastMsgWithIntent) {
+            onModuleOutputRef.current?.(lastMsgWithIntent.intentOutput);
+          }
+          const lastMsgWithRetrieval = [...parsed.messages].reverse().find((m) => m.retrieval);
+          if (lastMsgWithRetrieval) {
+            onRetrievalOutputRef.current?.(lastMsgWithRetrieval.retrieval);
+            if (lastMsgWithRetrieval.retrieval) {
+              pendingRetrievalRef.current.set(lastMsgWithRetrieval.id, lastMsgWithRetrieval.retrieval);
+              latestRetrievalMessageIdRef.current = lastMsgWithRetrieval.id;
+            }
+          }
+        }
+        if (Array.isArray(parsed.tokenLedger)) {
+          setTokenLedger(parsed.tokenLedger);
+        }
+        if (typeof parsed.totalCost === 'number') {
+          setTotalCost(parsed.totalCost);
+        }
+      } catch (err) {
+        console.error('Failed to load saved chat', err);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty – this must run only once on mount
+
+  const handleSaveChat = () => {
+    const chatState = {
+      messages,
+      tokenLedger,
+      totalCost,
+    };
+    localStorage.setItem('visualization_agent_chat_saved', JSON.stringify(chatState));
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 2000);
+  };
+
+  const handleClearChat = () => {
+    localStorage.removeItem('visualization_agent_chat_saved');
+    setMessages([]);
+    setTokenLedger([]);
+    setTotalCost(0);
+    onModuleOutput?.(null);
+    onRetrievalOutput?.(null);
+    pendingRetrievalRef.current.clear();
+    latestRetrievalMessageIdRef.current = null;
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -735,13 +798,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          provider:
-            usageRow?.provider ||
-            (typeof window !== 'undefined'
-              ? window.localStorage.getItem('sigmavalue_llm_provider') || 'openai'
-              : 'openai'),
+          provider: usageRow?.provider || 'backend',
           region: usageRow?.region || '',
-          model: usageRow?.model || getGlobalLlmModel(),
+          model: usageRow?.model || 'configured-in-backend',
           query_preview: `Insights: ${query}`.substring(0, 80),
           input_tokens: output.usage.total_input_tokens,
           cached_input_tokens: output.usage.total_cached_input_tokens,
@@ -824,13 +883,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     startHiddenDataRetrieval(query, assistantId);
 
     try {
-      const activeModel = getGlobalLlmModel();
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
-          model: activeModel,
           demo_mode: DEMO_MODE_ENABLED,
         }),
       });
@@ -964,6 +1021,30 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <>
+                <button
+                  onClick={handleSaveChat}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider transition-all duration-300 ${
+                    saveStatus === 'saved'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-600'
+                      : 'border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-700 bg-white hover:bg-slate-50'
+                  }`}
+                  title="Save this entire chat session locally to restore later"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {saveStatus === 'saved' ? 'Saved' : 'Save'}
+                </button>
+                <button
+                  onClick={handleClearChat}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-all duration-300"
+                  title="Clear this session and resets outputs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </button>
+              </>
+            )}
             <button
               onClick={onToggleExpand}
               className="text-slate-400 hover:text-slate-600 transition-colors p-1"
@@ -1330,14 +1411,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             )}
           </div>
 
-          {/* Runtime model information */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                {getGlobalLlmModel()}
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 

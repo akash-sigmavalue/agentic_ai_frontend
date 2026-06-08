@@ -10,9 +10,35 @@ import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 import { downloadStageWordReport } from "@/lib/data-retrieval/stageWordReport";
 
 export default function FrontendDashboard() {
-  const apiBaseUrl = useMemo(() => API_BASE_URL, []);
+  const apiBaseUrl = useMemo(
+    () => API_BASE_URL,
+    [],
+  );
 
-  // Always uses data_retrieval_agent_v2; provider/model from global navbar (Header.tsx).
+  const agentOptions = useMemo(
+    () => [
+      { value: "auto", label: "Auto Agent" },
+      { value: "transaction", label: "Transaction" },
+      { value: "project", label: "Project" },
+    ],
+    [],
+  );
+  const pipelineOptions = useMemo(
+    () => [
+      { value: "v1", label: "Agent v1" },
+      { value: "v2", label: "Agent v2" },
+    ],
+    [],
+  );
+  const modelOptions = useMemo(
+    () => [
+      { value: "gpt-4o-mini", label: "GPT-4o mini" },
+      { value: "gpt-5.1", label: "GPT-5.1" },
+      { value: "deepseek.v3.2", label: "AWS Bedrock - DeepSeek V3.2" },
+      { value: "mistral.mistral-large-3-675b-instruct", label: "AWS Bedrock - Mistral Large 3" },
+    ],
+    [],
+  );
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -324,11 +350,6 @@ export default function FrontendDashboard() {
     if (sessionId) {
       params.set("session_id", sessionId);
     }
-    params.set(
-      "model",
-      window.localStorage.getItem("sigmavalue_llm_model") || "gpt-4o-mini",
-    );
-
     const streamPath = "/aks_stream_data_retrieval_agent_v2";
     const source = new EventSource(
       apiUrl(`${streamPath}?${params.toString()}`),
@@ -489,10 +510,7 @@ export default function FrontendDashboard() {
         case "stage_report":
           if (data.content) {
             setStageReport(data.content);
-            const modelLabel =
-              window.localStorage.getItem("sigmavalue_llm_model") ||
-              "gpt-4o-mini";
-            downloadStageWordReport(data.content, modelLabel);
+            downloadStageWordReport(data.content, "backend-configured");
             setMetricsText(
               (current) => `${current} | Stage Word report downloaded`,
             );
@@ -690,11 +708,8 @@ export default function FrontendDashboard() {
               pipelineCatalog={pipelineCatalog}
               stageReport={stageReport}
               onDownloadStageReport={() => {
-                const modelLabel =
-                  window.localStorage.getItem("sigmavalue_llm_model") ||
-                  "gpt-4o-mini";
                 if (stageReport) {
-                  downloadStageWordReport(stageReport, modelLabel);
+                  downloadStageWordReport(stageReport, "backend-configured");
                 }
               }}
               isGenerating={isStreaming}
