@@ -118,6 +118,7 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:
 
 const API_ROUTES = {
   health: '/portfolio/health',
+  assets: '/portfolio/assets',
   sections: '/portfolio/sections',
   uploadableSections: '/portfolio/sections/uploadable',
   sectionFields: (sectionKey) => `/portfolio/sections/${sectionKey}/fields`,
@@ -258,6 +259,23 @@ const backendDashboardRowToUi = (row) => ({
   utilities: row.utilities || 0,
   propertyTax: row.propertyTax || 0
 });
+
+const assetDisplayName = (asset) => {
+  const code = asset.asset_code || asset.asset_id || asset.code || '';
+  const name = asset.property_name || asset.name || asset.asset_name || 'Unnamed Property';
+  const city = asset.city || asset.location_city || '';
+  return [code, name, city].filter(Boolean).join(' - ');
+};
+
+const assetCodeValue = (asset) => asset.asset_code || asset.asset_id || asset.code || '';
+
+const assetResolutionCounts = (resolution) => {
+  if (!resolution || typeof resolution !== 'object') return {};
+  const source = resolution.counts && typeof resolution.counts === 'object' ? resolution.counts : resolution;
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => typeof value === 'number' || (typeof value === 'string' && value !== ''))
+  );
+};
 
 const derivedAuditForField = (record, field) => {
   if (!record || !field?.backendKey) return null;
@@ -1071,6 +1089,11 @@ export default function PortfolioManagementApp() {
   const [excelWorkbookData, setExcelWorkbookData] = useState({});
   const [globalColumnMappings, setGlobalColumnMappings] = useState({});
   const [backendUploadPreview, setBackendUploadPreview] = useState(null);
+  const [portfolioAssets, setPortfolioAssets] = useState([]);
+  const [workbookScope, setWorkbookScope] = useState('multiple');
+  const [singlePropertyMode, setSinglePropertyMode] = useState('new');
+  const [selectedExistingAssetCode, setSelectedExistingAssetCode] = useState('');
+  const [uploadImportSummary, setUploadImportSummary] = useState(null);
   const [latestUploadTokenUsage, setLatestUploadTokenUsage] = useState(null);
   const [dashboardSaveMessage, setDashboardSaveMessage] = useState('');
   const [sectionSaveMessage, setSectionSaveMessage] = useState('');
@@ -1079,9 +1102,12 @@ export default function PortfolioManagementApp() {
   const reloadBackendState = useCallback(async (status = 'Refreshing from backend...') => {
     setApiStatus(status);
     const backendSections = await apiRequest(API_ROUTES.sections);
-    const [recordPayloads, dashboardPayload] = await Promise.all([
+    const [recordPayloads, dashboardPayload, assetsResult] = await Promise.all([
       Promise.all(backendSections.map((section) => apiRequest(API_ROUTES.records(section.section_key)))),
-      apiRequest(API_ROUTES.dashboard)
+      apiRequest(API_ROUTES.dashboard),
+      apiRequest(API_ROUTES.assets)
+        .then((payload) => ({ ok: true, payload }))
+        .catch((error) => ({ ok: false, error }))
     ]);
     const uiSections = forceExitAcquisitionAndTargetFields(forceRequestedFieldTypes(
       backendSections.map((section, index) => toUiSection(section, recordPayloads[index], index))
@@ -1091,7 +1117,13 @@ export default function PortfolioManagementApp() {
     setSelectedRecordIndex(0);
     setBackendDashboardRows((dashboardPayload.rows || []).map(backendDashboardRowToUi));
     setBackendSummary(dashboardPayload.summary || null);
-    setApiStatus('Backend connected');
+    if (assetsResult.ok) {
+      setPortfolioAssets(assetsResult.payload?.assets || []);
+      setApiStatus('Backend connected');
+    } else {
+      console.warn(assetsResult.error?.message || assetsResult.error);
+      setApiStatus(`Backend connected; asset list unavailable: ${assetsResult.error?.message || 'GET /portfolio/assets failed'}`);
+    }
     return uiSections;
   }, []);
 
@@ -1378,32 +1410,52 @@ export default function PortfolioManagementApp() {
     return mappings;
   };
 
-  const applyGlobalExcelMapping = (workbookData, mappings) => {
+  const buildUploadConfirmBody = () => {
+    if (workbookScope !== 'single') return {};
+    return {
+      single_property: true,
+      asset_code: singlePropertyMode === 'existing' ? selectedExistingAssetCode : null
+    };
+  };
+
+  const validateUploadConfirm = () => {
+    if (workbookScope === 'single' && singlePropertyMode === 'existing' && !selectedExistingAssetCode) {
+      setUploadMessage('Select an existing asset before confirming.');
+      return false;
+    }
+    return true;
+  };
+
+  const applyGlobalExcelMapping = async (workbookData, mappings) => {
     if (!backendUploadPreview) {
       setUploadMessage('Please upload Excel data first.');
       return;
     }
+    if (!validateUploadConfirm()) return;
 
     const sectionLookup = Object.fromEntries(sections.map((section) => [section.backendKey, section]));
-    setApiBusy(true);
-    setUploadMessage('Confirming backend mapping and importing records...');
-    apiRequest(API_ROUTES.uploadGlobalMapping(backendUploadPreview.upload_id), {
-      method: 'PATCH',
-      body: JSON.stringify(toBackendTablesPayload(backendUploadPreview.upload_id, backendUploadPreview.tables, sectionLookup, mappings))
-    })
-      .then(() => apiRequest(API_ROUTES.uploadGlobalConfirm(backendUploadPreview.upload_id), { method: 'POST', body: JSON.stringify({}) }))
-      .then(() => reloadBackendState('Upload imported. Refreshing backend data...'))
-      .then(() => {
-        setExcelUploadOpen(false);
-        setUploadMessage('');
-        setBackendUploadPreview(null);
-      })
-      .catch((error) => {
-        console.error(error);
-        setUploadMessage(`Backend upload failed: ${error.message}`);
-        setApiStatus(`Backend upload failed: ${error.message}`);
-      })
-      .finally(() => setApiBusy(false));
+    try {
+      setApiBusy(true);
+      setUploadImportSummary(null);
+      setUploadMessage('Confirming backend mapping and importing records...');
+      await apiRequest(API_ROUTES.uploadGlobalMapping(backendUploadPreview.upload_id), {
+        method: 'PATCH',
+        body: JSON.stringify(toBackendTablesPayload(backendUploadPreview.upload_id, backendUploadPreview.tables, sectionLookup, mappings))
+      });
+      const confirmResult = await apiRequest(API_ROUTES.uploadGlobalConfirm(backendUploadPreview.upload_id), {
+        method: 'POST',
+        body: JSON.stringify(buildUploadConfirmBody())
+      });
+      setUploadImportSummary(confirmResult);
+      await reloadBackendState('Upload imported. Refreshing backend data...');
+      setUploadMessage('Upload imported with canonical asset linking.');
+    } catch (error) {
+      console.error(error);
+      setUploadMessage(`Backend upload failed: ${error.message}`);
+      setApiStatus(`Backend upload failed: ${error.message}`);
+    } finally {
+      setApiBusy(false);
+    }
   };
 
   const updateGlobalColumnMapping = (sectionId, fieldName, columnName) => {
@@ -1426,6 +1478,10 @@ export default function PortfolioManagementApp() {
     setExcelWorkbookData({});
     setGlobalColumnMappings({});
     setBackendUploadPreview(null);
+    setWorkbookScope('multiple');
+    setSinglePropertyMode('new');
+    setSelectedExistingAssetCode('');
+    setUploadImportSummary(null);
     setUploadMessage('');
   };
 
@@ -1447,6 +1503,7 @@ export default function PortfolioManagementApp() {
 
     try {
       setApiBusy(true);
+      setUploadImportSummary(null);
       setUploadMessage('Uploading file to backend for preview and AI-assisted mapping...');
       const formData = new FormData();
       formData.append('file', file);
@@ -1478,7 +1535,7 @@ export default function PortfolioManagementApp() {
         setGlobalColumnMappings(mappings);
         setExcelRows(rows);
         setExcelColumns(columns);
-        setUploadMessage(`${tables.length} table(s) detected by backend. Review mapping and click Autopopulate All Sections.`);
+        setUploadMessage(`${tables.length} table(s) detected by backend. Review mapping and click Confirm Mapping & Import.`);
         return;
       }
 
@@ -1515,9 +1572,11 @@ export default function PortfolioManagementApp() {
       setUploadMessage('Please upload Excel data first.');
       return;
     }
+    if (!validateUploadConfirm()) return;
 
     try {
       setApiBusy(true);
+      setUploadImportSummary(null);
       setUploadMessage('Confirming backend mapping and importing records...');
       const sectionLookup = Object.fromEntries(sections.map((section) => [section.backendKey, section]));
       const tableMappings = {};
@@ -1528,11 +1587,13 @@ export default function PortfolioManagementApp() {
         method: 'PATCH',
         body: JSON.stringify(toBackendTablesPayload(backendUploadPreview.upload_id, backendUploadPreview.tables || [], sectionLookup, tableMappings))
       });
-      await apiRequest(API_ROUTES.uploadConfirm(backendUploadPreview.upload_id), { method: 'POST', body: JSON.stringify({}) });
+      const confirmResult = await apiRequest(API_ROUTES.uploadConfirm(backendUploadPreview.upload_id), {
+        method: 'POST',
+        body: JSON.stringify(buildUploadConfirmBody())
+      });
+      setUploadImportSummary(confirmResult);
       await reloadBackendState('Upload imported. Refreshing backend data...');
-      setExcelUploadOpen(false);
-      setUploadMessage('');
-      setBackendUploadPreview(null);
+      setUploadMessage('Upload imported with canonical asset linking.');
     } catch (error) {
       console.error(error);
       setUploadMessage(`Backend import failed: ${error.message}`);
@@ -1541,6 +1602,14 @@ export default function PortfolioManagementApp() {
       setApiBusy(false);
     }
   };
+
+  const uploadAssetResolutionCounts = useMemo(
+    () => assetResolutionCounts(uploadImportSummary?.asset_resolution),
+    [uploadImportSummary]
+  );
+  const uploadAssetReviewItems = Array.isArray(uploadImportSummary?.asset_review)
+    ? uploadImportSummary.asset_review
+    : [];
 
   const cardClass = 'rounded-[26px] border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]';
   const primaryButton = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-4 py-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800 max-[640px]:w-full';
@@ -2033,11 +2102,108 @@ export default function PortfolioManagementApp() {
 
             {uploadMessage && <div className="my-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700"><CheckCircle2 size={16} /> {uploadMessage}</div>}
 
+            {backendUploadPreview && (
+              <div className="my-3 rounded-[18px] border border-slate-200 bg-slate-50 p-3.5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="mb-1 mt-0 text-slate-900">Asset Linking</h4>
+                    <p className="m-0 text-[13px] text-slate-500">Choose how uploaded asset aliases should link to canonical asset IDs.</p>
+                  </div>
+                  <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm">
+                    {[
+                      ['multiple', 'Multiple properties'],
+                      ['single', 'One property']
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`rounded-xl px-3 py-2 text-sm font-bold ${workbookScope === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                        onClick={() => setWorkbookScope(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {workbookScope === 'single' && (
+                  <div className="grid gap-3 md:grid-cols-[auto_1fr] md:items-center">
+                    <div className="inline-flex w-fit rounded-2xl bg-white p-1 shadow-sm">
+                      {[
+                        ['new', 'Create new asset'],
+                        ['existing', 'Use existing asset']
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`rounded-xl px-3 py-2 text-sm font-bold ${singlePropertyMode === value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                          onClick={() => setSinglePropertyMode(value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {singlePropertyMode === 'existing' && (
+                      <select
+                        className="w-full rounded-[14px] border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
+                        value={selectedExistingAssetCode}
+                        onChange={(e) => setSelectedExistingAssetCode(e.target.value)}
+                      >
+                        <option value="">Select existing canonical asset</option>
+                        {portfolioAssets.map((asset) => {
+                          const code = assetCodeValue(asset);
+                          return <option key={code || assetDisplayName(asset)} value={code}>{assetDisplayName(asset)}</option>;
+                        })}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {uploadImportSummary && (
+              <div className="my-3 rounded-[18px] border border-blue-100 bg-blue-50 p-3.5 text-sm text-blue-900">
+                <b>Import Summary</b>
+                <p className="mb-2 mt-1">
+                  Imported {uploadImportSummary.saved_count ?? 0} rows. Created {uploadImportSummary.created_record_count ?? 0} records, updated {uploadImportSummary.updated_record_count ?? 0} records. Shell records: {uploadImportSummary.shell_record_count ?? 0}.
+                </p>
+                {!!Object.keys(uploadAssetResolutionCounts).length && (
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(uploadAssetResolutionCounts).map(([key, value]) => (
+                      <span key={key} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">{key.replace(/_/g, ' ')}: {value}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!!uploadAssetReviewItems.length && (
+              <div className="my-3 rounded-[18px] border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
+                <b>Some rows may match existing assets and need review.</b>
+                <p className="mb-3 mt-1">Review action API is not available yet; backend created a new asset for these ambiguous rows.</p>
+                <div className="grid gap-2">
+                  {uploadAssetReviewItems.map((item, index) => {
+                    const evidence = item.identity_evidence || {};
+                    return (
+                      <div key={`${item.created_asset_code || 'asset-review'}-${index}`} className="rounded-[14px] border border-amber-200 bg-white p-3">
+                        <div className="font-bold text-slate-900">Created: {item.created_asset_code || 'New asset'}</div>
+                        <div className="mt-1 text-slate-600">Candidates: {(item.candidate_asset_codes || []).join(', ') || 'None provided'}</div>
+                        <div className="mt-1 text-slate-600">
+                          Evidence: {[evidence.property_name, evidence.city, evidence.address, evidence.micromarket].filter(Boolean).join(' | ') || 'None provided'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {uploadMode === 'global' && !!Object.keys(excelWorkbookData).length && (
               <>
                 <div className="mt-[18px]">
                   <h4 className="mb-1.5 mt-0">Global Field-Column Mapping</h4>
-                  <p className="m-0 text-[13px] text-slate-500">Each section is mapped automatically. You can revise any mapping before autopopulating all sections.</p>
+                  <p className="m-0 text-[13px] text-slate-500">Each section is mapped automatically. You can revise any mapping before confirming the backend import.</p>
                 </div>
 
                 <div className="mt-3.5 grid max-h-[58vh] gap-4 overflow-auto pr-1.5">
@@ -2089,7 +2255,7 @@ export default function PortfolioManagementApp() {
 
                 <div className="mt-4 flex flex-wrap justify-end gap-2.5">
                   <button className={blueButton} onClick={() => applyGlobalExcelMapping(excelWorkbookData, globalColumnMappings)}>
-                    <Columns3 size={16} /> Autopopulate All Sections
+                    <Columns3 size={16} /> Confirm Mapping & Import
                   </button>
                   <button className={softButton} onClick={() => { setExcelWorkbookData({}); setGlobalColumnMappings({}); setExcelRows([]); setExcelColumns([]); }}>Clear Upload</button>
                 </div>
@@ -2138,7 +2304,7 @@ export default function PortfolioManagementApp() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap justify-end gap-2.5">
-                  <button className={blueButton} onClick={applyExcelMapping}><Columns3 size={16} /> Apply Mapping & Autopopulate</button>
+                  <button className={blueButton} onClick={applyExcelMapping}><Columns3 size={16} /> Confirm Mapping & Import</button>
                   <button className={softButton} onClick={() => { setExcelColumns([]); setExcelRows([]); setColumnMapping({}); }}>Clear Upload</button>
                 </div>
               </>

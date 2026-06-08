@@ -177,6 +177,8 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
   // Data stores
   const [allAmenities, setAllAmenities] = useState<AmenityPoint[]>([]);
   const [pointsToShow, setPointsToShow] = useState<AmenityPoint[]>([]);
+  const [amenitiesLoading, setAmenitiesLoading] = useState(false);
+  const [amenitiesStatus, setAmenitiesStatus] = useState('Loading Pune metro stations from OpenStreetMap...');
   const [highwaysData, setHighwaysData] = useState<HighwayData[]>([]);
   const [metroLinesData, setMetroLinesData] = useState<MetroLineData[]>([]);
   const [metroStationsData, setMetroStationsData] = useState<MetroStationData[]>([]);
@@ -464,6 +466,13 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
                   <span className="text-slate-700">{CATEGORY_CONFIG[cat].name}</span>
                 </label>
               ))}
+              <span className={`ml-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
+                amenitiesLoading
+                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}>
+                {amenitiesLoading ? 'Waiting for OSM...' : amenitiesStatus}
+              </span>
             </div>
           )}
 
@@ -622,7 +631,7 @@ const MapOverlayView: React.FC<MapOverlayViewProps> = ({ isFullscreen, toggleFul
 
         {/* Hidden subsection logic loaders */}
         <div className="hidden">
-          {overlayMode === 'amenities' && <AmenitiesOverlayLogic selectedCity={selectedCity} setSelectedCity={setSelectedCity} selectedCategories={selectedCategories} setSelectedCategories={setSelectedCategories} allAmenities={allAmenities} setAllAmenities={setAllAmenities} pointsToShow={pointsToShow} onClearDrawn={() => {}} onClearCircle={() => {}} />}
+          {overlayMode === 'amenities' && <AmenitiesOverlayLogic selectedCity={selectedCity} setSelectedCity={setSelectedCity} selectedCategories={selectedCategories} setSelectedCategories={setSelectedCategories} setAllAmenities={setAllAmenities} pointsToShow={pointsToShow} onClearDrawn={() => {}} onClearCircle={() => {}} onLoadingChange={setAmenitiesLoading} onStatusChange={setAmenitiesStatus} />}
           {overlayMode === 'metro' && <MetroCorridorLogic selectedCity={selectedCity} onDataLoaded={handleMetroDataLoaded} visibility={metroVisibility} onToggle={handleMetroToggle} />}
           {overlayMode === 'road' && (
             <RoadWidthLogic 
