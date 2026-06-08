@@ -101,15 +101,59 @@ const TAB_NAMES = [
   'Token Ledger',
 ];
 
-const RETRIEVAL_TABS = ['Data', 'SQL Query'];
+const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query'];
 type ChatCategory = 'land-gis' | 'insight-generation' | 'workflow' | 'conversational';
+type RetrievalAgentVersion = 'v1' | 'v2';
 const CHAT_CATEGORIES: Array<{ value: ChatCategory; label: string; disabled?: boolean }> = [
   { value: 'land-gis', label: 'Land / GIS' },
   { value: 'insight-generation', label: 'Insight Generation' },
   { value: 'workflow', label: 'Workflow (Coming Soon)', disabled: true },
   { value: 'conversational', label: 'Conversational (Coming Soon)', disabled: true },
 ];
+
+const RETRIEVAL_AGENT_VERSIONS: Array<{ value: RetrievalAgentVersion; label: string; description: string }> = [
+  { value: 'v1', label: 'V1', description: 'Legacy domain-routed agent' },
+  { value: 'v2', label: 'V2', description: 'SQL pipeline agent' },
+];
+
+const RETRIEVAL_ENDPOINT_MAP: Record<RetrievalAgentVersion, string> = {
+  v1: '/ask_stream_data_retrieval',
+  v2: '/aks_stream_data_retrieval_agent_v2',
+};
+
+const RETRIEVAL_ROUTE_LABEL: Record<RetrievalAgentVersion, string> = {
+  v1: 'data_retrieval_agent_v1',
+  v2: 'data_retrieval_agent_v2',
+};
+const VISUALIZATION_RETRIEVAL_V2_MODEL = 'moonshotai.kimi-k2.5';
 const DEFAULT_INSIGHT_QUERY = 'Generate insights for map';
+
+let fallbackMessageIdCounter = 0;
+
+function createMessageId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `msg-${globalThis.crypto.randomUUID()}`;
+  }
+
+  fallbackMessageIdCounter += 1;
+  return `msg-${Date.now()}-${fallbackMessageIdCounter}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeSavedMessages(savedMessages: Message[]) {
+  const seen = new Set<string>();
+
+  return savedMessages.map((message) => {
+    const id = typeof message.id === 'string' && message.id.trim() ? message.id : createMessageId();
+    if (!seen.has(id)) {
+      seen.add(id);
+      return { ...message, id };
+    }
+
+    const nextId = createMessageId();
+    seen.add(nextId);
+    return { ...message, id: nextId };
+  });
+}
 
 async function requestInsightGeneration(
   map: RuntimeGeneratedMapOption,
@@ -401,6 +445,124 @@ function buildClarificationAnswer(
     .join('\n');
 }
 
+function cleanRetrievalBaseQuery(query: string) {
+  return query
+    .split(/\n\s*Clarification answer\s*:/i)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildCompleteRetrievalQuery(
+  originalQuery: string,
+  clarification: VisualizationRetrievalClarification | undefined,
+  values: Record<string, string>,
+  fallbackAnswer = '',
+) {
+  const baseQuery = cleanRetrievalBaseQuery(originalQuery);
+  const fields = clarification?.fields || [];
+  const additions = fields
+    .map((field) => {
+      const value = (values[field.field] || '').trim();
+      if (!value) return '';
+      return `${clarificationFieldLabel(field).toLowerCase()} ${value}`;
+    })
+    .filter(Boolean);
+
+  const fallback = fallbackAnswer.trim();
+  if (!additions.length && fallback) {
+    additions.push(fallback);
+  }
+
+  if (!additions.length) {
+    return baseQuery;
+  }
+
+  return `${baseQuery}. Additional required filters: ${additions.join('; ')}.`;
+}
+
+interface DataVisRewriteResponse {
+  updated_query: string;
+  rewrite_reason?: string;
+  confidence?: number;
+  model?: string;
+  provider?: string;
+  region?: string;
+}
+
+async function requestDataVisRewrite(
+  originalQuery: string,
+  failureReason: string,
+  retrievalContext: Record<string, unknown>,
+) {
+  const response = await fetch(`${API_BASE}/visualization-agent/data-vis/rewrite-retrieval-query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      original_query: originalQuery,
+      failure_reason: failureReason,
+      retrieval_context: retrievalContext,
+    }),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(responseBody.detail || `data_vis layer failed with status ${response.status}`);
+  }
+
+  const data = (await response.json()) as DataVisRewriteResponse;
+  const updatedQuery = (data.updated_query || '').trim();
+  if (!updatedQuery) {
+    throw new Error('data_vis layer did not return an updated query.');
+  }
+  return { ...data, updated_query: updatedQuery };
+}
+
+function retrievalFailureEvidence(retrieval: VisualizationRetrievalState) {
+  return [
+    retrieval.error,
+    retrieval.metrics?.pipeline_status,
+    retrieval.sqlQuery,
+    ...(retrieval.debugTrace || []),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+}
+
+function shouldRunDataVisFallback(retrieval: VisualizationRetrievalState) {
+  if (retrieval.fallbackAttempted || retrieval.status !== 'error' || retrieval.resultSet?.rows?.length) {
+    return false;
+  }
+  const evidence = retrievalFailureEvidence(retrieval);
+  const hasSqlReviewFailure =
+    evidence.includes('sql review did not provide approved sql') ||
+    evidence.includes('approved sql could not be executed') ||
+    evidence.includes('no approved sql') ||
+    evidence.includes('sql_review_status') ||
+    evidence.includes('missing latitude and longitude') ||
+    evidence.includes('latitude_present') ||
+    evidence.includes('longitude_present');
+  const hasCoordinateEvidence =
+    evidence.includes('latitude') ||
+    evidence.includes('longitude') ||
+    evidence.includes('project_latitude') ||
+    evidence.includes('project_longitude');
+
+  return hasSqlReviewFailure && hasCoordinateEvidence;
+}
+
+function buildDataVisFailureReason(retrieval: VisualizationRetrievalState) {
+  const evidence = [
+    retrieval.error,
+    retrieval.metrics?.pipeline_status ? `pipeline_status: ${String(retrieval.metrics.pipeline_status)}` : '',
+    ...(retrieval.debugTrace || []).slice(-4),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return evidence || 'Data retrieval ended without result rows after SQL review/probe.';
+}
+
 function missingRequiredClarificationFields(
   clarification: VisualizationRetrievalClarification | undefined,
   values: Record<string, string>,
@@ -421,6 +583,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [input, setInput] = useState(EXAMPLE_QUERY);
   const [isLoading, setIsLoading] = useState(false);
   const [chatCategory, setChatCategory] = useState<ChatCategory>('land-gis');
+  const [retrievalAgentVersion, setRetrievalAgentVersion] = useState<RetrievalAgentVersion>('v2');
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
   const [totalCost, setTotalCost] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
@@ -471,15 +634,16 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
-          setMessages(parsed.messages);
+          const restoredMessages = normalizeSavedMessages(parsed.messages);
+          setMessages(restoredMessages);
           // Find the last message that has intentOutput or retrieval and notify the parent component
-          const lastMsgWithIntent = [...parsed.messages].reverse().find((m) => m.intentOutput);
+          const lastMsgWithIntent = [...restoredMessages].reverse().find((m) => m.intentOutput);
           if (lastMsgWithIntent) {
-            onModuleOutputRef.current?.(lastMsgWithIntent.intentOutput);
+            onModuleOutputRef.current?.(lastMsgWithIntent.intentOutput ?? null);
           }
-          const lastMsgWithRetrieval = [...parsed.messages].reverse().find((m) => m.retrieval);
+          const lastMsgWithRetrieval = [...restoredMessages].reverse().find((m) => m.retrieval);
           if (lastMsgWithRetrieval) {
-            onRetrievalOutputRef.current?.(lastMsgWithRetrieval.retrieval);
+            onRetrievalOutputRef.current?.(lastMsgWithRetrieval.retrieval ?? null);
             if (lastMsgWithRetrieval.retrieval) {
               pendingRetrievalRef.current.set(lastMsgWithRetrieval.id, lastMsgWithRetrieval.retrieval);
               latestRetrievalMessageIdRef.current = lastMsgWithRetrieval.id;
@@ -604,11 +768,71 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     }));
   };
 
-  const startHiddenDataRetrieval = (query: string, messageId: string) => {
+  const runDataVisFallback = async (
+    query: string,
+    messageId: string,
+    retrieval: VisualizationRetrievalState,
+  ) => {
+    const originalQuery = retrieval.originalQuery || query;
+    const failureReason = buildDataVisFailureReason(retrieval);
+    const routeLabel = RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion];
+    try {
+      const rewrite = await requestDataVisRewrite(originalQuery, failureReason, {
+        failure_reason: failureReason,
+        pipeline_status: retrieval.metrics?.pipeline_status,
+        retrieval_intent: retrieval.retrievalIntent || {},
+        sql_query: retrieval.sqlQuery || '',
+        debug_trace: (retrieval.debugTrace || []).slice(-8),
+      });
+      const updatedQuery = rewrite.updated_query;
+      updateRetrievalForMessage(messageId, {
+        status: 'running',
+        agentRoute: `data_vis -> ${routeLabel}`,
+        updatedQuery,
+        fallbackReason: rewrite.rewrite_reason || 'data_vis layer rewrote the retrieval query.',
+        error: undefined,
+        sqlQuery: undefined,
+        resultSet: undefined,
+        clarification: undefined,
+        tokenEvents: [],
+        metrics: {
+          ...(retrieval.metrics || {}),
+          data_vis_model: rewrite.model,
+          data_vis_provider: rewrite.provider,
+          data_vis_confidence: rewrite.confidence,
+        },
+      });
+      startHiddenDataRetrieval(updatedQuery, messageId, {
+        isDataVisRetry: true,
+        originalQuery,
+        updatedQuery,
+        fallbackReason: rewrite.rewrite_reason || 'data_vis layer rewrote the retrieval query.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'data_vis layer failed.';
+      updateRetrievalForMessage(messageId, {
+        status: 'error',
+        error: `Retrieval failed sending updated query. ${message}`,
+        fallbackAttempted: true,
+        fallbackReason: failureReason,
+      });
+    }
+  };
+
+  const startHiddenDataRetrieval = (
+    query: string,
+    messageId: string,
+    options: {
+      isDataVisRetry?: boolean;
+      originalQuery?: string;
+      updatedQuery?: string;
+      fallbackReason?: string;
+    } = {},
+  ) => {
     closeRetrievalSource(messageId);
     updateRetrievalForMessage(messageId, {
       status: 'running',
-      agentRoute: undefined,
+      agentRoute: options.isDataVisRetry ? 'data_vis -> data_retrieval_agent_v2' : undefined,
       retrievalIntent: undefined,
       sqlQuery: undefined,
       resultSet: undefined,
@@ -616,15 +840,24 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       tokenEvents: [],
       metrics: undefined,
       error: undefined,
+      originalQuery: options.originalQuery || query,
+      updatedQuery: options.updatedQuery,
+      fallbackReason: options.fallbackReason,
+      fallbackAttempted: options.isDataVisRetry || false,
+      debugTrace: [],
     });
 
     const params = new URLSearchParams({ question: query });
+    if (retrievalAgentVersion === 'v2') {
+      params.set('model', VISUALIZATION_RETRIEVAL_V2_MODEL);
+    }
     const storedSession = window.localStorage.getItem('visualization-data-retrieval-session-id') || '';
     if (storedSession) {
       params.set('session_id', storedSession);
     }
 
-    const source = new EventSource(`${API_BASE}/aks_stream_data_retrieval_agent_v2?${params.toString()}`);
+    const endpointPath = RETRIEVAL_ENDPOINT_MAP[retrievalAgentVersion];
+    const source = new EventSource(`${API_BASE}${endpointPath}?${params.toString()}`);
     retrievalSourcesRef.current.set(messageId, source);
 
     source.onmessage = (event) => {
@@ -641,12 +874,20 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           if (sessionId) {
             window.localStorage.setItem('visualization-data-retrieval-session-id', sessionId);
           }
-          updateRetrievalForMessage(messageId, { agentRoute: 'data_retrieval_agent_v2' });
+          const sessionRouteLabel = RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion];
+          updateRetrievalForMessage(messageId, {
+            agentRoute: options.isDataVisRetry ? `data_vis -> ${sessionRouteLabel}` : sessionRouteLabel,
+          });
           break;
         }
         case 'agent_route': {
           const content = payload.content as { agent_route?: string } | undefined;
-          updateRetrievalForMessage(messageId, { agentRoute: content?.agent_route });
+          const agentRouteLabel = RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion];
+          updateRetrievalForMessage(messageId, {
+            agentRoute: options.isDataVisRetry
+              ? `data_vis -> ${agentRouteLabel}`
+              : content?.agent_route || agentRouteLabel,
+          });
           break;
         }
         case 'intent': {
@@ -674,7 +915,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             clarification.message ||
             clarification.questions?.[0] ||
             'Please clarify the requested values.';
-          const originalQuery = clarification.original_query || query;
+          const originalQuery = cleanRetrievalBaseQuery(clarification.original_query || query);
           setPendingRetrievalClarification({ messageId, originalQuery, question });
           initializeClarificationAnswers(messageId, clarification);
           updateRetrievalForMessage(messageId, {
@@ -697,21 +938,56 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           });
           break;
         }
+        case 'debug_trace': {
+          const content = payload.content as { summary?: string } | undefined;
+          const summary = typeof content?.summary === 'string' ? content.summary : '';
+          if (summary) {
+            updateRetrievalForMessage(messageId, (current) => ({
+              ...current,
+              debugTrace: [...(current.debugTrace || []), summary].slice(-12),
+            }));
+          }
+          break;
+        }
         case 'done': {
-          updateRetrievalForMessage(messageId, (current) => ({
-            ...current,
-            status:
-              current.status === 'needs_clarification'
-                ? 'needs_clarification'
-                : current.resultSet?.rows?.length
-                  ? 'success'
-                  : 'error',
-            metrics: payload.metrics,
-            error: current.status === 'needs_clarification' || current.resultSet?.rows?.length
-              ? current.error
-              : current.error || 'Data retrieval completed without a result set.',
-          }));
+          const pipelineStatus = String(payload.metrics?.pipeline_status || '');
           closeRetrievalSource(messageId);
+          let shouldFallback = false;
+          let fallbackState: VisualizationRetrievalState | null = null;
+          updateRetrievalForMessage(messageId, (current) => {
+            const completedState: VisualizationRetrievalState = {
+              ...current,
+              status:
+                current.status === 'needs_clarification'
+                  ? 'needs_clarification'
+                  : current.error
+                    ? 'error'
+                    : current.resultSet?.rows?.length
+                      ? 'success'
+                      : pipelineStatus === 'no_data'
+                        ? 'no_data'
+                        : 'error',
+              metrics: payload.metrics,
+              error: current.status === 'needs_clarification' || current.resultSet?.rows?.length || pipelineStatus === 'no_data'
+                ? current.error
+                : current.error || 'Data retrieval completed without a result set.',
+            };
+            shouldFallback = shouldRunDataVisFallback(completedState);
+            fallbackState = completedState;
+            if (!shouldFallback) {
+              return completedState;
+            }
+            return {
+              ...completedState,
+              status: 'updating_query',
+              error: 'Retrieval failed sending updated query',
+              fallbackAttempted: true,
+              fallbackReason: buildDataVisFailureReason(completedState),
+            };
+          });
+          if (shouldFallback && fallbackState) {
+            void runDataVisFallback(query, messageId, fallbackState);
+          }
           break;
         }
         default:
@@ -750,20 +1026,21 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       return;
     }
 
-    const assistantId = (Date.now() + 1).toString();
-    const combinedQuery = `${originalQuery}\nClarification answer:\n${answer}`;
+    const userId = createMessageId();
+    const assistantId = createMessageId();
+    const combinedQuery = buildCompleteRetrievalQuery(originalQuery, clarification, values, answer);
     latestRetrievalMessageIdRef.current = assistantId;
     onRetrievalOutput?.(null);
     setMessages((prev) => [
       ...prev,
-      { id: Date.now().toString(), role: 'user', content: answer },
+      { id: userId, role: 'user', content: answer },
       {
         id: assistantId,
         role: 'assistant',
-        content: '**Data Retrieval V2:** Rerunning with your clarification.',
+        content: `**Data Retrieval ${retrievalAgentVersion.toUpperCase()}:** Rerunning with your clarification.`,
         retrieval: {
           status: 'running',
-          agentRoute: 'data_retrieval_agent_v2',
+          agentRoute: RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion],
           tokenEvents: [],
         },
       },
@@ -790,10 +1067,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         return;
       }
 
-      const assistantId = (Date.now() + 1).toString();
+      const userId = createMessageId();
+      const assistantId = createMessageId();
       setMessages((previous) => [
         ...previous,
-        { id: Date.now().toString(), role: 'user', content: query },
+        { id: userId, role: 'user', content: query },
       ]);
       setInput('');
       chatDraftsRef.current['insight-generation'] = '';
@@ -849,20 +1127,26 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
     if (pendingRetrievalClarification) {
       const answer = query;
-      const assistantId = (Date.now() + 1).toString();
-      const combinedQuery = `${pendingRetrievalClarification.originalQuery}\nClarification answer: ${answer}`;
+      const userId = createMessageId();
+      const assistantId = createMessageId();
+      const combinedQuery = buildCompleteRetrievalQuery(
+        pendingRetrievalClarification.originalQuery,
+        undefined,
+        {},
+        answer,
+      );
       latestRetrievalMessageIdRef.current = assistantId;
       onRetrievalOutput?.(null);
       setMessages((prev) => [
         ...prev,
-        { id: Date.now().toString(), role: 'user', content: answer },
+        { id: userId, role: 'user', content: answer },
         {
           id: assistantId,
           role: 'assistant',
-          content: '**Data Retrieval V2:** Rerunning with your clarification.',
+          content: `**Data Retrieval ${retrievalAgentVersion.toUpperCase()}:** Rerunning with your clarification.`,
           retrieval: {
             status: 'running',
-            agentRoute: 'data_retrieval_agent_v2',
+            agentRoute: RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion],
             tokenEvents: [],
           },
         },
@@ -876,12 +1160,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       return;
     }
 
-    const assistantId = (Date.now() + 1).toString();
+    const assistantId = createMessageId();
     latestRetrievalMessageIdRef.current = assistantId;
     onRetrievalOutput?.(null);
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: createMessageId(),
       role: 'user',
       content: query,
     };
@@ -965,7 +1249,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString(),
+          id: createMessageId(),
           role: 'assistant',
           content: `**Error:** ${message}`,
         },
@@ -981,9 +1265,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     setModalOpen(true);
   };
 
-  const openRetrievalModal = (retrieval: VisualizationRetrievalState) => {
+  const openRetrievalModal = (retrieval: VisualizationRetrievalState, tabIndex = 0) => {
     setRetrievalModalData(retrieval);
-    setActiveRetrievalTab(0);
+    setActiveRetrievalTab(tabIndex);
     setRetrievalModalOpen(true);
   };
 
@@ -1274,13 +1558,54 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                             </button>
                           )}
 
-                          {m.retrieval?.status === 'error' && !m.retrieval?.resultSet?.rows?.length && (
+                          {m.retrieval?.status === 'updating_query' && (
+                            <button
+                              disabled
+                              title={m.retrieval.fallbackReason || 'data_vis layer is preparing a safer retrieval query.'}
+                              className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-[10px] font-bold text-sky-600 uppercase tracking-widest"
+                            >
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Retrieval failed sending updated query
+                            </button>
+                          )}
+
+                          {m.retrieval?.updatedQuery && (
+                            <button
+                              onClick={() => openRetrievalModal(m.retrieval as VisualizationRetrievalState, 2)}
+                              className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-white px-3 py-1 text-[10px] font-bold text-sky-600 uppercase tracking-widest transition-all hover:bg-sky-50 hover:shadow-sm"
+                            >
+                              <FileCode2 className="h-3 w-3" />
+                              Display Updated Query
+                            </button>
+                          )}
+
+                          {m.retrieval?.status === 'error' && m.retrieval?.fallbackAttempted && !m.retrieval?.resultSet?.rows?.length && (
+                            <button
+                              disabled
+                              title={m.retrieval.error || 'data_vis fallback could not recover this retrieval run.'}
+                              className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-[10px] font-bold text-sky-600 uppercase tracking-widest"
+                            >
+                              Retrieval failed sending updated query
+                            </button>
+                          )}
+
+                          {m.retrieval?.status === 'error' && !m.retrieval?.fallbackAttempted && !m.retrieval?.resultSet?.rows?.length && (
                             <button
                               disabled
                               title={m.retrieval.error || 'Data retrieval did not return rows.'}
                               className="flex items-center gap-1.5 rounded-full border border-red-100 bg-red-50 px-3 py-1 text-[10px] font-bold text-red-500 uppercase tracking-widest"
                             >
                               Retrieval Unavailable
+                            </button>
+                          )}
+
+                          {m.retrieval?.status === 'no_data' && (
+                            <button
+                              disabled
+                              title="SQL executed successfully, but no matching rows were returned."
+                              className="flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[10px] font-bold text-amber-600 uppercase tracking-widest"
+                            >
+                              No Retrieved Rows
                             </button>
                           )}
                         </div>
@@ -1394,9 +1719,28 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                 ))}
               </select>
             </label>
+            {isLandGisChat && (
+              <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-0.5">
+                {RETRIEVAL_AGENT_VERSIONS.map((version) => (
+                  <button
+                    key={version.value}
+                    type="button"
+                    onClick={() => setRetrievalAgentVersion(version.value)}
+                    title={version.description}
+                    className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest transition-all duration-200 ${
+                      retrievalAgentVersion === version.value
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {version.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {isLandGisChat ? (
               <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
-                {pendingRetrievalClarification ? 'Answer Retrieval Clarification' : 'Module 1 + Retrieval V2 Active'}
+                {pendingRetrievalClarification ? 'Answer Retrieval Clarification' : `Module 1 + Retrieval ${retrievalAgentVersion.toUpperCase()} Active`}
               </span>
             ) : (
               <button
@@ -1824,6 +2168,20 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   </div>
                   <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
                     {retrievalModalData.sqlQuery || 'No SQL query was returned for this run.'}
+                  </pre>
+                </div>
+              )}
+
+              {activeRetrievalTab === 2 && (
+                <div className="overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-sm">
+                  <div className="border-b border-sky-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">data_vis Updated Query</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      {retrievalModalData.fallbackReason || 'Fallback query prepared for the existing retrieval agent'}
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.updatedQuery || 'No updated query was generated for this run.'}
                   </pre>
                 </div>
               )}
