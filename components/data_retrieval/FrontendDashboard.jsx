@@ -350,11 +350,6 @@ export default function FrontendDashboard() {
     if (sessionId) {
       params.set("session_id", sessionId);
     }
-    params.set(
-      "model",
-      window.localStorage.getItem("sigmavalue_llm_model") || "gpt-4o-mini",
-    );
-
     const streamPath = "/aks_stream_data_retrieval_agent_v2";
     const source = new EventSource(
       apiUrl(`${streamPath}?${params.toString()}`),
@@ -515,10 +510,7 @@ export default function FrontendDashboard() {
         case "stage_report":
           if (data.content) {
             setStageReport(data.content);
-            const modelLabel =
-              window.localStorage.getItem("sigmavalue_llm_model") ||
-              "gpt-4o-mini";
-            downloadStageWordReport(data.content, modelLabel);
+            downloadStageWordReport(data.content, "backend-configured");
             setMetricsText(
               (current) => `${current} | Stage Word report downloaded`,
             );
@@ -716,11 +708,8 @@ export default function FrontendDashboard() {
               pipelineCatalog={pipelineCatalog}
               stageReport={stageReport}
               onDownloadStageReport={() => {
-                const modelLabel =
-                  window.localStorage.getItem("sigmavalue_llm_model") ||
-                  "gpt-4o-mini";
                 if (stageReport) {
-                  downloadStageWordReport(stageReport, modelLabel);
+                  downloadStageWordReport(stageReport, "backend-configured");
                 }
               }}
               isGenerating={isStreaming}

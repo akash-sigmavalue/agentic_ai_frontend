@@ -77,12 +77,6 @@ interface Module1ResponseData {
   ledger_row?: TokenLedgerRow | null;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
-
-function getGlobalLlmModel(): string {
-  if (typeof window === 'undefined') return DEFAULT_MODEL;
-  return window.localStorage.getItem('sigmavalue_llm_model') || DEFAULT_MODEL;
-}
 const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
@@ -804,13 +798,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          provider:
-            usageRow?.provider ||
-            (typeof window !== 'undefined'
-              ? window.localStorage.getItem('sigmavalue_llm_provider') || 'openai'
-              : 'openai'),
+          provider: usageRow?.provider || 'backend',
           region: usageRow?.region || '',
-          model: usageRow?.model || getGlobalLlmModel(),
+          model: usageRow?.model || 'configured-in-backend',
           query_preview: `Insights: ${query}`.substring(0, 80),
           input_tokens: output.usage.total_input_tokens,
           cached_input_tokens: output.usage.total_cached_input_tokens,
@@ -893,13 +883,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     startHiddenDataRetrieval(query, assistantId);
 
     try {
-      const activeModel = getGlobalLlmModel();
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
-          model: activeModel,
           demo_mode: DEMO_MODE_ENABLED,
         }),
       });
@@ -1411,14 +1399,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             )}
           </div>
 
-          {/* Runtime model information */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                {getGlobalLlmModel()}
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
