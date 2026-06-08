@@ -846,22 +846,23 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
-  if (!comparables || comparables.length === 0) return null;
+  // Safe extraction of comparables length/existence
+  const safeComparables = comparables || [];
 
   // Detect whether mixed sources exist
-  const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
+  const hasMixedSources = safeComparables.some(c => c.data_source === "Internal DB") && safeComparables.some(c => c.data_source === "Web");
 
   const filteredComparables = sourceFilter === "all"
-    ? comparables
-    : comparables.filter(c => (c.data_source || "Web") === sourceFilter);
+    ? safeComparables
+    : safeComparables.filter(c => (c.data_source || "Web") === sourceFilter);
 
   const indexedComparables = useMemo(() => {
     return filteredComparables.map((comp) => ({
       comp,
-      originalIndex: comparables.indexOf(comp), // keep original indices for selection
+      originalIndex: safeComparables.indexOf(comp), // keep original indices for selection
       distanceKm: getComparableDistanceKm(comp),
     }));
-  }, [filteredComparables, comparables]);
+  }, [filteredComparables, safeComparables]);
 
   const processedComparables = useMemo(() => {
     return filterAndSortList(indexedComparables, sortConfig, filterConfig);
@@ -870,6 +871,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const nearbyComparables = useMemo(() => {
     return processedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
   }, [processedComparables]);
+
+  if (!comparables || comparables.length === 0) return null;
 
   const visibleComparables = showAllComparables ? processedComparables : nearbyComparables;
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
@@ -1174,9 +1177,6 @@ function ListingTable({ listings, dbTransactions }) {
     return [...subjectListings, ...compListings, ...dbRows];
   }, [subjectListings, compListings, dbRows]);
 
-  const allEmpty = allListingRowsCombined.length === 0;
-  if (allEmpty) return null;
-
   const processedSubjectListings = useMemo(() => {
     return filterAndSortList(subjectListings, sortConfig, filterConfig);
   }, [subjectListings, sortConfig, filterConfig]);
@@ -1188,6 +1188,9 @@ function ListingTable({ listings, dbTransactions }) {
   const processedDbRows = useMemo(() => {
     return filterAndSortList(dbRows, sortConfig, filterConfig);
   }, [dbRows, sortConfig, filterConfig]);
+
+  const allEmpty = allListingRowsCombined.length === 0;
+  if (allEmpty) return null;
 
   const renderRows = (rows, label) => (
     <>
