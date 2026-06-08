@@ -745,7 +745,7 @@ function TableHeaderCell({
         </div>
       </div>
 
-      {isOpen && triggerRef.current && (
+      {isOpen && (
         <SpreadsheetFilterDropdown
           triggerRef={triggerRef}
           columnKey={columnKey}
@@ -846,22 +846,26 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
-  if (!comparables || comparables.length === 0) return null;
+  const compsList = useMemo(() => comparables || [], [comparables]);
 
   // Detect whether mixed sources exist
-  const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
+  const hasMixedSources = useMemo(() => {
+    return compsList.some(c => c.data_source === "Internal DB") && compsList.some(c => c.data_source === "Web");
+  }, [compsList]);
 
-  const filteredComparables = sourceFilter === "all"
-    ? comparables
-    : comparables.filter(c => (c.data_source || "Web") === sourceFilter);
+  const filteredComparables = useMemo(() => {
+    return sourceFilter === "all"
+      ? compsList
+      : compsList.filter(c => (c.data_source || "Web") === sourceFilter);
+  }, [compsList, sourceFilter]);
 
   const indexedComparables = useMemo(() => {
     return filteredComparables.map((comp) => ({
       comp,
-      originalIndex: comparables.indexOf(comp), // keep original indices for selection
+      originalIndex: compsList.indexOf(comp), // keep original indices for selection
       distanceKm: getComparableDistanceKm(comp),
     }));
-  }, [filteredComparables, comparables]);
+  }, [filteredComparables, compsList]);
 
   const processedComparables = useMemo(() => {
     return filterAndSortList(indexedComparables, sortConfig, filterConfig);
@@ -870,6 +874,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const nearbyComparables = useMemo(() => {
     return processedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
   }, [processedComparables]);
+
+  if (compsList.length === 0) return null;
 
   const visibleComparables = showAllComparables ? processedComparables : nearbyComparables;
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
@@ -1174,9 +1180,6 @@ function ListingTable({ listings, dbTransactions }) {
     return [...subjectListings, ...compListings, ...dbRows];
   }, [subjectListings, compListings, dbRows]);
 
-  const allEmpty = allListingRowsCombined.length === 0;
-  if (allEmpty) return null;
-
   const processedSubjectListings = useMemo(() => {
     return filterAndSortList(subjectListings, sortConfig, filterConfig);
   }, [subjectListings, sortConfig, filterConfig]);
@@ -1188,6 +1191,9 @@ function ListingTable({ listings, dbTransactions }) {
   const processedDbRows = useMemo(() => {
     return filterAndSortList(dbRows, sortConfig, filterConfig);
   }, [dbRows, sortConfig, filterConfig]);
+
+  const allEmpty = allListingRowsCombined.length === 0;
+  if (allEmpty) return null;
 
   const renderRows = (rows, label) => (
     <>
@@ -1338,11 +1344,11 @@ function TransactionTable({ transactions }) {
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
-  if (!transactions || transactions.length === 0) return null;
-
   const processedTransactions = useMemo(() => {
-    return filterAndSortList(transactions, sortConfig, filterConfig);
+    return filterAndSortList(transactions || [], sortConfig, filterConfig);
   }, [transactions, sortConfig, filterConfig]);
+
+  if (!transactions || transactions.length === 0) return null;
 
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
@@ -1480,11 +1486,22 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
+  const listingsList = useMemo(() => listings || [], [listings]);
+
+  // Determine which rows to display based on active tab
+  const displayedListings = useMemo(() => {
+    return activeTab === "valid" ? listingsList : activeTab === "outliers" ? reviewListings : droppedListings;
+  }, [activeTab, listingsList, reviewListings, droppedListings]);
+
+  const processedListings = useMemo(() => {
+    return filterAndSortList(displayedListings, sortConfig, filterConfig);
+  }, [displayedListings, sortConfig, filterConfig]);
+
   if (!listings || listings.length === 0) return null;
 
   // Detect if we have plot data and if the subject itself is a plot
   // Detect if the subject itself is a plot or villa
-  const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+  const hasPlotData = listingsList.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
   const isPlotSubject = ["plot", "villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
   const isVillaSubject = ["villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
   // In Cost Approach, villa subject derives the PLOT/LAND rate (reverse residual: villa price - CC = land value)
@@ -1495,15 +1512,6 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
 
   // Always show the FSI/CC overrides if the subject is a plot or villa
   const showPlotControls = isPlotSubject;
-
-  // Determine which rows to display based on active tab
-  const displayedListings = useMemo(() => {
-    return activeTab === "valid" ? listings : activeTab === "outliers" ? reviewListings : droppedListings;
-  }, [activeTab, listings, reviewListings, droppedListings]);
-
-  const processedListings = useMemo(() => {
-    return filterAndSortList(displayedListings, sortConfig, filterConfig);
-  }, [displayedListings, sortConfig, filterConfig]);
 
   const showReasonColumn = activeTab === "outliers" || activeTab === "dropped";
 
@@ -1887,6 +1895,12 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
+  const dataTable = useMemo(() => data?.table || [], [data?.table]);
+
+  const filteredAndSortedTable = useMemo(() => {
+    return filterAndSortList(dataTable, sortConfig, filterConfig);
+  }, [dataTable, sortConfig, filterConfig]);
+
   if (!data || !data.table || data.table.length === 0) return null;
 
   const currency = data.currency || "INR";
@@ -1899,10 +1913,6 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
   });
 
   const fmt = (v) => (!v && v !== 0) ? "—" : formatter.format(v);
-
-  const filteredAndSortedTable = useMemo(() => {
-    return filterAndSortList(data.table, sortConfig, filterConfig);
-  }, [data.table, sortConfig, filterConfig]);
 
   const renderTable = (maxHeightClass = "") => (
     <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
@@ -5270,7 +5280,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     {/* Geocode Tip Remark & Errors */}
                     <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
                       <p className="text-[10px] text-text-dim leading-relaxed">
-                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">"Sus, Pune"</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
                       </p>
                       {geocodeError && (
                         <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">

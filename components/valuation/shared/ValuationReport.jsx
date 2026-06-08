@@ -63,6 +63,51 @@ function getAmenitiesCount(amenitySummary) {
   }
 }
 
+function formatAmenitySummary(summary) {
+  if (!summary) return "—";
+  try {
+    let parsed = summary;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed.replace(/'/g, '"'));
+      } catch (e) {
+        // ignore
+      }
+    }
+    let counts = parsed?.counts || parsed;
+    if (typeof counts === 'string') {
+      try {
+        counts = JSON.parse(counts.replace(/'/g, '"'));
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (counts && typeof counts === 'object') {
+      const entries = Object.entries(counts);
+      if (entries.length > 0) {
+        return "{" + entries.map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  if (typeof summary === 'string') {
+    const parts = summary.split(',').map(s => s.trim()).filter(Boolean);
+    const pairs = parts.map(part => {
+      const match = part.match(/(.*?):\s*(\d+)/);
+      if (match) {
+        return `'${match[1].toLowerCase().replace(/\s+/g, '_')}': ${match[2]}`;
+      }
+      return null;
+    }).filter(Boolean);
+    if (pairs.length > 0) {
+      return "{" + pairs.join(', ') + "}";
+    }
+    return summary;
+  }
+  return "—";
+}
+
 function haversineDistanceKM(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const R = 6371; // Earth radius in km
@@ -299,6 +344,11 @@ function SlideReportMap({ valuationResult }) {
                       <span>{m.isSubject ? "Subject Location" : `${m.distance?.toFixed(2)} km away`}</span>
                       <span className="font-mono">{fmtCurrency(m.rate, formatter)}/sqft</span>
                     </div>
+                    {m.lat != null && m.lng != null && (
+                      <p className="text-[7.5px] text-text-dim/70 font-mono mt-0.5">
+                        ({Number(m.lat).toFixed(5)}, {Number(m.lng).toFixed(5)})
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -313,6 +363,9 @@ function SlideReportMap({ valuationResult }) {
 // ── SLIDE 1: Valuation Certificate Cover ────────────────────────────────────
 function SlideCover({ valuationResult }) {
   const { subjectData, factorialAnalysis, costCalculation, type, timestamp } = valuationResult;
+  const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
+  const table = factorialAnalysis?.comparable_factoring_table || [];
+  const subjectRow = table.find(r => r.role === "SUBJECT");
   const currencyCode = subjectData?.currency || "INR";
   const formatter = buildFormatter(currencyCode);
 
@@ -343,9 +396,13 @@ function SlideCover({ valuationResult }) {
         <div className="relative z-10">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 border border-accent/30">
-                <Award className="h-5 w-5 text-accent" />
-              </div>
+              {logoBase64 ? (
+                <img src={logoBase64} alt="Sigmavalue AI Logo" className="h-10 w-auto object-contain rounded-lg border border-accent/25 bg-bg-deep/45 p-1" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 border border-accent/30">
+                  <Award className="h-5 w-5 text-accent" />
+                </div>
+              )}
               <div>
                 <p className="text-[8px] font-black uppercase tracking-[0.3em] text-accent/80">Sigmavalue AI</p>
                 <h1 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">
@@ -434,12 +491,16 @@ function SlideCover({ valuationResult }) {
             ["Configuration", subjectData?.configuration || subjectData?.unit_configuration],
             ["Approach", subjectData?.recommended_approach?.toUpperCase()],
             ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(4)}, ${Number(subjectData.lng || 0).toFixed(4)}` : null],
-          ].filter(([_, v]) => v).map(([label, value]) => (
-            <div key={label} className="flex items-start justify-between gap-2 py-1 border-b border-border-dim/40 last:border-0">
-              <span className="text-[9px] text-text-dim uppercase tracking-wide font-semibold shrink-0">{label}</span>
-              <span className="text-[9px] text-text-secondary font-bold text-right leading-snug">{value}</span>
-            </div>
-          ))}
+            ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+          ].filter(([_, v]) => v).map(([label, value]) => {
+            const isFullWidth = label === "Neighborhood Amenities";
+            return (
+              <div key={label} className={`flex items-start justify-between gap-2 py-1 border-b border-border-dim/40 last:border-0 ${isFullWidth ? "col-span-2" : ""}`}>
+                <span className="text-[9px] text-text-dim uppercase tracking-wide font-semibold shrink-0">{label}</span>
+                <span className="text-[9px] text-text-secondary font-bold text-right leading-snug">{value}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -467,7 +528,7 @@ function SlideComparableGrid({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="mb-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · LLM Factoring Engine</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · Agent Factoring Engine</p>
         <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Per-Comparable Adjustment Grid</h3>
         <p className="text-[9px] text-text-dim mt-0.5">Each spatial factor capped at ±5% · Total adjustment capped at ±20%</p>
       </div>
@@ -573,6 +634,56 @@ function SlideComparableGrid({ valuationResult }) {
           ))}
         </div>
       )}
+
+      {/* Spatial Attribute Legend & Remarks */}
+      <div className="mt-4 rounded-xl border border-border-soft bg-bg-card/40 p-3 shrink-0">
+        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-accent/80 mb-2 border-b border-border-soft pb-1">Spatial Attributes Legend & Reference Guide</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Road */}
+          <div className="space-y-1">
+            <p className="text-[8px] font-black text-text-primary uppercase tracking-wide">Road Connectivity (Road)</p>
+            <div className="text-[7.5px] leading-relaxed text-text-dim space-y-0.5">
+              <div><strong className="text-accent font-mono">D:</strong> Motorway / Expressway Frontage (High speed link)</div>
+              <div><strong className="text-accent font-mono">C:</strong> Primary Arterial Road (High volume commerce road)</div>
+              <div><strong className="text-accent font-mono">B:</strong> Secondary Road (Neighbourhood baseline collector)</div>
+              <div><strong className="text-accent font-mono">A:</strong> Tertiary / Residential Lane (Quiet, lower commercial utility)</div>
+            </div>
+          </div>
+
+          {/* Density */}
+          <div className="space-y-1">
+            <p className="text-[8px] font-black text-text-primary uppercase tracking-wide">Built Density & Congestion (Density)</p>
+            <div className="text-[7.5px] leading-relaxed text-text-dim space-y-0.5">
+              <div><strong className="text-accent">&gt; 4.0:</strong> Very High Density (Dense urban core, commercial premium)</div>
+              <div><strong className="text-accent">2.5 – 4.0:</strong> High Density (Established neighbourhood, active streets)</div>
+              <div><strong className="text-accent">1.2 – 2.5:</strong> Medium Density (Balanced suburban, standard baseline)</div>
+              <div><strong className="text-accent">&lt; 1.2:</strong> Low / Very Low Density (Emerging suburban, quiet gated zones)</div>
+            </div>
+          </div>
+
+          {/* CBD */}
+          <div className="space-y-1">
+            <p className="text-[8px] font-black text-text-primary uppercase tracking-wide">CBD Commute Zones (CBD km)</p>
+            <div className="text-[7.5px] leading-relaxed text-text-dim space-y-0.5">
+              <div><strong className="text-accent">&lt; 2 km:</strong> Prime Core (Walking/short ride, highest commercial premium)</div>
+              <div><strong className="text-accent">2 – 5 km:</strong> Excellent Zone (Easy transit commute, high demand)</div>
+              <div><strong className="text-accent">5 – 10 km:</strong> Good Zone (Accessible commuter corridor, mid-market)</div>
+              <div><strong className="text-accent">&gt; 10 km:</strong> Moderate to Peripheral Zone (Suburban / satellite hub)</div>
+            </div>
+          </div>
+
+          {/* Amenities */}
+          <div className="space-y-1">
+            <p className="text-[8px] font-black text-text-primary uppercase tracking-wide">Amenities (Healthcare, Education, etc.)</p>
+            <div className="text-[7.5px] leading-relaxed text-text-dim space-y-0.5">
+              <div>Includes count of essential institutions within 1 km radius:</div>
+              <div>• <strong className="text-text-secondary">Education:</strong> Schools, universities (key for family homes)</div>
+              <div>• <strong className="text-text-secondary">Transport:</strong> Metro, bus stops, rail stations (transit premium)</div>
+              <div>• <strong className="text-text-secondary">Retail & Leisure:</strong> Malls, parks, clinics, supermarkets</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -601,40 +712,73 @@ function SlideBlending({ valuationResult }) {
       </div>
 
       {/* Confidence-weighted blending table */}
-      {Object.keys(blending).length > 0 && (
-        <div className="rounded-xl border border-border-soft bg-bg-card/60 overflow-hidden shrink-0">
-          <div className="bg-bg-input px-4 py-2.5 border-b border-border-soft">
-            <p className="text-[8px] font-black uppercase tracking-widest text-text-dim">Confidence-Weighted Blending</p>
-          </div>
-          <div className="p-3 space-y-2">
-            {Object.entries(blending).map(([project, data]) => {
-              const weight = Number(data?.weight || 0) * 100;
-              const rate = data?.factored_rate;
-              const conf = data?.confidence_score;
-              return (
-                <div key={project} className="flex items-center gap-3">
+      {blending && (blending.w1 !== undefined || blending.w2 !== undefined) && (() => {
+        const w1 = Number(blending.w1 || 0) * 100;
+        const w2 = Number(blending.w2 || 0) * 100;
+        const subjectOwnRate = blending.subject_own_rate;
+        const factoredCompAvg = blending.factored_comp_avg;
+        return (
+          <>
+            <div className="rounded-xl border border-border-soft bg-bg-card/60 overflow-hidden shrink-0">
+              <div className="bg-bg-input px-4 py-2.5 border-b border-border-soft">
+                <p className="text-[8px] font-black uppercase tracking-widest text-text-dim">Confidence-Weighted Blending</p>
+              </div>
+              <div className="p-3 space-y-3">
+                {/* Subject own rate component */}
+                <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[9px] font-bold text-text-secondary truncate">{project}</p>
-                    {conf != null && (
-                      <p className="text-[8px] text-text-dim">Confidence: {(Number(conf) * 100).toFixed(0)}%</p>
-                    )}
+                    <p className="text-[9px] font-bold text-text-secondary truncate">Subject Property Baseline</p>
+                    <p className="text-[8px] text-text-dim font-medium">
+                      {blending.subject_listing_count ? `${blending.subject_listing_count} listings` : "0 listings"}
+                      {blending.subject_ci_width_pct ? ` · CI Width: ${Number(blending.subject_ci_width_pct).toFixed(1)}%` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="w-20 h-1.5 rounded-full bg-bg-deep overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-accent to-accent-purple transition-all duration-500"
-                        style={{ width: `${Math.min(weight, 100)}%` }}
+                        style={{ width: `${Math.min(w1, 100)}%` }}
                       />
                     </div>
-                    <span className="text-[9px] font-black font-mono text-accent w-10 text-right">{weight.toFixed(1)}%</span>
-                    <span className="text-[9px] font-mono text-text-secondary w-24 text-right">{fmtCurrency(rate, formatter)}</span>
+                    <span className="text-[9px] font-black font-mono text-accent w-10 text-right">{w1.toFixed(1)}%</span>
+                    <span className="text-[9px] font-mono text-text-secondary w-24 text-right">
+                      {fmtCurrency(subjectOwnRate, formatter)}/sqft
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
+                {/* Comparable average component */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-bold text-text-secondary truncate">Comparable Properties Average</p>
+                    <p className="text-[8px] text-text-dim font-medium">Factored average of all comparable listings</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="w-20 h-1.5 rounded-full bg-bg-deep overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-accent to-accent-purple transition-all duration-500"
+                        style={{ width: `${Math.min(w2, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] font-black font-mono text-accent w-10 text-right">{w2.toFixed(1)}%</span>
+                    <span className="text-[9px] font-mono text-text-secondary w-24 text-right">
+                      {fmtCurrency(factoredCompAvg, formatter)}/sqft
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Weight Selection Reasoning */}
+            {blending.weight_reasoning && (
+              <div className="rounded-xl border border-border-soft bg-bg-card/40 px-4 py-3 shrink-0">
+                <p className="text-[8px] font-black uppercase tracking-widest text-text-dim mb-1">Weight Selection Logic</p>
+                <p className="text-[9px] text-text-secondary leading-relaxed">{blending.weight_reasoning}</p>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Spatial factor impact summary */}
       {details.attribute_weights && (
@@ -718,7 +862,7 @@ function SlideReasoning({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar space-y-4">
       <div className="shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent-purple/80">Stage 5 · LLM Reasoning</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent-purple/80">Stage 5 · Agent Reasoning</p>
         <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">AI Agent Reasoning & Audit</h3>
       </div>
 
@@ -914,7 +1058,8 @@ function SlideFactorialTable({ valuationResult }) {
 
 // ── PDF Download using browser print ────────────────────────────────────────
 function downloadPDF(valuationResult) {
-  const { subjectData, factorialAnalysis, costCalculation, type } = valuationResult;
+  const { subjectData, factorialAnalysis, costCalculation, type, factorialData } = valuationResult;
+  const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
   
   const subjectLat = subjectData?.lat ? Number(subjectData.lat) : null;
   const subjectLng = subjectData?.lng ? Number(subjectData.lng) : null;
@@ -934,6 +1079,7 @@ function downloadPDF(valuationResult) {
   const table = factorialAnalysis?.comparable_factoring_table || [];
   const subjectRow = table.find(r => r.role === "SUBJECT");
   const compRows = table.filter(r => r.role !== "SUBJECT");
+  const rawRateTable = factorialData?.table || [];
 
   const costCalcs = costCalculation?.calculations || {};
   const costInputs = costCalculation?.inputs || {};
@@ -1023,10 +1169,13 @@ function downloadPDF(valuationResult) {
 
   <!-- Header -->
   <div class="header">
-    <div class="brand">
-      <div class="brand-name">Sigmavalue AI</div>
-      <div class="brand-sub">Intelligent Property Valuation Platform</div>
-      <div class="cert-no">REF: SV-${Date.now().toString(36).toUpperCase()}</div>
+    <div class="brand" style="display: flex; align-items: center; gap: 12px; flex-direction: row;">
+      ${logoBase64 ? `<img src="${logoBase64}" style="height: 36px; width: auto; object-fit: contain; border-radius: 4px;" />` : ""}
+      <div style="display: flex; flex-direction: column;">
+        <div class="brand-name">Sigmavalue AI</div>
+        <div class="brand-sub">Intelligent Property Valuation Platform</div>
+        <div class="cert-no">REF: SV-${Date.now().toString(36).toUpperCase()}</div>
+      </div>
     </div>
     <div class="doc-title">
       <h1>Valuation Certificate</h1>
@@ -1065,12 +1214,16 @@ function downloadPDF(valuationResult) {
         ["Plot Area", subjectData?.plot_area_sqft ? `${Number(subjectData.plot_area_sqft).toLocaleString()} sqft` : null],
         ["Approach", subjectData?.recommended_approach?.toUpperCase()],
         ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(5)}, ${Number(subjectData.lng || 0).toFixed(5)}` : null],
-      ].filter(([, v]) => v).map(([l, v]) => `<div class="info-item"><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`).join("")}
+        ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+      ].filter(([, v]) => v).map(([l, v]) => {
+        const isAmenities = l === "Neighborhood Amenities";
+        return `<div class="info-item" ${isAmenities ? 'style="grid-column: span 2;"' : ''}><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`;
+      }).join("")}
     </div>
   </div>
 
   <!-- Section 2: Map Visualisation -->
-  <div class="section">
+  <div class="section page-break">
     <div class="section-title">2. Property Location & Comparable Distribution Map</div>
     <div id="print-map" style="height: 350px; width: 100%; border: 1px solid #cbd5e1; border-radius: 12px; margin-top: 10px; margin-bottom: 15px;"></div>
     
@@ -1080,9 +1233,12 @@ function downloadPDF(valuationResult) {
       <!-- Subject property item -->
       <div style="display: flex; align-items: center; gap: 8px; background: #fff1f2; border: 1px solid #fecdd3; padding: 6px 10px; border-radius: 8px;">
         <span style="display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #f43f5e; color: white; border-radius: 50%; font-weight: 900; font-size: 9px; font-family: sans-serif;">S</span>
-        <div style="flex: 1;">
+        <div style="flex: 1; min-w: 0;">
           <div style="font-weight: 700; color: #9f1239;">[Subject] ${subjectName}</div>
-          <div style="color: #e11d48; font-size: 8px;">Subject Property Location</div>
+          <div style="color: #e11d48; font-size: 8px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
+            <span>Subject Property Location</span>
+            ${subjectLat != null && subjectLng != null ? `<span class="mono">(${subjectLat.toFixed(5)}, ${subjectLng.toFixed(5)})</span>` : ""}
+          </div>
         </div>
       </div>
       <!-- Comparables dynamically generated in HTML template -->
@@ -1093,9 +1249,12 @@ function downloadPDF(valuationResult) {
           <span style="display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #2563eb; color: white; border-radius: 50%; font-weight: 900; font-size: 9px; font-family: sans-serif;">${idx + 1}</span>
           <div style="flex: 1; min-w: 0;">
             <div style="font-weight: 700; color: #1e3a8a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${row.project_name}</div>
-            <div style="color: #2563eb; font-size: 8px; display: flex; justify-content: space-between;">
+            <div style="color: #2563eb; font-size: 8px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
               <span>Distance: ${dist != null ? `${dist.toFixed(2)} km` : "—"}</span>
               <span class="mono" style="font-weight: 700;">Rate: ${row.avg_rate != null ? fmtCurrency(row.avg_rate, formatter) : "—"}/sqft</span>
+            </div>
+            <div style="color: #64748b; font-size: 7.5px; font-family: 'JetBrains Mono', monospace; margin-top: 2px;">
+              (${Number(row.lat).toFixed(5)}, ${Number(row.lng).toFixed(5)})
             </div>
           </div>
         </div>
@@ -1104,10 +1263,45 @@ function downloadPDF(valuationResult) {
     </div>
   </div>
 
-  <!-- Section 3: Comparable Factoring Grid -->
+  <!-- Section 3: Comparable Rate Table -->
+  ${rawRateTable.length > 0 ? `
+  <div class="section page-break">
+    <div class="section-title">3. Comparable Rate Table (Stage 4 Raw Listings Statistics)</div>
+    <p style="font-size:8px; color:#64748b; margin-bottom:10px;">
+      ${rawRateTable.length} projects · ${factorialData?.total_valid || 0} valid listings analyzed
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Location</th>
+          <th class="text-center">Listing Count</th>
+          <th class="text-right">Average Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rawRateTable.map(row => `
+          <tr class="${row.is_subject ? "subject-row" : ""}">
+            <td>
+              ${row.project_name}
+              ${row.is_subject ? `<span style="background:#0891b2;color:white;font-size:7px;padding:1px 4px;border-radius:3px;font-weight:900;margin-left:4px;">SUBJECT</span>` : ""}
+            </td>
+            <td>${row.location || "—"}</td>
+            <td class="text-center mono">${row.listing_count || 0}</td>
+            <td class="text-right mono font-black" style="color:${row.is_subject ? "#0891b2" : "#16a34a"};">
+              ${row.avg_rate != null ? fmtCurrency(row.avg_rate, formatter) : "—"}/sqft
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  </div>
+  ` : ""}
+
+  <!-- Section 4: Comparable Factoring Grid -->
   ${compRows.length > 0 ? `
   <div class="section page-break">
-    <div class="section-title">3. Comparable Factoring Grid (Per-Unit Spatial Adjustments)</div>
+    <div class="section-title">4. Comparable Factoring Grid (Per-Unit Spatial Adjustments)</div>
     <table>
       <thead>
         <tr>
@@ -1149,32 +1343,140 @@ function downloadPDF(valuationResult) {
       </tbody>
     </table>
     <p style="font-size:8px;color:#94a3b8;">Each spatial factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
-  </div>` : ""}
-
-  <!-- Section 4: Cost Approach Calculation Steps (if cost type) -->
-  ${type === "cost" && costCalculation ? `
-  <div class="section">
-    <div class="section-title">4. Cost Approach — Depreciated Replacement Value Schedule</div>
-    ${[
-      ["1. Land Component Valuation", fmtCurrency(costCalcs.land_value, formatter), audit.step_1 || `${fmtCurrency(costInputs.derived_plot_rate_per_sqft, formatter)}/sqft × ${costInputs.plot_area_sqft} sqft`, "#0284c7"],
-      ["2. Replacement Construction Cost", fmtCurrency(costCalcs.construction_cost, formatter), audit.step_2 || `${fmtCurrency(costInputs.construction_rate_per_sqft, formatter)}/sqft × ${costInputs.builtup_area_sqft} sqft`, "#d97706"],
-      ["3. Depreciation Rate", `${costCalcs.depreciation_rate_pct || 0}%`, audit.step_3 || `Age: ${costInputs.age_of_property}yr ÷ Life: ${costInputs.total_life_of_building}yr`, "#dc2626"],
-      ["4. Depreciated Building Value", fmtCurrency(costCalcs.depreciated_building_value, formatter), audit.step_4 || "Construction Cost × (1 − Depreciation%)", "#ea580c"],
-      ["5. Final Cost Value", fmtCurrency(costResult.cost_value, formatter), audit.step_5 || "Land Value + Depreciated Building Value", "#16a34a"],
-    ].map(([label, value, formula, color]) => `
-    <div class="step-box">
-      <div>
-        <div class="step-label">${label}</div>
-        <div class="step-formula">${formula}</div>
+    
+    <div style="margin-top: 15px; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">
+      <div style="font-size: 8.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: #475569; margin-bottom: 8px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">
+        Spatial Attributes Legend & Reference Guide
       </div>
-      <div class="step-value" style="color:${color}">${value}</div>
-    </div>`).join("")}
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 8px; line-height: 1.4; color: #475569;">
+        <!-- Road -->
+        <div>
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 3px;">Road Connectivity (Road)</div>
+          <div style="margin-bottom: 2px;"><strong style="font-family: monospace; color: #0891b2;">D:</strong> Motorway / Expressway Frontage (High speed link)</div>
+          <div style="margin-bottom: 2px;"><strong style="font-family: monospace; color: #0891b2;">C:</strong> Primary Arterial Road (High volume commerce road)</div>
+          <div style="margin-bottom: 2px;"><strong style="font-family: monospace; color: #0891b2;">B:</strong> Secondary Road (Neighbourhood baseline collector)</div>
+          <div style="margin-bottom: 2px;"><strong style="font-family: monospace; color: #0891b2;">A:</strong> Tertiary / Residential Lane (Quiet environment, residential base)</div>
+        </div>
+
+        <!-- Density -->
+        <div>
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 3px;">Built Density & Congestion (Density)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">&gt; 4.0:</strong> Very High Density (Dense urban core, commercial premium)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">2.5 – 4.0:</strong> High Density (Established neighbourhood, active streets)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">1.2 – 2.5:</strong> Medium Density (Balanced suburban, standard baseline)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">&lt; 1.2:</strong> Low / Very Low Density (Emerging suburban, quiet gated zones)</div>
+        </div>
+
+        <!-- CBD -->
+        <div>
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 3px;">CBD Commute Zones (CBD km)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">&lt; 2 km:</strong> Prime Core (Walking/short ride, highest commercial premium)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">2 – 5 km:</strong> Excellent Zone (Easy transit commute, high demand)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">5 – 10 km:</strong> Good Zone (Accessible commuter corridor, mid-market)</div>
+          <div style="margin-bottom: 2px;"><strong style="color: #0891b2;">&gt; 10 km:</strong> Moderate to Peripheral Zone (Suburban / satellite hub)</div>
+        </div>
+
+        <!-- Amenities -->
+        <div>
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 3px;">Amenities (Healthcare, Education, etc.)</div>
+          <div style="margin-bottom: 2px;">Includes count of essential institutions within 1 km radius:</div>
+          <div style="margin-bottom: 2px;">• <strong style="color: #334155;">Education:</strong> Schools, universities (family segments weight)</div>
+          <div style="margin-bottom: 2px;">• <strong style="color: #334155;">Transport:</strong> Metro, bus stops, rail stations (transit premium)</div>
+          <div style="margin-bottom: 2px;">• <strong style="color: #334155;">Retail & Leisure:</strong> Malls, parks, clinics, supermarkets</div>
+        </div>
+      </div>
+    </div>
   </div>` : ""}
 
-  <!-- Section 5: AI Reasoning -->
+  <!-- Section 5: Blending & Final Rate Derivation -->
+  ${factorialAnalysis?.blending ? `
+  <div class="section page-break">
+    <div class="section-title">5. Rate Reconciliation & Blending Calculations</div>
+    
+    ${(() => {
+      const blending = factorialAnalysis.blending || {};
+      const w1 = Number(blending.w1 || 0) * 100;
+      const w2 = Number(blending.w2 || 0) * 100;
+      const subjectOwnRate = blending.subject_own_rate;
+      const factoredCompAvg = blending.factored_comp_avg;
+      const details = factorialAnalysis.valuation_details || {};
+      return `
+      <div style="border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:15px; background:#f8fafc;">
+        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
+          Confidence-Weighted Blending
+        </div>
+        
+        <!-- Subject Baseline -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-weight:700; color:#334155; font-size:9.5px;">Subject Property Baseline</div>
+            <div style="color:#64748b; font-size:8px;">
+              ${blending.subject_listing_count ? `${blending.subject_listing_count} listings` : "0 listings"}
+              ${blending.subject_ci_width_pct ? ` · Confidence Interval Width: ${Number(blending.subject_ci_width_pct).toFixed(1)}%` : ""}
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block;">
+              <div style="width:${Math.min(w1, 100)}%; height:100%; background:linear-gradient(to right, #06b6d4, #8b5cf6); border-radius:3px;"></div>
+            </div>
+            <span class="mono" style="font-weight:900; color:#0891b2; font-size:9.5px; width:45px; text-align:right;">${w1.toFixed(1)}%</span>
+            <span class="mono text-right" style="font-weight:700; color:#334155; font-size:9.5px; width:90px;">${fmtCurrency(subjectOwnRate, formatter)}/sqft</span>
+          </div>
+        </div>
+
+        <!-- Comparable Average -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-weight:700; color:#334155; font-size:9.5px;">Comparable Properties Average</div>
+            <div style="color:#64748b; font-size:8px;">Factored average of all comparable listings</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:100px; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; display:inline-block;">
+              <div style="width:${Math.min(w2, 100)}%; height:100%; background:linear-gradient(to right, #06b6d4, #8b5cf6); border-radius:3px;"></div>
+            </div>
+            <span class="mono" style="font-weight:900; color:#0891b2; font-size:9.5px; width:45px; text-align:right;">${w2.toFixed(1)}%</span>
+            <span class="mono text-right" style="font-weight:700; color:#334155; font-size:9.5px; width:90px;">${fmtCurrency(factoredCompAvg, formatter)}/sqft</span>
+          </div>
+        </div>
+      </div>
+
+      ${blending.weight_reasoning ? `
+      <div class="reasoning-box" style="margin-bottom:15px;">
+        <div class="reasoning-label">Weight Selection Logic</div>
+        <div class="reasoning-text">${blending.weight_reasoning}</div>
+      </div>` : ""}
+
+      <!-- Spatial factor impact summary -->
+      ${details.attribute_weights ? `
+      <div style="border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:15px;">
+        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
+          Spatial Factor Weights & Net Impact
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          ${Object.entries(details.attribute_weights || {}).map(([factor, weight]) => {
+            const impact = details.net_impacts?.[factor];
+            const formatted = factor.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+            const isPos = impact != null && Number(impact) > 0;
+            const isNeg = impact != null && Number(impact) < 0;
+            return `
+            <div style="border:1px solid #f1f5f9; background:#f8fafc; padding:8px 10px; border-radius:8px;">
+              <div style="font-size:8px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px;">${formatted}</div>
+              <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:9px;">
+                <span style="font-weight:700; color:#334155;">${(Number(weight || 0) * 100).toFixed(0)}% weight</span>
+                ${impact != null ? `<span style="font-weight:900; color:${isPos ? "#16a34a" : isNeg ? "#dc2626" : "#64748b"};">${isPos ? "+" : ""}${(Number(impact) * 100).toFixed(2)}% net impact</span>` : ""}
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>` : ""}
+      `;
+    })()}
+  </div>` : ""}
+
+  <!-- Section 6: AI Reasoning -->
   ${factorialAnalysis?.reasoning_audit ? `
-  <div class="section">
-    <div class="section-title">${type === "cost" ? "5" : "4"}. AI Agent Reasoning & Valuation Rationale</div>
+  <div class="section page-break">
+    <div class="section-title">6. AI Agent Reasoning & Valuation Rationale</div>
     ${[
       ["Stage 1 — Comparable Scoring Analysis", factorialAnalysis.reasoning_audit.stage_1_scoring_thought],
       ["Stage 2 — Spatial Adjustment Logic", factorialAnalysis.reasoning_audit.stage_2_adjustment_thought],
@@ -1191,6 +1493,26 @@ function downloadPDF(valuationResult) {
       <div style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.2em;color:#d97706;margin-bottom:4px;">Reconciliation Note</div>
       <div style="font-size:9px;color:#475569;line-height:1.6;">${factorialAnalysis.reconciliation_note}</div>
     </div>` : ""}
+  </div>` : ""}
+
+  <!-- Section 7: Cost Approach Calculation Steps (if cost type) -->
+  ${type === "cost" && costCalculation ? `
+  <div class="section page-break">
+    <div class="section-title">7. Cost Approach — Depreciated Replacement Value Schedule</div>
+    ${[
+      ["1. Land Component Valuation", fmtCurrency(costCalcs.land_value, formatter), audit.step_1 || `${fmtCurrency(costInputs.derived_plot_rate_per_sqft, formatter)}/sqft × ${costInputs.plot_area_sqft} sqft`, "#0284c7"],
+      ["2. Replacement Construction Cost", fmtCurrency(costCalcs.construction_cost, formatter), audit.step_2 || `${fmtCurrency(costInputs.construction_rate_per_sqft, formatter)}/sqft × ${costInputs.builtup_area_sqft} sqft`, "#d97706"],
+      ["3. Depreciation Rate", `${costCalcs.depreciation_rate_pct || 0}%`, audit.step_3 || `Age: ${costInputs.age_of_property}yr ÷ Life: ${costInputs.total_life_of_building}yr`, "#dc2626"],
+      ["4. Depreciated Building Value", fmtCurrency(costCalcs.depreciated_building_value, formatter), audit.step_4 || "Construction Cost × (1 − Depreciation%)", "#ea580c"],
+      ["5. Final Cost Value", fmtCurrency(costResult.cost_value, formatter), audit.step_5 || "Land Value + Depreciated Building Value", "#16a34a"],
+    ].map(([label, value, formula, color]) => `
+    <div class="step-box">
+      <div>
+        <div class="step-label">${label}</div>
+        <div class="step-formula">${formula}</div>
+      </div>
+      <div class="step-value" style="color:${color}">${value}</div>
+    </div>`).join("")}
   </div>` : ""}
 
   <!-- Disclaimer -->
@@ -1331,10 +1653,10 @@ export default function ValuationReport({ valuationResult }) {
   const slides = [
     { id: "cover", label: "Certificate", icon: Award, component: SlideCover },
     { id: "map", label: "Property Map", icon: MapPin, component: SlideReportMap },
+    { id: "factorial", label: "Rate Table", icon: Layers, component: SlideFactorialTable },
     { id: "comparable", label: "Comparables", icon: BarChart3, component: SlideComparableGrid },
     { id: "blending", label: "Rate Derivation", icon: Target, component: SlideBlending },
     { id: "reasoning", label: "AI Reasoning", icon: Zap, component: SlideReasoning },
-    { id: "factorial", label: "Rate Table", icon: Layers, component: SlideFactorialTable },
     ...(hasCostApproach ? [{ id: "cost", label: "Cost Approach", icon: Calculator, component: SlideCostApproach }] : []),
   ];
 
