@@ -151,7 +151,8 @@ export type GeneratedMapFamily =
   | '3d'
   | '3d-timelapse'
   | 'spatial-analysis'
-  | 'heatmap-timelapse';
+  | 'heatmap-timelapse'
+  | 'interactive-map';
 
 export interface RuntimeGeneratedMapOption {
   id: string;
