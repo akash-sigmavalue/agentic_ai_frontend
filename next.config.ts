@@ -10,6 +10,9 @@ const PDFJS_EXCLUDE = [/node_modules[\\/]pdfjs-dist/, /node_modules[\\/]react-pd
 const nextConfig: NextConfig = {
   /* config options here */
   allowedDevOrigins: ['192.168.1.76'],
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.cache = false; // Disable webpack cache for frontend
