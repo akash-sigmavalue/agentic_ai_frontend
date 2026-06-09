@@ -12,35 +12,48 @@ import {
   Send,
 } from "lucide-react";
 import EmailCard from "./EmailCard";
-import ThreadView from "./ThreadView";
-import type {
-  CompletionResult,
-  ConvStep,
-  WorkflowResponse,
-  WorkflowOperationType,
-} from "./types";
-import {
-  detectGroupType,
-  extractEmailsFromText,
-  getGmailNewIntentFromResponse,
-  resolveWorkflowOperationFromResponse,
-} from "./types";
-import MonitoringPanel from "./MonitoringPanel";
-import ReplyCustomizerPanel from "./ReplyCustomizerPanel";
 import WorkflowFormBox from "./WorkflowFormBox";
-import { toggleAutomationRule } from "./api";
+import ThreadView from "./ThreadView";
+import type { CompletionResult, ConvStep, WorkflowResponse } from "./types";
+import MonitoringPanel from "./MonitoringPanel";
+import ConfirmationActions from "./ConfirmationActions";
+type WorkflowOperationType =
+  | "reply"
+  | "reply_to_thread"
+  | "send"
+  | "automate"
+  | "fetch"
+  | "search"
+  | "read"
+  | "read_attachment"
+  | "analyze"
+  | "classify";
+
+type WorkflowPromptPayload = {
+  prompt: string;
+  confirmed?: boolean;
+  user_confirmed?: boolean;
+  partial_intent?: Record<string, unknown> | null;
+  team_context?: Record<string, unknown> | null;
+  user_answer?: string;
+  send_directly?: boolean;
+};
+
+type SendPromptHandler = (
+  promptOrPayload: string | WorkflowPromptPayload,
+  options?: {
+    partial_intent?: Record<string, unknown> | null;
+    team_context?: Record<string, unknown> | null;
+    user_answer?: string;
+    send_directly?: boolean;
+  }
+) => void;
 
 type OutputSectionConnectorProps = {
   response: WorkflowResponse | null;
   completionResult?: CompletionResult | null;
-  onSendPrompt?: (prompt: string) => void;
-  onRunWorkflow?: (payload: {
-    prompt: string;
-    partialIntent: Record<string, unknown>;
-    executionMode: "one_time_action" | "automation_rule";
-  }) => void;
-  pendingPrompt?: string | null;
-  currentPrompt?: string;
+  onSendPrompt?: SendPromptHandler;
+  partialIntent?: Record<string, unknown> | null;
   convStep?: ConvStep;
 };
 
@@ -48,9 +61,7 @@ export default function OutputSectionConnector({
   response,
   completionResult,
   onSendPrompt,
-  onRunWorkflow,
-  pendingPrompt,
-  currentPrompt,
+  partialIntent,
   convStep,
 }: OutputSectionConnectorProps) {
   const responseExtras = response as
@@ -59,37 +70,11 @@ export default function OutputSectionConnector({
   const [rawCopied, setRawCopied] = useState(false);
   const [selectedThread, setSelectedThread] = useState<any | null>(null);
   const [isThreadViewOpen, setIsThreadViewOpen] = useState(false);
-  const [senderInput, setSenderInput] = useState("");
-  const [senderConfirmed, setSenderConfirmed] = useState(false);
-  const [senderError, setSenderError] = useState<string | null>(null);
-  const [showReplyCustomizer, setShowReplyCustomizer] = useState(false);
-  const [replyValues, setReplyValues] = useState({
-    tone: "",
-    customInstruction: "",
-    rewrittenMessage: "",
-  });
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   useEffect(() => {
     setSelectedThread(null);
     setIsThreadViewOpen(false);
   }, [response]);
-
-  useEffect(() => {
-    setSenderInput("");
-    setSenderConfirmed(false);
-    setSenderError(null);
-    setShowReplyCustomizer(false);
-    setShowSuccessToast(false);
-  }, [
-    response?.plan?.goal,
-    response?.status,
-    response?.missing_field,
-    response?.execution_type,
-    response?.intent_understanding,
-    response?.gmail_intent,
-    response?.plan?.gmail_intent,
-  ]);
 
   const completionTitle =
     completionResult?.status === "automation_rule_created"
@@ -106,11 +91,10 @@ export default function OutputSectionConnector({
         s.tool === "fetch_matching_threads" ||
         s.tool === "gmail.search_threads" ||
         s.tool === "finalize" ||
-        s.kind === "finalize",
+        s.kind === "finalize"
     );
 
-    const threads =
-      step?.output?.threads || step?.output?.data?.threads || step?.output;
+    const threads = step?.output?.threads || step?.output?.data?.threads || step?.output;
 
     if (Array.isArray(threads)) return threads.length;
     if (step?.output) return 1;
@@ -119,105 +103,51 @@ export default function OutputSectionConnector({
 
   const repliesGenerated = (() => {
     const step = response?.step_results?.find(
-      (s) =>
-        s.tool === "llm.generate_reply" || s.tool === "generate_gmail_replies",
+      (s) => s.tool === "llm.generate_reply" || s.tool === "generate_gmail_replies"
     );
 
-    return Array.isArray(step?.output)
-      ? step.output.length
-      : step?.output
-        ? 1
-        : 0;
+    return Array.isArray(step?.output) ? step.output.length : step?.output ? 1 : 0;
   })();
 
-  const currentPromptValue = (
-    currentPrompt ||
-    pendingPrompt ||
-    response?.plan?.goal ||
-    response?.message ||
-    ""
-  ).trim();
+  const operationType = (() => {
+    const gmailIntent = response?.plan?.gmail_intent;
+    const rawOperation =
+      gmailIntent && typeof gmailIntent === "object" && !Array.isArray(gmailIntent)
+        ? (gmailIntent as { operation?: unknown }).operation
+        : undefined;
+    const rawResolvedOperation =
+      (typeof rawOperation === "string" && rawOperation) ||
+      (response?.execution_type === "automated" ? "automate" : response?.execution_type) ||
+      "send";
+    const resolvedOperation =
+      rawResolvedOperation === "send_email"
+        ? "send"
+        : rawResolvedOperation === "reply_thread"
+          ? "reply_to_thread"
+          : rawResolvedOperation === "fetch_attachment"
+            ? "read_attachment"
+            : rawResolvedOperation === "automation_rule"
+              ? "automate"
+              : rawResolvedOperation === "draft_reply"
+                ? "reply"
+                : rawResolvedOperation;
 
-  const operationType = resolveWorkflowOperationFromResponse(
-    response,
-    currentPromptValue,
-  );
-
-  const groupType = detectGroupType(
-    currentPromptValue,
-    operationType,
-    response?.execution_type,
-  );
-
-  useEffect(() => {
-    const isEmailSendSuccess =
-      Boolean(response && !response.error) &&
-      Boolean(
-        completionResult?.status === "one_time_completed" ||
-        completionResult?.reply_sent ||
-        response?.reply_sent ||
-        (response?.status === "completed" &&
-          (operationType === "send" ||
-            operationType === "reply" ||
-            operationType === "reply_to_thread")),
-      );
-
-    if (!isEmailSendSuccess) {
-      return;
+    switch (resolvedOperation) {
+      case "reply":
+      case "reply_to_thread":
+      case "send":
+      case "automate":
+      case "fetch":
+      case "search":
+      case "read":
+      case "read_attachment":
+      case "analyze":
+      case "classify":
+        return resolvedOperation;
+      default:
+        return "send";
     }
-
-    setShowSuccessToast(true);
-    const timer = window.setTimeout(() => setShowSuccessToast(false), 3500);
-    return () => window.clearTimeout(timer);
-  }, [
-    completionResult?.status,
-    completionResult?.reply_sent,
-    operationType,
-    response?.error,
-    response?.reply_sent,
-    response?.status,
-  ]);
-
-  const senderGateOperations: WorkflowOperationType[] = [
-    "fetch",
-    "reply",
-    "send",
-    "automate",
-    "search",
-    "read",
-    "read_attachment",
-    "analyze",
-    "label",
-    "status_update",
-    "delete",
-  ];
-  const newIntent = getGmailNewIntentFromResponse(response);
-
-  const needsSender =
-    !senderConfirmed &&
-    senderGateOperations.includes(operationType) &&
-    (response?.needs_sender_email === true ||
-      response?.missing_field === "sender_email" ||
-      newIntent?.clarification?.missing_information?.includes("sender") ||
-      newIntent?.clarification?.missing_information?.includes("sender_email"));
-  const originalPrompt = (
-    pendingPrompt ||
-    response?.plan?.goal ||
-    response?.message ||
-    ""
-  ).trim();
-
-  const handleConfirmSender = () => {
-    const trimmedSender = senderInput.trim();
-    if (!trimmedSender) {
-      setSenderError("Please enter a sender name or email address.");
-      return;
-    }
-
-    setSenderError(null);
-    setSenderConfirmed(true);
-    onSendPrompt?.(`${originalPrompt} from ${trimmedSender}`.trim());
-  };
+  })() as WorkflowOperationType;
 
   const repliesSent = (() => {
     const sendSteps =
@@ -225,13 +155,12 @@ export default function OutputSectionConnector({
         (s) =>
           s.tool === "gmail.reply_to_thread" ||
           s.tool === "gmail.send_email" ||
-          s.tool === "send_gmail_reply",
+          s.tool === "send_gmail_reply"
       ) || [];
 
     const fromSteps = sendSteps.reduce(
-      (acc, step) =>
-        acc + (Array.isArray(step.output) ? step.output.length : 1),
-      0,
+      (acc, step) => acc + (Array.isArray(step.output) ? step.output.length : 1),
+      0
     );
     if (fromSteps > 0) return fromSteps;
     if (
@@ -243,40 +172,6 @@ export default function OutputSectionConnector({
     }
     return 0;
   })();
-
-  const primaryMetricLabel =
-    groupType === "label"
-      ? "Emails Labeled"
-      : groupType === "status_update"
-        ? "Emails Updated"
-        : groupType === "delete"
-          ? "Emails Deleted"
-          : groupType === "draft"
-            ? "Drafts"
-            : groupType === "contact_report"
-              ? "People Found"
-              : groupType === "insight_report"
-                ? "Report Rows"
-                : "Emails Found";
-
-  const primaryMetricValue =
-    groupType === "label"
-      ? getResultCount(extractLatestToolOutput(response, "gmail.apply_label"))
-      : groupType === "status_update"
-        ? getResultCount(extractLatestToolOutput(response, "gmail.status_update"))
-        : groupType === "delete"
-          ? getDeleteCount(extractLatestToolOutput(response, "gmail.delete"))
-          : groupType === "draft"
-            ? getResultCount(
-                extractLatestToolOutput(response, "gmail.list_drafts") ||
-                  extractLatestToolOutput(response, "gmail.create_draft") ||
-                  extractLatestToolOutput(response, "gmail.draft_email"),
-              )
-            : groupType === "contact_report"
-              ? getReportRowCount(extractLatestToolOutput(response, "gmail.contact_report"))
-              : groupType === "insight_report"
-                ? getReportRowCount(extractLatestToolOutput(response, "gmail.insight_report"))
-                : emailsFound;
 
   const sentReplyText =
     completionResult?.reply_sent ||
@@ -295,24 +190,8 @@ export default function OutputSectionConnector({
 
   const processedEmails = extractProcessedEmails(response);
 
-  useEffect(() => {
-    if (groupType !== "read") {
-      return;
-    }
-
-    const firstEmail = processedEmails[0];
-    if (!firstEmail || !hasThreadMessages(firstEmail)) {
-      return;
-    }
-
-    setSelectedThread(normalizeThreadForView(firstEmail));
-    setIsThreadViewOpen(true);
-  }, [processedEmails.length, groupType]);
-
   const handleViewThread = (threadId: string, email?: any) => {
-    const threadSource = hasThreadMessages(email)
-      ? normalizeThreadForView(email)
-      : null;
+    const threadSource = hasThreadMessages(email) ? normalizeThreadForView(email) : null;
     if (threadSource) {
       setSelectedThread(threadSource);
       setIsThreadViewOpen(true);
@@ -328,27 +207,8 @@ export default function OutputSectionConnector({
   const completionTokens = response?.completion_tokens ?? 0;
   const totalTokens = response?.total_tokens ?? promptTokens + completionTokens;
   const estimatedCost = response?.estimated_cost_usd ?? 0;
-  const tokenUsage =
-    response?.token_usage && typeof response.token_usage === "object"
-      ? (response.token_usage as Record<string, unknown>)
-      : null;
-  const resolvedPromptTokens =
-    promptTokens ||
-    Number(tokenUsage?.prompt_tokens ?? 0) ||
-    Number(completionResult?.prompt_tokens ?? 0);
-  const resolvedCompletionTokens =
-    completionTokens ||
-    Number(tokenUsage?.completion_tokens ?? 0) ||
-    Number(completionResult?.completion_tokens ?? 0);
-  const resolvedTotalTokens =
-    totalTokens ||
-    Number(tokenUsage?.total_tokens ?? 0) ||
-    Number(completionResult?.total_tokens ?? 0) ||
-    resolvedPromptTokens + resolvedCompletionTokens;
-  const resolvedEstimatedCost =
-    estimatedCost ||
-    Number(tokenUsage?.estimated_cost_usd ?? 0) ||
-    Number(completionResult?.estimated_cost_usd ?? 0);
+  const estimatedCostLabel = `$${estimatedCost.toFixed(4)} USD`;
+
   const bannerStatus =
     response?.status === "needs_confirmation" ||
     response?.status === "needs_clarification"
@@ -381,96 +241,10 @@ export default function OutputSectionConnector({
     },
   }[bannerStatus];
 
-  const rawOutputDebug = response
-    ? JSON.stringify(
-        {
-          intent_understanding:
-            response.intent_understanding ||
-            response.gmail_intent ||
-            response.plan?.intent_understanding ||
-            response.plan?.gmail_intent ||
-            null,
-          raw_mcp_results: response.raw_mcp_results || [],
-          step_results: response.step_results || [],
-          policy_decision: response.policy_decision || null,
-        },
-        null,
-        2,
-      )
-    : "";
-  const showAutomationCompletionBanner =
-    groupType === "automate" &&
-    completionResult?.status === "automation_rule_created";
-  const showWorkflowForm =
-    bannerStatus === "pending" ||
-    response?.status === "needs_confirmation" ||
-    response?.status === "needs_clarification" ||
-    Boolean(response?.missing_field) ||
-    Boolean(response?.partial_intent) ||
-    newIntent?.clarification?.required === true ||
-    newIntent?.safety_and_permission?.permission_status === "pending_confirmation";
-
-  if (needsSender) {
-    return (
-      <div className="flex h-full flex-col overflow-hidden rounded-tl-3xl border-l border-t border-slate-200/60 bg-white p-6 shadow-[0_0_40px_-15px_rgba(0,0,0,0.05)]">
-        <div className="mb-6 flex items-center justify-between">
-          <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
-            OUTPUT
-          </h3>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-              Sender required
-            </p>
-            <h4 className="mt-2 text-xl font-black tracking-tight text-slate-900">
-              Before I run this, who is the email from?
-            </h4>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              {response?.sender_email_question ||
-                response?.missing_field_question ||
-                "Share the sender name or email address so I can target the right messages."}
-            </p>
-
-            <div className="mt-5">
-              <label className="flex flex-col gap-2">
-                <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-500">
-                  Sender name or email
-                </span>
-                <input
-                  value={senderInput}
-                  onChange={(event) => {
-                    setSenderInput(event.target.value);
-                    setSenderError(null);
-                  }}
-                  type="text"
-                  placeholder="avinash@sigmavalue.co.in"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
-                />
-              </label>
-
-              {senderError ? (
-                <p className="mt-2 text-xs font-medium text-rose-600">
-                  {senderError}
-                </p>
-              ) : null}
-
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleConfirmSender}
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-[#434dd8]"
-                >
-                  Confirm &amp; Run
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const rawOutputDebug =
+    response?.raw_mcp_results && response.raw_mcp_results.length > 0
+      ? JSON.stringify(response.raw_mcp_results, null, 2)
+      : "";
 
   const handleCopyRawOutput = async () => {
     if (!rawOutputDebug) return;
@@ -496,32 +270,6 @@ export default function OutputSectionConnector({
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-tl-3xl border-l border-t border-slate-200/60 bg-white p-6 shadow-[0_0_40px_-15px_rgba(0,0,0,0.05)]">
-      {showSuccessToast ? (
-        <div className="fixed right-6 top-6 z-[60] w-[min(420px,calc(100vw-2rem))] rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-[0_18px_50px_rgba(16,185,129,0.18)]">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 text-emerald-600">
-              <CheckCircle2 size={22} strokeWidth={2.5} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black tracking-tight text-emerald-800">
-                Email sent successfully
-              </p>
-              <p className="mt-1 text-sm leading-relaxed text-emerald-900/75">
-                Your message was sent and the workflow completed successfully.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowSuccessToast(false)}
-              className="rounded-full px-2 py-1 text-emerald-700 transition hover:bg-emerald-100"
-              aria-label="Dismiss success message"
-            >
-              <ChevronDown className="h-4 w-4 rotate-45" />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <div className="mb-6 flex items-center justify-between">
         <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
           OUTPUT
@@ -535,16 +283,13 @@ export default function OutputSectionConnector({
                 status: response.status,
                 summary: response.summary,
                 final_answer: response.final_answer,
-                intent_understanding: response.intent_understanding || response.gmail_intent || response.plan?.gmail_intent,
-                operation_type: operationType,
-                group_type: groupType,
                 emails_found: emailsFound,
                 replies_generated: repliesGenerated,
                 replies_sent: repliesSent,
-                prompt_tokens: resolvedPromptTokens,
-                completion_tokens: resolvedCompletionTokens,
-                total_tokens: resolvedTotalTokens,
-                estimated_cost_usd: resolvedEstimatedCost,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: totalTokens,
+                estimated_cost_usd: estimatedCost,
                 step_results: response.step_results,
                 timestamp: new Date().toISOString(),
               };
@@ -566,29 +311,7 @@ export default function OutputSectionConnector({
       </div>
 
       <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
-        {showAutomationCompletionBanner ? (
-          <div className="mb-8 rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
-            <h4 className="mb-1 text-xs font-black uppercase tracking-wider text-violet-700">
-              AUTOMATION ACTIVE
-            </h4>
-            <p className="mt-2 text-sm text-slate-700">
-              {completionResult?.message}
-            </p>
-            {completionResult?.rule_id ? (
-              <p className="mt-1 text-xs text-slate-500">
-                Rule ID: #{completionResult.rule_id}
-              </p>
-            ) : null}
-            {typeof completionResult?.rule_id === "number" ? (
-              <div className="mt-4">
-                <AutomationToggle
-                  ruleId={completionResult.rule_id}
-                  initialActive={true}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : completionResult?.status ? (
+        {completionResult?.status && (
           <div
             className="mb-8 rounded-2xl border border-green-100 bg-green-50/80 p-4"
             style={{ borderLeft: "4px solid #22c55e" }}
@@ -626,52 +349,33 @@ export default function OutputSectionConnector({
               </div>
             </div>
           </div>
-        ) : null}
+        )}
 
         {response ? (
           <>
-            <div
-              className={`relative mb-8 overflow-hidden rounded-2xl border p-6 ${bannerConfig.bg}`}
-            >
+            <div className={`relative mb-8 overflow-hidden rounded-2xl border p-6 ${bannerConfig.bg}`}>
               <div className="relative z-10 flex items-center gap-4">
-                <div
-                  className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-emerald-500/20 ${bannerConfig.iconBg}`}
-                >
+                <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-white shadow-md shadow-emerald-500/20 ${bannerConfig.iconBg}`}>
                   <Check size={24} strokeWidth={3} />
                 </div>
 
-                <div>
-                  <h4
-                    className={`text-lg font-black tracking-tight ${bannerConfig.titleColor}`}
-                  >
+                <div className="min-w-0 flex-1">
+                  <h4 className={`text-lg font-black tracking-tight ${bannerConfig.titleColor}`}>
                     {bannerConfig.title}
                   </h4>
 
-                  <p
-                    className={`mt-1 max-w-md text-sm font-medium leading-relaxed ${bannerConfig.textColor}`}
-                  >
+                  <p className={`mt-1 max-w-md text-sm font-medium leading-relaxed ${bannerConfig.textColor}`}>
                     {response.summary ||
                       "I found specific emails and processed them according to your workflow automatically."}
                   </p>
+
+                  <ConfirmationActions
+                    response={response}
+                    onSendPrompt={onSendPrompt}
+                  />
                 </div>
               </div>
             </div>
-
-            {newIntent ? (
-              <IntentUnderstandingCard intent={newIntent} />
-            ) : null}
-
-            {showWorkflowForm ? (
-              <div className="mb-8">
-                <WorkflowFormBox
-                  response={response}
-                  partialIntent={response.partial_intent || null}
-                  // cast to any to avoid cross-module WorkflowOperationType incompatibility
-                  operationType={operationType as any}
-                  onRerun={(payload) => onRunWorkflow?.(payload)}
-                />
-              </div>
-            ) : null}
 
             <div className="mb-8">
               <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
@@ -680,8 +384,8 @@ export default function OutputSectionConnector({
 
               <div className="grid grid-cols-4 gap-4">
                 <SummaryCard
-                  title={primaryMetricLabel}
-                  value={primaryMetricValue}
+                  title="Emails Found"
+                  value={emailsFound}
                   icon={<Mail size={24} strokeWidth={2.5} />}
                   iconClassName="text-sky-400"
                 />
@@ -714,7 +418,7 @@ export default function OutputSectionConnector({
                       Completed
                     </span>
                   </div>
-                </div>
+              </div>
               </div>
             </div>
 
@@ -724,222 +428,133 @@ export default function OutputSectionConnector({
               </h4>
 
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <TokenCard
-                  label="Prompt Tokens"
-                  value={resolvedPromptTokens}
-                  accentClassName="text-sky-500"
-                />
-                <TokenCard
-                  label="Completion Tokens"
-                  value={resolvedCompletionTokens}
-                  accentClassName="text-indigo-500"
-                />
-                <TokenCard
-                  label="Total Tokens"
-                  value={resolvedTotalTokens}
-                  accentClassName="text-emerald-500"
-                />
+                <TokenCard label="Prompt Tokens" value={promptTokens} accentClassName="text-sky-500" />
+                <TokenCard label="Completion Tokens" value={completionTokens} accentClassName="text-indigo-500" />
+                <TokenCard label="Total Tokens" value={totalTokens} accentClassName="text-emerald-500" />
                 <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
                   <div className="text-xs font-black tracking-tight text-slate-500">
                     Estimated Cost
                   </div>
                   <div className="mt-3 text-2xl font-black tracking-tight text-[#1e345c]">
-                    ${resolvedEstimatedCost.toFixed(4)} USD
+                    {estimatedCostLabel}
                   </div>
                 </div>
               </div>
             </div>
 
-            {sentReplyText && replyLabel ? (
-              <div className="mb-8">
-                <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
-                  {replyLabel}
-                </h4>
+          {sentReplyText && replyLabel ? (
+            <div className="mb-8">
+              <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
+                {replyLabel}
+              </h4>
 
-                <div
-                  className={`rounded-[20px] p-5 shadow-sm ${
-                    replyLabel === "AGENT REPLY SENT"
-                      ? "border border-emerald-200 bg-emerald-50/70"
-                      : "border border-amber-200 bg-amber-50/70"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white shadow-sm ${
+              <div
+                className={`rounded-[20px] p-5 shadow-sm ${
+                  replyLabel === "AGENT REPLY SENT"
+                    ? "border border-emerald-200 bg-emerald-50/70"
+                    : "border border-amber-200 bg-amber-50/70"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white shadow-sm ${
+                      replyLabel === "AGENT REPLY SENT"
+                        ? "bg-emerald-500 shadow-emerald-500/20"
+                        : "bg-amber-500 shadow-amber-500/20"
+                    }`}
+                  >
+                    <Send size={18} strokeWidth={2.5} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-sm font-black tracking-tight ${
+                          replyLabel === "AGENT REPLY SENT"
+                            ? "text-emerald-700"
+                            : "text-amber-700"
+                        }`}
+                      >
+                        {replyLabel === "AGENT REPLY SENT" ? "Reply delivered" : "Draft prepared"}
+                      </span>
+                      <span
+                        className={`rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] ${
+                          replyLabel === "AGENT REPLY SENT"
+                            ? "text-emerald-700"
+                            : "text-amber-700"
+                        }`}
+                      >
+                        Gmail
+                      </span>
+                    </div>
+
+                    <p
+                      className={`mt-1 text-sm leading-relaxed ${
                         replyLabel === "AGENT REPLY SENT"
-                          ? "bg-emerald-500 shadow-emerald-500/20"
-                          : "bg-amber-500 shadow-amber-500/20"
+                          ? "text-emerald-900/80"
+                          : "text-amber-900/80"
                       }`}
                     >
-                      <Send size={18} strokeWidth={2.5} />
-                    </div>
+                      {replyLabel === "AGENT REPLY SENT"
+                        ? "This is the message your agent sent back through the original email thread."
+                        : "This is the message your agent prepared for review."}
+                    </p>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-sm font-black tracking-tight ${
-                            replyLabel === "AGENT REPLY SENT"
-                              ? "text-emerald-700"
-                              : "text-amber-700"
-                          }`}
-                        >
-                          {replyLabel === "AGENT REPLY SENT"
-                            ? "Reply delivered"
-                            : "Draft prepared"}
-                        </span>
-                        <span
-                          className={`rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] ${
-                            replyLabel === "AGENT REPLY SENT"
-                              ? "text-emerald-700"
-                              : "text-amber-700"
-                          }`}
-                        >
-                          Gmail
-                        </span>
-                      </div>
-
-                      <p
-                        className={`mt-1 text-sm leading-relaxed ${
-                          replyLabel === "AGENT REPLY SENT"
-                            ? "text-emerald-900/80"
-                            : "text-amber-900/80"
-                        }`}
-                      >
-                        {replyLabel === "AGENT REPLY SENT"
-                          ? "This is the message your agent sent back through the original email thread."
-                          : "This is the message your agent prepared for review."}
-                      </p>
-
-                      {(operationType === "reply" ||
-                        operationType === "send" ||
-                        operationType === "reply_to_thread") && (
-                        <div className="mt-4 mb-2 text-xs font-semibold text-slate-500">
-                          To:{" "}
-                          {responseExtras?.to ||
-                            (response as any)?.recipient ||
-                            response?.from_email ||
-                            "Recipient"}
-                          {response?.subject && (
-                            <span> | Subject: {response.subject}</span>
-                          )}
-                        </div>
-                      )}
-                      <blockquote
-                        className={`mt-4 rounded-2xl border bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm ${
-                          replyLabel === "AGENT REPLY SENT"
-                            ? "border-emerald-200"
-                            : "border-amber-200"
-                        }`}
-                      >
-                        {sentReplyText}
-                      </blockquote>
-                    </div>
+                    <blockquote
+                      className={`mt-4 rounded-2xl border bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm ${
+                        replyLabel === "AGENT REPLY SENT"
+                          ? "border-emerald-200"
+                          : "border-amber-200"
+                      }`}
+                    >
+                      {sentReplyText}
+                    </blockquote>
                   </div>
                 </div>
               </div>
-            ) : null}
+            </div>
+          ) : null}
 
-            {groupType === "analyze" &&
-            (response?.final_answer || response?.analysis) ? (
-              <div className="mb-8 rounded-2xl border border-teal-200 bg-teal-50/60 p-5">
-                <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-teal-700">
-                  ANALYSIS RESULT
-                </h4>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
-                  {response.final_answer || response.analysis}
-                </div>
-              </div>
-            ) : null}
-
-            {groupType === "label" ? (
-              <LabelResultCard
-                result={extractLatestToolOutput(response, "gmail.apply_label")}
-              />
-            ) : null}
-
-            {groupType === "draft" ? (
-              <DraftResultCard
-                result={
-                  extractLatestToolOutput(response, "gmail.create_draft") ||
-                  extractLatestToolOutput(response, "gmail.draft_email") ||
-                  extractLatestToolOutput(response, "gmail.list_drafts")
-                }
-              />
-            ) : null}
-
-            {groupType === "contact_report" ? (
-              <PeopleReportCard
-                result={extractLatestToolOutput(response, "gmail.contact_report")}
-              />
-            ) : null}
-
-            {groupType === "status_update" ? (
-              <StatusResultCard
-                result={extractLatestToolOutput(response, "gmail.status_update")}
-              />
-            ) : null}
-
-            {groupType === "delete" ? (
-              <DeleteResultCard
-                result={extractLatestToolOutput(response, "gmail.delete")}
-              />
-            ) : null}
-
-            {groupType === "insight_report" ? (
-              <InsightReportCard
-                result={extractLatestToolOutput(response, "gmail.insight_report")}
-              />
-            ) : null}
-
-            {groupType === "chain" ? (
-              <WorkflowStepResultCard response={response} />
-            ) : null}
-
-            {(groupType === "reply" || groupType === "send") &&
-            (response?.reply_draft || response?.reply) &&
-            convStep !== "done" &&
-            !completionResult?.reply_sent ? (
+          {(convStep === "done" ||
+            convStep === "waiting_email" ||
+            convStep === "waiting_field" ||
+            response?.status === "needs_confirmation") &&
+            response &&
+            (response.from_email ||
+              response.subject ||
+              response.execution_type ||
+              responseExtras?.to ||
+              responseExtras?.recipient ||
+              response.step_results?.some(
+                (s) =>
+                  s.tool === "gmail.send_email" ||
+                  s.tool === "send_gmail_email" ||
+                  s.tool === "gmail.reply_to_thread"
+              ) ||
+              partialIntent?.filters ||
+              partialIntent?.original_prompt) && (
               <div className="mb-8">
-                {showReplyCustomizer ? (
-                  <ReplyCustomizerPanel
-                    draftReply={sentReplyText || response?.reply_draft || ""}
-                    values={replyValues}
-                    onChange={setReplyValues}
-                    onApply={(v) => {
-                      let cmd = `Looks good, send it. Reapply with tone: ${v.tone}`;
-                      if (v.customInstruction)
-                        cmd += `, instructions: ${v.customInstruction}`;
-                      if (v.rewrittenMessage)
-                        cmd += `, using this message instead: ${v.rewrittenMessage}`;
-                      onSendPrompt?.(cmd);
-                      setShowReplyCustomizer(false);
-                    }}
-                    onSkip={() => onSendPrompt?.(currentPromptValue || "")}
-                    isLoading={false}
-                  />
-                ) : (
-                  <PreflightEmailCard
-                    to={
-                      response?.to ||
-                      response?.from_email ||
-                      extractEmailsFromText(currentPromptValue)[0] ||
-                      ""
-                    }
-                    subject={response?.subject || ""}
-                    cc={response?.cc || null}
-                    bcc={response?.bcc || null}
-                    body={
-                      sentReplyText ||
-                      response?.reply_draft ||
-                      response?.reply ||
-                      ""
-                    }
-                    onSend={() => onSendPrompt?.(currentPromptValue || "")}
-                    onEdit={() => setShowReplyCustomizer(true)}
-                  />
-                )}
+                <WorkflowFormBox
+                  key={[
+                    operationType,
+                    response.from_email || "",
+                    response.subject || "",
+                    response.execution_type || "",
+                    partialIntent?.max_results ?? "",
+                    partialIntent?.reply_tone ?? "",
+                  ].join("|")}
+                  response={response}
+                  partialIntent={partialIntent}
+                  operationType={operationType}
+                  onRerun={onSendPrompt || (() => {})}
+                />
               </div>
-            ) : null}
+            )}
+
+          <div className="mb-8">
+            <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
+              RECENT EMAILS PROCESSED
+            </h4>
 
             {isThreadViewOpen && selectedThread ? (
               <div className="mb-4">
@@ -960,48 +575,50 @@ export default function OutputSectionConnector({
               onSendPrompt={onSendPrompt}
               onViewThread={handleViewThread}
             />
+          </div>
+
             <MonitoringPanel />
 
-            {rawOutputDebug ? (
-                <details className="group mb-2 mt-4 rounded-2xl border border-slate-200 bg-slate-50">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none">
-                    <div className="min-w-0">
-                      <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-500">
-                        RAW OUTPUT DEBUG
-                      </span>
-                      <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">
-                        Click to view full JSON response
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void handleCopyRawOutput();
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 transition hover:bg-slate-100"
-                      >
-                        <Copy size={12} />
-                        {rawCopied ? "Copied" : "Copy"}
-                      </button>
-
-                      <ChevronDown
-                        size={16}
-                        className="text-slate-400 transition-transform group-open:rotate-180"
-                      />
-                    </div>
-                  </summary>
-
-                  <div className="border-t border-slate-200 p-4">
-                    <pre className="overflow-x-auto text-[10px] leading-relaxed text-slate-600">
-                      {rawOutputDebug}
-                    </pre>
+            {response.raw_mcp_results && response.raw_mcp_results.length > 0 && (
+              <details className="group mb-2 mt-4 rounded-2xl border border-slate-200 bg-slate-50">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none">
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-500">
+                      RAW OUTPUT DEBUG
+                    </span>
+                    <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                      Click to view full JSON response
+                    </span>
                   </div>
-                </details>
-              ) : null}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleCopyRawOutput();
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 transition hover:bg-slate-100"
+                    >
+                      <Copy size={12} />
+                      {rawCopied ? "Copied" : "Copy"}
+                    </button>
+
+                    <ChevronDown
+                      size={16}
+                      className="text-slate-400 transition-transform group-open:rotate-180"
+                    />
+                  </div>
+                </summary>
+
+                <div className="border-t border-slate-200 p-4">
+                  <pre className="overflow-x-auto text-[10px] leading-relaxed text-slate-600">
+                    {rawOutputDebug}
+                  </pre>
+                </div>
+              </details>
+            )}
           </>
         ) : (
           <div className="m-2 flex h-full flex-col items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center">
@@ -1014,8 +631,7 @@ export default function OutputSectionConnector({
             </h4>
 
             <p className="mt-2 max-w-[240px] text-xs font-medium leading-relaxed text-slate-500">
-              Run a prompt to see the workflow execution summary and emails
-              processed here.
+              Run a prompt to see the workflow execution summary and emails processed here.
             </p>
           </div>
         )}
@@ -1023,103 +639,6 @@ export default function OutputSectionConnector({
     </div>
   );
 }
-
-function IntentUnderstandingCard({ intent }: { intent: any }) {
-  if (!intent || typeof intent !== "object") return null;
-
-  const understanding = intent.intent_understanding_output || {};
-  const clarification = intent.clarification || {};
-  const safety = intent.safety_and_permission || {};
-  const details = intent.intent_details || {};
-  const primaryIntent = String(understanding.primary_intent || "").trim();
-  const secondaryIntents = Array.isArray(understanding.secondary_intents)
-    ? understanding.secondary_intents
-    : [];
-  const requiredIntentNames = Object.entries(details)
-    .filter(([, value]) => value && typeof value === "object" && (value as any).is_required === true)
-    .map(([key]) => key);
-
-  return (
-    <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h4 className="text-xs font-black uppercase tracking-wider text-indigo-700">
-            INTENT UNDERSTANDING
-          </h4>
-          <p className="mt-2 text-sm leading-relaxed text-slate-700">
-            {understanding.user_goal ||
-              understanding.reasoning_summary ||
-              "The Gmail connector understood the user request and prepared the next execution stage."}
-          </p>
-        </div>
-
-        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-indigo-700 shadow-sm">
-          {understanding.intent_status || "resolved"}
-        </span>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-indigo-100 bg-white p-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-            Primary Intent
-          </p>
-          <p className="mt-1 truncate text-sm font-bold text-slate-800">
-            {primaryIntent || "N/A"}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-indigo-100 bg-white p-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-            Category
-          </p>
-          <p className="mt-1 truncate text-sm font-bold text-slate-800">
-            {understanding.action_category || "read_only"}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-indigo-100 bg-white p-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-            Confidence
-          </p>
-          <p className="mt-1 truncate text-sm font-bold text-slate-800">
-            {typeof understanding.confidence_score === "number"
-              ? `${Math.round(understanding.confidence_score * 100)}%`
-              : "N/A"}
-          </p>
-        </div>
-      </div>
-
-      {requiredIntentNames.length || secondaryIntents.length ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[...requiredIntentNames, ...secondaryIntents]
-            .filter(Boolean)
-            .slice(0, 8)
-            .map((item) => (
-              <span
-                key={String(item)}
-                className="rounded-full border border-indigo-100 bg-white px-3 py-1 text-[11px] font-bold text-indigo-700"
-              >
-                {String(item)}
-              </span>
-            ))}
-        </div>
-      ) : null}
-
-      {clarification.required ? (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          {clarification.question || "Clarification required before execution."}
-        </div>
-      ) : null}
-
-      {safety.permission_status === "pending_confirmation" ? (
-        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
-          This workflow requires confirmation before continuing.
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 
 function SummaryCard({
   title,
@@ -1134,9 +653,7 @@ function SummaryCard({
 }) {
   return (
     <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-      <div className="text-xs font-black tracking-tight text-slate-500">
-        {title}
-      </div>
+      <div className="text-xs font-black tracking-tight text-slate-500">{title}</div>
 
       <div className="mt-3 flex items-end gap-3">
         <div className={iconClassName}>{icon}</div>
@@ -1160,126 +677,11 @@ function TokenCard({
 }) {
   return (
     <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-      <div className="text-xs font-black tracking-tight text-slate-500">
-        {label}
-      </div>
-      <div
-        className={`mt-3 text-3xl font-black leading-none ${accentClassName}`}
-      >
+      <div className="text-xs font-black tracking-tight text-slate-500">{label}</div>
+      <div className={`mt-3 text-3xl font-black leading-none ${accentClassName}`}>
         {value}
       </div>
     </div>
-  );
-}
-
-function PreflightEmailCard({
-  to,
-  subject,
-  cc,
-  bcc,
-  body,
-  onSend,
-  onEdit,
-}: {
-  to: string;
-  subject: string;
-  cc?: string | null;
-  bcc?: string | null;
-  body: string;
-  onSend: () => void;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-[20px] border border-indigo-100 bg-white p-5 shadow-sm">
-      <div className="mb-2 border-b border-slate-100 pb-3">
-        <h4 className="text-sm font-black text-slate-800">Preflight Review</h4>
-        <p className="text-xs text-slate-500">
-          Review the drafted reply before sending.
-        </p>
-      </div>
-      <div className="text-sm text-slate-600">
-        <span className="font-semibold">To:</span> {to || "Recipient"}
-      </div>
-      <div className="text-sm border-b border-slate-100 pb-3 text-slate-600">
-        <span className="font-semibold">Subject:</span>{" "}
-        {subject || "No subject"}
-      </div>
-      {cc ? (
-        <div className="text-sm text-slate-600">
-          <span className="font-semibold">CC:</span> {cc}
-        </div>
-      ) : null}
-      {bcc ? (
-        <div className="text-sm text-slate-600">
-          <span className="font-semibold">BCC:</span> {bcc}
-        </div>
-      ) : null}
-      <blockquote className="mt-2 rounded-xl border border-slate-100 bg-white p-3 text-sm italic text-slate-700 shadow-sm">
-        {body || "Draft content..."}
-      </blockquote>
-      <div className="mt-2 flex items-center gap-3">
-        <button
-          onClick={onSend}
-          className="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-600"
-        >
-          ✓ Looks good, send it
-        </button>
-        <button
-          onClick={onEdit}
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-        >
-          ✏ Edit before sending
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AutomationToggle({
-  ruleId,
-  initialActive,
-}: {
-  ruleId: number;
-  initialActive: boolean;
-}) {
-  const [active, setActive] = useState(initialActive);
-
-  const handleToggle = async () => {
-    const nextState = !active;
-    setActive(nextState);
-
-    try {
-      await toggleAutomationRule(ruleId, nextState);
-    } catch {
-      setActive(!nextState);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-        active
-          ? "border-violet-200 bg-violet-600 text-white"
-          : "border-slate-200 bg-slate-100 text-slate-600"
-      }`}
-    >
-      <span className="text-[10px] uppercase tracking-[0.15em]">
-        {active ? "On" : "Off"}
-      </span>
-      <span
-        className={`relative inline-flex h-4 w-8 items-center rounded-full transition ${
-          active ? "bg-white/20" : "bg-slate-300"
-        }`}
-      >
-        <span
-          className={`inline-block h-3 w-3 transform rounded-full bg-white transition ${
-            active ? "translate-x-4" : "translate-x-0.5"
-          }`}
-        />
-      </span>
-    </button>
   );
 }
 
@@ -1289,7 +691,7 @@ function EmailList({
   onViewThread,
 }: {
   emails: any[];
-  onSendPrompt?: (prompt: string) => void;
+  onSendPrompt?: SendPromptHandler;
   onViewThread?: (threadId: string, email?: any) => void;
 }) {
   return (
@@ -1315,49 +717,15 @@ function EmailList({
   );
 }
 
-function extractLatestToolOutput(
-  response: WorkflowResponse | null,
-  toolName: string,
-) {
-  if (!response) return null;
-
-  const stepMatch = response.step_results
-    ?.slice()
-    .reverse()
-    .find((step) => step.tool === toolName);
-
-  if (stepMatch?.output) {
-    return stepMatch.output;
-  }
-
-  const rawMatch = response.raw_mcp_results
-    ?.slice()
-    .reverse()
-    .find((item) => item.tool === toolName);
-
-  if (rawMatch?.data) {
-    return rawMatch.data;
-  }
-
-  return null;
-}
-
 function extractProcessedEmails(response: WorkflowResponse | null) {
   const steps =
-    response?.step_results?.filter(
-      (step) =>
-        [
-          "gmail.search_threads",
-          "gmail.get_thread",
-          "fetch_matching_threads",
-          "finalize",
-          "fetch_latest_thread",
-          "fetch_by_sender",
-          "fetch_today",
-          "gmail.fetch_messages",
-          "search_by_keyword",
-          "search_by_subject",
-        ].includes(step.tool || "") || step.kind === "finalize",
+    response?.step_results?.filter((step) =>
+      [
+        "gmail.search_threads",
+        "gmail.get_thread",
+        "fetch_matching_threads",
+        "finalize",
+      ].includes(step.tool || "") || step.kind === "finalize"
     ) ?? [];
 
   const seen = new Set<string>();
@@ -1387,8 +755,7 @@ function flattenEmailRecords(output: any, tool?: string): any[] {
   }
 
   const record = output as Record<string, any>;
-  const nested =
-    record.data && typeof record.data === "object" ? record.data : null;
+  const nested = record.data && typeof record.data === "object" ? record.data : null;
   if (nested) {
     const nestedRecords = flattenEmailRecords(nested, tool);
     if (nestedRecords.length > 0) {
@@ -1397,9 +764,7 @@ function flattenEmailRecords(output: any, tool?: string): any[] {
   }
 
   if (Array.isArray(record.threads)) {
-    return record.threads.flatMap((thread) =>
-      normalizeThreadRecord(thread, tool),
-    );
+    return record.threads.flatMap((thread) => normalizeThreadRecord(thread, tool));
   }
 
   if (Array.isArray(record.messages)) {
@@ -1408,9 +773,7 @@ function flattenEmailRecords(output: any, tool?: string): any[] {
 
   if (record.data && typeof record.data === "object") {
     if (Array.isArray(record.data.threads)) {
-      return record.data.threads.flatMap((thread: any) =>
-        normalizeThreadRecord(thread, tool),
-      );
+      return record.data.threads.flatMap((thread: any) => normalizeThreadRecord(thread, tool));
     }
 
     if (Array.isArray(record.data.messages)) {
@@ -1418,12 +781,7 @@ function flattenEmailRecords(output: any, tool?: string): any[] {
     }
   }
 
-  if (
-    record.payload ||
-    record.internalDate ||
-    record.internal_date ||
-    record.snippet
-  ) {
+  if (record.payload || record.internalDate || record.internal_date || record.snippet) {
     return [normalizeMessageRecord(record, tool)];
   }
 
@@ -1432,11 +790,9 @@ function flattenEmailRecords(output: any, tool?: string): any[] {
 
 function normalizeThreadRecord(record: Record<string, any>, tool?: string) {
   const messages = normalizeThreadMessages(extractThreadMessages(record));
-  const summaryMessage =
-    messages.length > 0 ? messages[messages.length - 1] : record;
+  const summaryMessage = messages.length > 0 ? messages[messages.length - 1] : record;
   const summary = normalizeMessageRecord(summaryMessage, tool);
-  const threadId =
-    getThreadId(record) || getThreadId(summary) || getEmailId(record);
+  const threadId = getThreadId(record) || getThreadId(summary) || getEmailId(record);
   const messageCount = getThreadMessageCount(record, messages);
   const attachmentCount = getAttachmentCount(record, messages);
 
@@ -1452,36 +808,21 @@ function normalizeThreadRecord(record: Record<string, any>, tool?: string) {
     thread_message_count: record.thread_message_count ?? messageCount,
     from_email: getSender(summary) || getSender(record),
     to: getReceiver(summary) || getReceiver(record),
-    subject:
-      summary.subject || record.subject || record.title || "Email interaction",
-    date_str:
-      summary.date_str || summary.date || record.date_str || record.date,
+    subject: summary.subject || record.subject || record.title || "Email interaction",
+    date_str: summary.date_str || summary.date || record.date_str || record.date,
     snippet: getSnippet(summary) || getSnippet(record),
-    body_preview:
-      summary.body_preview ||
-      summary.body ||
-      summary.text ||
-      getSnippet(record),
+    body_preview: summary.body_preview || summary.body || summary.text || getSnippet(record),
     has_attachments:
-      Boolean(record.has_attachments) ||
-      attachmentCount > 0 ||
-      Boolean(summary.has_attachments),
-    attachment_count:
-      typeof record.attachment_count === "number"
-        ? record.attachment_count
-        : attachmentCount,
+      Boolean(record.has_attachments) || attachmentCount > 0 || Boolean(summary.has_attachments),
+    attachment_count: typeof record.attachment_count === "number" ? record.attachment_count : attachmentCount,
     tool,
   };
 }
 
 function normalizeMessageRecord(record: Record<string, any>, tool?: string) {
-  const source =
-    record.data && typeof record.data === "object" ? record.data : record;
+  const source = record.data && typeof record.data === "object" ? record.data : record;
   const headers = extractHeaders(source);
-  const payload =
-    source.payload && typeof source.payload === "object"
-      ? source.payload
-      : null;
+  const payload = source.payload && typeof source.payload === "object" ? source.payload : null;
   const attachmentCount = countAttachmentsFromMessage(source);
   const threadId = getThreadId(source);
   const messageId = getMessageId(source);
@@ -1499,26 +840,13 @@ function normalizeMessageRecord(record: Record<string, any>, tool?: string) {
     message_id: messageId || id,
     thread_id: threadId || undefined,
     threadId: threadId || source.threadId,
-    from_email: firstString(
-      source.from_email,
-      source.from,
-      source.sender,
-      source.sender_email,
-      fromHeader,
-    ),
+    from_email: firstString(source.from_email, source.from, source.sender, source.sender_email, fromHeader),
     to: firstString(source.to, source.receiver, source.to_email, toHeader),
-    subject:
-      firstString(source.subject, source.title, subjectHeader) ||
-      "Email interaction",
+    subject: firstString(source.subject, source.title, subjectHeader) || "Email interaction",
     date_str: firstString(source.date_str, source.date, dateHeader),
     internalDate: source.internalDate ?? source.internal_date,
     snippet,
-    body_preview: firstString(
-      source.body_preview,
-      source.body,
-      source.text,
-      snippet,
-    ),
+    body_preview: firstString(source.body_preview, source.body, source.text, snippet),
     has_attachments: Boolean(source.has_attachments) || attachmentCount > 0,
     attachment_count: source.attachment_count ?? attachmentCount,
     thread_message_count: source.thread_message_count ?? 1,
@@ -1540,9 +868,7 @@ function extractThreadMessages(record: Record<string, any>) {
           ? record.thread.messages
           : [];
 
-  return messages.filter(
-    (message: any) => message && typeof message === "object",
-  );
+  return messages.filter((message: any) => message && typeof message === "object");
 }
 
 function normalizeThreadMessages(messages: any[]) {
@@ -1563,8 +889,7 @@ function normalizeThreadMessages(messages: any[]) {
 }
 
 function normalizeThreadMessage(message: any) {
-  const source =
-    message?.data && typeof message.data === "object" ? message.data : message;
+  const source = message?.data && typeof message.data === "object" ? message.data : message;
   return {
     ...source,
     id: firstString(source?.id, source?.message_id, source?.gmail_id),
@@ -1581,16 +906,11 @@ function compareThreadMessages(a: any, b: any) {
   if (aTime !== bTime) {
     return aTime - bTime;
   }
-  return String(a.id || a.message_id || "").localeCompare(
-    String(b.id || b.message_id || ""),
-  );
+  return String(a.id || a.message_id || "").localeCompare(String(b.id || b.message_id || ""));
 }
 
 function extractHeaders(record: Record<string, any>) {
-  const payload =
-    record.payload && typeof record.payload === "object"
-      ? record.payload
-      : null;
+  const payload = record.payload && typeof record.payload === "object" ? record.payload : null;
   const rawHeaders = payload?.headers;
 
   if (!Array.isArray(rawHeaders)) {
@@ -1602,8 +922,7 @@ function extractHeaders(record: Record<string, any>) {
 
 function getHeaderValue(headers: any[], headerName: string) {
   const match = headers.find(
-    (header) =>
-      String(header?.name || "").toLowerCase() === headerName.toLowerCase(),
+    (header) => String(header?.name || "").toLowerCase() === headerName.toLowerCase()
   );
   const value = match?.value;
   return typeof value === "string" ? value.trim() : "";
@@ -1632,7 +951,7 @@ function getAttachmentCount(record: Record<string, any>, messages: any[]) {
 
   const messageAttachmentTotal = messages.reduce(
     (total, message) => total + countAttachmentsFromMessage(message),
-    0,
+    0
   );
 
   if (messageAttachmentTotal > 0) {
@@ -1651,9 +970,7 @@ function countAttachmentsFromMessage(message: any): number {
     return message.attachment_count;
   }
 
-  const attachments = Array.isArray(message.attachments)
-    ? message.attachments.length
-    : 0;
+  const attachments = Array.isArray(message.attachments) ? message.attachments.length : 0;
   if (attachments > 0) {
     return attachments;
   }
@@ -1662,10 +979,7 @@ function countAttachmentsFromMessage(message: any): number {
     return 1;
   }
 
-  const payload =
-    message.payload && typeof message.payload === "object"
-      ? message.payload
-      : null;
+  const payload = message.payload && typeof message.payload === "object" ? message.payload : null;
   return countAttachmentParts(payload);
 }
 
@@ -1707,12 +1021,7 @@ function getEmailDedupKey(email: any) {
 }
 
 function getEmailId(email: any) {
-  return firstString(
-    email?.id,
-    email?.message_id,
-    email?.thread_id,
-    email?.threadId,
-  );
+  return firstString(email?.id, email?.message_id, email?.thread_id, email?.threadId);
 }
 
 function getMessageId(email: any) {
@@ -1720,21 +1029,11 @@ function getMessageId(email: any) {
 }
 
 function getThreadId(email: any) {
-  return firstString(
-    email?.thread_id,
-    email?.threadId,
-    email?.id,
-    email?.message_id,
-  );
+  return firstString(email?.thread_id, email?.threadId, email?.id, email?.message_id);
 }
 
 function getSender(email: any) {
-  return firstString(
-    email?.from_email,
-    email?.from,
-    email?.sender,
-    email?.sender_email,
-  );
+  return firstString(email?.from_email, email?.from, email?.sender, email?.sender_email);
 }
 
 function getReceiver(email: any) {
@@ -1742,31 +1041,16 @@ function getReceiver(email: any) {
 }
 
 function getSnippet(email: any) {
-  return firstString(
-    email?.snippet,
-    email?.body_preview,
-    email?.body,
-    email?.text,
-  );
+  return firstString(email?.snippet, email?.body_preview, email?.body, email?.text);
 }
 
 function getDateValue(email: any) {
-  return firstString(
-    email?.date_str,
-    email?.date,
-    email?.internalDate,
-    email?.internal_date,
-  );
+  return firstString(email?.date_str, email?.date, email?.internalDate, email?.internal_date);
 }
 
 function getMessageSortTime(message: any) {
-  const internalRaw = firstString(
-    message?.internalDate,
-    message?.internal_date,
-  );
-  const internalValue = internalRaw
-    ? Number.parseInt(internalRaw, 10)
-    : Number.NaN;
+  const internalRaw = firstString(message?.internalDate, message?.internal_date);
+  const internalValue = internalRaw ? Number.parseInt(internalRaw, 10) : Number.NaN;
   if (Number.isFinite(internalValue)) {
     return internalValue;
   }
@@ -1791,13 +1075,7 @@ function getSubject(email: any) {
 }
 
 function getBody(email: any) {
-  return firstString(
-    email?.body,
-    email?.text,
-    email?.plain_text,
-    email?.snippet,
-    email?.body_preview,
-  );
+  return firstString(email?.body, email?.text, email?.plain_text, email?.snippet, email?.body_preview);
 }
 
 function hasThreadMessages(email: any) {
@@ -1810,257 +1088,9 @@ function normalizeThreadForView(email: any) {
   return {
     ...email,
     messages,
-    thread_message_count:
-      messages.length ||
-      email?.thread_message_count ||
-      email?.message_count ||
-      1,
-    message_count:
-      messages.length ||
-      email?.message_count ||
-      email?.thread_message_count ||
-      1,
+    thread_message_count: messages.length || email?.thread_message_count || email?.message_count || 1,
+    message_count: messages.length || email?.message_count || email?.thread_message_count || 1,
   };
-}
-
-function LabelResultCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const count = data.count || data.message_ids?.length || 0;
-
-  return (
-    <div className="mb-8 rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-violet-700">
-        LABEL / ORGANIZE RESULT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary || `Processed ${count} email(s) for label action.`}
-      </p>
-      {data.label_applied ? (
-        <p className="mt-2 text-xs font-bold text-violet-700">
-          Label: {data.label_applied}
-        </p>
-      ) : null}
-      {data.action ? (
-        <p className="mt-1 text-xs text-slate-500">Action: {data.action}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function DraftResultCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const drafts = Array.isArray(data.drafts) ? data.drafts : [];
-
-  return (
-    <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-amber-700">
-        DRAFT RESULT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary ||
-          (drafts.length
-            ? `Found ${drafts.length} draft(s).`
-            : "Draft operation completed.")}
-      </p>
-      {data.draft_id || data.id ? (
-        <p className="mt-2 text-xs text-slate-500">
-          Draft ID: {data.draft_id || data.id}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function PeopleReportCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const rows = Array.isArray(data.data) ? data.data : [];
-
-  return (
-    <div className="mb-8 rounded-2xl border border-sky-200 bg-sky-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-sky-700">
-        PEOPLE / CONTACT REPORT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary || `Prepared report for ${rows.length} sender(s).`}
-      </p>
-
-      {rows.length ? (
-        <div className="mt-4 overflow-hidden rounded-xl border border-sky-100 bg-white">
-          {rows.slice(0, 8).map((row: any, index: number) => (
-            <div
-              key={`${row.sender_email || row.display_name || index}`}
-              className="flex items-center justify-between border-b border-slate-100 px-4 py-3 last:border-b-0"
-            >
-              <span className="text-sm font-semibold text-slate-700">
-                {row.display_name || row.sender_email || "Unknown"}
-              </span>
-              <span className="text-sm font-black text-sky-700">
-                {row.count || 0}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function StatusResultCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const count = data.count || data.message_ids?.length || 0;
-
-  return (
-    <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-indigo-700">
-        STATUS UPDATE RESULT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary || `Updated status for ${count} email(s).`}
-      </p>
-      {data.action ? (
-        <p className="mt-2 text-xs font-bold text-indigo-700">
-          Action: {data.action}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function DeleteResultCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const deletedCount = data.deleted_count || data.message_ids?.length || 0;
-
-  return (
-    <div className="mb-8 rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-rose-700">
-        DELETE / CLEAN RESULT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary || `Moved ${deletedCount} email(s) to Trash.`}
-      </p>
-      <p className="mt-2 text-xs font-bold text-rose-700">
-        Deleted Count: {deletedCount}
-      </p>
-    </div>
-  );
-}
-
-function InsightReportCard({ result }: { result: any }) {
-  if (!result) return null;
-
-  const data = result.data || result;
-  const rows = Array.isArray(data.data) ? data.data : [];
-
-  return (
-    <div className="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-emerald-700">
-        INSIGHT REPORT
-      </h4>
-      <p className="text-sm leading-relaxed text-slate-800">
-        {data.summary || data.title || "Email insight report generated."}
-      </p>
-
-      {rows.length ? (
-        <div className="mt-4 overflow-hidden rounded-xl border border-emerald-100 bg-white">
-          {rows.slice(0, 8).map((row: any, index: number) => (
-            <div
-              key={`${row.label || index}`}
-              className="flex items-center justify-between border-b border-slate-100 px-4 py-3 last:border-b-0"
-            >
-              <span className="text-sm font-semibold text-slate-700">
-                {row.label || "Item"}
-              </span>
-              <span className="text-sm font-black text-emerald-700">
-                {row.value || 0}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function WorkflowStepResultCard({ response }: { response: WorkflowResponse }) {
-  const steps = response.step_results || [];
-
-  if (!steps.length) return null;
-
-  return (
-    <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-      <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-slate-700">
-        MULTI-STEP WORKFLOW
-      </h4>
-
-      <div className="space-y-3">
-        {steps.map((step, index) => (
-          <div
-            key={`${step.step_id || index}`}
-            className="rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-black text-slate-800">
-                {index + 1}. {step.tool || step.kind || step.step_id}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
-                  step.status === "completed"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-rose-50 text-rose-700"
-                }`}
-              >
-                {step.status}
-              </span>
-            </div>
-
-            {typeof step.output === "string" ? (
-              <p className="mt-2 text-sm text-slate-600">{step.output}</p>
-            ) : step.output?.summary ? (
-              <p className="mt-2 text-sm text-slate-600">
-                {step.output.summary}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function getResultCount(result: any) {
-  const data = result?.data || result;
-  if (!data) return 0;
-  if (typeof data.count === "number") return data.count;
-  if (Array.isArray(data.message_ids)) return data.message_ids.length;
-  if (Array.isArray(data.drafts)) return data.drafts.length;
-  if (data.success) return 1;
-  return 0;
-}
-
-function getDeleteCount(result: any) {
-  const data = result?.data || result;
-  if (!data) return 0;
-  if (typeof data.deleted_count === "number") return data.deleted_count;
-  if (Array.isArray(data.message_ids)) return data.message_ids.length;
-  return 0;
-}
-
-function getReportRowCount(result: any) {
-  const data = result?.data || result;
-  if (!data) return 0;
-  if (Array.isArray(data.data)) return data.data.length;
-  if (typeof data.count === "number") return data.count;
-  return 0;
 }
 
 function firstString(...values: any[]) {
