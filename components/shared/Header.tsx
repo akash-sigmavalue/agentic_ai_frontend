@@ -2,26 +2,24 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Network, Map, Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
+import { Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import AgentListDropdown from './AgentListDropdown';
 import { apiFetch } from '../../lib/api-client';
 
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(false);
+  const [isDark, setIsDark] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('sigmavalue_theme') === 'dark';
+  });
   const pathname = usePathname();
+  const shouldSyncLlmSelection = pathname !== '/maharera_agent';
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
   const [llmModel, setLlmModel] = React.useState('gpt-4o-mini');
   const [modelsByProvider, setModelsByProvider] = React.useState<Record<string, string[]>>({
     openai: ['gpt-4o-mini', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
     bedrock: ['moonshotai.kimi-k2.5', 'deepseek.v3.2'],
   });
-
-  React.useEffect(() => {
-    // Hydrate state from localStorage only after initial render
-    const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
-    setIsDark(theme);
-  }, []);
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);
@@ -40,6 +38,8 @@ const Header = () => {
           setLlmProvider(cachedProvider);
         }
         if (cachedModel) setLlmModel(cachedModel);
+
+        if (!shouldSyncLlmSelection) return;
 
         const data = await apiFetch<{
           selection?: { provider?: string; model?: string };
@@ -69,7 +69,7 @@ const Header = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [shouldSyncLlmSelection]);
 
   const persistAndApplySelection = React.useCallback(
     async (provider: 'openai' | 'bedrock', model: string) => {
@@ -77,6 +77,7 @@ const Header = () => {
       localStorage.setItem('sigmavalue_llm_model', model);
       setLlmProvider(provider);
       setLlmModel(model);
+      if (!shouldSyncLlmSelection) return;
       try {
         await apiFetch('/v1/llm/selection', {
           method: 'POST',
@@ -86,7 +87,7 @@ const Header = () => {
         console.warn('Failed to update LLM selection', error);
       }
     },
-    [],
+    [shouldSyncLlmSelection],
   );
 
   const handleProviderChange = async (nextProvider: 'openai' | 'bedrock') => {
@@ -101,11 +102,6 @@ const Header = () => {
 
   const toggleTheme = () => {
     setIsDark((prev) => !prev);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
   };
 
   const shellClass = isDark
