@@ -833,13 +833,25 @@ function SlideBlending({ valuationResult }) {
         </div>
       </div>
 
-      {/* Reconciliation note */}
-      {factorialAnalysis?.reconciliation_note && (
+      {/* Reconciliation / Limited Data Note */}
+      {factorialAnalysis?.limited_data_note ? (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 shrink-0 flex gap-3 items-start">
+          <div className="mt-0.5 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-400 mb-1">Limited Market Evidence</p>
+            <p className="text-[9px] text-amber-200/80 leading-relaxed">{factorialAnalysis.limited_data_note}</p>
+          </div>
+        </div>
+      ) : factorialAnalysis?.reconciliation_note ? (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 shrink-0">
           <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
           <p className="text-[9px] text-text-secondary leading-relaxed">{factorialAnalysis.reconciliation_note}</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
