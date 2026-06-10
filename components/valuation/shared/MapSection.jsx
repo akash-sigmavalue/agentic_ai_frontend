@@ -6,6 +6,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap, LayersControl, Circle, 
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { API_BASE_URL, apiUrl } from "@/lib/api-client";
+import ValuationReport from "@/components/valuation/shared/ValuationReport";
 import {
   Map as MapIcon,
   Loader2,
@@ -32,7 +33,8 @@ import {
   Info,
   Laptop,
   Store,
-  Compass
+  Compass,
+  FileText
 } from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -203,8 +205,9 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   return null;
 }
 
-export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate }) {
+export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, valuationResult }) {
   const [activeTheme, setActiveTheme] = useState("dark");
+  const [panelView, setPanelView] = useState("map"); // "map" | "report"
 
   useEffect(() => {
     const getTheme = () => document.documentElement.classList.contains("light") ? "light" : "dark";
@@ -810,10 +813,56 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
-        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{markers.length > 0 ? "LIVE MAP" : "WAITING"}</div>
+        {/* Tab Switcher: Visual Layer | Report */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
+            <button
+              onClick={() => setPanelView("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${
+                panelView === "map"
+                  ? "bg-accent/20 text-accent shadow-[0_0_8px_rgba(34,211,238,0.15)] border border-accent/30"
+                  : "text-text-dim hover:text-text-secondary"
+              }`}
+            >
+              <MapIcon className="h-3 w-3" />
+              Visual Layer
+            </button>
+            <button
+              onClick={() => setPanelView("report")}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${
+                panelView === "report"
+                  ? "bg-accent-purple/20 text-accent-purple shadow-[0_0_8px_rgba(167,139,250,0.15)] border border-accent-purple/30"
+                  : "text-text-dim hover:text-text-secondary"
+              }`}
+            >
+              <FileText className="h-3 w-3" />
+              Report
+              {valuationResult && panelView !== "report" && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                </span>
+              )}
+            </button>
+          </div>
+          <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${
+            panelView === "report" && valuationResult
+              ? "bg-green-500/10 border-green-500/30 text-green-400"
+              : markers.length > 0
+              ? "bg-accent/10 border-accent/20 text-accent"
+              : "bg-border/10 border-border/20 text-text-dim"
+          }`}>
+            {panelView === "report" ? (valuationResult ? "READY" : "PENDING") : (markers.length > 0 ? "LIVE MAP" : "WAITING")}
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
+      {/* Report View */}
+      {panelView === "report" ? (
+        <div className="flex-1 p-5 flex flex-col min-h-0 overflow-hidden">
+          <ValuationReport valuationResult={valuationResult} />
+        </div>
+      ) : (
+        <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
         {factorialData && factorialData.table && (
           <div className="rounded-2xl border border-border/80 bg-bg-card/80 p-5 shadow-panel flex gap-4 items-end flex-wrap shrink-0 relative z-10">
             <div className="flex-1 min-w-[220px]">
@@ -1034,9 +1083,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 )}
               </div>
             </div>
-          )
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
