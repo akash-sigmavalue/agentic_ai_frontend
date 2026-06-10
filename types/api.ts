@@ -1,5 +1,7 @@
 'use client';
 
+import type { WorkflowResponse } from "../components/connector/types";
+
 export type ConnectorMode = 'prompt' | 'manual';
 export type ConnectorStage = 'prompt' | 'workflow' | 'config' | 'test' | 'publish';
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
@@ -95,12 +97,7 @@ export interface ConnectorWorkflowDraft {
   source_prompt?: string | null;
 }
 
-export interface PromptToWorkflowResponse {
-  draft: ConnectorWorkflowDraft;
-  validation_errors: string[];
-  available_connectors: ConnectorCapability[];
-  can_execute: boolean;
-}
+export type PromptToWorkflowResponse = WorkflowResponse;
 
 export interface ConnectorInstanceConfiguration {
   connector_key: string;
@@ -296,17 +293,42 @@ export type UploadResult = {
 };
 
 export type Chunk = {
+  chunk_id?: string;
+  document_id?: string;
+  source_name?: string;
   source: string;
   page: string;
+  page_number?: string;
+  page_range?: string;
   type?: "text" | "table" | "image";
   content?: string;
+  text?: string;
   image_base64?: string;
   image_mime?: string;
   relevance_score?: number;
+  confidence_score?: number;
+};
+
+export type HighlightRect = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  page_width: number;
+  page_height: number;
+};
+
+export type HighlightResponse = {
+  success: boolean;
+  page_number: number;
+  rects: HighlightRect[];
+  message?: string | null;
 };
 
 export type AskResult = {
   answer: string;
   chunks: Chunk[];
   token_usage: TokenUsage;
+  verified?: boolean;
+  suggested_questions?: string[];
 };

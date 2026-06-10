@@ -224,6 +224,8 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
       setError(
         retrievalOutput?.status === 'running'
           ? 'Data Retrieval Agent is still running under the hood. Please run Module 2 after retrieved data is ready.'
+          : retrievalOutput?.status === 'no_data'
+            ? 'Data Retrieval Agent ran successfully, but SQL returned no rows for Module 2.'
           : retrievalOutput?.error || 'Data Retrieval Agent did not return usable rows for Module 2.',
       );
       onModule2Output?.(null);
@@ -389,6 +391,12 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
           {retrievalOutput?.status === 'error' && (
             <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-red-600">
               Runtime retrieval unavailable
+            </span>
+          )}
+
+          {retrievalOutput?.status === 'no_data' && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-600">
+              Runtime retrieval returned no rows
             </span>
           )}
 

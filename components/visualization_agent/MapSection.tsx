@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import DeckGL from '@deck.gl/react';
+import { ColumnLayer, PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import MapLibreMap, { NavigationControl as MapLibreNavigationControl } from 'react-map-gl/maplibre';
 import 'leaflet/dist/leaflet.css';
 import {
   AlertTriangle,
@@ -43,6 +46,7 @@ import type {
   Module1IntentOutput,
   Module2Output,
   RuntimeGeneratedMapOption,
+  VisualizationRetrievalState,
 } from './types';
 import {
   buildGeneratedMapConfig,
@@ -52,6 +56,7 @@ import ThreeDMapView from '@/components/geospatial/maps/ThreeDMapView';
 import ThreeDMapTimelapseView from '@/components/geospatial/maps/ThreeDMapTimelapseView';
 import SpatialAnalysisView from '@/components/geospatial/maps/SpatialAnalysisView';
 import MapOverlayView from '@/components/geospatial/maps/MapOverlayView';
+import { CATEGORY_CONFIG } from '@/components/geospatial/maps/overlays/AmenitiesOverlay';
 import HeatmapTimelapseView from '@/components/geospatial/maps/timelapse/HeatmapTimelapseView';
 import FullMapRenderer from './FullMapRenderer';
 import type { RuntimeHeatmapHub } from '@/components/geospatial/maps/timelapse/HeatmapTimelapseView';
@@ -129,13 +134,400 @@ const MapResizeInvalidator = dynamic(
     }),
   { ssr: false },
 );
+const MapAutoView = dynamic(
+  () =>
+    import('react-leaflet').then((mod) => {
+      function AutoView({ center, zoom }: { center: [number, number]; zoom: number }) {
+        const map = mod.useMap();
+
+        useEffect(() => {
+          map.setView(center, zoom, { animate: true });
+        }, [center, map, zoom]);
+
+        return null;
+      }
+
+      return AutoView;
+    }),
+  { ssr: false },
+);
+
+const InteractiveDrawControl = dynamic(
+  () =>
+    import('react-leaflet').then((mod) => {
+      function DrawControl({
+        onPolygonCreated,
+        onPolygonDeleted,
+      }: {
+        onPolygonCreated: (geoJson: any) => void;
+        onPolygonDeleted: () => void;
+      }) {
+        const map = mod.useMap();
+        const createdRef = useRef(onPolygonCreated);
+        const deletedRef = useRef(onPolygonDeleted);
+
+        createdRef.current = onPolygonCreated;
+        deletedRef.current = onPolygonDeleted;
+
+        useEffect(() => {
+          const mapWithDraw = map as any;
+          if (mapWithDraw.__interactiveDrawControl) {
+            return;
+          }
+
+          let cancelled = false;
+          let drawnItems: any;
+          let drawControl: any;
+          let onCreated: ((event: any) => void) | null = null;
+          let onDeleted: (() => void) | null = null;
+          let onEdited: ((event: any) => void) | null = null;
+
+          import('leaflet').then((leaflet: any) => {
+            import('leaflet-draw').then(() => {
+              if (cancelled || mapWithDraw.__interactiveDrawControl) return;
+
+              drawnItems = new leaflet.FeatureGroup();
+              map.addLayer(drawnItems);
+              drawControl = new (leaflet.Control as any).Draw({
+                position: 'topleft',
+                draw: {
+                  polygon: {
+                    allowIntersection: false,
+                    showArea: true,
+                    shapeOptions: { color: '#3b82f6', weight: 2, fillOpacity: 0.15 },
+                  },
+                  polyline: false,
+                  rectangle: false,
+                  circle: false,
+                  marker: false,
+                  circlemarker: false,
+                },
+                edit: {
+                  featureGroup: drawnItems,
+                  remove: true,
+                },
+              });
+              map.addControl(drawControl);
+
+              onCreated = (event: any) => {
+                drawnItems.clearLayers();
+                drawnItems.addLayer(event.layer);
+                createdRef.current(event.layer.toGeoJSON());
+              };
+              onDeleted = () => {
+                deletedRef.current();
+              };
+              onEdited = (event: any) => {
+                let editedGeoJson: any = null;
+                event.layers?.eachLayer?.((layer: any) => {
+                  editedGeoJson = layer.toGeoJSON();
+                });
+                if (editedGeoJson) {
+                  createdRef.current(editedGeoJson);
+                }
+              };
+              map.on('draw:created', onCreated);
+              map.on('draw:deleted', onDeleted);
+              map.on('draw:edited', onEdited);
+              mapWithDraw.__interactiveDrawControl = { drawnItems, drawControl, onCreated, onDeleted, onEdited };
+            });
+          });
+
+          return () => {
+            cancelled = true;
+            const registered = mapWithDraw.__interactiveDrawControl;
+            if (!registered) return;
+            if (registered.onCreated) map.off('draw:created', registered.onCreated);
+            if (registered.onDeleted) map.off('draw:deleted', registered.onDeleted);
+            if (registered.onEdited) map.off('draw:edited', registered.onEdited);
+            if (registered.drawControl) map.removeControl(registered.drawControl);
+            if (registered.drawnItems) map.removeLayer(registered.drawnItems);
+            delete mapWithDraw.__interactiveDrawControl;
+          };
+        }, [map]);
+
+        return null;
+      }
+
+      return DrawControl;
+    }),
+  { ssr: false },
+);
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629];
+const DEFAULT_INTERACTIVE_AMENITIES = ['railway_stations'];
+const MAX_INTERACTIVE_MARKERS = 1500;
+const INTERACTIVE_3D_AMENITY_HEIGHT = 52;
+const INTERACTIVE_3D_AMENITY_ICON_HEIGHT = INTERACTIVE_3D_AMENITY_HEIGHT + 10;
 
-type ViewerMapCategory = '2d' | '3d' | 'spatial-analysis';
+const CITY_CENTERS: Record<string, [number, number]> = {
+  Pune: [18.5204, 73.8567],
+  Mumbai: [19.076, 72.8777],
+  Thane: [19.2183, 72.9781],
+  Hyderabad: [17.385, 78.4867],
+  Bengaluru: [12.9716, 77.5946],
+};
+
+const CITY_BBOXES: Record<string, [number, number, number, number]> = {
+  Pune: [18.4000, 73.7200, 18.6800, 74.0200],
+  Mumbai: [18.8900, 72.7600, 19.3000, 72.9900],
+  Thane: [19.1200, 72.9000, 19.3500, 73.1000],
+  Hyderabad: [17.2500, 78.3000, 17.6000, 78.6500],
+  Bengaluru: [12.8000, 77.4500, 13.1500, 77.8000],
+};
+
+const INTERACTIVE_AMENITY_OPTIONS = [
+  { value: 'railway_stations', label: 'Railway Stations', color: CATEGORY_CONFIG.railway_stations.color },
+  { value: 'metro_stations', label: 'Metro Stations', color: CATEGORY_CONFIG.metro_stations.color },
+  { value: 'bus_stops', label: 'Bus Stops', color: CATEGORY_CONFIG.bus_stops.color },
+  { value: 'schools', label: 'Schools', color: CATEGORY_CONFIG.schools.color },
+  { value: 'hospitals', label: 'Hospitals', color: CATEGORY_CONFIG.hospitals.color },
+  { value: 'gardens', label: 'Gardens', color: CATEGORY_CONFIG.gardens.color },
+  { value: 'malls', label: 'Malls', color: CATEGORY_CONFIG.malls.color },
+  { value: 'it_parks', label: 'IT Parks', color: CATEGORY_CONFIG.it_parks.color },
+  { value: 'restaurants_entertainment', label: 'Restaurants & Entertainment', color: CATEGORY_CONFIG.restaurants_entertainment.color },
+  { value: 'police_stations', label: 'Police Stations', color: CATEGORY_CONFIG.police_stations.color },
+  { value: 'fire_stations', label: 'Fire Stations', color: CATEGORY_CONFIG.fire_stations.color },
+];
+
+const DEFAULT_INTERACTIVE_CORRIDORS = ['highways', 'metro_lines'];
+const INTERACTIVE_CORRIDOR_OPTIONS = [
+  { value: 'highways', label: 'Highway Corridors', color: '#dc2626' },
+  { value: 'metro_lines', label: 'Metro Lines', color: '#059669' },
+];
+
+const FONT_AWESOME_UNICODE_BY_CLASS: Record<string, string> = {
+  'fa-hospital': '\uf0f8',
+  'fa-bus': '\uf207',
+  'fa-school': '\uf549',
+  'fa-subway': '\uf239',
+  'fa-train': '\uf238',
+  'fa-leaf': '\uf06c',
+  'fa-shopping-bag': '\uf290',
+  'fa-building': '\uf1ad',
+  'fa-utensils': '\uf2e7',
+  'fa-shield-alt': '\uf3ed',
+  'fa-fire': '\uf06d',
+};
+
+interface InteractiveAmenityPoint {
+  name: string;
+  lat: number;
+  lon: number;
+  category: string;
+}
+
+interface InteractiveCorridorLine {
+  type?: string;
+  latlngs: [number, number][];
+  name?: string | null;
+  ref?: string | null;
+  layer: 'highways' | 'metro_lines';
+  highway?: string | null;
+  railway?: string | null;
+}
+
+interface InteractiveMapMarker {
+  id: string;
+  entity_type: 'project' | 'location';
+  name: string;
+  lat: number;
+  lon: number;
+  source_fields?: Record<string, string>;
+  raw?: Record<string, unknown>;
+}
+
+function createInteractiveAmenityIconHtml(category: string): string {
+  const cfg = CATEGORY_CONFIG[category];
+  if (!cfg) return '';
+  return `<div style="background:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:2px solid ${cfg.color};box-shadow:0 1px 4px rgba(0,0,0,.15)"><i class="fas ${cfg.icon}" style="color:${cfg.color};font-size:14px"></i></div>`;
+}
+
+function createDestinationMarkerIconHtml(color: string): string {
+  return `
+    <div style="position:relative;width:34px;height:42px;">
+      <div style="position:absolute;left:5px;top:1px;width:24px;height:24px;background:${color};border:2px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px rgba(15,23,42,.35);">
+        <div style="position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:50%;background:white;transform:translate(-50%,-50%);"></div>
+      </div>
+      <div style="position:absolute;left:12px;top:28px;width:10px;height:4px;border-radius:999px;background:rgba(15,23,42,.22);filter:blur(.5px);"></div>
+    </div>
+  `;
+}
+
+function pointInsidePolygon(point: [number, number], polygon: [number, number][]) {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function polygonLatLngsFromGeoJson(geoJson: any): [number, number][] {
+  const coords = geoJson?.geometry?.coordinates?.[0];
+  if (!Array.isArray(coords)) return [];
+  return coords
+    .map((coord: unknown) => {
+      if (!Array.isArray(coord) || coord.length < 2) return null;
+      const lon = Number(coord[0]);
+      const lat = Number(coord[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return [lat, lon] as [number, number];
+    })
+    .filter(Boolean) as [number, number][];
+}
+
+function isLatLngInsidePolygon(lat: number, lon: number, polygon: [number, number][]) {
+  if (!polygon.length) return true;
+  return pointInsidePolygon([lat, lon], polygon);
+}
+
+function resolveInteractiveSelectedCity({
+  selectedLocation,
+  resolvedCity,
+  rows,
+  moduleOutput,
+}: {
+  selectedLocation: string;
+  resolvedCity: string;
+  rows: Record<string, unknown>[];
+  moduleOutput: Module1IntentOutput | null;
+}) {
+  const searchStringSelected = selectedLocation ? selectedLocation.toLowerCase() : '';
+  const searchStringResolved = resolvedCity ? resolvedCity.toLowerCase() : '';
+
+  const directSelected = Object.keys(CITY_CENTERS).find((candidate) =>
+    searchStringSelected.includes(candidate.toLowerCase()),
+  );
+  if (directSelected) return directSelected;
+
+  const directResolved = Object.keys(CITY_CENTERS).find((candidate) =>
+    searchStringResolved.includes(candidate.toLowerCase()),
+  );
+  if (directResolved) return directResolved;
+
+  if (rows.length > 0) {
+    const first = rows[0];
+    const latField = findInteractiveField(first, ['latitude', 'lat', 'project_latitude', 'location_latitude', 'subject_lat', 'center_lat', 'y']);
+    const lonField = findInteractiveField(first, ['longitude', 'lng', 'lon', 'long', 'project_longitude', 'location_longitude', 'subject_lon', 'center_lng', 'x']);
+    if (latField && lonField) {
+      let sumLat = 0;
+      let sumLon = 0;
+      let count = 0;
+      for (const row of rows.slice(0, 10)) {
+        const lat = toInteractiveNumber(row[latField]);
+        const lon = toInteractiveNumber(row[lonField]);
+        if (lat != null && lon != null) {
+          sumLat += lat;
+          sumLon += lon;
+          count += 1;
+        }
+      }
+      if (count > 0) {
+        const avgLat = sumLat / count;
+        const avgLon = sumLon / count;
+        const matched = Object.entries(CITY_BBOXES).find(([, bbox]) => {
+          const [south, west, north, east] = bbox;
+          return avgLat >= south && avgLat <= north && avgLon >= west && avgLon <= east;
+        });
+        if (matched) return matched[0];
+      }
+    }
+  }
+
+  if (moduleOutput) {
+    const intentStr = JSON.stringify(moduleOutput).toLowerCase();
+    const matched = Object.keys(CITY_CENTERS).find((candidate) =>
+      intentStr.includes(candidate.toLowerCase()),
+    );
+    if (matched) return matched;
+  }
+
+  return 'Pune';
+}
+
+function getInteractiveMarkerMetric(marker: InteractiveMapMarker): number | null {
+  const raw = marker.raw || {};
+  const preferredKeys = [
+    'metric_value',
+    'metricValue',
+    'rate_per_sqft',
+    'rate_per_sqt',
+    'avg_rate_per_sqft',
+    'average_rate',
+    'value',
+    'price',
+  ];
+  for (const key of preferredKeys) {
+    const direct = raw[key];
+    const parsed = toInteractiveNumber(direct);
+    if (parsed != null) return parsed;
+    const matched = Object.keys(raw).find((candidate) => normalizeInteractiveKey(candidate) === normalizeInteractiveKey(key));
+    if (matched) {
+      const matchedParsed = toInteractiveNumber(raw[matched]);
+      if (matchedParsed != null) return matchedParsed;
+    }
+  }
+
+  const skipPattern = /(lat|latitude|lon|lng|long|longitude|year|month|date|period|time|floor|id|pin|code)/i;
+  for (const [key, value] of Object.entries(raw)) {
+    if (skipPattern.test(key)) continue;
+    const parsed = toInteractiveNumber(value);
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+function buildRuntime3DBuildingsFromInteractiveMarkers(markers: InteractiveMapMarker[], dates: string[]): Runtime3DBuilding[] {
+  const safeDates = dates.length > 0 ? dates : ['Current'];
+  return markers
+    .filter((marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lon))
+    .slice(0, 200)
+    .map((marker) => {
+      const metric = getInteractiveMarkerMetric(marker);
+      const floorRates = [metric];
+      return {
+        name: marker.name,
+        lat: marker.lat,
+        lng: marker.lon,
+        total_floors: 1,
+        has_floor_data: false,
+        floor_rates: floorRates,
+        floor_rates_by_date: safeDates.map(() => floorRates),
+        dates: safeDates,
+        metric_value: metric,
+      };
+    });
+}
+
+interface InteractiveEntityValidationResponse {
+  status: string;
+  validation_source: string;
+  entity_config: {
+    entity_type?: 'project' | 'location' | 'unknown';
+    name_field?: string | null;
+    latitude_field?: string | null;
+    longitude_field?: string | null;
+    confidence?: number;
+    reason?: string;
+  };
+  markers: InteractiveMapMarker[];
+  marker_count: number;
+  input_row_count: number;
+  deduped_row_count: number;
+  usage?: Record<string, unknown>;
+}
+
+type ViewerMapCategory = '2d' | '3d' | 'spatial-analysis' | 'interactive-map' | 'interactive-map-3d';
 type GeneratedBasemapMode = 'current' | 'road' | 'satellite' | 'dark';
 
 const DEFAULT_MAP_OPTIONS: { value: ViewerMapCategory; label: string }[] = [
+  { value: 'interactive-map-3d', label: 'Interactive Map 3D' },
+  { value: 'interactive-map', label: 'Interactive Map' },
   { value: '2d', label: '2D Maps' },
   { value: '3d', label: '3D Maps' },
   { value: 'spatial-analysis', label: 'Spatial Analysis' },
@@ -197,6 +589,7 @@ const FAMILY_LABEL: Record<GeneratedMapFamily, string> = {
   '3d-timelapse': '3D Map - Timelapse',
   'spatial-analysis': 'Spatial Analysis',
   'heatmap-timelapse': 'Heatmap - Timelapse',
+  'interactive-map': 'Interactive Map',
 };
 
 const FAMILY_ACTION_LABEL: Record<GeneratedMapFamily, string> = {
@@ -205,7 +598,26 @@ const FAMILY_ACTION_LABEL: Record<GeneratedMapFamily, string> = {
   '3d-timelapse': '3D Timelapse',
   'spatial-analysis': 'Spatial Analysis',
   'heatmap-timelapse': 'Heatmap Timelapse',
+  'interactive-map': 'Interactive Map',
 };
+
+const VIEWER_FAMILY_LABEL: Record<ViewerMapCategory, string> = {
+  '2d': '2D Maps',
+  '3d': '3D Maps',
+  'spatial-analysis': 'Spatial Analysis',
+  'interactive-map': 'Interactive Map',
+  'interactive-map-3d': 'Interactive Map 3D',
+};
+
+const VIEWER_ACTION_LABEL: Record<ViewerMapCategory, string> = {
+  '2d': '2D Map',
+  '3d': '3D Map',
+  'spatial-analysis': 'Spatial Analysis',
+  'interactive-map': 'Interactive Map',
+  'interactive-map-3d': 'Interactive Map 3D',
+};
+
+const INTERACTIVE_VIEWER_FAMILIES = new Set<ViewerMapCategory>(['interactive-map', 'interactive-map-3d']);
 
 const SAMPLE_OPTION_VALUE = 'sample';
 const SHOW_VISUALIZATION_DEFAULT_MAPS = false;
@@ -215,6 +627,7 @@ const GENERATED_FAMILIES = new Set<GeneratedMapFamily>([
   '3d-timelapse',
   'spatial-analysis',
   'heatmap-timelapse',
+  'interactive-map',
 ]);
 const GENERATED_RENDERERS = new Set<GeneratedMapRenderer>([
   'marker_map',
@@ -442,7 +855,13 @@ function getMapTypeForFamily(
     : '3d_heatmap';
   if (family === '3d-timelapse') return '3d_timelapse';
   if (family === 'spatial-analysis') return 'proximity_map';
+  if (family === 'interactive-map') return '2d_overlay';
   return '3d_heatmap';
+}
+
+function getGenerationFamilyForViewer(category: ViewerMapCategory): GeneratedMapFamily {
+  if (category === 'interactive-map-3d') return '3d';
+  return category === 'interactive-map' ? '2d' : category;
 }
 
 function getAutomatic3DMapType(moduleOutput: Module1IntentOutput | null, module2Output: Module2Output | null): string {
@@ -474,7 +893,161 @@ function getAutomatic3DMapType(moduleOutput: Module1IntentOutput | null, module2
 
 function isMapInViewerCategory(map: GeneratedMapConfig, category: ViewerMapCategory): boolean {
   if (category === '3d') return ['3d', '3d-timelapse', 'heatmap-timelapse'].includes(map.family);
+  if (category === 'interactive-map-3d') return ['3d', '3d-timelapse', 'heatmap-timelapse'].includes(map.family);
+  if (category === 'interactive-map') {
+    return map.family === 'interactive-map' || (map.family === '2d' && map.primaryMapType === '2d_overlay');
+  }
   return map.family === category;
+}
+
+function normalizeInteractiveKey(value: string) {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function toInteractiveNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/,/g, '').trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function findInteractiveField(record: Record<string, unknown>, candidates: string[]) {
+  const normalized = new Map(Object.keys(record).map((key) => [normalizeInteractiveKey(key), key]));
+  for (const candidate of candidates) {
+    const field = normalized.get(normalizeInteractiveKey(candidate));
+    if (field) return field;
+  }
+  return undefined;
+}
+
+function getInteractiveRows(
+  module2Output: Module2Output | null,
+  retrievalOutput: VisualizationRetrievalState | null,
+): Record<string, unknown>[] {
+  const visualizationRows = module2Output?.visualization_ready_output?.records;
+  if (Array.isArray(visualizationRows)) {
+    return visualizationRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  if (Array.isArray(module2Output?.analysis_ready_dataset)) {
+    return module2Output.analysis_ready_dataset.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  const retrievalRows = retrievalOutput?.resultSet?.rows;
+  if (Array.isArray(retrievalRows)) {
+    return retrievalRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+  }
+  return [];
+}
+
+function extractIntentLocations(moduleOutput: Module1IntentOutput | null) {
+  const found: string[] = [];
+  const locationKeyPattern = /(city|location|locality|village|micromarket|micro_market|geography|area|place)/;
+  const pushText = (value: unknown) => {
+    if (typeof value !== 'string' && typeof value !== 'number') return;
+    const text = String(value).trim();
+    if (
+      text &&
+      text.length <= 80 &&
+      !/^(true|false|null|undefined)$/i.test(text) &&
+      !/^[a-z0-9_ -]+requirements$/i.test(text)
+    ) {
+      found.push(text);
+    }
+  };
+  const collectLocationValues = (value: unknown) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(collectLocationValues);
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.values(value as Record<string, unknown>).forEach(collectLocationValues);
+      return;
+    }
+    pushText(value);
+  };
+  const visit = (value: unknown) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.entries(value as Record<string, unknown>).forEach(([key, nested]) => {
+        const keyLower = key.toLowerCase();
+        if (locationKeyPattern.test(keyLower) && !/(field|column|schema|mapping|requirement|output)/.test(keyLower)) {
+          collectLocationValues(nested);
+        } else {
+          visit(nested);
+        }
+      });
+    }
+  };
+  visit(moduleOutput);
+  const matchedKnownCities = Object.keys(CITY_CENTERS).filter((city) =>
+    found.some((value) => value.toLowerCase().includes(city.toLowerCase())),
+  );
+  return Array.from(new Set([...matchedKnownCities, ...found]));
+}
+
+function resolveInteractiveCity(moduleOutput: Module1IntentOutput | null) {
+  const locations = extractIntentLocations(moduleOutput);
+  return Object.keys(CITY_CENTERS).find((city) =>
+    locations.some((value) => value.toLowerCase().includes(city.toLowerCase())),
+  ) || locations[0] || '';
+}
+
+function buildFallbackInteractiveMarkers(rows: Record<string, unknown>[]): InteractiveMapMarker[] {
+  const first = rows[0];
+  if (!first) return [];
+  const projectField = findInteractiveField(first, ['Project Name', 'project_name', 'project', 'property_name']);
+  const locationField = findInteractiveField(first, ['Location Name', 'location_name', 'locality', 'village', 'village_name', 'micromarket', 'city']);
+  const latField = findInteractiveField(first, ['latitude', 'lat', 'project_latitude', 'location_latitude', 'subject_lat', 'center_lat', 'y']);
+  const lonField = findInteractiveField(first, ['longitude', 'lng', 'lon', 'long', 'project_longitude', 'location_longitude', 'subject_lon', 'center_lng', 'x']);
+  const nameField = projectField || locationField;
+  const entityType: 'project' | 'location' = projectField ? 'project' : 'location';
+  if (!nameField || !latField || !lonField) return [];
+  const seen = new Set<string>();
+  return rows.flatMap((row, index) => {
+    const name = String(row[nameField] || '').trim();
+    const lat = toInteractiveNumber(row[latField]);
+    const lon = toInteractiveNumber(row[lonField]);
+    if (!name || lat == null || lon == null || lat < -90 || lat > 90 || lon < -180 || lon > 180) return [];
+    const key = `${name.toLowerCase()}|${lat.toFixed(7)}|${lon.toFixed(7)}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{
+      id: `fallback:${index}`,
+      entity_type: entityType,
+      name,
+      lat,
+      lon,
+      source_fields: { name: nameField, latitude: latField, longitude: lonField },
+      raw: row,
+    }];
+  });
+}
+
+async function requestInteractiveEntityValidation(
+  moduleOutput: Module1IntentOutput | null,
+  module2Output: Module2Output | null,
+  rows: Record<string, unknown>[],
+): Promise<InteractiveEntityValidationResponse> {
+  const response = await fetch(`${API_BASE}/visualization-agent/module31/interactive-map/validate-entities`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      module_1_intent_json: moduleOutput,
+      module_2_output_json: module2Output,
+      rows_json: rows,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(body.detail || `Interactive map validation failed with status ${response.status}`);
+  }
+  return response.json();
 }
 
 async function requestModule3Generation(
@@ -735,6 +1308,7 @@ interface MapSectionProps {
   isExpanded?: boolean;
   moduleOutput?: Module1IntentOutput | null;
   module2Output?: Module2Output | null;
+  retrievalOutput?: VisualizationRetrievalState | null;
   onRuntimeGeneratedMapsChange?: (maps: RuntimeGeneratedMapOption[]) => void;
 }
 
@@ -1229,6 +1803,131 @@ function buildRuntime3DInputs(config: GeneratedMapConfig) {
   };
 }
 
+function rgbaFromHex(hex: string, alpha = 220): [number, number, number, number] {
+  const rgb = hexToRgb(hex);
+  return rgb ? [rgb[0], rgb[1], rgb[2], alpha] : [37, 99, 235, alpha];
+}
+
+function getAmenityFontAwesomeGlyph(category: string) {
+  const iconClass = CATEGORY_CONFIG[category]?.icon || '';
+  return FONT_AWESOME_UNICODE_BY_CLASS[iconClass] || '\uf111';
+}
+
+function buildInteractive3DOverlayLayers({
+  amenities,
+  corridors,
+  markers = [],
+}: {
+  amenities: InteractiveAmenityPoint[];
+  corridors: InteractiveCorridorLine[];
+  markers?: InteractiveMapMarker[];
+}) {
+  const amenityLayer = new ColumnLayer<InteractiveAmenityPoint>({
+    id: 'interactive-3d-amenity-columns',
+    data: amenities.slice(0, 800),
+    diskResolution: 16,
+    radius: 18,
+    elevationScale: 1,
+    getPosition: (amenity) => [amenity.lon, amenity.lat],
+    getElevation: () => INTERACTIVE_3D_AMENITY_HEIGHT,
+    getFillColor: (amenity) => rgbaFromHex(CATEGORY_CONFIG[amenity.category]?.color || '#f59e0b', 210),
+    getLineColor: [255, 255, 255, 230],
+    lineWidthMinPixels: 1,
+    extruded: true,
+    pickable: true,
+    autoHighlight: true,
+    highlightColor: [255, 255, 255, 120],
+  });
+
+  const corridorLayer = new PathLayer<InteractiveCorridorLine>({
+    id: 'interactive-3d-corridors',
+    data: corridors,
+    getPath: (line) => line.latlngs.map(([lat, lon]) => [lon, lat] as [number, number]),
+    getColor: (line) => line.layer === 'metro_lines' ? [5, 150, 105, 225] : [220, 38, 38, 204],
+    getWidth: (line) => line.layer === 'metro_lines' ? 8 : 7,
+    widthMinPixels: 2,
+    widthMaxPixels: 8,
+    jointRounded: true,
+    capRounded: true,
+    pickable: true,
+    autoHighlight: true,
+  });
+
+  const amenityIconLayer = new TextLayer<InteractiveAmenityPoint>({
+    id: 'interactive-3d-amenity-icons',
+    data: amenities.slice(0, 800),
+    billboard: true,
+    background: true,
+    backgroundPadding: [5, 5],
+    backgroundBorderRadius: 999,
+    fontFamily: '"Font Awesome 5 Free"',
+    fontWeight: 900,
+    characterSet: Object.values(FONT_AWESOME_UNICODE_BY_CLASS).join('') + '\uf111',
+    getText: (amenity) => getAmenityFontAwesomeGlyph(amenity.category),
+    getPosition: (amenity) => [amenity.lon, amenity.lat, INTERACTIVE_3D_AMENITY_ICON_HEIGHT],
+    getSize: () => 15,
+    sizeUnits: 'pixels',
+    getColor: (amenity) => rgbaFromHex(CATEGORY_CONFIG[amenity.category]?.color || '#f59e0b', 255),
+    getBackgroundColor: () => [255, 255, 255, 245],
+    getBorderColor: (amenity) => rgbaFromHex(CATEGORY_CONFIG[amenity.category]?.color || '#f59e0b', 255),
+    getBorderWidth: () => 2,
+    getTextAnchor: () => 'middle',
+    getAlignmentBaseline: () => 'center',
+    parameters: { depthTest: false } as any,
+    pickable: true,
+  });
+
+  const markerLayer = new ScatterplotLayer<InteractiveMapMarker>({
+    id: 'interactive-3d-preview-markers',
+    data: markers,
+    getPosition: (marker) => [marker.lon, marker.lat],
+    getFillColor: (marker) => marker.entity_type === 'project' ? [5, 150, 105, 235] : [37, 99, 235, 235],
+    getLineColor: [255, 255, 255, 255],
+    getRadius: 34,
+    radiusMinPixels: 7,
+    radiusMaxPixels: 18,
+    lineWidthMinPixels: 2,
+    stroked: true,
+    pickable: true,
+    autoHighlight: true,
+  });
+
+  return markers.length > 0
+    ? [corridorLayer, amenityLayer, amenityIconLayer, markerLayer]
+    : [corridorLayer, amenityLayer, amenityIconLayer];
+}
+
+type DeckOverlayTooltipHandler = (info: {
+  object?: unknown;
+  layer?: { id?: string } | null;
+  [key: string]: unknown;
+}) => { html?: string; text?: string } | null;
+
+const getInteractive3DTooltip: DeckOverlayTooltipHandler = (info) => {
+  const { object, layer } = info;
+  if (!object) return null;
+  const layerId = layer?.id || '';
+  const amenity = object as InteractiveAmenityPoint;
+  const corridor = object as InteractiveCorridorLine;
+  const marker = object as InteractiveMapMarker;
+
+  if (layerId.includes('amenity') || (typeof amenity.category === 'string' && amenity.category)) {
+    const label = CATEGORY_CONFIG[amenity.category]?.name || amenity.category;
+    return { html: `<strong>${amenity.name || 'Amenity'}</strong><br/>${label}` };
+  }
+  if (layerId.includes('corridor') || Array.isArray(corridor.latlngs)) {
+    return {
+      html: `<strong>${corridor.name || corridor.ref || 'Corridor'}</strong><br/>${
+        corridor.layer === 'metro_lines' ? 'Metro line' : 'Highway corridor'
+      }`,
+    };
+  }
+  if (marker.entity_type && marker.name) {
+    return { html: `<strong>${marker.name}</strong><br/>${marker.entity_type}` };
+  }
+  return null;
+};
+
 function Module31TokenLedger({ config }: { config: GeneratedMapConfig }) {
   const usage = config.module31?.usage;
   if (!usage) return null;
@@ -1391,6 +2090,8 @@ function GeneratedRuntimeHeatmapPanel({
   basemapMode,
   onBasemapModeChange,
   onLoaded,
+  extraDeckLayers = [],
+  overlayTooltip,
 }: {
   config: GeneratedMapConfig;
   title: string;
@@ -1398,6 +2099,8 @@ function GeneratedRuntimeHeatmapPanel({
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
   onLoaded?: (config: GeneratedMapConfig) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: DeckOverlayTooltipHandler;
 }) {
   const runtimeHeatmap = useMemo(() => buildRuntimeHeatmapInputs(config), [config]);
   const llmCalls = config.module31?.llm_call_count || 0;
@@ -1455,6 +2158,8 @@ function GeneratedRuntimeHeatmapPanel({
           basemapControls={<GeneratedBasemapOverlay value={basemapMode} onChange={onBasemapModeChange} />}
           autoLoad
           onInsightDataReady={handleRuntimeDataReady}
+          extraDeckLayers={extraDeckLayers}
+          overlayTooltip={overlayTooltip}
         />
       </div>
     </div>
@@ -1469,6 +2174,8 @@ function GeneratedRuntimeThreeDPanel({
   basemapMode,
   onBasemapModeChange,
   onLoaded,
+  extraDeckLayers = [],
+  overlayTooltip,
 }: {
   config: GeneratedMapConfig;
   mode: Exclude<Runtime3DMode, '3d-heatmap'>;
@@ -1477,6 +2184,8 @@ function GeneratedRuntimeThreeDPanel({
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
   onLoaded?: (config: GeneratedMapConfig) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: DeckOverlayTooltipHandler;
 }) {
   const runtime3D = useMemo(() => buildRuntime3DInputs(config), [config]);
   const llmCalls = config.module31?.llm_call_count || 0;
@@ -1499,6 +2208,8 @@ function GeneratedRuntimeThreeDPanel({
     mapId: `generated:${config.id}`,
     mapLabel: config.label,
     onInsightDataReady: handleRuntimeDataReady,
+    extraDeckLayers,
+    overlayTooltip,
   };
 
   return (
@@ -1549,6 +2260,165 @@ function GeneratedRuntimeThreeDPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function isModule31ThreeDConfig(config: GeneratedMapConfig): boolean {
+  return (
+    config.family === 'heatmap-timelapse'
+    || config.family === '3d-timelapse'
+    || config.family === '3d'
+    || config.renderer === '3d_heatmap'
+    || config.renderer === '3d_building_plotting'
+    || config.renderer === '3d_timelapse'
+    || config.renderer === '3d_floor_wise'
+  );
+}
+
+function getModule31ThreeDPanelSpec(
+  config: GeneratedMapConfig,
+  runtime3DMode: Runtime3DMode,
+): {
+  kind: 'heatmap' | 'three-d';
+  mode: '3d' | '3d-timelapse';
+  title: string;
+  description: string;
+} {
+  if (config.family === 'heatmap-timelapse') {
+    return {
+      kind: 'heatmap',
+      mode: '3d',
+      title: 'Module 3.1 Generated Heatmap Timelapse',
+      description: 'Module 3.1 routed this request to the Heatmap - Timelapse adapter and bound runtime location, radius, metric values, timeline, and tooltips from Module 2.',
+    };
+  }
+
+  if ((config.family === '3d-timelapse' || config.renderer === '3d_timelapse') && runtime3DMode === '3d-timelapse') {
+    return {
+      kind: 'three-d',
+      mode: '3d-timelapse',
+      title: 'Module 3.1 Generated 3D Timelapse',
+      description: 'Module 3.1 is using the Overture 3D timelapse adapter with runtime Module 2 buildings, time frames, and snapping to nearby building polygons.',
+    };
+  }
+
+  if (
+    (config.family === '3d' || config.family === '3d-timelapse')
+    && runtime3DMode === '3d'
+    && config.renderer !== '3d_floor_wise'
+  ) {
+    return {
+      kind: 'three-d',
+      mode: '3d',
+      title: 'Module 3.1 Generated 3D Map',
+      description: 'Module 3.1 detected project/building records without meaningful time or floor fields, so this is rendered as a simple 3D map with runtime metrics and coordinate correction enabled.',
+    };
+  }
+
+  if (config.renderer === '3d_floor_wise') {
+    if (runtime3DMode === '3d-timelapse') {
+      return {
+        kind: 'three-d',
+        mode: '3d-timelapse',
+        title: 'Module 3.1 Generated 3D Floor Wise Timelapse',
+        description: 'Module 3.1 detected floor and time fields, so this is routed to the 3D timelapse floor adapter with existing Overture snapping for building identification.',
+      };
+    }
+    return {
+      kind: 'three-d',
+      mode: '3d',
+      title: 'Module 3.1 Generated 3D Floor Wise Map',
+      description: 'Module 3.1 detected floor fields without a timeline, so this is routed to the 3D floor adapter with existing Overture snapping for building identification.',
+    };
+  }
+
+  if (config.renderer === '3d_heatmap' || config.renderer === '3d_building_plotting') {
+    if (runtime3DMode === '3d-timelapse') {
+      return {
+        kind: 'three-d',
+        mode: '3d-timelapse',
+        title: 'Module 3.1 Generated 3D Timelapse',
+        description: 'Module 3.1 detected project-level time data, so this is routed to the 3D timelapse adapter. Floor configuration is reduced to a single metric layer when floor fields are absent.',
+      };
+    }
+    if (runtime3DMode === '3d') {
+      return {
+        kind: 'three-d',
+        mode: '3d',
+        title: 'Module 3.1 Generated 3D Map',
+        description: 'Module 3.1 detected project/building data without a timeline, so this is routed to the 3D map adapter with Overture snapping and runtime metric coloring.',
+      };
+    }
+    return {
+      kind: 'heatmap',
+      mode: '3d',
+      title: 'Module 3.1 Generated 3D Map',
+      description: 'Module 3.1 selected the Overture 3D runtime adapter. Overture buildings are loaded around the Module 2 location and colored from the generated metric.',
+    };
+  }
+
+  if (runtime3DMode === '3d-heatmap') {
+    return {
+      kind: 'heatmap',
+      mode: '3d',
+      title: 'Module 3.1 Generated 3D Heatmap',
+      description: 'Module 3.1 routed this request to the heatmap timelapse adapter with runtime Module 2 metric coloring across Overture building extrusions.',
+    };
+  }
+
+  return {
+    kind: 'three-d',
+    mode: runtime3DMode === '3d-timelapse' ? '3d-timelapse' : '3d',
+    title: runtime3DMode === '3d-timelapse' ? 'Module 3.1 Generated 3D Timelapse' : 'Module 3.1 Generated 3D Map',
+    description: 'Module 3.1 routed this request to the runtime 3D map adapter with Overture building extrusions and Module 2 metrics.',
+  };
+}
+
+function GeneratedModule31ThreeDMapView({
+  config,
+  basemapMode,
+  onBasemapModeChange,
+  onLoaded,
+  extraDeckLayers = [],
+  overlayTooltip,
+}: {
+  config: GeneratedMapConfig;
+  basemapMode: GeneratedBasemapMode;
+  onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
+  onLoaded?: (config: GeneratedMapConfig) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: DeckOverlayTooltipHandler;
+}) {
+  const runtime3DMode = useMemo(() => getRuntime3DMode(config), [config]);
+  const panelSpec = useMemo(() => getModule31ThreeDPanelSpec(config, runtime3DMode), [config, runtime3DMode]);
+
+  if (panelSpec.kind === 'heatmap') {
+    return (
+      <GeneratedRuntimeHeatmapPanel
+        config={config}
+        title={panelSpec.title}
+        description={panelSpec.description}
+        basemapMode={basemapMode}
+        onBasemapModeChange={onBasemapModeChange}
+        onLoaded={onLoaded}
+        extraDeckLayers={extraDeckLayers}
+        overlayTooltip={overlayTooltip}
+      />
+    );
+  }
+
+  return (
+    <GeneratedRuntimeThreeDPanel
+      config={config}
+      mode={panelSpec.mode}
+      title={panelSpec.title}
+      description={panelSpec.description}
+      basemapMode={basemapMode}
+      onBasemapModeChange={onBasemapModeChange}
+      onLoaded={onLoaded}
+      extraDeckLayers={extraDeckLayers}
+      overlayTooltip={overlayTooltip}
+    />
   );
 }
 
@@ -1996,16 +2866,107 @@ function GeneratedSpatialAnalysisView({
   );
 }
 
+function GeneratedMapOsmOverlayLayers({
+  amenities,
+  corridors,
+}: {
+  amenities: InteractiveAmenityPoint[];
+  corridors: InteractiveCorridorLine[];
+}) {
+  const [leaflet, setLeaflet] = useState<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    import('leaflet').then((mod) => {
+      if (active) setLeaflet(mod);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const createLeafletDivIcon = useCallback(
+    (html: string, width: number, height: number, anchorY = height) => {
+      if (!leaflet || !html) return undefined;
+      return leaflet.divIcon({
+        html,
+        iconSize: [width, height],
+        iconAnchor: [width / 2, anchorY],
+        popupAnchor: [0, -Math.max(18, Math.round(height * 0.75))],
+        className: '',
+      });
+    },
+    [leaflet],
+  );
+
+  if (!leaflet) return null;
+
+  return (
+    <>
+      {corridors.map((line, index) => {
+        const isMetro = line.layer === 'metro_lines';
+        return (
+          <Polyline
+            key={`generated-osm-corridor-${line.layer}-${line.name || line.ref || index}-${index}`}
+            positions={line.latlngs}
+            pathOptions={{
+              color: isMetro ? '#059669' : '#dc2626',
+              weight: isMetro ? 5 : 4,
+              opacity: isMetro ? 0.88 : 0.8,
+              dashArray: isMetro ? '8, 6' : undefined,
+            }}
+          >
+            <Popup>
+              <div className="text-xs">
+                <strong>{line.name || (isMetro ? 'Metro line' : 'Highway corridor')}</strong>
+                <div>{isMetro ? 'Metro Line' : 'Highway Corridor'}</div>
+                {line.ref ? <div>Ref: {line.ref}</div> : null}
+                {line.highway ? <div>Type: {line.highway}</div> : null}
+              </div>
+            </Popup>
+          </Polyline>
+        );
+      })}
+      {amenities.map((amenity, index) => {
+        const option = INTERACTIVE_AMENITY_OPTIONS.find((candidate) => candidate.value === amenity.category);
+        const categoryConfig = CATEGORY_CONFIG[amenity.category];
+        return (
+          <Marker
+            key={`generated-osm-amenity-${amenity.category}-${amenity.lat}-${amenity.lon}-${index}`}
+            position={[amenity.lat, amenity.lon]}
+            icon={createLeafletDivIcon(createInteractiveAmenityIconHtml(amenity.category), 28, 28, 28)}
+          >
+            <Popup>
+              <div className="text-xs">
+                <strong>{amenity.name || 'Unnamed amenity'}</strong>
+                <div>{categoryConfig?.name || option?.label || amenity.category}</div>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
 function GeneratedMapView({
   config,
   basemapMode,
   onBasemapModeChange,
   onLoaded,
+  extraDeckLayers = [],
+  overlayTooltip,
+  osmAmenities = [],
+  osmCorridors = [],
 }: {
   config: GeneratedMapConfig;
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
   onLoaded?: (config: GeneratedMapConfig) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: DeckOverlayTooltipHandler;
+  osmAmenities?: InteractiveAmenityPoint[];
+  osmCorridors?: InteractiveCorridorLine[];
 }) {
   const [selectedFrame, setSelectedFrame] = useState<string>('all');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2061,7 +3022,6 @@ function GeneratedMapView({
     !shouldRenderClusters && !shouldRenderLines && (config.renderer === 'region_choropleth' || geometryType === 'polygon');
   const shouldRenderRadiusCircles = !shouldRenderClusters && !shouldRenderLines && !shouldRenderAreas && geometryType === 'circle';
   const shouldRenderPoints = !shouldRenderClusters && !shouldRenderLines && !shouldRenderAreas && !shouldRenderRadiusCircles;
-  const runtime3DMode = useMemo(() => getRuntime3DMode(config), [config]);
 
   useEffect(() => {
     if (config.family === '2d' && config.records.length > 0) onLoaded?.(config);
@@ -2078,119 +3038,21 @@ function GeneratedMapView({
   const getRecordRadius = (record: GeneratedMapRecord) =>
     hasMetrics ? getMetricRadius(record.metricValue, stats, visualEncoding) : visualEncoding.radiusRange.min;
 
-  if (config.family === 'heatmap-timelapse') {
+  if (isModule31ThreeDConfig(config)) {
     return (
-      <GeneratedRuntimeHeatmapPanel
+      <GeneratedModule31ThreeDMapView
         config={config}
-        title="Module 3.1 Generated Heatmap Timelapse"
-        description="Module 3.1 routed this request to the Heatmap - Timelapse adapter and bound runtime location, radius, metric values, timeline, and tooltips from Module 2."
         basemapMode={basemapMode}
         onBasemapModeChange={onBasemapModeChange}
         onLoaded={onLoaded}
-      />
-    );
-  }
-
-  if ((config.family === '3d-timelapse' || config.renderer === '3d_timelapse') && runtime3DMode === '3d-timelapse') {
-    return (
-      <GeneratedRuntimeThreeDPanel
-        config={config}
-        mode="3d-timelapse"
-        title="Module 3.1 Generated 3D Timelapse"
-        description="Module 3.1 is using the Overture 3D timelapse adapter with runtime Module 2 buildings, time frames, and snapping to nearby building polygons."
-        basemapMode={basemapMode}
-        onBasemapModeChange={onBasemapModeChange}
-        onLoaded={onLoaded}
-      />
-    );
-  }
-
-  if (
-    (config.family === '3d' || config.family === '3d-timelapse') &&
-    runtime3DMode === '3d' &&
-    config.renderer !== '3d_floor_wise'
-  ) {
-    return (
-      <GeneratedRuntimeThreeDPanel
-        config={config}
-        mode="3d"
-        title="Module 3.1 Generated 3D Map"
-        description="Module 3.1 detected project/building records without meaningful time or floor fields, so this is rendered as a simple 3D map with runtime metrics and coordinate correction enabled."
-        basemapMode={basemapMode}
-        onBasemapModeChange={onBasemapModeChange}
-        onLoaded={onLoaded}
+        extraDeckLayers={extraDeckLayers}
+        overlayTooltip={overlayTooltip}
       />
     );
   }
 
   if (config.family === 'spatial-analysis') {
     return <GeneratedSpatialAnalysisView config={config} basemapMode={basemapMode} onBasemapModeChange={onBasemapModeChange} onLoaded={onLoaded} />;
-  }
-
-  if (config.renderer === '3d_floor_wise') {
-    if (runtime3DMode === '3d-timelapse') {
-      return (
-        <GeneratedRuntimeThreeDPanel
-          config={config}
-          mode="3d-timelapse"
-          title="Module 3.1 Generated 3D Floor Wise Timelapse"
-          description="Module 3.1 detected floor and time fields, so this is routed to the 3D timelapse floor adapter with existing Overture snapping for building identification."
-          basemapMode={basemapMode}
-          onBasemapModeChange={onBasemapModeChange}
-          onLoaded={onLoaded}
-        />
-      );
-    }
-    return (
-      <GeneratedRuntimeThreeDPanel
-        config={config}
-        mode="3d"
-        title="Module 3.1 Generated 3D Floor Wise Map"
-        description="Module 3.1 detected floor fields without a timeline, so this is routed to the 3D floor adapter with existing Overture snapping for building identification."
-        basemapMode={basemapMode}
-        onBasemapModeChange={onBasemapModeChange}
-        onLoaded={onLoaded}
-      />
-    );
-  }
-
-  if (config.renderer === '3d_heatmap' || config.renderer === '3d_building_plotting') {
-    if (runtime3DMode === '3d-timelapse') {
-      return (
-        <GeneratedRuntimeThreeDPanel
-          config={config}
-          mode="3d-timelapse"
-          title="Module 3.1 Generated 3D Timelapse"
-          description="Module 3.1 detected project-level time data, so this is routed to the 3D timelapse adapter. Floor configuration is reduced to a single metric layer when floor fields are absent."
-          basemapMode={basemapMode}
-          onBasemapModeChange={onBasemapModeChange}
-          onLoaded={onLoaded}
-        />
-      );
-    }
-    if (runtime3DMode === '3d') {
-      return (
-        <GeneratedRuntimeThreeDPanel
-          config={config}
-          mode="3d"
-          title="Module 3.1 Generated 3D Map"
-          description="Module 3.1 detected project/building data without a timeline, so this is routed to the 3D map adapter with Overture snapping and runtime metric coloring."
-          basemapMode={basemapMode}
-          onBasemapModeChange={onBasemapModeChange}
-          onLoaded={onLoaded}
-        />
-      );
-    }
-    return (
-      <GeneratedRuntimeHeatmapPanel
-        config={config}
-        title="Module 3.1 Generated 3D Map"
-        description="Module 3.1 selected the Overture 3D runtime adapter. Overture buildings are loaded around the Module 2 location and colored from the generated metric."
-        basemapMode={basemapMode}
-        onBasemapModeChange={onBasemapModeChange}
-        onLoaded={onLoaded}
-      />
-    );
   }
 
   return (
@@ -2449,6 +3311,9 @@ function GeneratedMapView({
                 );
               })
             : null}
+          {(osmAmenities.length > 0 || osmCorridors.length > 0) ? (
+            <GeneratedMapOsmOverlayLayers amenities={osmAmenities} corridors={osmCorridors} />
+          ) : null}
         </MapContainer>
 
         <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-xs rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
@@ -2527,6 +3392,10 @@ function SampleMapView({
   );
 
   if (activeFamily === '2d') {
+    return <MapOverlayView isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} onInsightDataReady={handleLoaded} />;
+  }
+
+  if (activeFamily === 'interactive-map') {
     return <MapOverlayView isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} onInsightDataReady={handleLoaded} />;
   }
 
@@ -2699,6 +3568,748 @@ function Module7InsightsPanel({
   );
 }
 
+function InteractiveMapPendingState() {
+  return (
+    <section className="flex h-full min-h-[680px] flex-col items-center justify-center bg-white px-6 text-center">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">Interactive MapView</p>
+      <h3 className="mt-2 text-base font-extrabold text-slate-950">Waiting for resolved intent</h3>
+      <p className="mt-3 max-w-md text-xs font-semibold leading-5 text-slate-500">
+        Submit a query first. The interactive map will appear after Module 1 finishes intent resolution, then it will load amenities for the resolved city.
+      </p>
+    </section>
+  );
+}
+
+function Interactive2DPreviewMap({
+  center,
+  amenities,
+  corridors,
+  basemapMode,
+}: {
+  center: [number, number];
+  amenities: InteractiveAmenityPoint[];
+  corridors: InteractiveCorridorLine[];
+  basemapMode: GeneratedBasemapMode;
+}) {
+  return (
+    <MapContainer
+      center={center}
+      zoom={12}
+      preferCanvas
+      className="h-full min-h-[560px] w-full"
+      scrollWheelZoom
+    >
+      <TileLayer
+        url={LEAFLET_BASEMAP_OPTIONS[basemapMode].url}
+        attribution={LEAFLET_BASEMAP_OPTIONS[basemapMode].attribution}
+      />
+      <MapResizeInvalidator />
+      <GeneratedMapOsmOverlayLayers amenities={amenities} corridors={corridors} />
+    </MapContainer>
+  );
+}
+
+function InteractiveRuntimeMapView({
+  moduleOutput,
+  module2Output,
+  retrievalOutput,
+  module31Config = null,
+  isLoadingModule31 = false,
+  readiness,
+  basemapMode,
+  onBasemapModeChange,
+  onMapLoaded,
+}: {
+  moduleOutput: Module1IntentOutput | null;
+  module2Output: Module2Output | null;
+  retrievalOutput: VisualizationRetrievalState | null;
+  module31Config?: GeneratedMapConfig | null;
+  isLoadingModule31?: boolean;
+  readiness: ReturnType<typeof getModule31Readiness>;
+  basemapMode: GeneratedBasemapMode;
+  onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
+  onMapLoaded?: (config: GeneratedMapConfig) => void;
+}) {
+  const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
+  const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
+  const rows = useMemo(() => getInteractiveRows(module2Output, retrievalOutput), [module2Output, retrievalOutput]);
+  const [selectedLocation, setSelectedLocation] = useState(resolvedCity);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(DEFAULT_INTERACTIVE_AMENITIES);
+  const [selectedCorridors, setSelectedCorridors] = useState<string[]>(DEFAULT_INTERACTIVE_CORRIDORS);
+  const [amenities, setAmenities] = useState<InteractiveAmenityPoint[]>([]);
+  const [amenitiesLoading, setAmenitiesLoading] = useState(false);
+  const [amenitiesStatus, setAmenitiesStatus] = useState('Railway stations selected by default');
+  const [corridorLines, setCorridorLines] = useState<InteractiveCorridorLine[]>([]);
+  const [corridorsLoading, setCorridorsLoading] = useState(false);
+  const [corridorsStatus, setCorridorsStatus] = useState('Metro lines and highway corridors selected by default');
+
+  const selectedCity = useMemo(
+    () => resolveInteractiveSelectedCity({ selectedLocation, resolvedCity, rows, moduleOutput }),
+    [moduleOutput, resolvedCity, rows, selectedLocation],
+  );
+
+  useEffect(() => {
+    if (resolvedCity) {
+      setSelectedLocation(resolvedCity);
+    }
+  }, [resolvedCity]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const loadAmenities = async () => {
+      if (!selectedLocation || selectedAmenities.length === 0) {
+        setAmenities([]);
+        setAmenitiesStatus(!selectedLocation ? 'Waiting for resolved city to load amenities' : 'Select amenities to overlay');
+        return;
+      }
+      if (!selectedCity) {
+        setAmenities([]);
+        setAmenitiesStatus('Amenities need a supported resolved city');
+        return;
+      }
+      setAmenitiesLoading(true);
+      setAmenitiesStatus('Fetching amenities from OpenStreetMap...');
+      try {
+        const params = new URLSearchParams({ city: selectedCity, categories: selectedAmenities.join(',') });
+        const response = await fetch(`${API_BASE}/map-overlays/osm-amenities?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+        const data = await response.json() as {
+          points?: InteractiveAmenityPoint[];
+          category_metadata?: Record<string, { source?: string }>;
+        };
+        if (!active) return;
+        const sources = new Set(Object.values(data.category_metadata || {}).map((metadata) => metadata.source));
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        const points = Array.isArray(data.points) ? data.points : [];
+        setAmenities(points);
+        setAmenitiesStatus(`${points.length} amenities loaded${cacheUsed ? ' (soft cache)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setAmenities([]);
+        setAmenitiesStatus(error instanceof Error ? error.message : 'Unable to load amenities');
+      } finally {
+        if (active) setAmenitiesLoading(false);
+      }
+    };
+    loadAmenities();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedAmenities, selectedCity, selectedLocation]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const loadCorridors = async () => {
+      if (!selectedLocation || selectedCorridors.length === 0) {
+        setCorridorLines([]);
+        setCorridorsStatus(!selectedLocation ? 'Waiting for resolved city to load corridors' : 'Select corridor layers to overlay');
+        return;
+      }
+      if (!selectedCity) {
+        setCorridorLines([]);
+        setCorridorsStatus('Corridors need a supported resolved city');
+        return;
+      }
+      setCorridorsLoading(true);
+      setCorridorsStatus('Fetching metro lines and highway corridors from OpenStreetMap...');
+      try {
+        const params = new URLSearchParams({ city: selectedCity, layers: selectedCorridors.join(',') });
+        const response = await fetch(`${API_BASE}/map-overlays/osm-corridors?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+        const data = await response.json() as {
+          highways?: InteractiveCorridorLine[];
+          metro_lines?: InteractiveCorridorLine[];
+          layer_metadata?: Record<string, { source?: string }>;
+        };
+        if (!active) return;
+        const sources = new Set(Object.values(data.layer_metadata || {}).map((metadata) => metadata.source));
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        const highways = (Array.isArray(data.highways) ? data.highways : []).map((line) => ({ ...line, layer: 'highways' as const }));
+        const metroLines = (Array.isArray(data.metro_lines) ? data.metro_lines : []).map((line) => ({ ...line, layer: 'metro_lines' as const }));
+        const lines = [...highways, ...metroLines].filter((line) => Array.isArray(line.latlngs) && line.latlngs.length > 1);
+        setCorridorLines(lines);
+        setCorridorsStatus(`${lines.length} corridors loaded${cacheUsed ? ' (soft cache)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setCorridorLines([]);
+        setCorridorsStatus(error instanceof Error ? error.message : 'Unable to load corridors');
+      } finally {
+        if (active) setCorridorsLoading(false);
+      }
+    };
+    loadCorridors();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedCorridors, selectedCity, selectedLocation]);
+
+  const locationOptions = useMemo(
+    () => Array.from(new Set([resolvedCity, ...intentLocations].filter(Boolean))),
+    [intentLocations, resolvedCity],
+  );
+  const mapCenter: [number, number] = (selectedCity ? CITY_CENTERS[selectedCity] : undefined) || DEFAULT_CENTER;
+  const waitingStatus = moduleOutput
+    ? readiness.isReady
+      ? 'Module 3.1 is preparing the 2D map from finalized Module 2 data.'
+      : 'Intent resolved. Waiting for Module 2 finalized data before Module 3.1 starts.'
+    : 'Submit a query to resolve intent and load the map.';
+
+  const overlayToolbar = (
+    <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-4">
+      <div>
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">MapView</p>
+        <h3 className="text-sm font-extrabold text-slate-950">Interactive Map</h3>
+      </div>
+
+      {isLoadingModule31 ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-600">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Module 3.1 processing
+        </span>
+      ) : module31Config ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+          <TrendingUp className="h-3 w-3" />
+          OSM overlays active
+        </span>
+      ) : null}
+
+      <label className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        Location
+        <select
+          value={selectedLocation}
+          onChange={(event) => setSelectedLocation(event.target.value)}
+          className="max-w-[190px] bg-transparent text-[10px] font-extrabold uppercase tracking-widest text-slate-700 outline-none"
+        >
+          {locationOptions.length > 0 ? (
+            locationOptions.map((location) => (
+              <option key={location} value={location}>{location}</option>
+            ))
+          ) : (
+            <option value="">No resolved location</option>
+          )}
+        </select>
+      </label>
+
+      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <summary className="cursor-pointer list-none select-none">
+          Amenities {selectedAmenities.length ? `(${selectedAmenities.length})` : ''}
+        </summary>
+        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          {INTERACTIVE_AMENITY_OPTIONS.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
+              <input
+                type="checkbox"
+                checked={selectedAmenities.includes(option.value)}
+                onChange={(event) => {
+                  setSelectedAmenities((previous) =>
+                    event.target.checked
+                      ? Array.from(new Set([...previous, option.value]))
+                      : previous.filter((value) => value !== option.value),
+                  );
+                }}
+                className="h-3 w-3 accent-emerald-600"
+              />
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </details>
+
+      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <summary className="cursor-pointer list-none select-none">
+          Corridors {selectedCorridors.length ? `(${selectedCorridors.length})` : ''}
+        </summary>
+        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          {INTERACTIVE_CORRIDOR_OPTIONS.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
+              <input
+                type="checkbox"
+                checked={selectedCorridors.includes(option.value)}
+                onChange={(event) => {
+                  setSelectedCorridors((previous) =>
+                    event.target.checked
+                      ? Array.from(new Set([...previous, option.value]))
+                      : previous.filter((value) => value !== option.value),
+                  );
+                }}
+                className="h-3 w-3 accent-emerald-600"
+              />
+              <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: option.color }} />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+
+  const statusFooter = (
+    <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
+      <span>
+        {module31Config
+          ? `${module31Config.records.length} records · same 2D map family renderer`
+          : isLoadingModule31
+            ? 'Module 3.1 processing finalized data'
+            : waitingStatus}
+      </span>
+      <span>{module31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+      <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
+      <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+    </div>
+  );
+
+  if (module31Config) {
+    return (
+      <section className="flex h-full min-h-[680px] flex-col bg-white">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+        {overlayToolbar}
+        <div className="min-h-0 flex-1">
+          <GeneratedMapView
+            key={module31Config.id}
+            config={module31Config}
+            basemapMode={basemapMode}
+            onBasemapModeChange={onBasemapModeChange}
+            onLoaded={onMapLoaded}
+            osmAmenities={amenities}
+            osmCorridors={corridorLines}
+          />
+        </div>
+        {statusFooter}
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex h-full min-h-[680px] flex-col bg-white">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+      {overlayToolbar}
+      <div className="relative min-h-[560px] flex-1">
+        {readiness.isReady && isLoadingModule31 ? (
+          <div className="flex h-full min-h-[560px] flex-col items-center justify-center bg-slate-50 px-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            <p className="mt-4 text-sm font-extrabold text-slate-900">Building Interactive Map</p>
+            <p className="mt-2 max-w-md text-xs font-semibold leading-5 text-slate-500">
+              Module 3.1 is generating the same 2D map family renderer. OSM amenities and corridors will overlay once ready.
+            </p>
+          </div>
+        ) : (
+          <>
+            <Interactive2DPreviewMap
+              center={mapCenter}
+              amenities={amenities}
+              corridors={corridorLines}
+              basemapMode={basemapMode}
+            />
+            <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Resolved Location</p>
+              <p className="mt-1 text-base font-extrabold text-slate-950">{selectedLocation || selectedCity || 'No resolved location'}</p>
+              <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                Amenities and corridors are loaded from intent. The fine-tuned 2D map will appear after Module 2 and Module 3.1 finish.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      {statusFooter}
+    </section>
+  );
+}
+
+function Interactive3DPreviewMap({
+  center,
+  amenities,
+  corridors,
+  markers,
+  basemapMode,
+  onBasemapModeChange,
+}: {
+  center: [number, number];
+  amenities: InteractiveAmenityPoint[];
+  corridors: InteractiveCorridorLine[];
+  markers: InteractiveMapMarker[];
+  basemapMode: GeneratedBasemapMode;
+  onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
+}) {
+  const [viewState, setViewState] = useState({
+    longitude: center[1],
+    latitude: center[0],
+    zoom: markers.length > 0 ? 12.5 : 11.5,
+    pitch: 58,
+    bearing: 25,
+  });
+
+  useEffect(() => {
+    setViewState((previous) => ({
+      ...previous,
+      longitude: center[1],
+      latitude: center[0],
+      zoom: markers.length > 0 ? 12.5 : 11.5,
+    }));
+  }, [center, markers.length]);
+
+  const layers = useMemo(
+    () => buildInteractive3DOverlayLayers({ amenities, corridors, markers }),
+    [amenities, corridors, markers],
+  );
+
+  return (
+    <div className="relative h-full min-h-[560px] overflow-hidden">
+      <GeneratedBasemapOverlay value={basemapMode} onChange={onBasemapModeChange} />
+      <DeckGL
+        controller
+        layers={layers}
+        viewState={viewState}
+        onViewStateChange={({ viewState: nextViewState }) => setViewState(nextViewState as typeof viewState)}
+        getTooltip={getInteractive3DTooltip}
+        style={{ position: 'absolute', inset: '0px' }}
+      >
+        <MapLibreMap
+          mapLib={import('maplibre-gl')}
+          mapStyle={MAPLIBRE_STYLE_BY_BASEMAP[basemapMode]}
+          reuseMaps
+          style={{ width: '100%', height: '100%' }}
+        >
+          <MapLibreNavigationControl position="top-right" />
+        </MapLibreMap>
+      </DeckGL>
+    </div>
+  );
+}
+
+function InteractiveRuntime3DMapView({
+  moduleOutput,
+  module2Output,
+  retrievalOutput,
+  module31Config = null,
+  isLoadingModule31 = false,
+  readiness,
+  basemapMode,
+  onBasemapModeChange,
+  onMapLoaded,
+}: {
+  moduleOutput: Module1IntentOutput | null;
+  module2Output: Module2Output | null;
+  retrievalOutput: VisualizationRetrievalState | null;
+  module31Config?: GeneratedMapConfig | null;
+  isLoadingModule31?: boolean;
+  readiness: ReturnType<typeof getModule31Readiness>;
+  basemapMode: GeneratedBasemapMode;
+  onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
+  onMapLoaded?: (config: GeneratedMapConfig) => void;
+}) {
+  const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
+  const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
+  const rows = useMemo(() => getInteractiveRows(module2Output, retrievalOutput), [module2Output, retrievalOutput]);
+  const [selectedLocation, setSelectedLocation] = useState(resolvedCity);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(DEFAULT_INTERACTIVE_AMENITIES);
+  const [selectedCorridors, setSelectedCorridors] = useState<string[]>(DEFAULT_INTERACTIVE_CORRIDORS);
+  const [amenities, setAmenities] = useState<InteractiveAmenityPoint[]>([]);
+  const [amenitiesLoading, setAmenitiesLoading] = useState(false);
+  const [amenitiesStatus, setAmenitiesStatus] = useState('Railway stations selected by default');
+  const [corridorLines, setCorridorLines] = useState<InteractiveCorridorLine[]>([]);
+  const [corridorsLoading, setCorridorsLoading] = useState(false);
+  const [corridorsStatus, setCorridorsStatus] = useState('Metro lines and highway corridors selected by default');
+
+  const selectedCity = useMemo(
+    () => resolveInteractiveSelectedCity({ selectedLocation, resolvedCity, rows, moduleOutput }),
+    [moduleOutput, resolvedCity, rows, selectedLocation],
+  );
+
+  useEffect(() => {
+    if (resolvedCity) {
+      setSelectedLocation(resolvedCity);
+    }
+  }, [resolvedCity]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const loadAmenities = async () => {
+      if (!selectedLocation || selectedAmenities.length === 0) {
+        setAmenities([]);
+        setAmenitiesStatus(!selectedLocation ? 'Waiting for resolved city to load amenities' : 'Select amenities to overlay');
+        return;
+      }
+      if (!selectedCity) {
+        setAmenities([]);
+        setAmenitiesStatus('Amenities need a supported resolved city');
+        return;
+      }
+      setAmenitiesLoading(true);
+      setAmenitiesStatus('Fetching amenities from OpenStreetMap...');
+      try {
+        const params = new URLSearchParams({ city: selectedCity, categories: selectedAmenities.join(',') });
+        const response = await fetch(`${API_BASE}/map-overlays/osm-amenities?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+        const data = await response.json() as {
+          points?: InteractiveAmenityPoint[];
+          category_metadata?: Record<string, { source?: string }>;
+        };
+        if (!active) return;
+        const sources = new Set(Object.values(data.category_metadata || {}).map((metadata) => metadata.source));
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        const points = Array.isArray(data.points) ? data.points : [];
+        setAmenities(points);
+        setAmenitiesStatus(`${points.length} amenities loaded${cacheUsed ? ' (soft cache)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setAmenities([]);
+        setAmenitiesStatus(error instanceof Error ? error.message : 'Unable to load amenities');
+      } finally {
+        if (active) setAmenitiesLoading(false);
+      }
+    };
+    loadAmenities();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedAmenities, selectedCity, selectedLocation]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const loadCorridors = async () => {
+      if (!selectedLocation || selectedCorridors.length === 0) {
+        setCorridorLines([]);
+        setCorridorsStatus(!selectedLocation ? 'Waiting for resolved city to load corridors' : 'Select corridor layers to overlay');
+        return;
+      }
+      if (!selectedCity) {
+        setCorridorLines([]);
+        setCorridorsStatus('Corridors need a supported resolved city');
+        return;
+      }
+      setCorridorsLoading(true);
+      setCorridorsStatus('Fetching metro lines and highway corridors from OpenStreetMap...');
+      try {
+        const params = new URLSearchParams({ city: selectedCity, layers: selectedCorridors.join(',') });
+        const response = await fetch(`${API_BASE}/map-overlays/osm-corridors?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+        const data = await response.json() as {
+          highways?: InteractiveCorridorLine[];
+          metro_lines?: InteractiveCorridorLine[];
+          layer_metadata?: Record<string, { source?: string }>;
+        };
+        if (!active) return;
+        const sources = new Set(Object.values(data.layer_metadata || {}).map((metadata) => metadata.source));
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        const highways = (Array.isArray(data.highways) ? data.highways : []).map((line) => ({ ...line, layer: 'highways' as const }));
+        const metroLines = (Array.isArray(data.metro_lines) ? data.metro_lines : []).map((line) => ({ ...line, layer: 'metro_lines' as const }));
+        const lines = [...highways, ...metroLines].filter((line) => Array.isArray(line.latlngs) && line.latlngs.length > 1);
+        setCorridorLines(lines);
+        setCorridorsStatus(`${lines.length} corridors loaded${cacheUsed ? ' (soft cache)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setCorridorLines([]);
+        setCorridorsStatus(error instanceof Error ? error.message : 'Unable to load corridors');
+      } finally {
+        if (active) setCorridorsLoading(false);
+      }
+    };
+    loadCorridors();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedCorridors, selectedCity, selectedLocation]);
+
+  const extraDeckLayers = useMemo(
+    () => buildInteractive3DOverlayLayers({ amenities, corridors: corridorLines }),
+    [amenities, corridorLines],
+  );
+  const locationOptions = useMemo(
+    () => Array.from(new Set([resolvedCity, ...intentLocations].filter(Boolean))),
+    [intentLocations, resolvedCity],
+  );
+  const mapCenter: [number, number] = (selectedCity ? CITY_CENTERS[selectedCity] : undefined) || DEFAULT_CENTER;
+  const waitingStatus = moduleOutput
+    ? readiness.isReady
+      ? 'Module 3.1 is preparing the 3D map from finalized Module 2 data.'
+      : 'Intent resolved. Waiting for Module 2 finalized data before Module 3.1 starts.'
+    : 'Submit a query to resolve intent and load the map.';
+
+  const overlayToolbar = (
+    <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-4">
+      <div>
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">MapView</p>
+        <h3 className="text-sm font-extrabold text-slate-950">Interactive Map 3D</h3>
+      </div>
+
+      {isLoadingModule31 ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-600">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Module 3.1 processing
+        </span>
+      ) : module31Config ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+          <TrendingUp className="h-3 w-3" />
+          OSM overlays active
+        </span>
+      ) : null}
+
+      <label className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        Location
+        <select
+          value={selectedLocation}
+          onChange={(event) => setSelectedLocation(event.target.value)}
+          className="max-w-[190px] bg-transparent text-[10px] font-extrabold uppercase tracking-widest text-slate-700 outline-none"
+        >
+          {locationOptions.length > 0 ? (
+            locationOptions.map((location) => (
+              <option key={location} value={location}>{location}</option>
+            ))
+          ) : (
+            <option value="">No resolved location</option>
+          )}
+        </select>
+      </label>
+
+      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <summary className="cursor-pointer list-none select-none">
+          Amenities {selectedAmenities.length ? `(${selectedAmenities.length})` : ''}
+        </summary>
+        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          {INTERACTIVE_AMENITY_OPTIONS.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
+              <input
+                type="checkbox"
+                checked={selectedAmenities.includes(option.value)}
+                onChange={(event) => {
+                  setSelectedAmenities((previous) =>
+                    event.target.checked
+                      ? Array.from(new Set([...previous, option.value]))
+                      : previous.filter((value) => value !== option.value),
+                  );
+                }}
+                className="h-3 w-3 accent-emerald-600"
+              />
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </details>
+
+      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <summary className="cursor-pointer list-none select-none">
+          Corridors {selectedCorridors.length ? `(${selectedCorridors.length})` : ''}
+        </summary>
+        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          {INTERACTIVE_CORRIDOR_OPTIONS.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
+              <input
+                type="checkbox"
+                checked={selectedCorridors.includes(option.value)}
+                onChange={(event) => {
+                  setSelectedCorridors((previous) =>
+                    event.target.checked
+                      ? Array.from(new Set([...previous, option.value]))
+                      : previous.filter((value) => value !== option.value),
+                  );
+                }}
+                className="h-3 w-3 accent-emerald-600"
+              />
+              <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: option.color }} />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+
+  const statusFooter = (
+    <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
+      <span>
+        {module31Config
+          ? `${module31Config.records.length} records · same 3D map family renderer`
+          : isLoadingModule31
+            ? 'Module 3.1 processing finalized data'
+            : waitingStatus}
+      </span>
+      <span>{module31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+      <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
+      <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+    </div>
+  );
+
+  if (module31Config) {
+    return (
+      <section className="flex h-full min-h-[680px] flex-col bg-white">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+        {overlayToolbar}
+        <div className="min-h-0 flex-1">
+          <GeneratedMapView
+            key={module31Config.id}
+            config={module31Config}
+            basemapMode={basemapMode}
+            onBasemapModeChange={onBasemapModeChange}
+            onLoaded={onMapLoaded}
+            extraDeckLayers={extraDeckLayers}
+            overlayTooltip={getInteractive3DTooltip}
+          />
+        </div>
+        {statusFooter}
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex h-full min-h-[680px] flex-col bg-white">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+      {overlayToolbar}
+      <div className="relative min-h-[560px] flex-1">
+        {readiness.isReady && isLoadingModule31 ? (
+          <div className="flex h-full min-h-[560px] flex-col items-center justify-center bg-slate-50 px-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            <p className="mt-4 text-sm font-extrabold text-slate-900">Building Interactive Map 3D</p>
+            <p className="mt-2 max-w-md text-xs font-semibold leading-5 text-slate-500">
+              Module 3.1 is generating the same 3D map family renderer. OSM amenities and corridors will overlay once ready.
+            </p>
+          </div>
+        ) : (
+          <>
+            <Interactive3DPreviewMap
+              center={mapCenter}
+              amenities={amenities}
+              corridors={corridorLines}
+              markers={[]}
+              basemapMode={basemapMode}
+              onBasemapModeChange={onBasemapModeChange}
+            />
+            <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Resolved Location</p>
+              <p className="mt-1 text-base font-extrabold text-slate-950">{selectedLocation || selectedCity || 'No resolved location'}</p>
+              <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                Amenities and corridors are loaded from intent. The fine-tuned 3D map will appear after Module 2 and Module 3.1 finish.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      {statusFooter}
+    </section>
+  );
+}
+
 function GeneratedMapEmptyState({
   activeFamily,
   readiness,
@@ -2712,22 +4323,25 @@ function GeneratedMapEmptyState({
   hasCachedMap: boolean;
   onGenerate: () => void | Promise<void>;
 }) {
-  const actionLabel = FAMILY_ACTION_LABEL[activeFamily];
+  const actionLabel = VIEWER_ACTION_LABEL[activeFamily];
+  const showGenerateButton = !INTERACTIVE_VIEWER_FAMILIES.has(activeFamily);
 
   return (
     <div className="flex h-full min-h-[540px] flex-col items-center justify-center bg-white px-6 text-center">
-      <button
-        type="button"
-        onClick={() => void onGenerate()}
-        disabled={!readiness.isReady || isGenerating}
-        title={readiness.isReady ? `Generate ${actionLabel} from the finalized Module 2 data` : readiness.reasons.join(' ')}
-        className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-      >
-        {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-        {hasCachedMap ? `View ${actionLabel}` : `Generate ${actionLabel}`}
-      </button>
+      {showGenerateButton ? (
+        <button
+          type="button"
+          onClick={() => void onGenerate()}
+          disabled={!readiness.isReady || isGenerating}
+          title={readiness.isReady ? `Generate ${actionLabel} from the finalized Module 2 data` : readiness.reasons.join(' ')}
+          className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        >
+          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          {hasCachedMap ? `View ${actionLabel}` : `Generate ${actionLabel}`}
+        </button>
+      ) : null}
       {!readiness.isReady ? (
-        <p className="mt-4 max-w-md text-xs font-semibold leading-5 text-slate-500">
+        <p className={`${showGenerateButton ? 'mt-4' : ''} max-w-md text-xs font-semibold leading-5 text-slate-500`}>
           Module 3.1 unlocks after runtime Module 1 intent and runtime Module 2 finalized data are ready.
         </p>
       ) : null}
@@ -2740,13 +4354,14 @@ const MapSection: React.FC<MapSectionProps> = ({
   isExpanded,
   moduleOutput = null,
   module2Output = null,
+  retrievalOutput = null,
   onRuntimeGeneratedMapsChange,
 }) => {
   const [leafletReady, setLeafletReady] = useState(false);
   const [activeViewerModule, setActiveViewerModule] = useState<'3.1' | '3'>('3.1');
-  const [generatedBasemapMode, setGeneratedBasemapMode] = useState<GeneratedBasemapMode>('current');
-  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('2d');
-  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('2d');
+  const [generatedBasemapMode, setGeneratedBasemapMode] = useState<GeneratedBasemapMode>('satellite');
+  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('interactive-map-3d');
+  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('3d');
   const [generatedMaps, setGeneratedMaps] = useState<GeneratedMapConfig[]>([]);
   const [activeGeneratedId, setActiveGeneratedId] = useState<string>(SAMPLE_OPTION_VALUE);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -2773,16 +4388,24 @@ const MapSection: React.FC<MapSectionProps> = ({
   const [mapStorageMessageTone, setMapStorageMessageTone] = useState<'success' | 'error'>('success');
   const insightPanelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Auto-trigger Module 3.1 for Interactive Map ─────────────────────────────
+  const [interactiveModule31Config, setInteractiveModule31Config] = useState<GeneratedMapConfig | null>(null);
+  const [isGeneratingInteractiveM31, setIsGeneratingInteractiveM31] = useState(false);
+  const prevModule2IdRef = useRef<string | null>(null);
+  const [interactive3DModule31Config, setInteractive3DModule31Config] = useState<GeneratedMapConfig | null>(null);
+  const [isGeneratingInteractive3DM31, setIsGeneratingInteractive3DM31] = useState(false);
+  const prevModule23DIdRef = useRef<string | null>(null);
+
   const readiness = useMemo(
     () => getModule31Readiness(moduleOutput, module2Output),
     [moduleOutput, module2Output],
   );
   const mapsForFamily = generatedMaps.filter((map) => isMapInViewerCategory(map, activeFamily));
   const selectedGenerationTarget = useMemo<Module31GenerationTarget>(() => ({
-    requested_map_family: activeFamily,
-    requested_map_type: activeFamily === '3d'
+    requested_map_family: getGenerationFamilyForViewer(activeFamily),
+    requested_map_type: activeFamily === '3d' || activeFamily === 'interactive-map-3d'
       ? getAutomatic3DMapType(moduleOutput, module2Output)
-      : getMapTypeForFamily(activeFamily, moduleOutput),
+      : getMapTypeForFamily(getGenerationFamilyForViewer(activeFamily), moduleOutput),
   }), [activeFamily, module2Output, moduleOutput]);
   const cachedMapForSelectedTarget = generatedMaps.find(
     (map) =>
@@ -2928,6 +4551,7 @@ const MapSection: React.FC<MapSectionProps> = ({
     };
   }, []);
 
+  // Update parent registry about runtime maps
   useEffect(() => {
     onRuntimeGeneratedMapsChange?.(runtimeGeneratedMapOptions);
   }, [onRuntimeGeneratedMapsChange, runtimeGeneratedMapOptions]);
@@ -2955,13 +4579,6 @@ const MapSection: React.FC<MapSectionProps> = ({
           ...previous,
           ...savedFullMaps.filter((saved) => !previous.some((existing) => existing.output.cache_key === saved.output.cache_key)),
         ]);
-        if (savedGeneratedMaps[0]) {
-          setActiveGeneratedId((previous) => {
-            if (previous !== SAMPLE_OPTION_VALUE) return previous;
-            setActiveFamily(isMapInViewerCategory(savedGeneratedMaps[0], '3d') ? '3d' : savedGeneratedMaps[0].family as ViewerMapCategory);
-            return savedGeneratedMaps[0].id;
-          });
-        }
         if (savedFullMaps[0]) {
           setActiveFullMapKey((previous) => previous || savedFullMaps[0].output.cache_key);
         }
@@ -2977,6 +4594,64 @@ const MapSection: React.FC<MapSectionProps> = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeFamily !== 'interactive-map') return;
+    if (!moduleOutput || !module2Output || !readiness.isReady) return;
+
+    const m2Id = (module2Output as unknown as Record<string, unknown>).cache_key as string
+      || JSON.stringify(module2Output).slice(0, 64);
+    if (m2Id === prevModule2IdRef.current) return;
+    prevModule2IdRef.current = m2Id;
+
+    setInteractiveModule31Config(null);
+    setIsGeneratingInteractiveM31(true);
+
+    requestModule31Generation(moduleOutput, module2Output, {
+      requested_map_family: '2d',
+      requested_map_type: getMapTypeForFamily('2d', moduleOutput),
+    })
+      .then((m31Output) => {
+        const baseConfig = buildGeneratedMapConfig(moduleOutput, module2Output);
+        const finalConfig = applyModule31Output(baseConfig, m31Output);
+        setInteractiveModule31Config(finalConfig);
+      })
+      .catch((err: unknown) => {
+        console.warn('[InteractiveMap] Auto Module 3.1 failed, falling back to Kimi K2 validation:', err);
+      })
+      .finally(() => {
+        setIsGeneratingInteractiveM31(false);
+      });
+  }, [activeFamily, module2Output, moduleOutput, readiness.isReady]);
+
+  useEffect(() => {
+    if (activeFamily !== 'interactive-map-3d') return;
+    if (!moduleOutput || !module2Output || !readiness.isReady) return;
+
+    const m2Id = (module2Output as unknown as Record<string, unknown>).cache_key as string
+      || JSON.stringify(module2Output).slice(0, 64);
+    if (m2Id === prevModule23DIdRef.current) return;
+    prevModule23DIdRef.current = m2Id;
+
+    setInteractive3DModule31Config(null);
+    setIsGeneratingInteractive3DM31(true);
+
+    requestModule31Generation(moduleOutput, module2Output, {
+      requested_map_family: '3d',
+      requested_map_type: getAutomatic3DMapType(moduleOutput, module2Output),
+    })
+      .then((m31Output) => {
+        const baseConfig = buildGeneratedMapConfig(moduleOutput, module2Output);
+        const finalConfig = applyModule31Output(baseConfig, m31Output);
+        setInteractive3DModule31Config(finalConfig);
+      })
+      .catch((err: unknown) => {
+        console.warn('[InteractiveMap3D] Auto Module 3.1 failed, keeping retrieval/runtime 3D view:', err);
+      })
+      .finally(() => {
+        setIsGeneratingInteractive3DM31(false);
+      });
+  }, [activeFamily, module2Output, moduleOutput, readiness.isReady]);
 
   const handleSaveRuntimeMap = async () => {
     if (!activeRuntimeMapStorageId) return;
@@ -3287,7 +4962,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                   onChange={(event) => {
                     const nextFamily = event.target.value as ViewerMapCategory;
                     setActiveFamily(nextFamily);
-                    setActiveSampleFamily(nextFamily === '3d' ? '3d' : nextFamily);
+                    setActiveSampleFamily(nextFamily === 'interactive-map-3d' ? '3d' : getGenerationFamilyForViewer(nextFamily));
                     setActiveGeneratedId(SAMPLE_OPTION_VALUE);
                     setLoadedSampleMap(null);
                     setInsightError(null);
@@ -3329,7 +5004,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                       ))
                     ) : (
                       <option value={`sample:${activeFamily}`}>
-                        {activeFamily === '2d' ? 'Default 2D Sample Maps' : `Default ${FAMILY_LABEL[activeFamily]}`}
+                        {activeFamily === '2d' ? 'Default 2D Sample Maps' : `Default ${VIEWER_FAMILY_LABEL[activeFamily]}`}
                       </option>
                     )
                   ) : (
@@ -3345,19 +5020,19 @@ const MapSection: React.FC<MapSectionProps> = ({
                 </select>
               </label>
 
-              {readiness.isReady ? (
+              {readiness.isReady && !INTERACTIVE_VIEWER_FAMILIES.has(activeFamily) ? (
                 <button
                   onClick={handleGenerateMap}
                   disabled={isGenerating}
                   title={
                     cachedMapForSelectedTarget
-                      ? `Open the cached ${FAMILY_ACTION_LABEL[activeFamily]} generated from this Module 2 data`
-                      : `Generate ${FAMILY_ACTION_LABEL[activeFamily]} from the finalized Module 2 data`
+                      ? `Open the cached ${VIEWER_ACTION_LABEL[activeFamily]} generated from this Module 2 data`
+                      : `Generate ${VIEWER_ACTION_LABEL[activeFamily]} from the finalized Module 2 data`
                   }
                   className="flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-all hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                  {cachedMapForSelectedTarget ? `View ${FAMILY_ACTION_LABEL[activeFamily]}` : `Generate ${FAMILY_ACTION_LABEL[activeFamily]}`}
+                  {cachedMapForSelectedTarget ? `View ${VIEWER_ACTION_LABEL[activeFamily]}` : `Generate ${VIEWER_ACTION_LABEL[activeFamily]}`}
                 </button>
               ) : (
                 <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -3617,6 +5292,34 @@ const MapSection: React.FC<MapSectionProps> = ({
                 toggleFullscreen={() => setIsSampleFullscreen((prev) => !prev)}
                 onInsightDataReady={handleSampleMapLoaded}
               />
+            ) : INTERACTIVE_VIEWER_FAMILIES.has(activeFamily) && !moduleOutput ? (
+              <InteractiveMapPendingState />
+            ) : activeFamily === 'interactive-map' ? (
+              <InteractiveRuntimeMapView
+                key="interactive-map-runtime"
+                moduleOutput={moduleOutput}
+                module2Output={module2Output}
+                retrievalOutput={retrievalOutput}
+                module31Config={interactiveModule31Config}
+                isLoadingModule31={isGeneratingInteractiveM31}
+                readiness={readiness}
+                basemapMode={generatedBasemapMode}
+                onBasemapModeChange={setGeneratedBasemapMode}
+                onMapLoaded={handleGeneratedMapLoaded}
+              />
+            ) : activeFamily === 'interactive-map-3d' ? (
+              <InteractiveRuntime3DMapView
+                key="interactive-map-3d-runtime"
+                moduleOutput={moduleOutput}
+                module2Output={module2Output}
+                retrievalOutput={retrievalOutput}
+                module31Config={interactive3DModule31Config}
+                isLoadingModule31={isGeneratingInteractive3DM31}
+                readiness={readiness}
+                basemapMode={generatedBasemapMode}
+                onBasemapModeChange={setGeneratedBasemapMode}
+                onMapLoaded={handleGeneratedMapLoaded}
+              />
             ) : (
               <GeneratedMapEmptyState
                 activeFamily={activeFamily}
@@ -3634,7 +5337,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                 output={activeInsight}
                 mapLabel={
                   activeGenerated?.label ||
-                  (SHOW_VISUALIZATION_DEFAULT_MAPS ? loadedSampleMap?.mapLabel || FAMILY_LABEL[activeSampleFamily] : FAMILY_LABEL[activeFamily])
+                  (SHOW_VISUALIZATION_DEFAULT_MAPS ? loadedSampleMap?.mapLabel || FAMILY_LABEL[activeSampleFamily] : VIEWER_FAMILY_LABEL[activeFamily])
                 }
               />
             </div>
