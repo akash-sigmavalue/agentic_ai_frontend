@@ -255,6 +255,7 @@ export default function DocumentReader() {
   const [highlightError, setHighlightError] = useState<string | null>(null);
   const highlightRequestIdRef = useRef(0);
   const router = useRouter();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [leftWidth, setLeftWidth] = useState(24);
   const [rightWidth, setRightWidth] = useState(30);
@@ -295,6 +296,10 @@ export default function DocumentReader() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, busy]);
 
   const tokenUsage = useMemo<TokenUsage>(
     () => askResult?.token_usage || uploadResult?.token_usage || { input: 0, output: 0 },
@@ -611,6 +616,7 @@ export default function DocumentReader() {
                   Thinking...
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
             <div className="border-t border-slate-100 p-3">
               <form onSubmit={askQuestion} className="flex gap-2">
