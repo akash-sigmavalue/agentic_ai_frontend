@@ -1,14 +1,35 @@
 'use client';
 
 import type { PortfolioChartSpec, PortfolioVisualSpec } from '@/types/portfolio-visuals';
-import { BarChart3, Gauge, Layers3, X } from 'lucide-react';
+import { BarChart3, Gauge, Layers3, X, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import PortfolioVisualEmptyState from './PortfolioVisualEmptyState';
 import PortfolioVisualRenderer from './PortfolioVisualRenderer';
 
+type PortfolioResultSet = {
+  title?: string;
+  columns?: string[];
+  rows?: Record<string, unknown>[];
+  row_count?: number;
+};
+
 type PortfolioVisualsModalProps = {
   visualSpec: PortfolioVisualSpec | null;
+  resultSet?: PortfolioResultSet | null;
   onClose: () => void;
+};
+
+const toText = (value: unknown) => {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  return JSON.stringify(value, null, 2);
+};
+
+const resultSetColumns = (resultSet: PortfolioResultSet) => {
+  if (resultSet.columns?.length) return resultSet.columns;
+  const rows = resultSet.rows || [];
+  return Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
 };
 
 const formatConfidence = (value?: number) => {
@@ -68,12 +89,17 @@ function ChartCard({ chart, compact = false }: { chart: PortfolioChartSpec; comp
   );
 }
 
-export default function PortfolioVisualsModal({ visualSpec, onClose }: PortfolioVisualsModalProps) {
+export default function PortfolioVisualsModal({ visualSpec, resultSet, onClose }: PortfolioVisualsModalProps) {
+  const [tableMinimized, setTableMinimized] = useState(false);
+  
   if (!visualSpec) return null;
   if (typeof document === 'undefined') return null;
 
   const charts = visualSpec.charts || [];
   const isDashboard = visualSpec.mode === 'dashboard';
+  const rows = resultSet?.rows || [];
+  const columns = resultSet ? resultSetColumns(resultSet) : [];
+  const hasTable = rows.length > 0 && columns.length > 0;
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] bg-slate-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
@@ -102,19 +128,75 @@ export default function PortfolioVisualsModal({ visualSpec, onClose }: Portfolio
         </header>
 
         <main className="flex-1 overflow-auto p-6">
-          {!visualSpec.visual_available ? (
-            <PortfolioVisualEmptyState message={visualSpec.reason || 'No meaningful visual could be generated for this response.'} />
-          ) : isDashboard ? (
-            <div className="grid gap-5 lg:grid-cols-2">
-              {charts.slice(0, 4).map((chart) => (
-                <ChartCard chart={chart} compact key={chart.chart_id} />
-              ))}
+          <div className="space-y-5">
+            {/* Data Table Section */}
+            {hasTable && (
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-md">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 p-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Database size={16} className="shrink-0 text-slate-500" />
+                    <div className="min-w-0">
+                      <h3 className="m-0 text-sm font-black text-slate-900">{resultSet?.title || 'Retrieved Data'}</h3>
+                      <p className="m-0 mt-0.5 text-xs font-semibold text-slate-500">{rows.length} row(s) • {columns.length} column(s)</p>
+                    </div>
+                  </div>
+                  <button
+                    className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100"
+                    type="button"
+                    onClick={() => setTableMinimized(!tableMinimized)}
+                    title={tableMinimized ? 'Show table' : 'Minimize table'}
+                    aria-label={tableMinimized ? 'Show table' : 'Minimize table'}
+                  >
+                    {tableMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                  </button>
+                </div>
+
+                {!tableMinimized && (
+                  <div className="p-4">
+                    <div className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white whitespace-normal">
+                      <table className="min-w-full border-collapse text-left text-[12px]">
+                        <thead className="sticky top-0 bg-slate-50 text-slate-500">
+                          <tr>
+                            {columns.map((column) => (
+                              <th className="border-b border-slate-200 px-4 py-2.5 font-black whitespace-nowrap" key={column}>{column}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rowIndex) => (
+                            <tr className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" key={`row-${rowIndex}`}>
+                              {columns.map((column) => (
+                                <td className="max-w-xs break-words px-4 py-2.5 align-top font-semibold text-slate-700" key={`${rowIndex}-${column}`}>
+                                  {toText(row?.[column]) || '-'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Visual Section */}
+            <div>
+              {!visualSpec.visual_available ? (
+                <PortfolioVisualEmptyState message={visualSpec.reason || 'No meaningful visual could be generated for this response.'} />
+              ) : isDashboard ? (
+                <div className="grid gap-5 lg:grid-cols-2">
+                  {charts.slice(0, 4).map((chart) => (
+                    <ChartCard chart={chart} compact key={chart.chart_id} />
+                  ))}
+                </div>
+              ) : charts[0] ? (
+                <ChartCard chart={charts[0]} />
+              ) : (
+                <PortfolioVisualEmptyState />
+              )}
             </div>
-          ) : charts[0] ? (
-            <ChartCard chart={charts[0]} />
-          ) : (
-            <PortfolioVisualEmptyState />
-          )}
+          </div>
         </main>
       </div>
     </div>,
