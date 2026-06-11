@@ -5228,24 +5228,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             {gateStep === 5 ? (
               <div className="space-y-4">
                 <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
-                <div className="flex flex-wrap gap-3">
-                  {(() => {
-                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
-                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
-                    const finalFields = [...standardFields, ...extraFields].map(f => {
-                      if (f.field === "lat" || f.field === "lng") {
-                        return { ...f, type: "text" };
+                <div className="overflow-y-auto custom-scrollbar pr-1" style={{ maxHeight: "45vh" }}>
+                  <div className="flex flex-wrap gap-3">
+                    {(() => {
+                      const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                      const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                      const finalFields = [...standardFields, ...extraFields].map(f => {
+                        if (f.field === "lat" || f.field === "lng") {
+                          return { ...f, type: "text" };
+                        }
+                        return f;
+                      });
+                      if (!finalFields.some(f => f.field === "lat")) {
+                        finalFields.push({ field: "lat", label: "Latitude", type: "text" });
                       }
-                      return f;
-                    });
-                    if (!finalFields.some(f => f.field === "lat")) {
-                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
-                    }
-                    if (!finalFields.some(f => f.field === "lng")) {
-                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
-                    }
-                    return finalFields.map(f => renderGateField(f));
-                  })()}
+                      if (!finalFields.some(f => f.field === "lng")) {
+                        finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                      }
+                      return finalFields.map(f => renderGateField(f));
+                    })()}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
                   <button
