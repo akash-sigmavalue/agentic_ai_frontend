@@ -5,8 +5,6 @@ import OpenAI from 'openai';
 import { Send, Bot, User, Loader2, Maximize2, Square, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {  Message, WorkflowData as WorkflowJson, MarkerData as Marker  } from '@/lib/dashboard/geospatial/types';
-
 import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '@/lib/dashboard/geospatial/types';
 
 interface ChatSectionProps {

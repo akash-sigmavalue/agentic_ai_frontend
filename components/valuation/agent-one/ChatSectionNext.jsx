@@ -257,7 +257,7 @@ function humanizeFieldName(field) {
 const getRowKey = (lst) => {
   if (!lst) return "";
   const project = lst.cleaned_match_project || lst.project_name || "";
-  const date = lst.transaction_date || "";
+  const date = lst.transaction_date || lst.posted_date_raw || "";
   const area = lst.final_super_builtup_area || lst.cleaned_area_sqft || lst.area_sqft || "";
   const price = lst.cleaned_price_value || lst.price_value || "";
   return `${project}_${date}_${area}_${price}`;
@@ -291,6 +291,10 @@ const getRowValue = (row, columnKey) => {
   const rootVal = row[columnKey];
   const compVal = row.comp ? row.comp[columnKey] : undefined;
 
+  if (columnKey === "transaction_date") {
+    const r = row.comp || row;
+    return r.transaction_date || r.posted_date_raw || "";
+  }
   if (columnKey === "comp.location_certainty") {
     const c = row.comp || row;
     return c.location_certainty || (c.location_certainty_score !== undefined ? (c.location_certainty_score >= 0.8 ? "Sure" : "Not Sure") : "—");
@@ -381,7 +385,8 @@ const isNumericColumn = (col) => {
     "total_factor",
     "factored_rate",
     "builtup_density.congestion.score",
-    "cbd_data"
+    "cbd_data",
+    "website_authenticity_score"
   ];
   return numericCols.includes(col);
 };
@@ -1170,6 +1175,8 @@ function ListingTable({ listings, dbTransactions }) {
       transaction_date: t.transaction_date,
       source_url: null,
       _is_db: true,   // flag to render source badge
+      website_authenticity_score: 100,
+      website_authenticity_category: "Government DB",
     }));
   }, [dbTransactions]);
 
@@ -1238,7 +1245,25 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.floor || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.total_floors || "—"}</td>
           <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{lst.location || "—"}</td>
-          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
+          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+            {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
+          </td>
+          <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
+            {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                lst.website_authenticity_score >= 90
+                  ? "bg-success/20 text-success border border-success/30"
+                  : lst.website_authenticity_score >= 70
+                  ? "bg-accent/20 text-accent border border-accent/30"
+                  : "bg-danger/20 text-danger border border-danger/30"
+              }`}>
+                {lst.website_authenticity_score}
+              </span>
+            ) : "—"}
+          </td>
+          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+            {lst.website_authenticity_category || "—"}
+          </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
               <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
@@ -1273,6 +1298,8 @@ function ListingTable({ listings, dbTransactions }) {
             <TableHeaderCell columnKey="total_floors" label="Total Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="transaction_date" label="Date" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="website_authenticity_score" label="Authenticity" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="website_authenticity_category" label="Site Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="_is_db" label="Source" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
           </tr>
         </thead>
@@ -1694,7 +1721,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+                {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
+              </td>
               <td className="px-3 py-2 text-center">
                 <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
                   {lst.source || "Web"}
@@ -5199,24 +5228,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             {gateStep === 5 ? (
               <div className="space-y-4">
                 <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
-                <div className="flex flex-wrap gap-3">
-                  {(() => {
-                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
-                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
-                    const finalFields = [...standardFields, ...extraFields].map(f => {
-                      if (f.field === "lat" || f.field === "lng") {
-                        return { ...f, type: "text" };
+                <div className="overflow-y-auto custom-scrollbar pr-1" style={{ maxHeight: "45vh" }}>
+                  <div className="flex flex-wrap gap-3">
+                    {(() => {
+                      const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                      const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                      const finalFields = [...standardFields, ...extraFields].map(f => {
+                        if (f.field === "lat" || f.field === "lng") {
+                          return { ...f, type: "text" };
+                        }
+                        return f;
+                      });
+                      if (!finalFields.some(f => f.field === "lat")) {
+                        finalFields.push({ field: "lat", label: "Latitude", type: "text" });
                       }
-                      return f;
-                    });
-                    if (!finalFields.some(f => f.field === "lat")) {
-                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
-                    }
-                    if (!finalFields.some(f => f.field === "lng")) {
-                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
-                    }
-                    return finalFields.map(f => renderGateField(f));
-                  })()}
+                      if (!finalFields.some(f => f.field === "lng")) {
+                        finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                      }
+                      return finalFields.map(f => renderGateField(f));
+                    })()}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
                   <button

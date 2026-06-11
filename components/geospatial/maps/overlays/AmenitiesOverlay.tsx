@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Download, Trash2, Circle } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { apiUrl } from '@/lib/api-client';
 
 // ── Constants ───────────────────────────────────────────────
 const CITIES: Record<string, string> = {
   Pune: 'Pune',
-  Mumbai: 'mumbai',
-  Thane: 'thane',
-  Hyderabad: 'hyderabad',
+  Mumbai: 'Mumbai',
+  Thane: 'Thane',
+  Hyderabad: 'Hyderabad',
   Bengaluru: 'Bengaluru',
 };
 
@@ -41,40 +41,15 @@ export interface AmenityPoint {
   lat: number;
   lon: number;
   category: string;
+  osm_type?: string;
+  osm_id?: number;
 }
 
-// ── Excel loader with cache ────────────────────────────────
-const dataCache: Record<string, AmenityPoint[]> = {};
-
-const loadExcelFile = async (city: string, category: string): Promise<AmenityPoint[]> => {
-  const cityFolder = CITIES[city];
-  const cityLower = cityFolder.toLowerCase();
-  const fileName = `${cityLower}_${category}.xlsx`;
-  const url = `/amenities/${cityFolder}/${fileName}`;
-
-  if (dataCache[url]) return dataCache[url];
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) { console.warn(`File not found: ${url}`); return []; }
-    const arrayBuffer = await response.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet);
-    const records: AmenityPoint[] = jsonData
-      .filter((row) => row.name && row.lat && row.lon)
-      .map((row) => ({
-        name: String(row.name),
-        lat: parseFloat(String(row.lat)),
-        lon: parseFloat(String(row.lon)),
-        category: '',
-      }));
-    dataCache[url] = records;
-    return records;
-  } catch {
-    return [];
-  }
-};
+// ── Runtime OSM response ───────────────────────────────────
+interface AmenityRuntimeResponse {
+  points?: AmenityPoint[];
+  category_metadata?: Record<string, { source?: string; count?: number }>;
+}
 
 // ── Sidebar Controls ───────────────────────────────────────
 interface AmenitiesOverlayProps {
@@ -82,11 +57,12 @@ interface AmenitiesOverlayProps {
   setSelectedCity: (city: string) => void;
   selectedCategories: string[];
   setSelectedCategories: (cats: string[]) => void;
-  allAmenities: AmenityPoint[];
   setAllAmenities: (pts: AmenityPoint[]) => void;
   pointsToShow: AmenityPoint[];
   onClearDrawn: () => void;
   onClearCircle: () => void;
+  onLoadingChange?: (loading: boolean) => void;
+  onStatusChange?: (status: string) => void;
 }
 
 const AmenitiesOverlay: React.FC<AmenitiesOverlayProps> = ({
@@ -94,26 +70,66 @@ const AmenitiesOverlay: React.FC<AmenitiesOverlayProps> = ({
   setSelectedCity,
   selectedCategories,
   setSelectedCategories,
-  allAmenities,
   setAllAmenities,
   pointsToShow,
   onClearDrawn,
   onClearCircle,
+  onLoadingChange,
+  onStatusChange,
 }) => {
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     const loadData = async () => {
-      if (!selectedCity || selectedCategories.length === 0) { setAllAmenities([]); return; }
-      const promises = selectedCategories.map((cat) => loadExcelFile(selectedCity, cat));
-      const results = await Promise.all(promises);
-      const allPoints = results.flatMap((records, index) => {
-        if (records.length === 0) return [];
-        const category = selectedCategories[index];
-        return records.map((r) => ({ ...r, category }));
-      });
-      setAllAmenities(allPoints);
+      if (!selectedCity || selectedCategories.length === 0) {
+        setAllAmenities([]);
+        onLoadingChange?.(false);
+        onStatusChange?.('Select an amenity category');
+        return;
+      }
+
+      onLoadingChange?.(true);
+      onStatusChange?.('Fetching selected amenities from OpenStreetMap...');
+
+      try {
+        const params = new URLSearchParams({
+          city: selectedCity,
+          categories: selectedCategories.join(','),
+        });
+        const response = await fetch(apiUrl(`/map-overlays/osm-amenities?${params.toString()}`), {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(body.detail || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json() as AmenityRuntimeResponse;
+        if (!active) return;
+
+        const points = Array.isArray(data.points) ? data.points : [];
+        const sources = new Set(
+          Object.values(data.category_metadata || {}).map((metadata) => metadata.source).filter(Boolean),
+        );
+        const cacheUsed = sources.has('soft_cache') || sources.has('stale_soft_cache');
+        setAllAmenities(points);
+        onStatusChange?.(`${points.length} OSM amenities loaded${cacheUsed ? ' (soft cache used)' : ''}`);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        setAllAmenities([]);
+        onStatusChange?.(error instanceof Error ? error.message : 'Unable to load OSM amenities');
+      } finally {
+        if (active) onLoadingChange?.(false);
+      }
     };
+
     loadData();
-  }, [selectedCity, selectedCategories, setAllAmenities]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [onLoadingChange, onStatusChange, selectedCity, selectedCategories, setAllAmenities]);
 
   const categoryCounts = pointsToShow.reduce<Record<string, number>>((acc, p) => {
     acc[p.category] = (acc[p.category] || 0) + 1;
