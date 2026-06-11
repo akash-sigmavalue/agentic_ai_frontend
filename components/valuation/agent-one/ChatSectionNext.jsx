@@ -2442,6 +2442,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
     confidence,
     raw_markdown_report,
     reconciliation_note,
+    limited_evidence_note,
+    subject_only_mode,
   } = data;
 
   const currencyCode = subjectData?.currency || "INR";
@@ -2490,6 +2492,27 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
       </div>
 
       <div className="p-8 space-y-10">
+
+        {/* ── Subject-Only Evidence Warning ─────────────────────────── */}
+        {subject_only_mode && (
+          <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-bg-card to-amber-600/5 p-5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.12),transparent_60%)]" />
+            <div className="relative z-10 flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[18px] font-black">
+                ⚠
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-amber-400 mb-1.5">
+                  Limited Comparable Market Evidence — Subject-Only Valuation
+                </p>
+                <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                  {limited_evidence_note ||
+                    "Due to limited comparable market evidence, the valuation has been derived using the best available data for the subject property. For a detailed expert review and enhanced valuation assessment, please contact our team."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── COMPARABLE FACTORING TABLE ─────────────────────────────── */}
         <section>
