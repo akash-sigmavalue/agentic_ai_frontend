@@ -14,13 +14,19 @@ type WorkflowOperationType =
   | "read"
   | "read_attachment"
   | "analyze"
-  | "classify";
+  | "classify"
+  | "label"
+  | "flag"
+  | "delete"
+  | "contact"
+  | "insight"
+  | "chain";
 
 type WorkflowFormBoxProps = {
   response: WorkflowResponse;
   partialIntent?: Record<string, unknown> | null;
   operationType: WorkflowOperationType;
-  onRerun: (prompt: string, options?: { partial_intent?: Record<string, unknown> | null; team_context?: Record<string, unknown> | null; user_answer?: string; send_directly?: boolean }) => void;
+  onRerun: (prompt: string) => void;
 };
 
 function toStringValue(value: unknown, fallback = "") {
@@ -71,6 +77,12 @@ export default function WorkflowFormBox({
     "read_attachment",
     "analyze",
     "classify",
+    "label",
+    "flag",
+    "delete",
+    "contact",
+    "insight",
+    "chain",
   ].includes(operationType);
 
   const senderValue = senderEmail.trim();
@@ -100,31 +112,7 @@ export default function WorkflowFormBox({
       prompt = `extract key details from the last email from ${senderValue}`;
     }
 
-    const updatedPartialIntent: Record<string, unknown> = {
-      ...(partialIntent || {}),
-      original_prompt: toStringValue(partialIntent?.original_prompt, prompt),
-      operation: partialIntent?.operation || operationType,
-      to: toValue || toEmail,
-      subject: subjectValue,
-      body: emailBodyValue,
-      reply_tone: replyToneValue,
-      execution_type: execType,
-      send_directly: operationType === "reply" || operationType === "reply_to_thread" || operationType === "send",
-      filters: {
-        ...((partialIntent?.filters as Record<string, unknown> | undefined) || {}),
-        sender_email: senderValue || undefined,
-        from: senderValue || undefined,
-      },
-    };
-
-    // Important: do not submit only the typed email/body as a fresh prompt.
-    // Send the previous partial_intent back so backend continues the same workflow.
-    onRerun(prompt, {
-      partial_intent: updatedPartialIntent,
-      team_context: { partial_intent: updatedPartialIntent },
-      user_answer: senderValue || toValue || emailBodyValue,
-      send_directly: Boolean(updatedPartialIntent.send_directly),
-    });
+    onRerun(prompt);
   };
 
   return (

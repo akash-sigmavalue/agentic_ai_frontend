@@ -1,6 +1,6 @@
 "use client";
 
-import type { WorkflowResponse } from "./types";
+import type { StreamStep, WorkflowResponse } from "./types";
 import { API_BASE_URL, CONNECTOR_API_ROUTES, apiUrl } from "../../lib/api-client";
 
 export interface GoogleOAuthStartResponse {
@@ -10,6 +10,36 @@ export interface GoogleOAuthStartResponse {
 export interface GmailConnectionStatusResponse {
   connected: boolean;
   email?: string | null;
+}
+
+export interface GmailAttachmentFileResponse {
+  id?: number;
+  filename?: string;
+  mime_type?: string | null;
+  message_id?: string;
+  thread_id?: string | null;
+  attachment_id?: string;
+  file_size_bytes?: number | null;
+  storage_type?: string;
+  file_path?: string;
+  file_url?: string | null;
+  view_url?: string | null;
+  download_url?: string | null;
+  is_pdf?: boolean;
+  stored?: boolean;
+}
+
+export interface GmailAttachmentDownloadResponse {
+  success: boolean;
+  message_id: string;
+  attachment_id: string;
+  attachment?: Record<string, unknown> | null;
+  downloaded?: Record<string, unknown> | null;
+  processed?: Record<string, unknown> | null;
+  attachment_file?: GmailAttachmentFileResponse | null;
+  pdf_attachment?: GmailAttachmentFileResponse | null;
+  attachments?: GmailAttachmentFileResponse[];
+  pdf_attachments?: GmailAttachmentFileResponse[];
 }
 
 export interface ContinueMissingFieldRequest {
@@ -78,11 +108,140 @@ export interface ConnectorHealthResponse {
   rules_failed_last_24h?: number;
 }
 
+export type WorkflowStreamEventType =
+  | "step_started"
+  | "step_completed"
+  | "step_failed"
+  | "workflow_completed"
+  | "missing_field"
+  | "error";
+
+export type RawStepEvent = {
+  step_number?: number;
+  step_id?: string;
+  step_name?: string;
+  status?: "running" | "completed" | "failed" | string;
+  output?: string;
+  duration_ms?: number | null;
+  error_message?: string | null;
+};
+
+export type WorkflowStreamEvent = {
+  type?: WorkflowStreamEventType | string;
+  step?: RawStepEvent;
+  result?: WorkflowResponse;
+  error?: string;
+};
+
+export type StreamWorkflowHandlers = {
+  onEvent?: (event: WorkflowStreamEvent) => void;
+  onStepStarted?: (step: StreamStep) => void;
+  onStepCompleted?: (step: StreamStep) => void;
+  onStepFailed?: (step: StreamStep) => void;
+  onMissingField?: (result: WorkflowResponse) => void;
+  onCompleted?: (result: WorkflowResponse) => void;
+  onError?: (message: string) => void;
+  signal?: AbortSignal;
+};
+
 export const API_BASE = API_BASE_URL;
+
+export function getConnectorFileUrl(pathOrUrl?: string | null): string {
+  if (!pathOrUrl) return "";
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return apiUrl(pathOrUrl);
+}
+
+export function getPdfViewUrl(file: { view_url?: string | null; file_url?: string | null } | null | undefined): string {
+  return getConnectorFileUrl(file?.view_url || file?.file_url || "");
+}
+
+export function getPdfDownloadUrl(file: { download_url?: string | null; file_url?: string | null } | null | undefined): string {
+  return getConnectorFileUrl(file?.download_url || file?.file_url || "");
+}
 
 function getToken(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("token") || "";
+}
+
+function getStreamWorkflowPath(): string {
+  const routes = CONNECTOR_API_ROUTES as Record<string, string | undefined>;
+  return routes.streamWorkflow || routes.processWorkflowStream || "/connectors/workflow/run/stream";
+}
+
+function mapRawStepToStreamStep(step: RawStepEvent | undefined): StreamStep {
+  return {
+    step: Number(step?.step_number || 0),
+    step_id: String(step?.step_id || step?.step_number || Date.now()),
+    name: String(step?.step_name || step?.step_id || "Workflow step"),
+    status: String(step?.status || "running"),
+    output: String(step?.output || ""),
+    duration_ms: step?.duration_ms ?? null,
+    error: step?.error_message ?? null,
+  };
+}
+
+function dispatchStreamEvent(event: WorkflowStreamEvent, handlers: StreamWorkflowHandlers): WorkflowResponse | null {
+  handlers.onEvent?.(event);
+
+  const eventType = String(event.type || "");
+
+  if (eventType === "step_started") {
+    handlers.onStepStarted?.(mapRawStepToStreamStep({ ...(event.step || {}), status: "running" }));
+    return null;
+  }
+
+  if (eventType === "step_completed") {
+    handlers.onStepCompleted?.(mapRawStepToStreamStep({ ...(event.step || {}), status: "completed" }));
+    return null;
+  }
+
+  if (eventType === "step_failed") {
+    handlers.onStepFailed?.(mapRawStepToStreamStep({ ...(event.step || {}), status: "failed" }));
+    return null;
+  }
+
+  if (eventType === "missing_field" && event.result) {
+    handlers.onMissingField?.(event.result);
+    return event.result;
+  }
+
+  if (eventType === "workflow_completed") {
+    const completedResult: WorkflowResponse = event.result ?? { success: true };
+    handlers.onCompleted?.(completedResult);
+    return completedResult;
+  }
+
+  if (eventType === "error") {
+    const message = event.error || "Workflow stream failed.";
+    handlers.onError?.(message);
+    throw new Error(message);
+  }
+
+  return null;
+}
+
+function parseSseBlock(block: string): WorkflowStreamEvent | null {
+  const dataLines: string[] = [];
+
+  for (const rawLine of block.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  const data = dataLines.join("\n").trim();
+  if (!data) return null;
+
+  try {
+    return JSON.parse(data) as WorkflowStreamEvent;
+  } catch (error) {
+    console.error("Invalid workflow SSE event", { data, error });
+    return null;
+  }
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -179,49 +338,104 @@ export function loginUser(payload: { username: string; password: string }) {
   });
 }
 
-export type ProcessWorkflowOptions = {
-  partial_intent?: Record<string, unknown> | null;
-  team_context?: Record<string, unknown> | null;
-  confirmed?: boolean;
-  user_confirmed?: boolean;
-  approval_confirmed?: boolean;
-  approved?: boolean;
-  send_directly?: boolean;
-  user_answer?: string;
-};
-
 export function processWorkflow(
   prompt: string,
-  options: ProcessWorkflowOptions = {},
 ): Promise<WorkflowResponse> {
-  const payload: Record<string, unknown> = { prompt };
-
-  if (options.partial_intent) {
-    payload.partial_intent = options.partial_intent;
-    payload.team_context = {
-      ...(options.team_context || {}),
-      partial_intent: options.partial_intent,
-    };
-  } else if (options.team_context) {
-    payload.team_context = options.team_context;
-  }
-
-  if (typeof options.confirmed === "boolean") payload.confirmed = options.confirmed;
-  if (typeof options.user_confirmed === "boolean") payload.user_confirmed = options.user_confirmed;
-  if (typeof options.approval_confirmed === "boolean") payload.approval_confirmed = options.approval_confirmed;
-  if (typeof options.approved === "boolean") payload.approved = options.approved;
-  if (typeof options.send_directly === "boolean") payload.send_directly = options.send_directly;
-  if (options.user_answer) payload.user_answer = options.user_answer;
-
-  console.log("[Connector Debug] Before processWorkflow():", payload);
-  console.log("[Connector Debug] Calling processWorkflow with payload:", payload);
+  console.log("[Connector Debug] Before processWorkflow():", { prompt });
+  console.log("[Connector Debug] Calling processWorkflow with payload:", { prompt });
   return apiFetch<WorkflowResponse>(CONNECTOR_API_ROUTES.processWorkflow, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ prompt }),
   }).then((response) => {
     console.log("[Connector Debug] processWorkflow response:", response);
     return response;
   });
+}
+
+export async function streamWorkflow(
+  prompt: string,
+  handlers: StreamWorkflowHandlers = {},
+): Promise<WorkflowResponse> {
+  const token = getToken();
+  const path = getStreamWorkflowPath();
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  });
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt }),
+      signal: handlers.signal,
+    });
+  } catch (error) {
+    console.error("Workflow stream network error", { path, apiBase: API_BASE, error });
+    throw new Error(`Unable to reach backend stream at ${API_BASE}. Is it running?`);
+  }
+
+  if (!response.ok) {
+    const message = await response.text();
+    if (response.status === 401 || response.status === 403) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+      }
+      throw new Error("Session expired. Please log in again.");
+    }
+    throw new Error(message || `Workflow stream failed with status ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Backend did not return a readable workflow stream.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult: WorkflowResponse | null = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+
+    for (const block of blocks) {
+      const event = parseSseBlock(block);
+      if (!event) continue;
+      const maybeResult = dispatchStreamEvent(event, handlers);
+      if (maybeResult) {
+        finalResult = maybeResult;
+      }
+    }
+
+    if (done) break;
+  }
+
+  const trailing = parseSseBlock(buffer);
+  if (trailing) {
+    const maybeResult = dispatchStreamEvent(trailing, handlers);
+    if (maybeResult) {
+      finalResult = maybeResult;
+    }
+  }
+
+  if (!finalResult) {
+    // Some operation types (e.g. G8 automation rules, G9 label) return only
+    // step events with no result payload. Treat as a successful empty response
+    // rather than crashing the UI.
+    console.warn("[streamWorkflow] Stream ended without a result payload — returning empty success.");
+    return { success: true } as WorkflowResponse;
+  }
+
+  return finalResult;
 }
 
 export function startGoogleOAuth(): Promise<GoogleOAuthStartResponse> {
@@ -254,7 +468,7 @@ export function fetchAttachment(
   attachmentId: string,
   filename?: string,
   mimeType?: string,
-): Promise<Record<string, unknown>> {
+): Promise<GmailAttachmentDownloadResponse> {
   const query = new URLSearchParams();
   if (filename) {
     query.set("filename", filename);
@@ -264,7 +478,7 @@ export function fetchAttachment(
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return apiFetch<Record<string, unknown>>(
+  return apiFetch<GmailAttachmentDownloadResponse>(
     `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}${suffix}`,
     {
       method: "GET",
