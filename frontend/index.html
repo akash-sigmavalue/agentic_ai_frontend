@@ -1,12 +1,15 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MahaRERA Agent</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
   <style>
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -65,7 +68,10 @@
       font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    button, input, select, textarea {
+    button,
+    input,
+    select,
+    textarea {
       font: inherit;
     }
 
@@ -234,7 +240,8 @@
       gap: 16px;
     }
 
-    .card, .panel {
+    .card,
+    .panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -245,7 +252,8 @@
       padding: 18px;
     }
 
-    .card-header, .panel-header {
+    .card-header,
+    .panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -253,7 +261,8 @@
       margin-bottom: 14px;
     }
 
-    .card-title, .panel-title {
+    .card-title,
+    .panel-title {
       font-size: 13px;
       font-weight: 700;
     }
@@ -280,7 +289,9 @@
       font-weight: 650;
     }
 
-    .field input, .field select, .field textarea {
+    .field input,
+    .field select,
+    .field textarea {
       width: 100%;
       border: 1px solid var(--border-strong);
       background: var(--surface-soft);
@@ -296,7 +307,9 @@
       resize: vertical;
     }
 
-    .field input:focus, .field select:focus, .field textarea:focus {
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
     }
@@ -397,7 +410,9 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .panel-grid {
@@ -411,7 +426,8 @@
       min-width: 0;
     }
 
-    .steps, .history-list {
+    .steps,
+    .history-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -511,11 +527,25 @@
       flex: 0 0 auto;
     }
 
-    .log-info { color: var(--accent); }
-    .log-success { color: var(--success); }
-    .log-warn { color: var(--warn); }
-    .log-danger { color: var(--danger); }
-    .log-muted { color: var(--muted); }
+    .log-info {
+      color: var(--accent);
+    }
+
+    .log-success {
+      color: var(--success);
+    }
+
+    .log-warn {
+      color: var(--warn);
+    }
+
+    .log-danger {
+      color: var(--danger);
+    }
+
+    .log-muted {
+      color: var(--muted);
+    }
 
     .metrics {
       display: grid;
@@ -561,7 +591,8 @@
       min-width: 760px;
     }
 
-    th, td {
+    th,
+    td {
       padding: 8px 10px;
       border-bottom: 1px solid var(--border);
       text-align: left;
@@ -679,12 +710,15 @@
         justify-content: flex-start;
       }
 
-      .panel-grid, .metrics, .field-grid {
+      .panel-grid,
+      .metrics,
+      .field-grid {
         grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
+
 <body>
   <div class="app">
     <aside class="sidebar" aria-label="Primary">
@@ -746,12 +780,14 @@
             <div class="field-grid">
               <div class="field full">
                 <label for="inp-url">MahaRERA URL</label>
-                <input id="inp-url" type="url" value="https://maharerait.gov.in/searchprojectdetails/" placeholder="https://maharerait.gov.in/..." />
+                <input id="inp-url" type="url" value="https://maharera.maharashtra.gov.in/"
+                  placeholder="https://maharera.maharashtra.gov.in/..." />
               </div>
 
               <div class="field full">
                 <label for="inp-query">Natural language query</label>
-                <textarea id="inp-query" placeholder="Get all registered residential projects in Pune district">Get all registered residential projects in Pune district</textarea>
+                <textarea id="inp-query"
+                  placeholder="Get all registered residential projects in Pune district">Get all registered residential projects in Pune district</textarea>
               </div>
 
               <div class="field">
@@ -1418,7 +1454,5 @@
     window.addEventListener("load", () => setTimeout(checkAPI, 600));
   </script>
 </body>
+
 </html>
-
-
-
