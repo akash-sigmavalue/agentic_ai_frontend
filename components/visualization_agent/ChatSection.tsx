@@ -844,6 +844,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     const params = new URLSearchParams({ question: query });
     if (retrievalAgentVersion === 'v2') {
       params.set('model', VISUALIZATION_RETRIEVAL_V2_MODEL);
+      params.set('called_from_visualization_agent', 'true');
     }
     const storedSession = window.localStorage.getItem('visualization-data-retrieval-session-id') || '';
     if (storedSession) {
