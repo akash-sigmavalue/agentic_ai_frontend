@@ -180,7 +180,7 @@ const OutputSectionDashboard: React.FC<OutputSectionProps> = ({
   const [Babel, setBabel] = useState<BabelStandalone | null>(null);
   const [componentError, setComponentError] = useState<string | null>(null);
   const [isOutputFullscreen, setIsOutputFullscreen] = useState(false);
-  const hasOutput = Boolean(analyticalOutput?.jsx);
+  const hasOutput = Boolean(analyticalOutput);
 
   useEffect(() => {
     setIsMounted(true);
@@ -277,6 +277,17 @@ const OutputSectionDashboard: React.FC<OutputSectionProps> = ({
             </pre>
           </details>
         </div>
+      ) : null}
+
+      {analyticalOutput ? (
+        <article className="mt-6 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-slate-100 shadow-sm">
+          <div className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+            Raw JSON Response
+          </div>
+          <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words text-xs leading-5">
+            {JSON.stringify(analyticalOutput, null, 2)}
+          </pre>
+        </article>
       ) : null}
     </div>
   );

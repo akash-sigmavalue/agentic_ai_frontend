@@ -1,16 +1,102 @@
 "use client";
 
+export type GmailFormFieldType = "text" | "textarea" | "select" | "email" | "boolean";
+
+export interface GmailFormField {
+  name: string;
+  label: string;
+  type: GmailFormFieldType;
+  required?: boolean;
+  required_for?: string[];
+  options?: string[];
+  placeholder?: string;
+  default?: string | boolean;
+}
+
+export interface GmailFormSchema {
+  title?: string;
+  description?: string;
+  missing_field?: string | null;
+  fields?: GmailFormField[];
+  partial_intent?: Record<string, unknown>;
+}
+
+export interface GmailAttachmentFile {
+  id?: number | string | null;
+  filename?: string;
+  original_filename?: string;
+  mime_type?: string | null;
+  file_extension?: string | null;
+  message_id?: string | null;
+  thread_id?: string | null;
+  attachment_id?: string | null;
+  size?: number | null;
+  file_size_bytes?: number | null;
+  storage_type?: "local" | "s3" | string;
+  stored?: boolean;
+  is_pdf?: boolean;
+  file_url?: string | null;
+  view_url?: string | null;
+  download_url?: string | null;
+}
+
+export interface GmailUiEmail {
+  id?: string;
+  thread_id?: string;
+  subject?: string;
+  from?: string;
+  from_name?: string;
+  sender_name?: string;
+  from_email?: string;
+  to?: string;
+  date?: string;
+  date_str?: string;
+  snippet?: string;
+  body_preview?: string;
+  body?: string;
+  content?: string;
+  attachments?: GmailAttachmentFile[];
+  pdf_attachments?: GmailAttachmentFile[];
+}
+
+export interface UiResult {
+  kind?: "email_result" | "draft_result" | "summary_result" | string;
+  title?: string;
+  summary?: string;
+  emails?: GmailUiEmail[];
+  attachments?: GmailAttachmentFile[];
+  pdf_attachments?: GmailAttachmentFile[];
+  has_pdf_attachments?: boolean;
+  raw_hidden?: boolean;
+}
+
 export type WorkflowResponse = {
   success?: boolean;
   status?: string;
   summary?: string;
   message?: string;
+  chat_message?: string | null;
+  ui_result?: UiResult | null;
+
+  // PDF / Gmail attachment viewer support.
+  attachments?: GmailAttachmentFile[];
+  pdf_attachments?: GmailAttachmentFile[];
+  has_pdf_attachments?: boolean;
+
+  // Phase 2: backend-driven clarification/action form.
+  requires_form?: boolean;
+  form_schema?: GmailFormSchema | null;
+  form_data?: Record<string, unknown> | null;
+
+  // Editable reply draft / final-send support.
+  thread_id?: string | null;
+  draft_id?: string | null;
+  can_send?: boolean;
+
   can_execute?: boolean;
   missing_field?: string;
   missing_field_question?: string;
   question?: string;
-  needs_sender_email?: boolean;
-  sender_email_question?: string;
   partial_intent?: Record<string, unknown>;
   field_type?: "email" | "choice" | "text" | "text_optional";
   field_options?: string[];
@@ -32,13 +118,12 @@ export type WorkflowResponse = {
   reply_draft?: string | null;
   final_answer?: string | null;
   delivery_status?: "sent" | "draft_only";
+  emails_found?: number;
+  replies_generated?: number;
+  replies_sent_count?: number;
   rule_id?: number;
   execution_type?: string;
   from_email?: string;
-  to?: string | null;
-  cc?: string | null;
-  bcc?: string | null;
-  automation_frequency?: "one_time" | "automated" | null;
   subject?: string;
   prompt_tokens?: number;
   completion_tokens?: number;
@@ -114,6 +199,9 @@ export interface CompletionResult {
   reply?: string;
   reply_sent?: string;
   reply_draft?: string;
+  thread_id?: string | null;
+  draft_id?: string | null;
+  can_send?: boolean;
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
@@ -135,45 +223,4 @@ export function resolveGmailIntent(value: WorkflowResponse["plan"]): string {
     return String(record.intent ?? record.type ?? record.operation ?? record.name ?? "").trim();
   }
   return "";
-}
-
-export function detectGroupType(
-  prompt: string,
-  operationType?: string,
-  executionType?: string,
-): string {
-  const lower = (prompt || "").toLowerCase();
-  const op = (operationType || "").toLowerCase();
-  const exec = (executionType || "").toLowerCase();
-
-  if (
-    op === "automate" ||
-    exec === "automated" ||
-    /\b(when|whenever|every time|automatically|always)\b/.test(lower)
-  ) {
-    return "automate";
-  }
-  if (op === "reply" || op === "reply_to_thread" || /\breply\b/.test(lower)) return "reply";
-  if (op === "send" || /\bsend email\b/.test(lower)) return "send";
-  if (/\b(read the pdf|open attachment|download attachment)\b/.test(lower)) return "attachment";
-  if (/\b(extract|analyze|classify|summarize|key details)\b/.test(lower)) return "analyze";
-  if (/\b(show full thread|read thread|full thread)\b/.test(lower)) return "read";
-  if (/\b(find emails|search emails|search for|emails about)\b/.test(lower)) return "search";
-  return "fetch";
-}
-
-export function extractEmailsFromText(text: string): string[] {
-  return (text || "").match(/[\w.+-]+@[\w.-]+\.\w+/g) || [];
-}
-
-export function inferExecutionType(
-  prompt: string,
-  responseExecType?: string | null,
-): "one_time" | "automated" | null {
-  if (responseExecType === "one_time" || responseExecType === "automated") return responseExecType;
-
-  const lower = (prompt || "").toLowerCase();
-  if (/\b(when|whenever|every time|automatically|always)\b/.test(lower)) return "automated";
-  if (/\b(reply to|send email|reply saying|send saying)\b/.test(lower)) return "one_time";
-  return null;
 }
