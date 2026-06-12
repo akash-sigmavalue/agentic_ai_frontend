@@ -1,22 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import type { HighlightRect } from "../../types/api";
-import React, { useCallback } from "react";
+import React from "react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 import { Document, Page, pdfjs } from "react-pdf";
 interface CustomPdfViewerProps {
   pdfUrl: string;
-  pageNumber: number;
+  pageNumbers: number[];
   searchText: string;
   highlightRects?: HighlightRect[];
 }
 
 export default function CustomPdfViewer({
   pdfUrl,
-  pageNumber,
+  pageNumbers,
   searchText,
   highlightRects = [],
 }: CustomPdfViewerProps) {
@@ -34,7 +35,8 @@ export default function CustomPdfViewer({
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [pdfModuleError, setPdfModuleError] = useState<string | null>(null);
 
-  const safePage = Math.min(Math.max(1, pageNumber), numPages ?? pageNumber);
+  const safePages = pageNumbers.map(p => Math.min(Math.max(1, p), numPages ?? p));
+  const safePage = safePages[0] || 1;
   const renderedPageWidth = containerWidth ? Math.max(containerWidth - 32, 0) : 0;
   const firstRect = highlightRects[0];
   const renderedPageHeight =
@@ -46,38 +48,18 @@ export default function CustomPdfViewer({
   }, [pdfUrl, safePage]);
 
   useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerWidth(entry.contentRect.width);
       }
-    };
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    // Only scroll to top if we don't have text or highlights to scroll to
-    if (!searchText && (!highlightRects || highlightRects.length === 0)) {
-      containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [safePage, searchText, highlightRects]);
-
-  useEffect(() => {
-    const scrollToHighlight = () => {
-      if (highlightRects && highlightRects.length > 0) {
-        const el = containerRef.current?.querySelector("#highlight-rect-first");
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      } else if (searchText) {
-        const mark = containerRef.current?.querySelector("mark.highlighted-text-fallback");
-        if (mark) mark.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    };
-
-    // We delay the scroll to ensure the PDF page and text layer have fully rendered
-    const timer = setTimeout(scrollToHighlight, 800);
-    return () => clearTimeout(timer);
-  }, [highlightRects, searchText, safePage, renderedPageWidth]);
 
   const customTextRenderer = useCallback(
     ({ str }: { str: string }) => {
@@ -106,7 +88,6 @@ export default function CustomPdfViewer({
   );
 
   useEffect(() => {
-    // If pdfjs fails to load for any reason, we can catch it here though static import usually throws at module level
     if (!pdfjs || !pdfjs.version) {
       setPdfModuleError("Failed to load PDF renderer.");
     }
@@ -125,7 +106,6 @@ export default function CustomPdfViewer({
       <div ref={containerRef} className="flex h-full w-full flex-col overflow-hidden bg-slate-100">
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
           PDF preview is using the browser fallback because the PDF viewer could not initialize.
-          {/* <br /> Error: {pdfModuleError} */}
         </div>
         <iframe
           title="PDF preview"
@@ -137,54 +117,80 @@ export default function CustomPdfViewer({
   }
 
   return (
-    <div ref={containerRef} className="flex h-full w-full flex-col items-center overflow-auto bg-slate-100 p-4">
+    <div ref={containerRef} className="relative flex h-full w-full flex-col bg-slate-100 p-4 overflow-hidden">
       {pdfUrl ? (
-        <Document
-          file={pdfUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={<div className="flex items-center justify-center p-10 text-slate-400">Loading PDF...</div>}
-          error={<div className="flex items-center justify-center p-10 text-red-500">Failed to load PDF.</div>}
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.4}
+          maxScale={3}
+          centerOnInit={true}
+          wheel={{ step: 0.04 }}
         >
-          <div
-            className="relative overflow-hidden rounded-sm shadow-md"
-            style={{
-              width: renderedPageWidth || undefined,
-              height: renderedPageHeight,
-            }}
-          >
-            <Page
-              key={`page-${safePage}-${searchText.slice(0, 32)}`}
-              pageNumber={safePage}
-              width={renderedPageWidth || undefined}
-              renderAnnotationLayer={false}
-              renderTextLayer={true}
-              customTextRenderer={customTextRenderer as any}
-            />
-            {renderedPageWidth > 0 &&
-              highlightRects.map((rect, index) => {
-                const scaleX = renderedPageWidth / rect.page_width;
-                const scaleY = (renderedPageHeight || rect.page_height) / rect.page_height;
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <>
+              <div className="absolute top-6 right-6 z-[100] self-end flex gap-1 mb-2 bg-white/90 p-1.5 rounded-lg shadow-sm backdrop-blur-sm border border-slate-200">
+                <button onClick={() => zoomOut()} className="px-2.5 py-1 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded">-</button>
+                <button onClick={() => zoomIn()} className="px-2.5 py-1 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded">+</button>
+                <button onClick={() => resetTransform()} className="px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded ml-1">Reset</button>
+              </div>
 
-                return (
-                  <div
-                    key={`${index}-${rect.x0}-${rect.y0}`}
-                    id={index === 0 ? "highlight-rect-first" : undefined}
-                    className="pointer-events-none absolute rounded-[3px]"
-                    style={{
-                      left: rect.x0 * scaleX,
-                      top: rect.y0 * scaleY,
-                      width: (rect.x1 - rect.x0) * scaleX,
-                      height: (rect.y1 - rect.y0) * scaleY,
-                      background: "rgba(255, 255, 0, 0.45)",
-                      mixBlendMode: "multiply",
-                      zIndex: 20,
-                    }}
-                  />
-                );
-              })}
-          </div>
-        </Document>
+              <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", justifyContent: "center" }}>
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={<div className="flex items-center justify-center p-10 text-slate-400">Loading PDF...</div>}
+                  error={<div className="flex items-center justify-center p-10 text-red-500">Failed to load PDF.</div>}
+                >
+                  <div className="flex w-max min-w-full flex-col gap-6 items-center select-none bg-slate-100">
+                    {safePages.map(page => (
+                      <div
+                        key={`page-wrapper-${page}`}
+                        className="relative overflow-visible rounded-sm shadow-md bg-white"
+                        style={{
+                          width: renderedPageWidth || undefined,
+                          height: page === safePage ? renderedPageHeight : undefined,
+                        }}
+                      >
+                        <Page
+                          key={`page-${page}-${searchText.slice(0, 32)}`}
+                          pageNumber={page}
+                          width={renderedPageWidth || undefined}
+                          renderAnnotationLayer={false}
+                          renderTextLayer={true}
+                          customTextRenderer={customTextRenderer as any}
+                          devicePixelRatio={typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 2.5) : 2.5}
+                        />
+                        {renderedPageWidth > 0 && page === safePage &&
+                          highlightRects.map((rect, index) => {
+                            const scaleX = renderedPageWidth / rect.page_width;
+                            const scaleY = (renderedPageHeight || rect.page_height) / rect.page_height;
+
+                            return (
+                              <div
+                                key={`${index}-${rect.x0}-${rect.y0}`}
+                                id={index === 0 ? "highlight-rect-first" : undefined}
+                                className="pointer-events-none absolute rounded-[3px]"
+                                style={{
+                                  left: rect.x0 * scaleX,
+                                  top: rect.y0 * scaleY,
+                                  width: (rect.x1 - rect.x0) * scaleX,
+                                  height: (rect.y1 - rect.y0) * scaleY,
+                                  background: "rgba(255, 255, 0, 0.45)",
+                                  mixBlendMode: "multiply",
+                                  zIndex: 20,
+                                }}
+                              />
+                            );
+                          })}
+                      </div>
+                    ))}
+                  </div>
+                </Document>
+              </TransformComponent>
+            </>
+          )}
+        </TransformWrapper>
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
           <div className="flex items-center justify-center p-10 text-slate-400">
