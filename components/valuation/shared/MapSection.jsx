@@ -34,7 +34,11 @@ import {
   Laptop,
   Store,
   Compass,
-  FileText
+  FileText,
+  Minimize2,
+  Maximize2,
+  RotateCw,
+  SlidersHorizontal
 } from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -226,6 +230,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   }, []);
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
   const [amenityRadius, setAmenityRadius] = useState(1000);
@@ -594,10 +599,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   const mapContent = (
     <div className={`transition-all duration-300 flex flex-col ${isMaximized
-        ? "fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-[0_0_50px_rgba(0,0,0,0.6)]"
-        : "w-full h-[450px] overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel relative"
+        ? "fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-[0_0_50px_rgba(0,0,0,0.6)]"
+        : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       }`}>
-      <div className="flex items-center justify-between border-b border-border bg-bg-input px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-input px-4 py-3 shrink-0">
         <span className="font-display text-[11px] uppercase tracking-[0.14em] text-accent-light">
           {isMaximized ? "Fullscreen Map View" : "Subject Property Location"}
         </span>
@@ -607,9 +612,20 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
           </span>
           <button
             onClick={() => setIsMaximized(!isMaximized)}
-            className="rounded-md bg-accent/10 px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep cursor-pointer"
+            title={isMaximized ? "Close Fullscreen" : "Maximize Map"}
           >
-            {isMaximized ? "⛕ Close Fullscreen" : "⛶ Maximize Map"}
+            {isMaximized ? (
+              <>
+                <Minimize2 className="h-3 w-3" />
+                Close Fullscreen
+              </>
+            ) : (
+              <>
+                <Maximize2 className="h-3 w-3" />
+                Maximize Map
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -627,7 +643,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             mapMode={mapMode}
           />
 
-          <LayersControl position="topright">
+          <LayersControl position="bottomleft">
             <LayersControl.BaseLayer checked={activeTheme === "dark"} name="Dark Map">
               <TileLayer
                 attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -800,6 +816,145 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             });
           })()}
         </MapContainer>
+
+        {/* Floating Settings Card Overlay */}
+        {factorialData && factorialData.table && (
+          !isControlsExpanded ? (
+            <button
+              onClick={() => setIsControlsExpanded(true)}
+              className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md px-3 py-2 text-xs font-bold text-accent shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:scale-105 hover:bg-bg-card transition cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Map Controls</span>
+            </button>
+          ) : (
+            <div className="absolute top-3 right-3 z-[1000] w-[300px] max-h-[85%] overflow-y-auto custom-scrollbar rounded-xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-3 text-xs text-left">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 shrink-0">
+                <span className="font-display text-[10px] font-extrabold uppercase tracking-widest text-[#22d3ee] flex items-center gap-1.5">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Map Controls
+                </span>
+                <div className="flex items-center gap-2">
+                  {(isFetchingAmenities || isFetchingDensity || isFetchingRoads || isFetchingCbd) && (
+                    <span className="text-[9px] text-[#22d3ee] animate-pulse">Syncing...</span>
+                  )}
+                  <button
+                    onClick={() => setIsControlsExpanded(false)}
+                    className="text-text-dim hover:text-text-primary text-[10px] font-black uppercase transition p-0.5 cursor-pointer"
+                    title="Close Controls"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Select View Mode */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Map View Mode</label>
+                <select
+                  value={mapMode}
+                  onChange={(e) => setMapMode(e.target.value)}
+                  className="w-full rounded-lg border border-white/[0.08] bg-bg-input px-2.5 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent transition cursor-pointer"
+                >
+                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="amenity">Amenities Layout</option>
+                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="density">Built-Up Density & Congestion</option>
+                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="roads">Road Infrastructure</option>
+                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="cbd">CBD Proximity</option>
+                </select>
+              </div>
+
+              {/* Amenity Filters */}
+              {mapMode === "amenity" && availableCategories.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Amenity Filters</label>
+                  <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto custom-scrollbar pr-1">
+                    {availableCategories.map(cat => {
+                      const label = cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      const isChecked = activeFilters.includes(cat);
+                      return (
+                        <label key={cat} className="flex items-center justify-between cursor-pointer group select-none py-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
+                            <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition font-medium">{label}</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (activeFilters.includes(cat)) {
+                                setSelectedCategories(activeFilters.filter(c => c !== cat));
+                              } else {
+                                setSelectedCategories([...activeFilters, cat]);
+                              }
+                            }}
+                            className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded cursor-pointer"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Visibility Toggle */}
+              <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
+                <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Project Visibility</label>
+                <div className="flex flex-col gap-1.5 max-h-[100px] overflow-y-auto custom-scrollbar pr-1">
+                  {availableProjects.map((proj, i) => {
+                    const name = proj.label || proj.project_name || "Subject";
+                    const isChecked = !hiddenProjects.has(name);
+                    return (
+                      <label key={i} className="flex items-center justify-between cursor-pointer group select-none py-0.5">
+                        <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition font-medium truncate max-w-[85%]">{name}</span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const newHidden = new Set(hiddenProjects);
+                            if (isChecked) newHidden.add(name);
+                            else newHidden.delete(name);
+                            setHiddenProjects(newHidden);
+                          }}
+                          className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded cursor-pointer"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Radius and Refresh */}
+              {mapMode !== "cbd" && (
+                <div className="flex flex-col gap-2 border-t border-white/[0.04] pt-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex flex-col gap-1">
+                      <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Radius (m)</label>
+                      <input
+                        type="number"
+                        value={mapMode === "amenity" ? amenityRadius : mapMode === "density" ? densityRadius : roadRadius}
+                        onChange={(e) => {
+                          if (mapMode === "amenity") setAmenityRadius(Number(e.target.value));
+                          else if (mapMode === "density") setDensityRadius(Number(e.target.value));
+                          else setRoadRadius(Number(e.target.value));
+                        }}
+                        step={100}
+                        className="w-full rounded-lg border border-white/[0.08] bg-bg-input px-2.5 py-1 text-[11px] text-text-primary outline-none focus:border-accent font-mono"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRefresh}
+                      disabled={isFetchingAmenities || isFetchingDensity || isFetchingRoads}
+                      className="flex items-center justify-center gap-1.5 self-end h-[28px] rounded-lg border border-accent/20 bg-accent/5 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep disabled:opacity-50 whitespace-nowrap cursor-pointer"
+                    >
+                      <RotateCw className={`h-3 w-3 ${isFetchingAmenities || isFetchingDensity || isFetchingRoads ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        )}
       </div>
     </div>
   );
@@ -863,116 +1018,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         </div>
       ) : (
         <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
-        {factorialData && factorialData.table && (
-          <div className="rounded-2xl border border-border/80 bg-bg-card/80 p-5 shadow-panel flex gap-4 items-end flex-wrap shrink-0 relative z-10">
-            <div className="flex-1 min-w-[220px]">
-              <label className="mb-1.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                Map View Mode
-              </label>
-              <select
-                value={mapMode}
-                onChange={(e) => setMapMode(e.target.value)}
-                className="w-full rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-accent font-medium shadow-sm hover:bg-bg-input/80"
-              >
-                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="amenity">Amenities Layout</option>
-                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="density">Built-Up Density & Congestion</option>
-                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="roads">Road Infrastructure</option>
-                <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="cbd">CBD Proximity</option>
-              </select>
-            </div>
-
-            {mapMode === "amenity" && availableCategories.length > 0 && (
-              <div className="w-full mt-2 pt-3.5 border-t border-border/40">
-                <label className="mb-2.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                  Amenity Filters
-                </label>
-                <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-                  {availableCategories.map(cat => {
-                    const label = cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    const isChecked = activeFilters.includes(cat);
-                    return (
-                      <label key={cat} className="flex items-center gap-2 cursor-pointer group select-none">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            if (activeFilters.includes(cat)) {
-                              setSelectedCategories(activeFilters.filter(c => c !== cat));
-                            } else {
-                              setSelectedCategories([...activeFilters, cat]);
-                            }
-                          }}
-                          className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded-sm cursor-pointer"
-                        />
-                        <div className="flex items-center gap-1.5">
-                          <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
-                          <span className="text-[11px] text-text-secondary group-hover:text-text-primary transition font-medium">{label}</span>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="w-full mt-2 pt-3.5 border-t border-border/40">
-              <label className="mb-2.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                Project Visibility
-              </label>
-              <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-                {availableProjects.map((proj, i) => {
-                  const name = proj.label || proj.project_name || "Subject";
-                  const isChecked = !hiddenProjects.has(name);
-                  return (
-                    <label key={i} className="flex items-center gap-2 cursor-pointer group select-none">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          const newHidden = new Set(hiddenProjects);
-                          if (isChecked) newHidden.add(name);
-                          else newHidden.delete(name);
-                          setHiddenProjects(newHidden);
-                        }}
-                        className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded-sm cursor-pointer"
-                      />
-                      <span className="text-[11px] text-text-secondary group-hover:text-text-primary transition font-medium">{name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {mapMode !== "cbd" && (
-              <div className="flex-[0.5] min-w-[140px]">
-                <label className="mb-1.5 block pl-1 text-[11px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                  Search Radius (m)
-                </label>
-                <input
-                  type="number"
-                  value={mapMode === "amenity" ? amenityRadius : mapMode === "density" ? densityRadius : roadRadius}
-                  onChange={(e) => {
-                    if (mapMode === "amenity") setAmenityRadius(Number(e.target.value));
-                    else if (mapMode === "density") setDensityRadius(Number(e.target.value));
-                    else setRoadRadius(Number(e.target.value));
-                  }}
-                  step={100}
-                  className="w-full rounded-xl border border-border bg-bg-input px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-accent font-medium shadow-sm"
-                />
-              </div>
-            )}
-
-            {mapMode !== "cbd" && (
-              <button
-                onClick={handleRefresh}
-                disabled={isFetchingAmenities || isFetchingDensity || isFetchingRoads}
-                className="shrink-0 h-[46px] rounded-xl border border-border bg-accent/10 px-6 text-xs font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep disabled:opacity-50 whitespace-nowrap shadow-sm cursor-pointer"
-              >
-                {(isFetchingAmenities || isFetchingDensity || isFetchingRoads) ? "Refreshing..." : "Refresh Data"}
-              </button>
-            )}
-          </div>
-        )}
+        {/* Inline controls panel relocated to floating settings overlay inside mapContent */}
 
         {markers.length > 0 ? (
           <div className={isMaximized ? "hidden" : "relative w-full shrink-0"}>

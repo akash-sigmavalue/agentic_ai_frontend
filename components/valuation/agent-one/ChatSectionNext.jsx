@@ -1513,15 +1513,43 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
+  // Reset filters and sort whenever the tab changes.
+  // filterConfig values are built from the current tab's row data — they are not
+  // transferable across tabs (Valid vs Outlier vs Dropped have different value sets).
+  // Without this reset, switching tabs leaves stale filters active, causing wrong
+  // rows to appear in the new tab (the reported bug).
+  useEffect(() => {
+    setSortConfig({ column: null, direction: null });
+    setFilterConfig({});
+  }, [activeTab]);
+
+  console.log("CleanedTable Render:", {
+    activeTab,
+    listingsPropLength: listings?.length,
+    reviewListingsPropLength: reviewListings?.length,
+    droppedListingsPropLength: droppedListings?.length,
+  });
+
   const listingsList = useMemo(() => listings || [], [listings]);
 
   // Determine which rows to display based on active tab
   const displayedListings = useMemo(() => {
-    return activeTab === "valid" ? listingsList : activeTab === "outliers" ? reviewListings : droppedListings;
+    const res = activeTab === "valid" ? listingsList : activeTab === "outliers" ? reviewListings : droppedListings;
+    console.log("CleanedTable displayedListings recalculated:", {
+      activeTab,
+      resLength: res?.length,
+      resFirst3: res?.slice(0, 3)
+    });
+    return res;
   }, [activeTab, listingsList, reviewListings, droppedListings]);
 
   const processedListings = useMemo(() => {
-    return filterAndSortList(displayedListings, sortConfig, filterConfig);
+    const res = filterAndSortList(displayedListings, sortConfig, filterConfig);
+    console.log("CleanedTable processedListings recalculated:", {
+      resLength: res?.length,
+      resFirst3: res?.slice(0, 3)
+    });
+    return res;
   }, [displayedListings, sortConfig, filterConfig]);
 
   if (!listings || listings.length === 0) return null;
@@ -1610,12 +1638,12 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
               </td>
             </tr>
-          ) : processedListings.map((lst) => {
+          ) : processedListings.map((lst, idx) => {
             const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
             const rKey = getRowKey(lst);
             return (
-              <tr key={rKey} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
+              <tr key={`${activeTab}_${idx}_${rKey}`} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
                 <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                   {lst.cleaned_match_project || lst.project_name || "—"}
                 </td>
@@ -1748,18 +1776,18 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
 
   return (
     <>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-cyan-500/5">
+        <div className="border-b border-white/[0.06] bg-[rgba(251,146,60,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
               {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
+              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
                 onClick={() => setIsMaximized(true)}
-                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
+                className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
                 title="Maximize Table"
               >
                 ⛶
@@ -1769,25 +1797,27 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         </div>
 
         {/* ── Tab Bar ────────────────────────────────────── */}
-        <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2">
-          <button
-            onClick={() => setActiveTab("valid")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ✅ Valid ({listings.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("outliers")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ⚠️ Outliers ({reviewListings.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("dropped")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ❌ Dropped ({droppedListings.length})
-          </button>
+        <div className="flex items-center gap-1.5 border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5">
+          <div className="flex items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-0.5 gap-0.5">
+            <button
+              onClick={() => setActiveTab("valid")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ✅ Valid ({listings.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("outliers")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ⚠️ Outliers ({reviewListings.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("dropped")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ❌ Dropped ({droppedListings.length})
+            </button>
+          </div>
         </div>
 
         {showPlotControls && onRecalculate && (
@@ -1878,25 +1908,27 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             </div>
             <div className="flex-1 overflow-hidden flex flex-col">
               {/* Tab Bar (maximized) */}
-              <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2 shrink-0">
-                <button
-                  onClick={() => setActiveTab("valid")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ✅ Valid ({listings.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("outliers")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ⚠️ Outliers ({reviewListings.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("dropped")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ❌ Dropped ({droppedListings.length})
-                </button>
+              <div className="flex items-center gap-1.5 border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5 shrink-0">
+                <div className="flex items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setActiveTab("valid")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ✅ Valid ({listings.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("outliers")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ⚠️ Outliers ({reviewListings.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("dropped")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ❌ Dropped ({droppedListings.length})
+                  </button>
+                </div>
               </div>
 
               {/* Table (full-width, scrollable) */}
@@ -2232,8 +2264,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
 
   return (
     <>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(167,139,250,0.06)] px-4 py-3">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-purple-500/5">
+        <div className="border-b border-white/[0.06] bg-[rgba(167,139,250,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(167,139,250,0.15)] text-sm">📈</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a78bfa]">Comparable Project Metrics</span>
@@ -2246,8 +2278,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   Compare {selectedForComparison.size}
                 </button>
               )}
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{data.table.length} projects · {data.total_valid} listings</span>
-              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
+              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{data.table.length} projects · {data.total_valid} listings</span>
+              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
             </div>
           </div>
         </div>
@@ -3266,7 +3298,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingNote]);
+  }, [messages, streamingNote, showTokenBreakdown, gateActive, mapConfirmation, approachChoiceNeeded]);
 
   const clearInteractiveState = () => {
     setClarificationPrompt("");
@@ -5186,11 +5218,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const canAdvance = Boolean(mandatoryStep);
 
     return (
-      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-0">
         {/* Header */}
         <div
           onClick={() => setGateCollapsed(!gateCollapsed)}
-          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -5233,25 +5265,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
         {/* Gate body */}
         {!gateCollapsed && (
-          <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col min-h-0">
+            {/* Scrollable Content Container */}
+            <div className="overflow-y-auto custom-scrollbar p-4 space-y-4 max-h-[30vh] min-h-0">
+              {/* Show prompt/question from the agent if available */}
+              {gateStep === 3 && approachChoiceNeeded?.question && (
+                <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                  <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
+                </div>
+              )}
+              {gateStep !== 3 && clarificationPrompt && (
+                <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                  <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
+                </div>
+              )}
 
-            {/* Show prompt/question from the agent if available */}
-            {gateStep === 3 && approachChoiceNeeded?.question && (
-              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
-                <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
-              </div>
-            )}
-            {gateStep !== 3 && clarificationPrompt && (
-              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
-                <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
-              </div>
-            )}
-
-            {/* Gate 5 = full review */}
-            {gateStep === 5 ? (
-              <div className="space-y-4">
-                <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
-                <div className="overflow-y-auto custom-scrollbar pr-1" style={{ maxHeight: "45vh" }}>
+              {/* Gate 5 = full review */}
+              {gateStep === 5 ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
                   <div className="flex flex-wrap gap-3">
                     {(() => {
                       const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
@@ -5272,7 +5304,109 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-3">
+                    {stepFields.map(f => renderGateField(f))}
+                    {stepFields.length === 0 && (
+                      <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
+                    )}
+                  </div>
+
+                  {/* Gate 1 Coordinate Verification */}
+                  {gateStep === 1 && (
+                    <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
+                        </span>
+                        <div className="flex gap-3 items-center">
+                          {mapConfirmation && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const latVal = mapConfirmation.lat || "";
+                                const lngVal = mapConfirmation.lng || "";
+                                setGateValues(prev => ({
+                                  ...prev,
+                                  lat: latVal,
+                                  lng: lngVal,
+                                  coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                                }));
+                              }}
+                              className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                            >
+                              Pull from Map Confirmation
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={isGeocoding}
+                            onClick={handleGeocodeRefresh}
+                            className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
+                          >
+                            {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Geocode Tip Remark & Errors */}
+                      <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
+                        <p className="text-[10px] text-text-dim leading-relaxed">
+                          <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                        </p>
+                        {geocodeError && (
+                          <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
+                            ⚠️ {geocodeError}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                          <input
+                            type="text"
+                            value={gateValues["lat"] ?? ""}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGateValues(prev => ({
+                                ...prev,
+                                lat: val,
+                                coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
+                              }));
+                            }}
+                            placeholder="e.g. 19.0760"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                          <input
+                            type="text"
+                            value={gateValues["lng"] ?? ""}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGateValues(prev => ({
+                                ...prev,
+                                lng: val,
+                                coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
+                              }));
+                            }}
+                            placeholder="e.g. 72.8777"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Sticky footer buttons */}
+            <div className="border-t border-border/40 bg-bg-card/90 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+              {gateStep === 5 ? (
+                <>
                   <button
                     type="button"
                     onClick={() => setGateStep(4)}
@@ -5283,105 +5417,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     onClick={gateSubmitFinal}
                     className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
                   >Confirm & Proceed →</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-3">
-                  {stepFields.map(f => renderGateField(f))}
-                  {stepFields.length === 0 && (
-                    <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
-                  )}
-                </div>
-
-                {/* Gate 1 Coordinate Verification */}
-                {gateStep === 1 && (
-                  <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
-                      </span>
-                      <div className="flex gap-3 items-center">
-                        {mapConfirmation && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const latVal = mapConfirmation.lat || "";
-                              const lngVal = mapConfirmation.lng || "";
-                              setGateValues(prev => ({
-                                ...prev,
-                                lat: latVal,
-                                lng: lngVal,
-                                coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
-                              }));
-                            }}
-                            className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
-                          >
-                            Pull from Map Confirmation
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isGeocoding}
-                          onClick={handleGeocodeRefresh}
-                          className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
-                        >
-                          {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Geocode Tip Remark & Errors */}
-                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
-                      <p className="text-[10px] text-text-dim leading-relaxed">
-                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
-                      </p>
-                      {geocodeError && (
-                        <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
-                          ⚠️ {geocodeError}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
-                        <input
-                          type="text"
-                          value={gateValues["lat"] ?? ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGateValues(prev => ({
-                              ...prev,
-                              lat: val,
-                              coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
-                            }));
-                          }}
-                          placeholder="e.g. 19.0760"
-                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
-                        <input
-                          type="text"
-                          value={gateValues["lng"] ?? ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGateValues(prev => ({
-                              ...prev,
-                              lng: val,
-                              coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
-                            }));
-                          }}
-                          placeholder="e.g. 72.8777"
-                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                </>
+              ) : (
+                <>
                   {gateStep > 1 ? (
                     <button
                       type="button"
@@ -5410,9 +5448,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
                     >Review & Confirm →</button>
                   )}
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -5599,255 +5637,358 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 </div>
               </div>
             ) : null}
+
+            {/* ── Proceed to Listing Fetch CTA ────────────────── */}
+            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
+                  className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                      <FileSearch className="h-5 w-5 text-accent-light" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
+                          Step 2 — Fetch Listings
+                        </p>
+                        {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {selectedComps.size > 0
+                          ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
+                          : "Select at least one comparable from the table above to proceed."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaListingCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      The listing pipeline will search for real listings for the subject property + your selected comparables.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitListingFetch}
+                      disabled={selectedComps.size === 0}
+                      className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                    >
+                      Proceed to Next Step →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Proceed to Data Cleaning CTA ────────────────── */}
+            {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
+                  className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                      <Sparkles className="h-5 w-5 text-[#fb923c]" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                          Step 3 — Clean Raw Listings
+                        </p>
+                        {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaCleanCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitCleaning}
+                      className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                    >
+                      Start Data Cleaning →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Proceed to Factorial Table CTA ────────────────── */}
+            {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
+                  className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                      <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
+                          Step 4 — Generate Factorial Table
+                        </p>
+                        {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaFactorialCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      This will group data by project and calculate key rate statistics for valuation.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitFactorial}
+                      className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                    >
+                      Generate Factorial Table →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
+            {Stage1GateWizard}
+
+            {/* ── Map Confirmation (standalone — not part of wizard) */}
+            {mapConfirmation && !gateActive && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                <div
+                  onClick={() => setMapCollapsed(!mapCollapsed)}
+                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
+                        <MapPin className="h-5 w-5 text-warning" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                          {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                        </div>
+                        <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMapConfirmation(null);
+                      }}
+                      className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
+                    >×</button>
+                  </div>
+                </div>
+                {!mapCollapsed && (
+                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => submitMapConfirmation(true)}
+                        className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
+                      >Location Is Correct</button>
+                      <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
+                        <input
+                          type="text"
+                          value={clarificationValues.coordinates || ""}
+                          onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
+                          placeholder={PLACEHOLDER_MAP.coordinates}
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => submitMapConfirmation(false)}
+                        className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 shrink-0"
+                      >Apply Fix</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Approach Choice (standalone fallback if wizard not active) */}
+            {approachChoiceNeeded && !gateActive && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                <div
+                  onClick={() => setApproachCollapsed(!approachCollapsed)}
+                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
+                      <SlidersHorizontal className="h-5 w-5 text-warning" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                        {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                    </div>
+                  </div>
+                </div>
+                {!approachCollapsed && (
+                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-wrap items-end gap-3 animate-in fade-in duration-200 min-h-0">
+                    <button
+                      type="button"
+                      onClick={() => submitApproachChoice(true)}
+                      className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
+                    >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                    <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+                      <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                      <select
+                        value={clarificationValues.override_approach || ""}
+                        onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
+                        className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                      >
+                        <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                        <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                        <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                          Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
+                        </option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!clarificationValues.override_approach}
+                      onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
+                      className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50 shrink-0"
+                    >Apply Override</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Token Breakdown UI ────────────────── */}
+            {showTokenBreakdown && (
+              <div className="mb-4 overflow-y-auto custom-scrollbar max-h-[30vh] rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
+                <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-accent animate-pulse" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
+                    <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
+                    {tokenStats.last_stage_tokens && (
+                      <p className="text-[8px] text-accent-light font-bold mt-0.5">
+                        +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
+                    {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
+                      <p className="text-[11px] text-text-dim italic">No model data yet...</p>
+                    ) : (
+                      Object.entries(tokenStats.model_breakdown)
+                        .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
+                        .map(([model, usage]) => (
+                          <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-bold text-accent-light">{model}</span>
+                              <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
+                            </div>
+                            <div className="flex gap-3">
+                              <div className="flex-1">
+                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-accent"
+                                    style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-[8px] uppercase text-text-dim">Input</span>
+                                  <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-accent-purple"
+                                    style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-[8px] uppercase text-text-dim">Output</span>
+                                  <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
+                    {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
+                      <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
+                        <p className="text-[10px] text-text-dim">No tools called in this run.</p>
+                      </div>
+                    ) : (
+                      Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
+                        <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <SlidersHorizontal className="h-4 w-4 text-accent" />
+                              <div>
+                                <p className="text-[10px] font-bold text-text-primary">{tool}</p>
+                                <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
+                              <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+
+                    <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
+                        <span className="text-[10px] font-bold text-success">Optimal</span>
+                      </div>
+                      <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
+                        Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={scrollRef} />
           </div>
         )}
       </div>
 
-      <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
-        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
-              className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
-                  <FileSearch className="h-5 w-5 text-accent-light" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                      Step 2 — Fetch Listings
-                    </p>
-                    {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {selectedComps.size > 0
-                      ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
-                      : "Select at least one comparable from the table above to proceed."}
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaListingCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  The listing pipeline will search for real listings for the subject property + your selected comparables.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitListingFetch}
-                  disabled={selectedComps.size === 0}
-                  className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-                >
-                  Proceed to Next Step →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
-              className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
-                  <Sparkles className="h-5 w-5 text-[#fb923c]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                      Step 3 — Clean Raw Listings
-                    </p>
-                    {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaCleanCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitCleaning}
-                  className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                >
-                  Start Data Cleaning →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Proceed to Factorial Table CTA ────────────────── */}
-        {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
-              className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
-                  <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                      Step 4 — Generate Factorial Table
-                    </p>
-                    {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaFactorialCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  This will group data by project and calculate key rate statistics for valuation.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitFactorial}
-                  className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                >
-                  Generate Factorial Table →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
-        {Stage1GateWizard}
-
-        {/* ── Map Confirmation (standalone — not part of wizard) */}
-        {mapConfirmation && !gateActive && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div
-              onClick={() => setMapCollapsed(!mapCollapsed)}
-              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
-                    <MapPin className="h-5 w-5 text-warning" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
-                      {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-                    </div>
-                    <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMapConfirmation(null);
-                  }}
-                  className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
-                >×</button>
-              </div>
-            </div>
-            {!mapCollapsed && (
-              <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-200">
-                <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => submitMapConfirmation(true)}
-                    className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >Location Is Correct</button>
-                  <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
-                    <input
-                      type="text"
-                      value={clarificationValues.coordinates || ""}
-                      onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
-                      placeholder={PLACEHOLDER_MAP.coordinates}
-                      className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => submitMapConfirmation(false)}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >Apply Fix</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Approach Choice (standalone fallback if wizard not active) */}
-        {approachChoiceNeeded && !gateActive && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div
-              onClick={() => setApproachCollapsed(!approachCollapsed)}
-              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
-                  <SlidersHorizontal className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
-                    {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
-                </div>
-              </div>
-            </div>
-            {!approachCollapsed && (
-              <div className="flex flex-wrap items-end gap-3 p-4 animate-in fade-in duration-200">
-                <button
-                  type="button"
-                  onClick={() => submitApproachChoice(true)}
-                  className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
-                >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
-                <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                  <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
-                  <select
-                    value={clarificationValues.override_approach || ""}
-                    onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
-                    className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                  >
-                    <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
-                    <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                    <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                      Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
-                    </option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  disabled={!clarificationValues.override_approach}
-                  onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
-                  className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
-                >Apply Override</button>
-              </div>
-            )}
-          </div>
-        )}
-
-
-        <div className="mb-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
+      <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
           <span className="truncate pr-4">{currentStage}</span>
           <button
             type="button"
@@ -5860,112 +6001,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </button>
         </div>
 
-        {/* ── Token Breakdown UI ────────────────── */}
-        {showTokenBreakdown && (
-          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-accent animate-pulse" />
-                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
-                <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
-                {tokenStats.last_stage_tokens && (
-                  <p className="text-[8px] text-accent-light font-bold mt-0.5">
-                    +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
-                {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
-                  <p className="text-[11px] text-text-dim italic">No model data yet...</p>
-                ) : (
-                  Object.entries(tokenStats.model_breakdown)
-                    .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
-                    .map(([model, usage]) => (
-                      <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-bold text-accent-light">{model}</span>
-                        <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent"
-                              style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-1">
-                            <span className="text-[8px] uppercase text-text-dim">Input</span>
-                            <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent-purple"
-                              style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-1">
-                            <span className="text-[8px] uppercase text-text-dim">Output</span>
-                            <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
-                {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
-                  <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
-                    <p className="text-[10px] text-text-dim">No tools called in this run.</p>
-                  </div>
-                ) : (
-                  Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
-                    <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <SlidersHorizontal className="h-4 w-4 text-accent" />
-                          <div>
-                            <p className="text-[10px] font-bold text-text-primary">{tool}</p>
-                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
-                          <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-
-                <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
-                    <span className="text-[10px] font-bold text-success">Optimal</span>
-                  </div>
-                  <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
-                    Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {messages.length === 0 && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
-          <div className="relative">
+          <div className="relative mt-2.5">
             <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
             <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
               <textarea
