@@ -17,7 +17,12 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
-  Info
+  Info,
+  ArrowUp,
+  ArrowDown,
+  Filter,
+  Search,
+  X
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -249,6 +254,519 @@ function humanizeFieldName(field) {
   return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+const getRowKey = (lst) => {
+  if (!lst) return "";
+  const project = lst.cleaned_match_project || lst.project_name || "";
+  const date = lst.transaction_date || lst.posted_date_raw || "";
+  const area = lst.final_super_builtup_area || lst.cleaned_area_sqft || lst.area_sqft || "";
+  const price = lst.cleaned_price_value || lst.price_value || "";
+  return `${project}_${date}_${area}_${price}`;
+};
+
+const parseNumericValue = (val) => {
+  if (val === null || val === undefined || val === "") return -Infinity;
+  if (typeof val === "number") return val;
+  
+  let str = String(val).toLowerCase().trim();
+  let multiplier = 1;
+  if (str.includes("cr") || str.includes("crore")) {
+    multiplier = 10000000;
+  } else if (str.includes("lac") || str.includes("lakh")) {
+    multiplier = 100000;
+  } else if (str.includes("k") && !str.includes("sqft") && !str.includes("km")) {
+    multiplier = 1000;
+  }
+  
+  let cleanStr = str
+    .replace(/[₹$€£a-z]/gi, "")
+    .replace(/,/g, "")
+    .trim();
+    
+  let parsed = parseFloat(cleanStr);
+  return isNaN(parsed) ? -Infinity : parsed * multiplier;
+};
+
+const getRowValue = (row, columnKey) => {
+  if (!row) return "";
+  const rootVal = row[columnKey];
+  const compVal = row.comp ? row.comp[columnKey] : undefined;
+
+  if (columnKey === "transaction_date") {
+    const r = row.comp || row;
+    return r.transaction_date || r.posted_date_raw || "";
+  }
+  if (columnKey === "comp.location_certainty") {
+    const c = row.comp || row;
+    return c.location_certainty || (c.location_certainty_score !== undefined ? (c.location_certainty_score >= 0.8 ? "Sure" : "Not Sure") : "—");
+  }
+  if (columnKey === "comp.confidence_score") {
+    const c = row.comp || row;
+    return c.confidence_score ?? "—";
+  }
+  if (columnKey === "rate_per_sqft") {
+    const r = row.comp || row;
+    const price = r.cleaned_price_value || r.price_value;
+    const area = r.final_super_builtup_area;
+    return price && area ? Math.round(price / area) : "";
+  }
+  if (columnKey === "raw_price") {
+    const r = row.comp || row;
+    return r.original_price_value !== undefined && r.original_price_value !== null
+      ? r.original_price_value
+      : r.price_value;
+  }
+  if (columnKey === "cleaned_price_value") {
+    const r = row.comp || row;
+    return r.cleaned_price_value || r.price_value;
+  }
+  if (columnKey === "distance_from_subject_km") {
+    return row.distanceKm !== undefined && row.distanceKm !== null ? row.distanceKm : (row.comp?.distance_from_subject_km || "");
+  }
+  if (columnKey === "cbd_data") {
+    const cbds = row.cbd_data || [];
+    return cbds[0]?.distance_km ?? "";
+  }
+  if (columnKey === "amenity_summary") {
+    try {
+      let summary = row.amenity_summary;
+      if (typeof summary === 'string') summary = JSON.parse(summary);
+      let counts = summary?.counts;
+      if (typeof counts === 'string') counts = JSON.parse(counts);
+      if (!counts || typeof counts !== 'object') return "";
+      return "{" + Object.entries(counts).map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+    } catch (e) {
+      return "";
+    }
+  }
+  if (columnKey.includes(".")) {
+    const parts = columnKey.split(".");
+    let val = parts.reduce((acc, part) => acc && acc[part], row);
+    if (val === undefined && row.comp) {
+      val = parts.reduce((acc, part) => acc && acc[part], row.comp);
+    }
+    return val !== undefined && val !== null ? val : "";
+  }
+
+  if (compVal !== undefined && compVal !== null) return compVal;
+  if (rootVal !== undefined && rootVal !== null) return rootVal;
+  return "";
+};
+
+const isNumericColumn = (col) => {
+  const numericCols = [
+    "distance_from_subject_km",
+    "distanceKm",
+    "map_search_lat",
+    "map_search_lng",
+    "confidence_score",
+    "location_certainty_score",
+    "price_per_sqft",
+    "rate_per_sqft",
+    "price",
+    "price_value",
+    "original_price_value",
+    "cleaned_price_value",
+    "agreement_price",
+    "area_sqft",
+    "net_carpet_area_sq_m",
+    "final_super_builtup_area",
+    "floor",
+    "floor_number",
+    "total_floors",
+    "cleaned_floor",
+    "cleaned_total_floors",
+    "listing_count",
+    "avg_rate",
+    "ci_90_lower",
+    "ci_90_upper",
+    "raw_price",
+    "builtup_density_score",
+    "cbd_nearest_km",
+    "total_factor",
+    "factored_rate",
+    "builtup_density.congestion.score",
+    "cbd_data",
+    "website_authenticity_score"
+  ];
+  return numericCols.includes(col);
+};
+
+const filterAndSortList = (rows, sortConfig, filterConfig) => {
+  if (!rows || rows.length === 0) return [];
+  let result = [...rows];
+  
+  // 1. Filter
+  if (filterConfig) {
+    Object.entries(filterConfig).forEach(([col, selectedList]) => {
+      if (selectedList === null || selectedList === undefined) return;
+      const selectedSet = new Set(selectedList);
+      result = result.filter(row => {
+        const val = getRowValue(row, col);
+        const valStr = val === null || val === undefined || val === "" ? "" : String(val);
+        return selectedSet.has(valStr);
+      });
+    });
+  }
+  
+  // 2. Sort
+  if (sortConfig && sortConfig.column && sortConfig.direction) {
+    const col = sortConfig.column;
+    const isDesc = sortConfig.direction === "desc";
+    const isNumeric = isNumericColumn(col);
+    
+    result.sort((a, b) => {
+      let valA = getRowValue(a, col);
+      let valB = getRowValue(b, col);
+      
+      if (isNumeric) {
+        valA = parseNumericValue(valA);
+        valB = parseNumericValue(valB);
+      } else {
+        valA = valA === null || valA === undefined ? "" : String(valA).toLowerCase();
+        valB = valB === null || valB === undefined ? "" : String(valB).toLowerCase();
+      }
+      
+      if (valA === valB) return 0;
+      if (valA === -Infinity || valA === "") return 1; // blanks to bottom
+      if (valB === -Infinity || valB === "") return -1;
+      
+      if (isDesc) {
+        return valA < valB ? 1 : -1;
+      } else {
+        return valA > valB ? 1 : -1;
+      }
+    });
+  }
+  return result;
+};
+
+function SpreadsheetFilterDropdown({
+  triggerRef,
+  columnKey,
+  label,
+  uniqueValues,
+  sortConfig,
+  onSort,
+  filterConfig,
+  onFilterChange,
+  onClose,
+}) {
+  const dropdownRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  const selectedValues = useMemo(() => filterConfig?.[columnKey] || [], [filterConfig, columnKey]);
+
+  useEffect(() => {
+    const updatePosition = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      const dropdownWidth = 240;
+      const dropdownHeight = 320;
+      
+      let left = rect.left + window.scrollX;
+      let top = rect.bottom + window.scrollY + 4;
+
+      if (rect.left + dropdownWidth > window.innerWidth) {
+        left = rect.right - dropdownWidth + window.scrollX;
+      }
+      if (left < 0) {
+        left = 8 + window.scrollX;
+      }
+      if (rect.bottom + dropdownHeight > window.innerHeight) {
+        top = rect.top - dropdownHeight - 4 + window.scrollY;
+      }
+
+      setCoords({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [triggerRef]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
+      ) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose, triggerRef]);
+
+  const filteredOptions = useMemo(() => {
+    return uniqueValues.filter(val => {
+      const displayVal = val === "" ? "(Blanks)" : val;
+      return displayVal.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [uniqueValues, searchQuery]);
+
+  const isAllChecked = !filterConfig?.[columnKey] || filterConfig[columnKey].length === uniqueValues.length;
+
+  const handleToggleOption = (val) => {
+    let nextSelected;
+    const currentFilter = filterConfig?.[columnKey];
+    if (!currentFilter) {
+      nextSelected = uniqueValues.filter(v => v !== val);
+    } else {
+      if (currentFilter.includes(val)) {
+        nextSelected = currentFilter.filter(v => v !== val);
+      } else {
+        nextSelected = [...currentFilter, val];
+      }
+    }
+    
+    if (nextSelected.length === uniqueValues.length) {
+      onFilterChange(columnKey, null);
+    } else {
+      onFilterChange(columnKey, nextSelected);
+    }
+  };
+
+  const isOptionChecked = (val) => {
+    const currentFilter = filterConfig?.[columnKey];
+    if (!currentFilter) return true;
+    return currentFilter.includes(val);
+  };
+
+  const handleSortAsc = () => {
+    onSort(columnKey, "asc");
+    onClose();
+  };
+
+  const handleSortDesc = () => {
+    onSort(columnKey, "desc");
+    onClose();
+  };
+
+  const handleClearSort = () => {
+    onSort(columnKey, null);
+    onClose();
+  };
+
+  const handleClearFilter = () => {
+    onFilterChange(columnKey, null);
+    onClose();
+  };
+
+  const handleSelectOnly = (val) => {
+    onFilterChange(columnKey, [val]);
+  };
+
+  return createPortal(
+    <div
+      ref={dropdownRef}
+      style={{
+        position: "absolute",
+        top: coords.top,
+        left: coords.left,
+      }}
+      className="z-[99999] w-60 rounded-xl border border-border bg-bg-card/95 backdrop-blur-md shadow-2xl p-3 text-xs flex flex-col max-h-[320px] animate-in fade-in zoom-in-95 duration-100"
+    >
+      <div className="pb-2 border-b border-border/50 space-y-1 shrink-0">
+        <button
+          onClick={handleSortAsc}
+          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "asc" ? "bg-accent/10 text-accent hover:bg-accent/15" : ""}`}
+        >
+          <ArrowUp size={13} className="text-text-dim shrink-0" />
+          <span>Sort Smallest to Largest</span>
+        </button>
+        <button
+          onClick={handleSortDesc}
+          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "desc" ? "bg-accent/10 text-accent hover:bg-accent/15" : ""}`}
+        >
+          <ArrowDown size={13} className="text-text-dim shrink-0" />
+          <span>Sort Largest to Smallest</span>
+        </button>
+        {sortConfig?.column === columnKey && sortConfig?.direction && (
+          <button
+            onClick={handleClearSort}
+            className="w-full text-left px-2.5 py-1 rounded-lg flex items-center gap-2 text-danger hover:bg-danger/10 transition"
+          >
+            <X size={13} className="shrink-0" />
+            <span>Clear Sort</span>
+          </button>
+        )}
+      </div>
+
+      <div className="pt-2 flex-1 flex flex-col min-h-0">
+        <div className="flex items-center justify-between px-1 mb-2 shrink-0">
+          <span className="font-bold text-text-dim text-[10px] uppercase tracking-wider">Filter Values</span>
+          {filterConfig?.[columnKey] && (
+            <button
+              onClick={handleClearFilter}
+              className="text-accent hover:text-accent-light hover:underline font-bold text-[10px] uppercase"
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
+
+        <div className="relative mb-2 shrink-0">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            type="text"
+            placeholder="Search values..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-bg-deep/50 border border-border/60 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-accent outline-none transition"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-1 text-[11px]">
+          {searchQuery === "" && (
+            <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-text-secondary select-none font-medium">
+              <input
+                type="checkbox"
+                checked={isAllChecked}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    onFilterChange(columnKey, null);
+                  } else {
+                    onFilterChange(columnKey, []);
+                  }
+                }}
+                className="h-3.5 w-3.5 rounded accent-[#fb923c] border-border"
+              />
+              <span>(Select All)</span>
+            </label>
+          )}
+
+          {filteredOptions.length === 0 ? (
+            <div className="text-center py-4 text-text-dim italic">No matching values</div>
+          ) : (
+            filteredOptions.map((val, idx) => {
+              const displayVal = val === "" ? "(Blanks)" : val;
+              const isChecked = isOptionChecked(val);
+              return (
+                <div key={idx} className="flex items-center justify-between group/opt rounded hover:bg-white/5 px-2 py-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-text-secondary select-none flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleOption(val)}
+                      className="h-3.5 w-3.5 rounded accent-[#fb923c] border-border shrink-0"
+                    />
+                    <span className="truncate" title={displayVal}>{displayVal}</span>
+                  </label>
+                  <button
+                    onClick={() => handleSelectOnly(val)}
+                    className="opacity-0 group-hover/opt:opacity-100 text-[10px] text-accent hover:text-accent-light font-bold uppercase transition"
+                  >
+                    Only
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function TableHeaderCell({
+  columnKey,
+  label,
+  sortConfig,
+  onSort,
+  filterConfig,
+  onFilterChange,
+  allRows,
+  className = "",
+  align = "left",
+}) {
+  const triggerRef = useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const isSorted = sortConfig?.column === columnKey;
+  const sortDir = isSorted ? sortConfig?.direction : null;
+
+  const activeFilters = filterConfig?.[columnKey] || [];
+  const hasActiveFilters = activeFilters.length > 0;
+
+  const uniqueValues = useMemo(() => {
+    if (!allRows) return [];
+    const values = allRows.map(row => {
+      const val = getRowValue(row, columnKey);
+      return val === null || val === undefined || val === "" ? "" : String(val);
+    });
+    return Array.from(new Set(values)).sort((a, b) => {
+      if (a === "") return 1;
+      if (b === "") return -1;
+      const numA = parseNumericValue(a);
+      const numB = parseNumericValue(b);
+      if (numA !== -Infinity && numB !== -Infinity) {
+        return numA - numB;
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [allRows, columnKey]);
+
+  const toggleDropdown = (e) => {
+    e.stopPropagation();
+    setIsOpen(!isOpen);
+  };
+
+  const handleClose = () => setIsOpen(false);
+
+  return (
+    <th className={`px-3 py-2.5 font-semibold group/header relative select-none ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${className}`}>
+      <div className={`flex items-center gap-1.5 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
+        <span>{label}</span>
+        
+        <div className="flex items-center gap-0.5">
+          {isSorted && (
+            sortDir === "asc" ? (
+              <ArrowUp size={12} className="text-[#fb923c] animate-fade-in" />
+            ) : (
+              <ArrowDown size={12} className="text-[#fb923c] animate-fade-in" />
+            )
+          )}
+          {hasActiveFilters && (
+            <Filter size={10} className="text-[#fb923c] animate-fade-in" />
+          )}
+          
+          <button
+            ref={triggerRef}
+            onClick={toggleDropdown}
+            className={`opacity-0 group-hover/header:opacity-100 focus:opacity-100 hover:text-accent-light text-text-dim transition p-0.5 rounded ${isOpen ? 'opacity-100 text-accent bg-white/5' : ''}`}
+            title="Sort & Filter"
+          >
+            <ChevronDown size={12} />
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <SpreadsheetFilterDropdown
+          triggerRef={triggerRef}
+          columnKey={columnKey}
+          label={label}
+          uniqueValues={uniqueValues}
+          sortConfig={sortConfig}
+          onSort={onSort}
+          filterConfig={filterConfig}
+          onFilterChange={onFilterChange}
+          onClose={handleClose}
+        />
+      )}
+    </th>
+  );
+}
+
 // ── Road Type Badge ──────────────────────────────────────────────
 function RoadTypeBadge({ type }) {
   if (!type) return <span className="text-text-dim">—</span>;
@@ -330,23 +848,41 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showAllComparables, setShowAllComparables] = useState(false);
   const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
 
-  if (!comparables || comparables.length === 0) return null;
+  const compsList = useMemo(() => comparables || [], [comparables]);
 
   // Detect whether mixed sources exist
-  const hasMixedSources = comparables.some(c => c.data_source === "Internal DB") && comparables.some(c => c.data_source === "Web");
+  const hasMixedSources = useMemo(() => {
+    return compsList.some(c => c.data_source === "Internal DB") && compsList.some(c => c.data_source === "Web");
+  }, [compsList]);
 
-  const filteredComparables = sourceFilter === "all"
-    ? comparables
-    : comparables.filter(c => (c.data_source || "Web") === sourceFilter);
+  const filteredComparables = useMemo(() => {
+    return sourceFilter === "all"
+      ? compsList
+      : compsList.filter(c => (c.data_source || "Web") === sourceFilter);
+  }, [compsList, sourceFilter]);
 
-  const indexedComparables = filteredComparables.map((comp, originalIndex) => ({
-    comp,
-    originalIndex: comparables.indexOf(comp), // keep original indices for selection
-    distanceKm: getComparableDistanceKm(comp),
-  }));
-  const nearbyComparables = indexedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
-  const visibleComparables = showAllComparables ? indexedComparables : nearbyComparables;
+  const indexedComparables = useMemo(() => {
+    return filteredComparables.map((comp) => ({
+      comp,
+      originalIndex: compsList.indexOf(comp), // keep original indices for selection
+      distanceKm: getComparableDistanceKm(comp),
+    }));
+  }, [filteredComparables, compsList]);
+
+  const processedComparables = useMemo(() => {
+    return filterAndSortList(indexedComparables, sortConfig, filterConfig);
+  }, [indexedComparables, sortConfig, filterConfig]);
+
+  const nearbyComparables = useMemo(() => {
+    return processedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
+  }, [processedComparables]);
+
+  if (compsList.length === 0) return null;
+
+  const visibleComparables = showAllComparables ? processedComparables : nearbyComparables;
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
   const hasHiddenComparables = hiddenComparableCount > 0;
   const visibleResultLabel = showAllComparables
@@ -376,21 +912,21 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   />
                 </th>
               )}
-              <th className="px-3 py-2.5 font-semibold">Project Name</th>
-              <th className="px-3 py-2.5 font-semibold">Location</th>
-              <th className="px-3 py-2.5 font-semibold">Country</th>
-              <th className="px-3 py-2.5 font-semibold">Type</th>
-              <th className="px-3 py-2.5 font-semibold">Property Category</th>
-              <th className="px-3 py-2.5 font-semibold text-right">Distance</th>
-              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lat</th>
-              <th className="px-3 py-2.5 font-semibold text-right text-warning">Lng</th>
-              <th className="px-3 py-2.5 font-semibold">Status</th>
-              <th className="px-3 py-2.5 font-semibold">Reason</th>
-              <th className="px-3 py-2.5 font-semibold text-center text-accent-light whitespace-nowrap">Confidence</th>
-              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Confidence Reasoning</th>
-              <th className="px-3 py-2.5 font-semibold">Location Certainty</th>
-              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source URL</th>
-              <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Source</th>
+              <TableHeaderCell columnKey="project_name" label="Project Name" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="country" label="Country" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="distance_from_subject_km" label="Distance" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="map_search_lat" label="Lat" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="map_search_lng" label="Lng" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="possession_status" label="Status" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="reason" label="Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="comp.confidence_score" label="Confidence" align="center" className="text-accent-light whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="confidence_reasoning" label="Confidence Reasoning" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="comp.location_certainty" label="Location Certainty" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="source_url" label="Source URL" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="data_source" label="Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
             </tr>
           </thead>
           <tbody>
@@ -616,33 +1152,55 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
 // ── Listing Table ────────────────────────────────────────────────
 function ListingTable({ listings, dbTransactions }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
 
   // Map internal DB transactions into listing row shape
-  const dbRows = (dbTransactions || []).map(t => ({
-    project_name: t.project_name,
-    property_type: t.property_type_raw || t.property_type,
-    project_category: t.property_type,
-    listing_type: t.transaction_category,
-    bhk: t.unit_configuration,
-    currency: t.currency,
-    price: t.agreement_price,
-    price_per_sqft: t.price_per_sqft,
-    area_sqft: t.area_sqft,
-    area_type: t.area_type || "Carpet Area",
-    is_subject: t.is_subject || false,
-    floor: t.floor_number,
-    total_floors: null,
-    location: t.location_name,
-    transaction_date: t.transaction_date,
-    source_url: null,
-    _is_db: true,   // flag to render source badge
-  }));
+  const dbRows = useMemo(() => {
+    return (dbTransactions || []).map(t => ({
+      project_name: t.project_name,
+      property_type: t.property_type_raw || t.property_type,
+      project_category: t.property_type,
+      listing_type: t.transaction_category,
+      bhk: t.unit_configuration,
+      currency: t.currency,
+      price: t.agreement_price,
+      price_per_sqft: t.price_per_sqft,
+      area_sqft: t.area_sqft,
+      area_type: t.area_type || "Carpet Area",
+      is_subject: t.is_subject || false,
+      floor: t.floor_number,
+      total_floors: null,
+      location: t.location_name,
+      transaction_date: t.transaction_date,
+      source_url: null,
+      _is_db: true,   // flag to render source badge
+      website_authenticity_score: 100,
+      website_authenticity_category: "Government DB",
+    }));
+  }, [dbTransactions]);
 
-  const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
+  const subjectListings = useMemo(() => (listings || []).filter((l) => l.is_subject), [listings]);
+  const compListings = useMemo(() => (listings || []).filter((l) => !l.is_subject), [listings]);
+
+  const allListingRowsCombined = useMemo(() => {
+    return [...subjectListings, ...compListings, ...dbRows];
+  }, [subjectListings, compListings, dbRows]);
+
+  const processedSubjectListings = useMemo(() => {
+    return filterAndSortList(subjectListings, sortConfig, filterConfig);
+  }, [subjectListings, sortConfig, filterConfig]);
+
+  const processedCompListings = useMemo(() => {
+    return filterAndSortList(compListings, sortConfig, filterConfig);
+  }, [compListings, sortConfig, filterConfig]);
+
+  const processedDbRows = useMemo(() => {
+    return filterAndSortList(dbRows, sortConfig, filterConfig);
+  }, [dbRows, sortConfig, filterConfig]);
+
+  const allEmpty = allListingRowsCombined.length === 0;
   if (allEmpty) return null;
-
-  const subjectListings = (listings || []).filter((l) => l.is_subject);
-  const compListings = (listings || []).filter((l) => !l.is_subject);
 
   const renderRows = (rows, label) => (
     <>
@@ -687,7 +1245,25 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.floor || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.total_floors || "—"}</td>
           <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{lst.location || "—"}</td>
-          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
+          <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+            {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
+          </td>
+          <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
+            {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                lst.website_authenticity_score >= 90
+                  ? "bg-success/20 text-success border border-success/30"
+                  : lst.website_authenticity_score >= 70
+                  ? "bg-accent/20 text-accent border border-accent/30"
+                  : "bg-danger/20 text-danger border border-danger/30"
+              }`}>
+                {lst.website_authenticity_score}
+              </span>
+            ) : "—"}
+          </td>
+          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+            {lst.website_authenticity_category || "—"}
+          </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
               <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
@@ -707,28 +1283,30 @@ function ListingTable({ listings, dbTransactions }) {
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            <th className="px-3 py-2.5 font-semibold">Project</th>
-            <th className="px-3 py-2.5 font-semibold">Type</th>
-            <th className="px-3 py-2.5 font-semibold">Property Category</th>
-            <th className="px-3 py-2.5 font-semibold">List Type</th>
-            <th className="px-3 py-2.5 font-semibold text-center">BHK</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price/Sqft</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Area</th>
-            <th className="px-3 py-2.5 font-semibold">Area Type</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Role</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
-            <th className="px-3 py-2.5 font-semibold">Location</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
-            <th className="px-3 py-2.5 font-semibold">Source</th>
+            <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="listing_type" label="List Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="bhk" label="BHK" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="price" label="Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="price_per_sqft" label="Price/Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="area_sqft" label="Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="area_type" label="Area Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="is_subject" label="Role" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="floor" label="Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="total_floors" label="Total Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="transaction_date" label="Date" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="website_authenticity_score" label="Authenticity" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="website_authenticity_category" label="Site Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
+            <TableHeaderCell columnKey="_is_db" label="Source" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
           </tr>
         </thead>
         <tbody>
-          {renderRows(subjectListings, "Subject Property")}
-          {renderRows(compListings, "Comparable Projects")}
-          {dbRows.length > 0 && renderRows(dbRows, "Internal DB Transactions")}
+          {renderRows(processedSubjectListings, "Subject Property")}
+          {renderRows(processedCompListings, "Comparable Projects")}
+          {processedDbRows.length > 0 && renderRows(processedDbRows, "Internal DB Transactions")}
         </tbody>
       </table>
     </div>
@@ -790,6 +1368,13 @@ function ListingTable({ listings, dbTransactions }) {
 // ── Transaction Table (Internal DB) ─────────────────────────────────────────
 function TransactionTable({ transactions }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
+
+  const processedTransactions = useMemo(() => {
+    return filterAndSortList(transactions || [], sortConfig, filterConfig);
+  }, [transactions, sortConfig, filterConfig]);
+
   if (!transactions || transactions.length === 0) return null;
 
   const tableContent = (
@@ -797,25 +1382,25 @@ function TransactionTable({ transactions }) {
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            <th className="px-3 py-2.5 font-semibold">Project</th>
-            <th className="px-3 py-2.5 font-semibold">Type</th>
-            <th className="px-3 py-2.5 font-semibold">Property Category</th>
-            <th className="px-3 py-2.5 font-semibold">List Type</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price/Sqft</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Area (Sqft)</th>
-            <th className="px-3 py-2.5 font-semibold">Area Type</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
-            <th className="px-3 py-2.5 font-semibold">Location</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
-            <th className="px-3 py-2.5 font-semibold">Source</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Net Carpet (SQM)</th>
-            <th className="px-3 py-2.5 font-semibold">Country</th>
+            <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="property_type_raw" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="property_type" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="transaction_category" label="List Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="agreement_price" label="Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="price_per_sqft" label="Price/Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="area_sqft" label="Area (Sqft)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="area_type" label="Area Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="floor_number" label="Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="location_name" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="transaction_date" label="Date" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="source" label="Source" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="net_carpet_area_sq_m" label="Net Carpet (SQM)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
+            <TableHeaderCell columnKey="country_name" label="Country" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
           </tr>
         </thead>
         <tbody>
-          {transactions.map((t, i) => (
+          {processedTransactions.map((t, i) => (
             <tr key={i} className="border-b border-border/50 transition hover:bg-[rgba(52,211,153,0.04)]">
               <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">{t.project_name || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{t.property_type_raw || "—"}</td>
@@ -923,14 +1508,55 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
-  const [rowOverrides, setRowOverrides] = useState({}); // { rowIndex: { fsi_low, fsi_high, cc_low, cc_high } }
+  const [rowOverrides, setRowOverrides] = useState({}); // { uniqueKey: { fsi_low, fsi_high, cc_low, cc_high } }
   const [activeTab, setActiveTab] = useState("valid"); // "valid" | "outliers" | "dropped"
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
+
+  // Reset filters and sort whenever the tab changes.
+  // filterConfig values are built from the current tab's row data — they are not
+  // transferable across tabs (Valid vs Outlier vs Dropped have different value sets).
+  // Without this reset, switching tabs leaves stale filters active, causing wrong
+  // rows to appear in the new tab (the reported bug).
+  useEffect(() => {
+    setSortConfig({ column: null, direction: null });
+    setFilterConfig({});
+  }, [activeTab]);
+
+  console.log("CleanedTable Render:", {
+    activeTab,
+    listingsPropLength: listings?.length,
+    reviewListingsPropLength: reviewListings?.length,
+    droppedListingsPropLength: droppedListings?.length,
+  });
+
+  const listingsList = useMemo(() => listings || [], [listings]);
+
+  // Determine which rows to display based on active tab
+  const displayedListings = useMemo(() => {
+    const res = activeTab === "valid" ? listingsList : activeTab === "outliers" ? reviewListings : droppedListings;
+    console.log("CleanedTable displayedListings recalculated:", {
+      activeTab,
+      resLength: res?.length,
+      resFirst3: res?.slice(0, 3)
+    });
+    return res;
+  }, [activeTab, listingsList, reviewListings, droppedListings]);
+
+  const processedListings = useMemo(() => {
+    const res = filterAndSortList(displayedListings, sortConfig, filterConfig);
+    console.log("CleanedTable processedListings recalculated:", {
+      resLength: res?.length,
+      resFirst3: res?.slice(0, 3)
+    });
+    return res;
+  }, [displayedListings, sortConfig, filterConfig]);
 
   if (!listings || listings.length === 0) return null;
 
   // Detect if we have plot data and if the subject itself is a plot
   // Detect if the subject itself is a plot or villa
-  const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
+  const hasPlotData = listingsList.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
   const isPlotSubject = ["plot", "villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
   const isVillaSubject = ["villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
   // In Cost Approach, villa subject derives the PLOT/LAND rate (reverse residual: villa price - CC = land value)
@@ -942,8 +1568,6 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   // Always show the FSI/CC overrides if the subject is a plot or villa
   const showPlotControls = isPlotSubject;
 
-  // Determine which rows to display based on active tab
-  const displayedListings = activeTab === "valid" ? listings : activeTab === "outliers" ? reviewListings : droppedListings;
   const showReasonColumn = activeTab === "outliers" || activeTab === "dropped";
 
   // Helper: extract reason for drop/outlier
@@ -958,15 +1582,15 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
       <table className="w-full text-left text-xs relative">
         <thead className="sticky top-0 z-[11] bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            <th className="px-3 py-2.5 font-semibold">Matched Project</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
-            <th className="px-3 py-2.5 font-semibold">Config</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Raw Price</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Standardized Price</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Exchange Rate</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
+            <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_config" label="Config" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="raw_price" label="Raw Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_price_value" label="Standardized Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="exchange_rate_remark" label="Exchange Rate" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_area_sqft" label="Raw Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="final_super_builtup_area" label="Normalized Area (SBUA)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="rate_per_sqft" label="Rate / Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
 
             {showPlotControls && (
               <>
@@ -992,33 +1616,34 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                     </div>
                   </div>
                 </th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{derivedRateLabel} Derived Rate / Sqft</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent">{derivedRateLabel} Rate Range</th>
-                <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
+                <TableHeaderCell columnKey="plot_derived_rate_per_sqft" label={`${derivedRateLabel} Derived Rate / Sqft`} align="right" className="text-accent-light font-bold" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+                <TableHeaderCell columnKey="plot_derived_rate_range" label={`${derivedRateLabel} Rate Range`} align="right" className="text-accent" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+                <TableHeaderCell columnKey="plot_derived_by" label="Derived By" align="center" className="text-accent-light" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               </>
             )}
 
-            <th className="px-3 py-2.5 font-semibold text-center">Floor</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Total Floor</th>
-            <th className="px-3 py-2.5 font-semibold">Status</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Date</th>
-            <th className="px-3 py-2.5 font-semibold text-center">Source</th>
-            <th className="px-3 py-2.5 font-semibold">Flag</th>
-            {showReasonColumn && <th className="px-3 py-2.5 font-semibold">Reason</th>}
+            <TableHeaderCell columnKey="cleaned_floor" label="Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_total_floors" label="Total Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="cleaned_possession_status" label="Status" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="transaction_date" label="Date" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="source" label="Source" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="stat_flag" label="Flag" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            {showReasonColumn && <TableHeaderCell columnKey="reason" label="Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />}
           </tr>
         </thead>
         <tbody>
-          {displayedListings.length === 0 ? (
+          {processedListings.length === 0 ? (
             <tr>
               <td colSpan={99} className="px-4 py-8 text-center text-sm text-text-dim">
                 {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
               </td>
             </tr>
-          ) : displayedListings.map((lst, i) => {
+          ) : processedListings.map((lst, idx) => {
             const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
+            const rKey = getRowKey(lst);
             return (
-              <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
+              <tr key={`${activeTab}_${idx}_${rKey}`} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
                 <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                   {lst.cleaned_match_project || lst.project_name || "—"}
                 </td>
@@ -1066,12 +1691,12 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                             step="0.01"
                             placeholder="FSI"
                             className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
-                            value={rowOverrides[i]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
+                            value={rowOverrides[rKey]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
                             onChange={(e) => {
                               const val = e.target.value;
                               setRowOverrides(prev => ({
                                 ...prev,
-                                [i]: { ...prev[i], fsi_best: val }
+                                [rKey]: { ...prev[rKey], fsi_best: val }
                               }));
                             }}
                           />
@@ -1087,12 +1712,12 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                             type="number"
                             placeholder="CC"
                             className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
-                            value={rowOverrides[i]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
+                            value={rowOverrides[rKey]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
                             onChange={(e) => {
                               const val = e.target.value;
                               setRowOverrides(prev => ({
                                 ...prev,
-                                [i]: { ...prev[i], const_cost_best: val }
+                                [rKey]: { ...prev[rKey], const_cost_best: val }
                               }));
                             }}
                           />
@@ -1124,7 +1749,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
               <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(lst.transaction_date)}</td>
+              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+                {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
+              </td>
               <td className="px-3 py-2 text-center">
                 <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
                   {lst.source || "Web"}
@@ -1149,18 +1776,18 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
 
   return (
     <>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(251,146,60,0.06)] px-4 py-3">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-cyan-500/5">
+        <div className="border-b border-white/[0.06] bg-[rgba(251,146,60,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
               {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
+              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
                 onClick={() => setIsMaximized(true)}
-                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
+                className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
                 title="Maximize Table"
               >
                 ⛶
@@ -1170,25 +1797,27 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         </div>
 
         {/* ── Tab Bar ────────────────────────────────────── */}
-        <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2">
-          <button
-            onClick={() => setActiveTab("valid")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ✅ Valid ({listings.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("outliers")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ⚠️ Outliers ({reviewListings.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("dropped")}
-            className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-          >
-            ❌ Dropped ({droppedListings.length})
-          </button>
+        <div className="flex items-center gap-1.5 border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5">
+          <div className="flex items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-0.5 gap-0.5">
+            <button
+              onClick={() => setActiveTab("valid")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ✅ Valid ({listings.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("outliers")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ⚠️ Outliers ({reviewListings.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("dropped")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+            >
+              ❌ Dropped ({droppedListings.length})
+            </button>
+          </div>
         </div>
 
         {showPlotControls && onRecalculate && (
@@ -1278,30 +1907,31 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               </button>
             </div>
             <div className="flex-1 overflow-hidden flex flex-col">
-
-              {/* ── Tab Bar (maximized) ────────────────────── */}
-              <div className="flex items-center gap-1 border-b border-border bg-bg-deep/30 px-4 py-2 shrink-0">
-                <button
-                  onClick={() => setActiveTab("valid")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "valid" ? "bg-success/15 text-success border border-success/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ✅ Valid ({listings.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("outliers")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "outliers" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ⚠️ Outliers ({reviewListings.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("dropped")}
-                  className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${activeTab === "dropped" ? "bg-danger/15 text-danger border border-danger/30" : "text-text-dim hover:text-text-secondary hover:bg-bg-card/50"}`}
-                >
-                  ❌ Dropped ({droppedListings.length})
-                </button>
+              {/* Tab Bar (maximized) */}
+              <div className="flex items-center gap-1.5 border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5 shrink-0">
+                <div className="flex items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setActiveTab("valid")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ✅ Valid ({listings.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("outliers")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ⚠️ Outliers ({reviewListings.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("dropped")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  >
+                    ❌ Dropped ({droppedListings.length})
+                  </button>
+                </div>
               </div>
 
-              {/* ── Table (full-width, scrollable) ─────────── */}
+              {/* Table (full-width, scrollable) */}
               <div className="flex-1 overflow-auto p-4 custom-scrollbar">
                 <div className="w-full border border-border rounded-2xl overflow-hidden bg-bg-card">
                   {tableContent}
@@ -1316,19 +1946,27 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   );
 }
 
-// ── Factorial Rate Summary Table ─────────────────────────────────
+// ── Factorial Rate Summary Table ──────────────────────────────────────────────
 function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canCalculateRate = true }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState(new Set());
   const [showComparison, setShowComparison] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState(new Set());
 
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
+
+  const dataTable = useMemo(() => data?.table || [], [data?.table]);
+
+  const filteredAndSortedTable = useMemo(() => {
+    return filterAndSortList(dataTable, sortConfig, filterConfig);
+  }, [dataTable, sortConfig, filterConfig]);
+
   if (!data || !data.table || data.table.length === 0) return null;
 
   const currency = data.currency || "INR";
   const areaUnit = data.area_unit || "sqft";
 
-  // Truly universal formatter using Intl API
   const formatter = new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: currency,
@@ -1342,37 +1980,125 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
       <table className="w-full text-left text-xs">
         <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            <th className="px-4 py-3 font-semibold">
+            <th className="px-4 py-3 font-semibold w-10">
               <span className="sr-only">Select</span>
             </th>
-            <th className="px-4 py-3 font-semibold">Project</th>
-            <th className="px-4 py-3 font-semibold text-center">Listings</th>
-            <th className="px-4 py-3 font-semibold text-center">Road Type</th>
-            <th className="px-4 py-3 font-semibold text-center">Nearby Amenities</th>
-            <th className="px-4 py-3 font-semibold text-center">Nearest Commercial Hubs</th>
-            <th className="px-4 py-3 font-semibold text-center">Built-up Density</th>
-            <th className="px-4 py-3 font-semibold text-right">Avg Rate</th>
-            <th className="px-4 py-3 font-semibold text-right">90% CI Lower</th>
-            <th className="px-4 py-3 font-semibold text-right">90% CI Upper</th>
-            <th className="px-4 py-3 font-semibold text-center">Rate Source</th>
+            <TableHeaderCell
+              columnKey="project_name"
+              label="Project"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+            />
+            <TableHeaderCell
+              columnKey="listing_count"
+              label="Listings"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="center"
+            />
+            <TableHeaderCell
+              columnKey="road_type"
+              label="Road Type"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="center"
+            />
+            <TableHeaderCell
+              columnKey="amenity_summary"
+              label="Nearby Amenities"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+            />
+            <TableHeaderCell
+              columnKey="cbd_data"
+              label="Nearest Commercial Hubs"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="center"
+            />
+            <TableHeaderCell
+              columnKey="builtup_density.congestion.score"
+              label="Built-up Density"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="center"
+            />
+            <TableHeaderCell
+              columnKey="avg_rate"
+              label="Avg Rate"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="right"
+            />
+            <TableHeaderCell
+              columnKey="ci_90_lower"
+              label="90% CI Lower"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="right"
+            />
+            <TableHeaderCell
+              columnKey="ci_90_upper"
+              label="90% CI Upper"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="right"
+            />
+            <TableHeaderCell
+              columnKey="rate_derived_from"
+              label="Rate Source"
+              sortConfig={sortConfig}
+              onSort={setSortConfig}
+              filterConfig={filterConfig}
+              onFilterChange={setFilterConfig}
+              allRows={data.table}
+              align="center"
+            />
           </tr>
         </thead>
         <tbody>
-          {data.table.map((row, i) => {
+          {filteredAndSortedTable.map((row, i) => {
             const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
-            const isExpanded = expandedProjects.has(i);
+            const isExpanded = expandedProjects.has(row.project_name);
 
             return (
-              <Fragment key={`fact-${i}`}>
+              <Fragment key={`fact-${row.project_name || i}`}>
                 <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedForComparison.has(i)}
+                      checked={selectedForComparison.has(row.project_name)}
                       onChange={(e) => {
                         const next = new Set(selectedForComparison);
-                        if (e.target.checked) next.add(i);
-                        else next.delete(i);
+                        if (e.target.checked) next.add(row.project_name);
+                        else next.delete(row.project_name);
                         setSelectedForComparison(next);
                       }}
                       className="h-3.5 w-3.5 rounded border-border accent-accent"
@@ -1384,8 +2110,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                         <button
                           onClick={() => {
                             const next = new Set(expandedProjects);
-                            if (isExpanded) next.delete(i);
-                            else next.add(i);
+                            if (isExpanded) next.delete(row.project_name);
+                            else next.add(row.project_name);
                             setExpandedProjects(next);
                           }}
                           className="text-text-dim hover:text-text-primary p-0.5 rounded hover:bg-white/5 transition"
@@ -1448,7 +2174,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                                 className="text-[9px] font-bold text-[#f59e0b] bg-[#f59e0b]/10 border border-[#f59e0b]/20 rounded px-1.5 py-0.5 whitespace-nowrap truncate"
                                 title={cbd.name}
                               >
-                                🏙 {cbd.short_name || cbd.name.split(',')[0]}
+                                🏢 {cbd.short_name || cbd.name.split(',')[0]}
                               </span>
                               <span className="text-[9px] font-mono text-text-dim whitespace-nowrap">
                                 {cbd.distance_km != null ? `${cbd.distance_km} km` : "N/A"}
@@ -1494,12 +2220,12 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   const isSubDb = sub.rate_derived_from === "internal_db";
                   return (
                     <tr
-                      key={`fact-${i}-sub-${subIdx}`}
+                      key={`fact-${row.project_name || i}-sub-${subIdx}`}
                       className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
                     >
                       <td className="px-4 py-2"></td>
                       <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
-                        <span className="text-border">└─</span>
+                        <span className="text-border">└──</span>
                         <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
                       </td>
                       <td className="px-4 py-2 text-center">
@@ -1538,8 +2264,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
 
   return (
     <>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(167,139,250,0.06)] px-4 py-3">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-purple-500/5">
+        <div className="border-b border-white/[0.06] bg-[rgba(167,139,250,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(167,139,250,0.15)] text-sm">📈</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#a78bfa]">Comparable Project Metrics</span>
@@ -1552,8 +2278,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   Compare {selectedForComparison.size}
                 </button>
               )}
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{data.table.length} projects · {data.total_valid} listings</span>
-              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
+              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{data.table.length} projects · {data.total_valid} listings</span>
+              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
             </div>
           </div>
         </div>
@@ -1577,7 +2303,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
 
       {showComparison && (
         <ComparisonModal
-          projects={Array.from(selectedForComparison).map(i => data.table[i])}
+          projects={data.table.filter(p => selectedForComparison.has(p.project_name))}
           onClose={() => setShowComparison(false)}
         />
       )}
@@ -2290,7 +3016,7 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData }) {
+export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -2474,6 +3200,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "cost_calculation_result") {
             setCostCalculationData(event.content);
+            // Bubble cost valuation result up for the Report tab in Visual Layer
+            onValuationResult?.({
+              type: "cost",
+              factorialAnalysis: factorialAnalysisData,
+              costCalculation: event.content,
+              subjectData: subjectDataRef.current || subjectData,
+              factorialData: factorialData,
+              timestamp: new Date().toISOString(),
+            });
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -2540,7 +3275,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingNote]);
+  }, [messages, streamingNote, showTokenBreakdown, gateActive, mapConfirmation, approachChoiceNeeded]);
 
   const clearInteractiveState = () => {
     setClarificationPrompt("");
@@ -3041,16 +3776,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     try {
       const mappedOverrides = {};
-      Object.entries(rowOverrides).forEach(([key, ov]) => {
-        if (!ov) return;
-        mappedOverrides[key] = {};
-        if (ov.fsi_best !== undefined) {
-          mappedOverrides[key].fsi_low = ov.fsi_best;
-          mappedOverrides[key].fsi_high = ov.fsi_best;
-        }
-        if (ov.const_cost_best !== undefined) {
-          mappedOverrides[key].cc_low = ov.const_cost_best;
-          mappedOverrides[key].cc_high = ov.const_cost_best;
+      cleanedData.forEach((lst, origIdx) => {
+        const uniqueKey = getRowKey(lst);
+        const ov = rowOverrides[uniqueKey];
+        if (ov) {
+          mappedOverrides[origIdx] = {};
+          if (ov.fsi_best !== undefined && ov.fsi_best !== "") {
+            mappedOverrides[origIdx].fsi_low = ov.fsi_best;
+            mappedOverrides[origIdx].fsi_high = ov.fsi_best;
+          }
+          if (ov.const_cost_best !== undefined && ov.const_cost_best !== "") {
+            mappedOverrides[origIdx].cc_low = ov.const_cost_best;
+            mappedOverrides[origIdx].cc_high = ov.const_cost_best;
+          }
         }
       });
 
@@ -3349,6 +4087,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "factorial_analysis_result") {
             setFactorialAnalysisData(event.content);
+            // Bubble valuation result up for the Report tab in Visual Layer
+            onValuationResult?.({
+              type: "market",
+              factorialAnalysis: event.content,
+              subjectData: subjectDataRef.current || subjectData,
+              factorialData: factorialData,
+              timestamp: new Date().toISOString(),
+            });
 
             // Handle audit stats
             const usage = event.content?._token_usage;
@@ -4449,11 +5195,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const canAdvance = Boolean(mandatoryStep);
 
     return (
-      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-0">
         {/* Header */}
         <div
           onClick={() => setGateCollapsed(!gateCollapsed)}
-          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -4496,44 +5242,148 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
         {/* Gate body */}
         {!gateCollapsed && (
-          <div className="flex flex-col gap-4 p-4">
-
-            {/* Show prompt/question from the agent if available */}
-            {gateStep === 3 && approachChoiceNeeded?.question && (
-              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
-                <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
-              </div>
-            )}
-            {gateStep !== 3 && clarificationPrompt && (
-              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
-                <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
-              </div>
-            )}
-
-            {/* Gate 5 = full review */}
-            {gateStep === 5 ? (
-              <div className="space-y-4">
-                <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
-                <div className="flex flex-wrap gap-3">
-                  {(() => {
-                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
-                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
-                    const finalFields = [...standardFields, ...extraFields].map(f => {
-                      if (f.field === "lat" || f.field === "lng") {
-                        return { ...f, type: "text" };
-                      }
-                      return f;
-                    });
-                    if (!finalFields.some(f => f.field === "lat")) {
-                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
-                    }
-                    if (!finalFields.some(f => f.field === "lng")) {
-                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
-                    }
-                    return finalFields.map(f => renderGateField(f));
-                  })()}
+          <div className="flex flex-col min-h-0">
+            {/* Scrollable Content Container */}
+            <div className="overflow-y-auto custom-scrollbar p-4 space-y-4 max-h-[30vh] min-h-0">
+              {/* Show prompt/question from the agent if available */}
+              {gateStep === 3 && approachChoiceNeeded?.question && (
+                <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                  <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+              )}
+              {gateStep !== 3 && clarificationPrompt && (
+                <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                  <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
+                </div>
+              )}
+
+              {/* Gate 5 = full review */}
+              {gateStep === 5 ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
+                  <div className="flex flex-wrap gap-3">
+                    {(() => {
+                      const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                      const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                      const finalFields = [...standardFields, ...extraFields].map(f => {
+                        if (f.field === "lat" || f.field === "lng") {
+                          return { ...f, type: "text" };
+                        }
+                        return f;
+                      });
+                      if (!finalFields.some(f => f.field === "lat")) {
+                        finalFields.push({ field: "lat", label: "Latitude", type: "text" });
+                      }
+                      if (!finalFields.some(f => f.field === "lng")) {
+                        finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                      }
+                      return finalFields.map(f => renderGateField(f));
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-3">
+                    {stepFields.map(f => renderGateField(f))}
+                    {stepFields.length === 0 && (
+                      <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
+                    )}
+                  </div>
+
+                  {/* Gate 1 Coordinate Verification */}
+                  {gateStep === 1 && (
+                    <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
+                        </span>
+                        <div className="flex gap-3 items-center">
+                          {mapConfirmation && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const latVal = mapConfirmation.lat || "";
+                                const lngVal = mapConfirmation.lng || "";
+                                setGateValues(prev => ({
+                                  ...prev,
+                                  lat: latVal,
+                                  lng: lngVal,
+                                  coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                                }));
+                              }}
+                              className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                            >
+                              Pull from Map Confirmation
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={isGeocoding}
+                            onClick={handleGeocodeRefresh}
+                            className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
+                          >
+                            {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Geocode Tip Remark & Errors */}
+                      <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
+                        <p className="text-[10px] text-text-dim leading-relaxed">
+                          <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                        </p>
+                        {geocodeError && (
+                          <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
+                            ⚠️ {geocodeError}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                          <input
+                            type="text"
+                            value={gateValues["lat"] ?? ""}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGateValues(prev => ({
+                                ...prev,
+                                lat: val,
+                                coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
+                              }));
+                            }}
+                            placeholder="e.g. 19.0760"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                          <input
+                            type="text"
+                            value={gateValues["lng"] ?? ""}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setGateValues(prev => ({
+                                ...prev,
+                                lng: val,
+                                coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
+                              }));
+                            }}
+                            placeholder="e.g. 72.8777"
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Sticky footer buttons */}
+            <div className="border-t border-border/40 bg-bg-card/90 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+              {gateStep === 5 ? (
+                <>
                   <button
                     type="button"
                     onClick={() => setGateStep(4)}
@@ -4544,105 +5394,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     onClick={gateSubmitFinal}
                     className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
                   >Confirm & Proceed →</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-3">
-                  {stepFields.map(f => renderGateField(f))}
-                  {stepFields.length === 0 && (
-                    <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
-                  )}
-                </div>
-
-                {/* Gate 1 Coordinate Verification */}
-                {gateStep === 1 && (
-                  <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
-                      </span>
-                      <div className="flex gap-3 items-center">
-                        {mapConfirmation && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const latVal = mapConfirmation.lat || "";
-                              const lngVal = mapConfirmation.lng || "";
-                              setGateValues(prev => ({
-                                ...prev,
-                                lat: latVal,
-                                lng: lngVal,
-                                coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
-                              }));
-                            }}
-                            className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
-                          >
-                            Pull from Map Confirmation
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isGeocoding}
-                          onClick={handleGeocodeRefresh}
-                          className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
-                        >
-                          {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Geocode Tip Remark & Errors */}
-                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
-                      <p className="text-[10px] text-text-dim leading-relaxed">
-                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">"Sus, Pune"</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
-                      </p>
-                      {geocodeError && (
-                        <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
-                          ⚠️ {geocodeError}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
-                        <input
-                          type="text"
-                          value={gateValues["lat"] ?? ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGateValues(prev => ({
-                              ...prev,
-                              lat: val,
-                              coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
-                            }));
-                          }}
-                          placeholder="e.g. 19.0760"
-                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
-                        <input
-                          type="text"
-                          value={gateValues["lng"] ?? ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGateValues(prev => ({
-                              ...prev,
-                              lng: val,
-                              coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
-                            }));
-                          }}
-                          placeholder="e.g. 72.8777"
-                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                </>
+              ) : (
+                <>
                   {gateStep > 1 ? (
                     <button
                       type="button"
@@ -4671,9 +5425,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
                     >Review & Confirm →</button>
                   )}
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -4860,255 +5614,358 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 </div>
               </div>
             ) : null}
+
+            {/* ── Proceed to Listing Fetch CTA ────────────────── */}
+            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
+                  className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                      <FileSearch className="h-5 w-5 text-accent-light" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
+                          Step 2 — Fetch Listings
+                        </p>
+                        {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {selectedComps.size > 0
+                          ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
+                          : "Select at least one comparable from the table above to proceed."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaListingCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      The listing pipeline will search for real listings for the subject property + your selected comparables.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitListingFetch}
+                      disabled={selectedComps.size === 0}
+                      className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                    >
+                      Proceed to Next Step →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Proceed to Data Cleaning CTA ────────────────── */}
+            {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
+                  className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                      <Sparkles className="h-5 w-5 text-[#fb923c]" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                          Step 3 — Clean Raw Listings
+                        </p>
+                        {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaCleanCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitCleaning}
+                      className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                    >
+                      Start Data Cleaning →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Proceed to Factorial Table CTA ────────────────── */}
+            {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
+                <div
+                  onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
+                  className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                      <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
+                          Step 4 — Generate Factorial Table
+                        </p>
+                        {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!ctaFactorialCollapsed && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <p className="text-xs text-text-dim">
+                      This will group data by project and calculate key rate statistics for valuation.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={submitFactorial}
+                      className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                    >
+                      Generate Factorial Table →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
+            {Stage1GateWizard}
+
+            {/* ── Map Confirmation (standalone — not part of wizard) */}
+            {mapConfirmation && !gateActive && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                <div
+                  onClick={() => setMapCollapsed(!mapCollapsed)}
+                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
+                        <MapPin className="h-5 w-5 text-warning" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                          {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                        </div>
+                        <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMapConfirmation(null);
+                      }}
+                      className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
+                    >×</button>
+                  </div>
+                </div>
+                {!mapCollapsed && (
+                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => submitMapConfirmation(true)}
+                        className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
+                      >Location Is Correct</button>
+                      <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
+                        <input
+                          type="text"
+                          value={clarificationValues.coordinates || ""}
+                          onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
+                          placeholder={PLACEHOLDER_MAP.coordinates}
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => submitMapConfirmation(false)}
+                        className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 shrink-0"
+                      >Apply Fix</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Approach Choice (standalone fallback if wizard not active) */}
+            {approachChoiceNeeded && !gateActive && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                <div
+                  onClick={() => setApproachCollapsed(!approachCollapsed)}
+                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
+                      <SlidersHorizontal className="h-5 w-5 text-warning" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                        {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                      </div>
+                      <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                    </div>
+                  </div>
+                </div>
+                {!approachCollapsed && (
+                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-wrap items-end gap-3 animate-in fade-in duration-200 min-h-0">
+                    <button
+                      type="button"
+                      onClick={() => submitApproachChoice(true)}
+                      className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
+                    >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                    <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+                      <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                      <select
+                        value={clarificationValues.override_approach || ""}
+                        onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
+                        className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                      >
+                        <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                        <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                        <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                          Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
+                        </option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!clarificationValues.override_approach}
+                      onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
+                      className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50 shrink-0"
+                    >Apply Override</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Token Breakdown UI ────────────────── */}
+            {showTokenBreakdown && (
+              <div className="mb-4 overflow-y-auto custom-scrollbar max-h-[30vh] rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
+                <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-accent animate-pulse" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
+                    <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
+                    {tokenStats.last_stage_tokens && (
+                      <p className="text-[8px] text-accent-light font-bold mt-0.5">
+                        +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
+                    {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
+                      <p className="text-[11px] text-text-dim italic">No model data yet...</p>
+                    ) : (
+                      Object.entries(tokenStats.model_breakdown)
+                        .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
+                        .map(([model, usage]) => (
+                          <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-bold text-accent-light">{model}</span>
+                              <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
+                            </div>
+                            <div className="flex gap-3">
+                              <div className="flex-1">
+                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-accent"
+                                    style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-[8px] uppercase text-text-dim">Input</span>
+                                  <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-accent-purple"
+                                    style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-[8px] uppercase text-text-dim">Output</span>
+                                  <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
+                    {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
+                      <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
+                        <p className="text-[10px] text-text-dim">No tools called in this run.</p>
+                      </div>
+                    ) : (
+                      Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
+                        <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <SlidersHorizontal className="h-4 w-4 text-accent" />
+                              <div>
+                                <p className="text-[10px] font-bold text-text-primary">{tool}</p>
+                                <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
+                              <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+
+                    <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
+                        <span className="text-[10px] font-bold text-success">Optimal</span>
+                      </div>
+                      <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
+                        Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={scrollRef} />
           </div>
         )}
       </div>
 
-      <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
-        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-        {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
-              className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
-                  <FileSearch className="h-5 w-5 text-accent-light" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                      Step 2 — Fetch Listings
-                    </p>
-                    {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {selectedComps.size > 0
-                      ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
-                      : "Select at least one comparable from the table above to proceed."}
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaListingCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  The listing pipeline will search for real listings for the subject property + your selected comparables.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitListingFetch}
-                  disabled={selectedComps.size === 0}
-                  className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-                >
-                  Proceed to Next Step →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-        {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
-              className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
-                  <Sparkles className="h-5 w-5 text-[#fb923c]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                      Step 3 — Clean Raw Listings
-                    </p>
-                    {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaCleanCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitCleaning}
-                  className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                >
-                  Start Data Cleaning →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Proceed to Factorial Table CTA ────────────────── */}
-        {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-            <div
-              onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
-              className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
-                  <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                      Step 4 — Generate Factorial Table
-                    </p>
-                    {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
-                  </p>
-                </div>
-              </div>
-            </div>
-            {!ctaFactorialCollapsed && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                <p className="text-xs text-text-dim">
-                  This will group data by project and calculate key rate statistics for valuation.
-                </p>
-                <button
-                  type="button"
-                  onClick={submitFactorial}
-                  className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                >
-                  Generate Factorial Table →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
-        {Stage1GateWizard}
-
-        {/* ── Map Confirmation (standalone — not part of wizard) */}
-        {mapConfirmation && !gateActive && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div
-              onClick={() => setMapCollapsed(!mapCollapsed)}
-              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
-                    <MapPin className="h-5 w-5 text-warning" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
-                      {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-                    </div>
-                    <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMapConfirmation(null);
-                  }}
-                  className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
-                >×</button>
-              </div>
-            </div>
-            {!mapCollapsed && (
-              <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-200">
-                <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => submitMapConfirmation(true)}
-                    className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >Location Is Correct</button>
-                  <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
-                    <input
-                      type="text"
-                      value={clarificationValues.coordinates || ""}
-                      onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
-                      placeholder={PLACEHOLDER_MAP.coordinates}
-                      className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => submitMapConfirmation(false)}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >Apply Fix</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Approach Choice (standalone fallback if wizard not active) */}
-        {approachChoiceNeeded && !gateActive && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div
-              onClick={() => setApproachCollapsed(!approachCollapsed)}
-              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
-                  <SlidersHorizontal className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
-                    {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
-                </div>
-              </div>
-            </div>
-            {!approachCollapsed && (
-              <div className="flex flex-wrap items-end gap-3 p-4 animate-in fade-in duration-200">
-                <button
-                  type="button"
-                  onClick={() => submitApproachChoice(true)}
-                  className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
-                >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
-                <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                  <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
-                  <select
-                    value={clarificationValues.override_approach || ""}
-                    onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
-                    className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                  >
-                    <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
-                    <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                    <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                      Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
-                    </option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  disabled={!clarificationValues.override_approach}
-                  onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
-                  className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
-                >Apply Override</button>
-              </div>
-            )}
-          </div>
-        )}
-
-
-        <div className="mb-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
+      <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
           <span className="truncate pr-4">{currentStage}</span>
           <button
             type="button"
@@ -5121,112 +5978,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </button>
         </div>
 
-        {/* ── Token Breakdown UI ────────────────── */}
-        {showTokenBreakdown && (
-          <div className="mb-4 overflow-hidden rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-accent animate-pulse" />
-                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
-                <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
-                {tokenStats.last_stage_tokens && (
-                  <p className="text-[8px] text-accent-light font-bold mt-0.5">
-                    +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
-                {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
-                  <p className="text-[11px] text-text-dim italic">No model data yet...</p>
-                ) : (
-                  Object.entries(tokenStats.model_breakdown)
-                    .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
-                    .map(([model, usage]) => (
-                      <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-bold text-accent-light">{model}</span>
-                        <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent"
-                              style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-1">
-                            <span className="text-[8px] uppercase text-text-dim">Input</span>
-                            <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent-purple"
-                              style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-1">
-                            <span className="text-[8px] uppercase text-text-dim">Output</span>
-                            <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
-                {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
-                  <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
-                    <p className="text-[10px] text-text-dim">No tools called in this run.</p>
-                  </div>
-                ) : (
-                  Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
-                    <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <SlidersHorizontal className="h-4 w-4 text-accent" />
-                          <div>
-                            <p className="text-[10px] font-bold text-text-primary">{tool}</p>
-                            <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
-                          <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-
-                <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
-                    <span className="text-[10px] font-bold text-success">Optimal</span>
-                  </div>
-                  <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
-                    Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {messages.length === 0 && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
-          <div className="relative">
+          <div className="relative mt-2.5">
             <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
             <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
               <textarea

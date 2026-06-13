@@ -14,7 +14,13 @@ type WorkflowOperationType =
   | "read"
   | "read_attachment"
   | "analyze"
-  | "classify";
+  | "classify"
+  | "label"
+  | "flag"
+  | "delete"
+  | "contact"
+  | "insight"
+  | "chain";
 
 type WorkflowFormBoxProps = {
   response: WorkflowResponse;
@@ -71,6 +77,12 @@ export default function WorkflowFormBox({
     "read_attachment",
     "analyze",
     "classify",
+    "label",
+    "flag",
+    "delete",
+    "contact",
+    "insight",
+    "chain",
   ].includes(operationType);
 
   const senderValue = senderEmail.trim();

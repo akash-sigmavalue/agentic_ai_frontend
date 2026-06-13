@@ -236,8 +236,11 @@ export default function ClarificationFields({
 
       {interactive && isV2Pipeline && fields.length > 0 ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {fields.map((schema) => (
-            <label key={schema.field} className={`flex flex-col gap-1.5 ${schema.type === "textarea" ? "sm:col-span-2" : ""}`}>
+          {fields.map((schema, fieldIndex) => (
+            <label
+              key={`${schema.field}-${fieldIndex}`}
+              className={`flex flex-col gap-1.5 ${schema.type === "textarea" ? "sm:col-span-2" : ""}`}
+            >
               <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
                 {schema.label || schema.field}
               </span>
