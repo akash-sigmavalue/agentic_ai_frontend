@@ -14,7 +14,10 @@ import {
   ShieldCheck,
   AlertTriangle,
   Database,
-  CheckCircle
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Info
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -213,7 +216,11 @@ function summarizeEvent(event) {
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    return `[SUCCESS] Found ${c?.total_found || 0} comparable projects within ${c?.final_radius_km || "?"}km after ${c?.iterations || "?"} iterations. Select comparables below and proceed to fetch listings.`;
+    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Select comparables below and proceed to fetch listings.`;
+    if (c?.web_error) {
+      baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
+    }
+    return baseMsg;
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
@@ -428,8 +435,8 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
                       const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
                         tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
-                        tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
-                        "bg-danger/20 text-danger border-danger/30";
+                          tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                            "bg-danger/20 text-danger border-danger/30";
                       const fb = comp.factor_breakdown || {};
                       const tooltip = [
                         comp.confidence_reasoning || "",
@@ -518,22 +525,27 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
-            {hasMixedSources && (
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                {["all", "Web", "Internal DB"].map(opt => (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+              {["all", "Web", "Internal DB"].map(opt => {
+                const count = opt === "all"
+                  ? comparables.length
+                  : opt === "Web"
+                    ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                    : comparables.filter(c => c.data_source === "Internal DB").length;
+                return (
                   <button
                     key={opt}
                     onClick={() => setSourceFilter(opt)}
                     className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                        ? "bg-[#fb923c] text-bg-deep shadow"
-                        : "text-text-dim hover:text-text-primary"
+                      ? "bg-[#fb923c] text-bg-deep shadow"
+                      : "text-text-dim hover:text-text-primary"
                       }`}
                   >
-                    {opt === "all" ? "All Sources" : opt}
+                    {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -560,22 +572,27 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
                 </div>
               </div>
-              {hasMixedSources && (
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                  {["all", "Web", "Internal DB"].map(opt => (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                {["all", "Web", "Internal DB"].map(opt => {
+                  const count = opt === "all"
+                    ? comparables.length
+                    : opt === "Web"
+                      ? comparables.filter(c => (c.data_source || "Web") === "Web").length
+                      : comparables.filter(c => c.data_source === "Internal DB").length;
+                  return (
                     <button
                       key={opt}
                       onClick={() => setSourceFilter(opt)}
                       className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                          ? "bg-[#fb923c] text-bg-deep shadow"
-                          : "text-text-dim hover:text-text-primary"
+                        ? "bg-[#fb923c] text-bg-deep shadow"
+                        : "text-text-dim hover:text-text-primary"
                         }`}
                     >
-                      {opt === "all" ? "All Sources" : opt}
+                      {opt === "all" ? `All (${count})` : `${opt} (${count})`}
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -605,20 +622,20 @@ function ListingTable({ listings, dbTransactions }) {
     project_name: t.project_name,
     property_type: t.property_type_raw || t.property_type,
     project_category: t.property_type,
-    listing_type:     t.transaction_category,
-    bhk:              t.unit_configuration,
-    currency:         t.currency,
-    price:            t.agreement_price,
-    price_per_sqft:   t.price_per_sqft,
-    area_sqft:        t.area_sqft,
-    area_type:        t.area_type || "Carpet Area",
-    is_subject:       t.is_subject || false,
-    floor:            t.floor_number,
-    total_floors:     null,
-    location:         t.location_name,
+    listing_type: t.transaction_category,
+    bhk: t.unit_configuration,
+    currency: t.currency,
+    price: t.agreement_price,
+    price_per_sqft: t.price_per_sqft,
+    area_sqft: t.area_sqft,
+    area_type: t.area_type || "Carpet Area",
+    is_subject: t.is_subject || false,
+    floor: t.floor_number,
+    total_floors: null,
+    location: t.location_name,
     transaction_date: t.transaction_date,
-    source_url:       null,
-    _is_db:           true,   // flag to render source badge
+    source_url: null,
+    _is_db: true,   // flag to render source badge
   }));
 
   const allEmpty = (!listings || listings.length === 0) && dbRows.length === 0;
@@ -642,7 +659,7 @@ function ListingTable({ listings, dbTransactions }) {
             {lst.project_name || "—"}
             {lst.is_fallback && (
               <span
-                title="Data found via LLM search fallback (scraping failed)"
+                title="Data found via Agent search fallback (scraping failed)"
                 className="ml-2 inline-flex items-center rounded-full bg-orange-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-400 border border-orange-400/20"
               >
                 Fallback
@@ -902,7 +919,7 @@ function formatDate(dateStr) {
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType }) {
+function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType, valuationApproach }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
@@ -914,8 +931,13 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   // Detect if we have plot data and if the subject itself is a plot
   // Detect if the subject itself is a plot or villa
   const hasPlotData = listings.some(lst => lst.plot_derived_rate_per_sqft !== undefined && lst.plot_derived_rate_per_sqft !== null);
-  const isPlotSubject = ["plot", "villa"].includes(subjectPropertyType?.toLowerCase()?.trim());
-  const isVillaSubject = subjectPropertyType?.toLowerCase()?.trim() === "villa";
+  const isPlotSubject = ["plot", "villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
+  const isVillaSubject = ["villa", "building_land"].includes(subjectPropertyType?.toLowerCase()?.trim());
+  // In Cost Approach, villa subject derives the PLOT/LAND rate (reverse residual: villa price - CC = land value)
+  // In Market Approach, villa subject derives the VILLA built-up rate (plot comps × FSI + CC)
+  const isCostApproach = valuationApproach?.toLowerCase?.() === "cost";
+  // derivedRateLabel reflects what is being DERIVED, not the subject type
+  const derivedRateLabel = (isVillaSubject && isCostApproach) ? "Plot" : (isVillaSubject ? "Villa" : "Plot");
 
   // Always show the FSI/CC overrides if the subject is a plot or villa
   const showPlotControls = isPlotSubject;
@@ -939,16 +961,39 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <th className="px-3 py-2.5 font-semibold">Matched Project</th>
             <th className="px-3 py-2.5 font-semibold text-center">Currency</th>
             <th className="px-3 py-2.5 font-semibold">Config</th>
-            <th className="px-3 py-2.5 font-semibold text-right">Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Raw Price</th>
+            <th className="px-3 py-2.5 font-semibold text-right">Standardized Price</th>
+            <th className="px-3 py-2.5 font-semibold text-center">Exchange Rate</th>
             <th className="px-3 py-2.5 font-semibold text-right">Raw Area</th>
             <th className="px-3 py-2.5 font-semibold text-right">Normalized Area (SBUA)</th>
             <th className="px-3 py-2.5 font-semibold text-right">Rate / Sqft</th>
 
             {showPlotControls && (
               <>
-                <th colSpan="2" className="px-3 py-2.5 font-semibold text-center">FSI & CC Edits</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{isVillaSubject ? "Villa Derived Rate / Sqft" : "Plot Derived Rate / Sqft"}</th>
-                <th className="px-3 py-2.5 font-semibold text-right text-accent">{isVillaSubject ? "Villa Rate Range" : "Plot Rate Range"}</th>
+                <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1">
+                    Gross Floor area/Plot area
+                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
+                      <Info size={11} className="inline-block" />
+                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-56 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-2 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
+                        Any location does not have one fixed FSI/FAR; it depends on the specific plot, zoning,  Development authority approvals & various other factors
+                      </span>
+                    </div>
+                  </div>
+                </th>
+                <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
+                  <div className="flex items-center justify-center gap-1">
+                    CC (₹/sqft)
+                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
+                      <Info size={11} className="inline-block" />
+                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-32 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-1 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
+                        Construction Cost
+                      </span>
+                    </div>
+                  </div>
+                </th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent-light font-bold">{derivedRateLabel} Derived Rate / Sqft</th>
+                <th className="px-3 py-2.5 font-semibold text-right text-accent">{derivedRateLabel} Rate Range</th>
                 <th className="px-3 py-2.5 font-semibold text-center text-accent-light">Derived By</th>
               </>
             )}
@@ -969,113 +1014,108 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 {activeTab === "outliers" ? "No outlier listings detected." : "No dropped listings."}
               </td>
             </tr>
-          ) : displayedListings.map((lst, i) => (
-            <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
-              <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
-                {lst.cleaned_match_project || lst.project_name || "—"}
+          ) : displayedListings.map((lst, i) => {
+            const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
+            const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
+            return (
+              <tr key={i} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
+                <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
+                  {lst.cleaned_match_project || lst.project_name || "—"}
+                </td>
+                <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
+                <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
+              
+              {/* Raw Price Column */}
+                <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">
+                {lst.original_price_value !== undefined && lst.original_price_value !== null
+                  ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
+                  : formatPrice(lst.price_value, lst.currency)}
               </td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
-              <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-              <td className="px-3 py-2 text-right font-mono text-text-primary">
-                {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
-              </td>
-              <td className="px-3 py-2 text-right font-mono text-text-primary">
-                {lst.cleaned_price_value && lst.final_super_builtup_area
-                  ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
-                  : "—"}
+              
+              {/* Standardized Price Column */}
+              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
+                  {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
+                </td>
+              
+              {/* Exchange Rate Column */}
+              <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
+                  ? lst.exchange_rate_remark
+                  : "1.0"}
               </td>
 
-              {showPlotControls && (
-                <>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">Low</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.fsi_low ?? (lst.plot_fsi_range?.low || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], fsi_low: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">High</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-12 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-center text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.fsi_high ?? (lst.plot_fsi_range?.high || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], fsi_high: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">Low</span>
-                        <input
-                          type="number"
-                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.cc_low ?? (lst.plot_construction_cost_range?.low || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], cc_low: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] opacity-40 uppercase">High</span>
-                        <input
-                          type="number"
-                          className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1 py-0.5 text-right text-[10px] text-accent focus:border-accent outline-none"
-                          value={rowOverrides[i]?.cc_high ?? (lst.plot_construction_cost_range?.high || "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRowOverrides(prev => ({
-                              ...prev,
-                              [i]: { ...prev[i], cc_high: val }
-                            }));
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                  {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
+                  {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-text-primary">
+                  {lst.cleaned_price_value && lst.final_super_builtup_area
+                    ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
+                    : "—"}
+                </td>
+
+                {showPlotControls && (
+                  <>
+                    <td className="px-3 py-2 text-center">
+                      {isFsiCcRequired ? (
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="FSI"
+                            className="w-16 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                            value={rowOverrides[i]?.fsi_best ?? (lst.plot_fsi_range?.best || "")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRowOverrides(prev => ({
+                                ...prev,
+                                [i]: { ...prev[i], fsi_best: val }
+                              }));
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-text-dim">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {isFsiCcRequired ? (
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="number"
+                            placeholder="CC"
+                            className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
+                            value={rowOverrides[i]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRowOverrides(prev => ({
+                                ...prev,
+                                [i]: { ...prev[i], const_cost_best: val }
+                              }));
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-text-dim">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {lst.plot_derived_rate_per_sqft
-                      ? `${lst.plot_construction_cost_range?.currency || ""}${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
+                      ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
                       : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
                     {lst.plot_derived_rate_range
-                      ? `${lst.plot_derived_rate_range.currency}${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`
+                      ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
+                        ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
+                        : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
                       : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
-                      {lst.plot_derived_by || "llm"}
+                      {lst.plot_derived_by || "Agent"}
                     </span>
                   </td>
                 </>
@@ -1101,7 +1141,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </td>
               )}
             </tr>
-          ))}
+          )})}
         </tbody>
       </table>
     </div>
@@ -1114,7 +1154,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
-              {hasPlotData ? `Cleaned & ${isVillaSubject ? "Villa" : "Plot"} Valuation Data` : "Cleaned & Normalized Data"}
+              {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
@@ -1198,7 +1238,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
-                    {hasPlotData ? `Normalized Listing & ${isVillaSubject ? "Villa" : "Plot"} Data` : "Normalized Listing Data"}
+                    {hasPlotData ? `Normalized Listing & ${derivedRateLabel} Data` : "Normalized Listing Data"}
                   </h3>
                   {showPlotControls && onRecalculate && (
                     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card px-4 py-3 shrink-0 mt-2 mb-2">
@@ -1728,8 +1768,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   };
 
   const subjectRow = comparable_factoring_table.find(r => r.role === "SUBJECT");
-  const compRows   = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
-  const finalRate  = Number(subject_final_rate || 0);
+  const compRows = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
+  const finalRate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
 
   const MainContent = (
@@ -1842,7 +1882,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
               {compRows.filter(r => r.factor_reasoning).map((row, i) => (
                 <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
                   <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
-                  
+
                   {/* Attribute percentage chips */}
                   <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
                     <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
@@ -1879,7 +1919,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           if (["flat", "apartment", "shop", "retail", "office", "commercial_office"].includes(propType)) {
             selectedArea = Number(subjectData?.salable_area_sqft || 0);
             areaLabel = "Salable Area";
-          } else if (["villa", "house"].includes(propType)) {
+          } else if (["villa", "house", "building_land"].includes(propType)) {
             selectedArea = Number(subjectData?.builtup_area_sqft || 0);
             areaLabel = "Built-up Area";
           } else if (["land", "plot"].includes(propType)) {
@@ -1897,7 +1937,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           return (
             <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
-              
+
               <div className="flex-1 space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
@@ -1937,7 +1977,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
         {raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
-              <span className="flex items-center gap-2">🧾 LLM Reasoning Report</span>
+              <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
               <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
             {showReport && (
@@ -2027,7 +2067,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
             const propType = (subjectData?.property_type || "").toLowerCase();
             if (propType === "apartment" || propType === "retail" || propType === "commercial_office") {
               helpText = "Remark: Please enter construction cost per sqft on Salable Area.";
-            } else if (propType === "villa") {
+            } else if (propType === "villa" || propType === "building_land") {
               helpText = "Remark: Please enter construction cost per sqft on Built-up Area.";
             }
           }
@@ -2263,6 +2303,40 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   });
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
+  // Helper for model-wise pricing:
+  // Mistral Large 3: Input $0.50/1M, Output $1.50/1M
+  // Kimi: Input $0.60/1M, Output $3.00/1M (commented out)
+  // GPT-4o: Input $5.00/1M, Output $15.00/1M
+  // GPT-4o-mini/others: Input $0.15/1M, Output $0.60/1M
+  const getModelCost = (model, prompt, completion) => {
+    const modelLower = model.toLowerCase();
+    if (modelLower.includes("mistral.mistral-large-3-675b-instruct") || modelLower.includes("mistral-large-3")) {
+      return (prompt / 1000000 * 0.50) + (completion / 1000000 * 1.50);
+    } else if (modelLower.includes("gpt-4o") && !modelLower.includes("mini")) {
+      return (prompt / 1000000 * 5.00) + (completion / 1000000 * 15.00);
+    } else {
+      return (prompt / 1000000 * 0.15) + (completion / 1000000 * 0.60);
+    }
+  };
+
+  const calculatedTotalTokens = useMemo(() => {
+    return Object.entries(tokenStats.model_breakdown)
+      .filter(([model]) => model.toLowerCase() !== "unknown")
+      .reduce((sum, [_, usage]) => sum + (usage.total || 0), 0);
+  }, [tokenStats.model_breakdown]);
+
+  const calculatedCostUsd = useMemo(() => {
+    const modelCost = Object.entries(tokenStats.model_breakdown).reduce(
+      (sum, [model, usage]) => sum + getModelCost(model, usage.prompt || 0, usage.completion || 0),
+      0
+    );
+    const toolCost = Object.values(tokenStats.tool_breakdown).reduce(
+      (sum, tool) => sum + (tool.cost_usd || 0),
+      0
+    );
+    return modelCost + toolCost;
+  }, [tokenStats.model_breakdown, tokenStats.tool_breakdown]);
+
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [clarificationPrompt, setClarificationPrompt] = useState("");
   const [clarificationFields, setClarificationFields] = useState([]);
@@ -2270,6 +2344,22 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [mapConfirmation, setMapConfirmation] = useState(null);
   const [approachChoiceNeeded, setApproachChoiceNeeded] = useState(null);
   const [extractionVerification, setExtractionVerification] = useState(null);
+
+  // ── Stage 1 Gate Wizard ────────────────────────────────────────
+  const [gateActive, setGateActive] = useState(false);
+  const [gateStep, setGateStep] = useState(1);
+  const [gateMode, setGateMode] = useState(null);
+  const [gateAllFields, setGateAllFields] = useState([]);
+  const [gateValues, setGateValues] = useState({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
+  // ── Collapse states for all interactive panels ────────────────
+  const [gateCollapsed, setGateCollapsed] = useState(false);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [approachCollapsed, setApproachCollapsed] = useState(false);
+  const [ctaListingCollapsed, setCtaListingCollapsed] = useState(false);
+  const [ctaCleanCollapsed, setCtaCleanCollapsed] = useState(false);
+  const [ctaFactorialCollapsed, setCtaFactorialCollapsed] = useState(false);
   const [comparableData, setComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
   const [dbNoResults, setDbNoResults] = useState(false);
@@ -2330,7 +2420,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       derived_plot_rate_per_sqft: Number(derivedRate),
       plot_area_sqft: Number(plotArea),
       builtup_area_sqft: Number(builtupArea),
-      property_type: "villa",
+      property_type: subjectData?.property_type || "villa",
       construction_rate_per_sqft: Number(costInputsValues.construction_rate_per_sqft || 0),
       total_life_of_building: Number(costInputsValues.total_life_of_building || 60),
       age_of_property: Number(ageYears),
@@ -2474,6 +2564,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setIsCostCalculating(false);
     setPipelineDone(false);
     setCurrentStage("Stage 0: Initialization");
+    // Reset gate wizard
+    setGateActive(false);
+    setGateStep(1);
+    setGateMode(null);
+    setGateAllFields([]);
+    setGateValues({});
+    // Reset collapse states
+    setGateCollapsed(false);
+    setMapCollapsed(false);
+    setApproachCollapsed(false);
+    setCtaListingCollapsed(false);
+    setCtaCleanCollapsed(false);
+    setCtaFactorialCollapsed(false);
     markersRef.current = [];
     onMarkersUpdate?.([]);
   };
@@ -2566,14 +2669,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     ]);
 
     try {
-      // ── 1. Fetch transactions for each Internal DB comparable ──────────
-      const allDbTransactions = [];
-      for (const comp of dbComps) {
+      // ── 1. Fetch transactions for each Internal DB comparable in parallel ──
+      const fetchProjectTransactions = async (comp, isSubject = false) => {
         const projId = comp.project_id || comp.id || comp.project_name;
         const propType = comp.property_type || subjectData.property_type || "apartment";
-        if (!projId) continue;
+        if (!projId) return [];
 
         setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
             method: "POST",
@@ -2584,7 +2687,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               project_name: comp.project_name || "",
             }),
           });
-          if (!res.ok || !res.body) continue;
+          if (!res.ok || !res.body) return [];
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -2600,60 +2703,137 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const ev = JSON.parse(chunk.slice(6));
               onEvent?.(ev);
               if (ev.type === "transaction_results") {
-                allDbTransactions.push(...(ev.content?.transactions || []));
-                setStreamingNote(`✅ Got ${ev.content?.total || 0} transactions for "${comp.project_name}"`);
+                const txs = ev.content?.transactions || [];
+                const mapped = isSubject ? txs.map(t => ({ ...t, is_subject: true })) : txs;
+                projectTx.push(...mapped);
+                setStreamingNote(`✅ Got ${ev.content?.total || 0} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
               }
             }
           }
         } catch (e) {
           console.warn("DB transaction fetch failed for", comp.project_name, e);
         }
-      }
+        return projectTx;
+      };
 
-      // Also fetch subject's own DB transactions if it was found in the internal DB
-      if (subjectDbProject) {
-        const projId = subjectDbProject.project_id || subjectDbProject.id || subjectDbProject.project_name;
-        const propType = subjectDbProject.property_type || subjectData.property_type || "apartment";
-        if (projId) {
-          setStreamingNote(`🗄️ Fetching DB transactions for subject "${subjectDbProject.project_name}"...`);
-          try {
-            const res = await fetch(apiUrl("/transaction_stream"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                project_id: String(projId),
-                property_type: propType,
-                project_name: subjectDbProject.project_name || "",
-              }),
-            });
-            if (res.ok && res.body) {
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder();
-              let buf = "";
-              while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                const chunks = buf.split("\n\n");
-                buf = chunks.pop() || "";
-                for (const chunk of chunks) {
-                  if (!chunk.startsWith("data: ")) continue;
-                  const ev = JSON.parse(chunk.slice(6));
-                  onEvent?.(ev);
-                  if (ev.type === "transaction_results") {
-                    // Mark subject transactions with is_subject flag
-                    const subjectTx = (ev.content?.transactions || []).map(t => ({ ...t, is_subject: true }));
-                    allDbTransactions.push(...subjectTx);
-                    setStreamingNote(`✅ Got ${ev.content?.total || 0} subject transactions from Internal DB`);
+      const fetchWebListings = async () => {
+        const webFetchNote = webComps.length > 0 
+          ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+          : `🌐 Fetching web listings for Subject Project...`;
+        setStreamingNote(webFetchNote);
+
+        try {
+          const response = await fetch(apiUrl("/listing_stream"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: subjectData,
+              selected_comparables: webComps,
+              property_type: subjectData.property_type || "apartment",
+            }),
+          });
+
+          if (!response.ok || !response.body) return [];
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let listings = [];
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const chunks = buffer.split("\n\n");
+            buffer = chunks.pop() || "";
+
+            for (const chunk of chunks) {
+              if (!chunk.startsWith("data: ")) continue;
+              const event = JSON.parse(chunk.slice(6));
+              onEvent?.(event);
+              const summary = summarizeEvent(event);
+              setStreamingNote(summary);
+
+              if (event.type === "listing_results") {
+                listings = event.content?.listings || [];
+                const newUsage = event.content?.token_usage || {};
+                const total = newUsage.total_tokens || 0;
+                const model = newUsage.model || "gpt-4o-mini";
+                setListingData(listings);
+                setTokenStats((prev) => {
+                  const nextModelBreakdown = { ...prev.model_breakdown };
+                  const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                  
+                  const promptDiff = (newUsage.prompt_tokens || 0);
+                  const completionDiff = (newUsage.completion_tokens || 0);
+
+                  nextModelBreakdown[model] = {
+                    prompt: currentModelStats.prompt + promptDiff,
+                    completion: currentModelStats.completion + completionDiff,
+                    total: currentModelStats.total + total
+                  };
+
+                  const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+                  return {
+                    ...prev,
+                    total_tokens: prev.total_tokens + total,
+                    model_breakdown: nextModelBreakdown,
+                    cost_usd: (prev.cost_usd || 0) + addedCost
+                  };
+                });
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0) {
+                    next[lastIndex] = {
+                      ...next[lastIndex],
+                      role: "assistant",
+                      content: summary,
+                      meta: "listing results",
+                      listings,
+                      // Preserve any DB transactions stamped in the same message
+                      db_transactions: next[lastIndex].db_transactions || [],
+                    };
                   }
-                }
+                  return next;
+                });
+              }
+
+              if (event.type === "listing_done" || event.type === "error") {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const lastIndex = next.length - 1;
+                  if (lastIndex >= 0 && !next[lastIndex].listings) {
+                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                  }
+                  return next;
+                });
               }
             }
-          } catch (e) {
-            console.warn("DB transaction fetch failed for subject", subjectDbProject.project_name, e);
           }
+          return listings;
+        } catch (error) {
+          console.warn("Web listing fetch failed", error);
+          throw error;
         }
+      };
+
+      const fetchPromises = [];
+      for (const comp of dbComps) {
+        fetchPromises.push(fetchProjectTransactions(comp, false));
       }
+      if (subjectDbProject) {
+        fetchPromises.push(fetchProjectTransactions(subjectDbProject, true));
+      }
+
+      // Execute all DB fetches and Web listings fetch concurrently in parallel
+      const [dbResults, _] = await Promise.all([
+        Promise.all(fetchPromises),
+        fetchWebListings()
+      ]);
+
+      const allDbTransactions = dbResults.flat();
 
       // Store DB transactions and stamp on the message
       if (allDbTransactions.length > 0) {
@@ -2669,94 +2849,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           }
           return next;
         });
-      }
-
-      // ── 2. Always fetch web listings (for Subject Project + any Web comparables) ──
-      const webFetchNote = webComps.length > 0 
-        ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
-        : `🌐 Fetching web listings for Subject Project...`;
-      setStreamingNote(webFetchNote);
-
-      const response = await fetch(apiUrl("/listing_stream"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: subjectData,
-          selected_comparables: webComps,
-          property_type: subjectData.property_type || "apartment",
-        }),
-      });
-
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const chunks = buffer.split("\n\n");
-          buffer = chunks.pop() || "";
-
-          for (const chunk of chunks) {
-            if (!chunk.startsWith("data: ")) continue;
-            const event = JSON.parse(chunk.slice(6));
-            onEvent?.(event);
-            const summary = summarizeEvent(event);
-            setStreamingNote(summary);
-
-            if (event.type === "listing_results") {
-              const listings = event.content?.listings || [];
-              const newUsage = event.content?.token_usage || {};
-              const total = newUsage.total_tokens || 0;
-              const model = newUsage.model || "gpt-4o-mini";
-              setListingData(listings);
-              setTokenStats((prev) => {
-                const next = { ...prev };
-                next.total_tokens += total;
-                if (!next.model_breakdown[model]) next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-                next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-                next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-                next.model_breakdown[model].total += total;
-
-                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-                const promptRate = isGpt4o ? 5.00 : 0.15;
-                const completionRate = isGpt4o ? 15.00 : 0.60;
-                const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
-                next.cost_usd = (next.cost_usd || 0) + addedCost;
-                return next;
-              });
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0) {
-                  next[lastIndex] = {
-                    ...next[lastIndex],
-                    role: "assistant",
-                    content: summary,
-                    meta: "listing results",
-                    listings,
-                    // Preserve any DB transactions stamped in the same message
-                    db_transactions: next[lastIndex].db_transactions || [],
-                  };
-                }
-                return next;
-              });
-            }
-
-            if (event.type === "listing_done" || event.type === "error") {
-              setMessages((prev) => {
-                const next = [...prev];
-                const lastIndex = next.length - 1;
-                if (lastIndex >= 0 && !next[lastIndex].listings) {
-                  next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
-                }
-                return next;
-              });
-            }
-          }
-        }
       }
 
     } catch (error) {
@@ -2857,21 +2949,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
             setCleanedData(cleanedListings);
             setTokenStats((prev) => {
-              const next = { ...prev };
-              next.total_tokens += total;
-              if (!next.model_breakdown[model]) {
-                next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-              }
-              next.model_breakdown[model].prompt += (newUsage.prompt_tokens || 0);
-              next.model_breakdown[model].completion += (newUsage.completion_tokens || 0);
-              next.model_breakdown[model].total += total;
+              const nextModelBreakdown = { ...prev.model_breakdown };
+              const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+              
+              const promptDiff = (newUsage.prompt_tokens || 0);
+              const completionDiff = (newUsage.completion_tokens || 0);
 
-              const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-              const promptRate = isGpt4o ? 5.00 : 0.15;
-              const completionRate = isGpt4o ? 15.00 : 0.60;
-              const addedCost = ((newUsage.prompt_tokens || 0) / 1000000 * promptRate) + ((newUsage.completion_tokens || 0) / 1000000 * completionRate);
-              next.cost_usd = (next.cost_usd || 0) + addedCost;
-              return next;
+              nextModelBreakdown[model] = {
+                prompt: currentModelStats.prompt + promptDiff,
+                completion: currentModelStats.completion + completionDiff,
+                total: currentModelStats.total + total
+              };
+
+              const addedCost = getModelCost(model, promptDiff, completionDiff);
+
+              return {
+                ...prev,
+                total_tokens: prev.total_tokens + total,
+                model_breakdown: nextModelBreakdown,
+                cost_usd: (prev.cost_usd || 0) + addedCost
+              };
             });
 
             setMessages((prev) => {
@@ -2943,11 +3040,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     ]);
 
     try {
+      const mappedOverrides = {};
+      Object.entries(rowOverrides).forEach(([key, ov]) => {
+        if (!ov) return;
+        mappedOverrides[key] = {};
+        if (ov.fsi_best !== undefined) {
+          mappedOverrides[key].fsi_low = ov.fsi_best;
+          mappedOverrides[key].fsi_high = ov.fsi_best;
+        }
+        if (ov.const_cost_best !== undefined) {
+          mappedOverrides[key].cc_low = ov.const_cost_best;
+          mappedOverrides[key].cc_high = ov.const_cost_best;
+        }
+      });
+
       const payload = {
         cleaned_listings: cleanedData,
         subject: subjectData,
         property_type: subjectData.property_type || "plot",
-        overrides: rowOverrides,
+        overrides: mappedOverrides,
       };
       if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
       if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
@@ -3003,6 +3114,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   content: summary,
                   meta: "cleaning results",
                   cleaned_listings: event.content.listings,
+                  // Backend returns the authoritative full set after segregating
+                  // negative-rate listings — update both tabs in one shot.
+                  dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
+                  review_listings:  event.content.review_listings  ?? next[lastIndex].review_listings  ?? [],
                 };
               }
               return next;
@@ -3169,25 +3284,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (!factData || !subject || isFactorialAnalysisStreaming) return;
 
     setIsFactorialAnalysisStreaming(true);
-    setStreamingNote("Sending factorial data to LLM for adjustment analysis...");
-    setCurrentStage("Stage 5: LLM Factorial Analysis");
+    setStreamingNote("Sending factorial data to Agent for adjustment analysis...");
+    setCurrentStage("Stage 5: Agent Factorial Analysis");
 
     setMessages((prev) => {
       const existingIndex = prev.findIndex(m =>
         m.meta === "factorial analysis results" ||
         m.meta === "factorial analysis done" ||
         m.meta === "factorial analysis start" ||
-        m.content === "Running LLM Factoring..."
+        m.content === "Running Agent Factoring..."
       );
 
       if (existingIndex !== -1) {
         const next = [...prev];
-        next[existingIndex] = { role: "assistant", content: "Running LLM Factoring...", meta: "Live" };
+        next[existingIndex] = { role: "assistant", content: "Running Agent Factoring...", meta: "Live" };
         return next;
       }
       return [
         ...prev,
-        { role: "assistant", content: "Running LLM Factoring...", meta: "Live" }
+        { role: "assistant", content: "Running Agent Factoring...", meta: "Live" }
       ];
     });
 
@@ -3204,7 +3319,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`LLM Factoring request failed with status ${response.status}`);
+        throw new Error(`Agent Factoring request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -3225,9 +3340,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           onEvent?.(event);
           let summary = "Pipeline update received.";
-          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running LLM factoring analysis...";
-          else if (event.type === "factorial_analysis_result") summary = `🤖 LLM Factoring ready.`;
-          else if (event.type === "factorial_analysis_done") summary = "LLM Factoring completed.";
+          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Agent factoring analysis...";
+          else if (event.type === "factorial_analysis_result") summary = `🤖 Agent Factoring ready.`;
+          else if (event.type === "factorial_analysis_done") summary = "Agent Factoring completed.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
@@ -3241,26 +3356,28 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               const total = usage.total_tokens || 0;
               const model = usage.model || "gpt-4o";
               setTokenStats((prev) => {
-                const next = { ...prev };
-                next.total_tokens += total;
-                if (!next.model_breakdown[model]) {
-                  next.model_breakdown[model] = { prompt: 0, completion: 0, total: 0 };
-                }
-                next.model_breakdown[model].prompt += (usage.prompt_tokens || 0);
-                next.model_breakdown[model].completion += (usage.completion_tokens || 0);
-                next.model_breakdown[model].total += total;
+                const nextModelBreakdown = { ...prev.model_breakdown };
+                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
+                
+                const promptDiff = (usage.prompt_tokens || 0);
+                const completionDiff = (usage.completion_tokens || 0);
 
-                const isGpt4o = model.toLowerCase().includes("gpt-4o") && !model.toLowerCase().includes("mini");
-                const promptRate = isGpt4o ? 5.00 : 0.15;
-                const completionRate = isGpt4o ? 15.00 : 0.60;
-                const addedCost = ((usage.prompt_tokens || 0) / 1000000 * promptRate) + ((usage.completion_tokens || 0) / 1000000 * completionRate);
-                next.cost_usd = (next.cost_usd || 0) + addedCost;
+                nextModelBreakdown[model] = {
+                  prompt: currentModelStats.prompt + promptDiff,
+                  completion: currentModelStats.completion + completionDiff,
+                  total: currentModelStats.total + total
+                };
 
-                // Track current stage
-                next.last_stage_tokens = total;
-                next.last_stage_name = "LLM Factoring (Stage 5)";
+                const addedCost = getModelCost(model, promptDiff, completionDiff);
 
-                return next;
+                return {
+                  ...prev,
+                  total_tokens: prev.total_tokens + total,
+                  model_breakdown: nextModelBreakdown,
+                  cost_usd: (prev.cost_usd || 0) + addedCost,
+                  last_stage_tokens: total,
+                  last_stage_name: "Agent Factoring (Stage 5)"
+                };
               });
             }
 
@@ -3305,7 +3422,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           next[targetIndex] = {
             ...next[targetIndex],
             role: "assistant",
-            content: `LLM Factoring error: ${error.message}`,
+            content: `Agent Factoring error: ${error.message}`,
             meta: "Error",
           };
         }
@@ -3315,6 +3432,134 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       setIsFactorialAnalysisStreaming(false);
       setStreamingNote("");
     }
+  };
+
+
+  const buildGateInitialValues = (schemas, currentSubjectData, currentMapConfirmation) => {
+    const sData = currentSubjectData || subjectDataRef.current || {};
+    const mapConf = currentMapConfirmation || mapConfirmation || null;
+
+    const allExpectedFields = [
+      ...schemas.map(s => s.field),
+      "project_name",
+      "location_name",
+      "country",
+      "city",
+      "property_type",
+      "recommended_approach",
+      "lat",
+      "lng",
+      "coordinates",
+      "salable_area_sqft",
+      "carpet_area_sqft",
+      "builtup_area_sqft",
+      "plot_area_sqft",
+      "age_years",
+      "land_type",
+      "frontage",
+      "occupancy_status"
+    ];
+
+    const initVals = {};
+
+    // Fill defaults from schemas
+    schemas.forEach(s => {
+      let dVal = s.default;
+      if (s.field === "property_type" && dVal) {
+        const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === dVal);
+        if (!hasOpt) dVal = "";
+      }
+      if (dVal !== undefined && dVal !== null && dVal !== "") {
+        initVals[s.field] = dVal;
+      }
+    });
+
+    // Autofill from sData (extracted from query)
+    allExpectedFields.forEach(field => {
+      if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
+        const valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        if (valFromData !== undefined && valFromData !== null && valFromData !== "") {
+          if (!(field === "project_name" && valFromData === "Subject Property")) {
+            if (field === "coordinates" && typeof valFromData === 'object') {
+              if (valFromData.lat && valFromData.lng) {
+                initVals[field] = `${valFromData.lat}, ${valFromData.lng}`;
+              }
+            } else if (typeof valFromData !== 'object') {
+              initVals[field] = valFromData;
+            }
+          }
+        }
+      }
+    });
+
+    // Fallback/custom fields mapping
+    if (!initVals["lat"] || Number(initVals["lat"]) === 0) {
+      if (mapConf?.lat) {
+        initVals["lat"] = mapConf.lat;
+      } else if (sData.coordinates?.lat) {
+        initVals["lat"] = sData.coordinates.lat;
+      } else if (sData.lat) {
+        initVals["lat"] = sData.lat;
+      }
+    }
+    if (!initVals["lng"] || Number(initVals["lng"]) === 0) {
+      if (mapConf?.lng) {
+        initVals["lng"] = mapConf.lng;
+      } else if (sData.coordinates?.lng) {
+        initVals["lng"] = sData.coordinates.lng;
+      } else if (sData.lng) {
+        initVals["lng"] = sData.lng;
+      }
+    }
+
+    if (!initVals["coordinates"]) {
+      if (initVals["lat"] && initVals["lng"]) {
+        initVals["coordinates"] = `${initVals["lat"]}, ${initVals["lng"]}`;
+      } else if (sData.coordinates) {
+        if (typeof sData.coordinates === 'string') {
+          initVals["coordinates"] = sData.coordinates;
+        } else if (typeof sData.coordinates === 'object' && sData.coordinates.lat && sData.coordinates.lng) {
+          initVals["coordinates"] = `${sData.coordinates.lat}, ${sData.coordinates.lng}`;
+        }
+      }
+    }
+
+    // Area fields fallback mapping
+    const propType = (gateValues["property_type"] || sData.property_type || "").toLowerCase().trim();
+
+    const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
+    const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
+    const extractedCarpet = sData.carpet_area_sqft || sData.entities?.carpet_area_sqft || "";
+    const extractedPlot = sData.plot_area_sqft || sData.entities?.plot_area_sqft || "";
+
+    const primaryArea = extractedBuiltup || extractedSalable || extractedCarpet || extractedPlot;
+
+    if (primaryArea) {
+      if (propType === "villa" || propType === "building_land") {
+        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || extractedCarpet || "";
+        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup/carpet for villa plot area
+      } else if (propType === "plot") {
+        initVals["plot_area_sqft"] = extractedPlot || primaryArea;
+      } else {
+        // apartment, retail, commercial_office
+        initVals["salable_area_sqft"] = extractedSalable || primaryArea;
+      }
+
+      // Keep other fields filled if extracted specifically
+      if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
+      if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
+      if (extractedCarpet) initVals["carpet_area_sqft"] = extractedCarpet;
+      if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
+    }
+
+    // Ensure all expected fields are strings/numbers, not undefined
+    allExpectedFields.forEach(field => {
+      if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
+        initVals[field] = "";
+      }
+    });
+
+    return initVals;
   };
 
 
@@ -3340,6 +3585,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setInput("");
     setStreamingNote("Connecting to backend stream...");
     setIsStreaming(true);
+
+    let currentSubjectObj = null;
+    let currentMapConf = null;
 
     try {
       const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}&comparable_source=both`), {
@@ -3401,6 +3649,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             };
             setSubjectData(subjectObj);
             subjectDataRef.current = subjectObj;
+            currentSubjectObj = subjectObj;
 
             if (coords?.lat && coords?.lng && !isNaN(Number(coords.lat)) && !isNaN(Number(coords.lng)) && Number(coords.lat) !== 0 && Number(coords.lng) !== 0) {
               // useEffect will handle marker update
@@ -3439,21 +3688,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "clarification_needed") {
             const inputs = event.content?.user_inputs_required || [];
             const fields = event.content?.missing_fields || [];
-
             const schemas = inputs.length > 0 ? inputs : fields.map(f => ({
               field: f, label: f.replaceAll("_", " "), type: "text"
             }));
-
+            const initVals = buildGateInitialValues(schemas, currentSubjectObj, currentMapConf);
+            // Legacy path kept for non-gate flows
             setClarificationPrompt(event.content?.question || event.content?.message || "");
             setClarificationFields(schemas);
-            setClarificationValues(Object.fromEntries(schemas.map((s) => {
-              let val = s.default || "";
-              if (s.field === "property_type" && val) {
-                const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === val);
-                if (!hasOpt) val = "";
-              }
-              return [s.field, val];
-            })));
+            setClarificationValues(initVals);
+            // Open gate wizard
+            setGateAllFields(schemas);
+            setGateValues(initVals);
+            setGateMode('clarification');
+            setGateStep(1);
+            setGateActive(true);
           }
 
           if (event.type === "map_confirmation") {
@@ -3461,22 +3709,54 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             const lng = Number(event.content?.lng);
 
             if (!isNaN(lat) && !isNaN(lng)) {
-              setMapConfirmation({
+              const conf = {
                 lat,
                 lng,
                 label: event.content?.location_name || "Subject Property",
                 source: "map_confirmation",
                 message: event.content?.message || "Please confirm this location.",
-              });
+              };
+              setMapConfirmation(conf);
+              currentMapConf = conf;
               setClarificationValues(prev => ({
                 ...prev,
-                coordinates: `${lat}, ${lng}`
+                coordinates: `${lat}, ${lng}`,
+                lat: lat,
+                lng: lng
+              }));
+              setGateValues(prev => ({
+                ...prev,
+                coordinates: `${lat}, ${lng}`,
+                lat: lat,
+                lng: lng
               }));
             }
           }
 
           if (event.type === "approach_choice_needed") {
             setApproachChoiceNeeded(event.content);
+            // Open the 5-step wizard at Step 3 (Approach Selection)
+            const schemas = [
+              {
+                field: "recommended_approach",
+                label: "Valuation Approach",
+                type: "select",
+                options: [
+                  { value: "market", label: "Market Approach" },
+                  { value: "cost",   label: "Cost Approach" }
+                ],
+                default: event.content.recommended_approach
+              }
+            ];
+            const initVals = buildGateInitialValues(schemas, currentSubjectObj || subjectDataRef.current, currentMapConf || mapConfirmation);
+            if (event.content.recommended_approach) {
+              initVals["recommended_approach"] = event.content.recommended_approach;
+            }
+            setGateAllFields(schemas);
+            setGateValues(initVals);
+            setGateMode('clarification');
+            setGateStep(3); // Start directly at Step 3: Approach Selection
+            setGateActive(true);
           }
 
           if (event.type === "extraction_verification") {
@@ -3488,33 +3768,30 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               "clarification_needed", "recommended_approach", "coordinates",
               "property_type_missing", "pt_clarification", "others_clarification"
             ];
-
-            // Determine property type to decide if project_name should be shown
             const propType = ents?.property_type;
             const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
-
             const fields = Object.entries(ents)
               .filter(([k, v]) => {
                 if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
                 if (v === null || v === "" || typeof v === 'object') return false;
-                // Hide project_name for plot types (not applicable)
                 if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
                 return true;
               })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
-
             if (ents.coordinates && typeof ents.coordinates === 'object') {
-              if (ents.coordinates.lat) {
-                fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
-              }
-              if (ents.coordinates.lng) {
-                fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
-              }
+              if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
+              if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
             }
-
+            const initVals = buildGateInitialValues(fields, currentSubjectObj || ents, currentMapConf);
             setClarificationFields(fields);
-            setClarificationValues(Object.fromEntries(fields.map(f => [f.field, f.default])));
+            setClarificationValues(initVals);
             setClarificationPrompt(event.content?.message || "Please review and confirm the extracted property details.");
+            // Open gate wizard at verification step
+            setGateAllFields(fields);
+            setGateValues(initVals);
+            setGateMode('verification');
+            setGateStep(1);
+            setGateActive(true);
           }
 
           if (event.type === "comparable_results") {
@@ -3528,17 +3805,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 ? { ...subjectDataRef.current, subject_db_project: subjectDbProject }
                 : subjectDataRef.current;
             }
-            // Pre-select only comparables within the initial radius by default
-            const initialSelected = comps
-              .map((comp, i) => {
-                const dist = getComparableDistanceKm(comp);
-                if (dist === null || dist <= INITIAL_COMPARABLE_RADIUS_KM) {
-                  return i;
-                }
-                return -1;
-              })
-              .filter((i) => i !== -1);
-            setSelectedComps(new Set(initialSelected));
+            // Do not auto-select comparables by default to prevent accidental massive token consumption.
+            // But we show them all on the map by default.
+            setSelectedComps(new Set());
           }
 
           if (event.type === "db_comparable_status") {
@@ -3667,6 +3936,55 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setMapConfirmation(null);
     setClarificationValues((prev) => ({ ...prev, coordinates: "" }));
     submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}.`, true, `Updated coordinates to ${corrected}`);
+  };
+
+  const handleGeocodeRefresh = async () => {
+    const locName = gateValues["location_name"] || "";
+    const projName = gateValues["project_name"] || "";
+    const country = gateValues["country"] || "India";
+
+    if (!locName.trim()) {
+      setGeocodeError("Please enter a locality name first (e.g. Sus, Pune).");
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError("");
+
+    try {
+      const response = await fetch(apiUrl("/geocode"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location_name: locName,
+          project_name: projName,
+          country: country
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to contact geocoder API.");
+      }
+
+      const result = await response.json();
+      if (result.lat && result.lng) {
+        setGateValues(prev => ({
+          ...prev,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          coordinates: `${result.lat}, ${result.lng}`
+        }));
+        setGeocodeError("");
+      } else if (result.error) {
+        setGeocodeError(`Error: ${result.error}. Please adjust the Location Name and try again.`);
+      } else {
+        setGeocodeError("Coordinates not found. Please enter them manually or check location name formatting.");
+      }
+    } catch (err) {
+      setGeocodeError(`Failed to fetch coordinates: ${err.message}`);
+    } finally {
+      setIsGeocoding(false);
+    }
   };
 
   const submitApproachChoice = (confirmed, alternative) => {
@@ -3847,6 +4165,521 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     }
   };
 
+  // ── Gate Wizard Helpers ───────────────────────────────────────────
+  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
+  const PROP_TYPE_FIELDS = ["property_type"];
+  const APPROACH_FIELDS = ["approach", "recommended_approach", "valuation_approach"];
+
+  // Fields that belong to Gate 4 (property-specific attributes, not identity/type/approach)
+  const isGate4Field = (f) =>
+    !IDENTITY_FIELDS.includes(f.field) &&
+    !PROP_TYPE_FIELDS.includes(f.field) &&
+    !APPROACH_FIELDS.includes(f.field);
+
+  const gate1Fields = gateAllFields.filter(f => IDENTITY_FIELDS.includes(f.field));
+  const gate2Fields = gateAllFields.filter(f => PROP_TYPE_FIELDS.includes(f.field));
+  const gate3Fields = gateAllFields.filter(f => APPROACH_FIELDS.includes(f.field));
+  const gate4Fields = gateAllFields.filter(isGate4Field);
+
+  // Current property type from wizard values (or already-known subject data)
+  const wizardPropType = (gateValues["property_type"] || subjectData?.property_type || "").toLowerCase().trim();
+  const isVilla = wizardPropType === "villa";
+
+  // Compute effective max step (skip gate 3 if not villa)
+  const gateMax = isVilla ? 5 : 4;   // 1=Identity,2=PropType,3=Approach(villa only),4=Fields,5=Verify
+
+  const advanceGate = () => {
+    setGateStep(prev => {
+      let next = prev + 1;
+      // Skip approach gate (3) if not villa
+      if (next === 3 && !isVilla) next = 4;
+      return next;
+    });
+  };
+
+  const closeGate = () => {
+    setGateActive(false);
+    setGateStep(1);
+    setGateMode(null);
+  };
+
+  const gateSubmitFinal = () => {
+    // Merge gateValues back into clarificationValues / extractionVerification path
+    setClarificationValues(gateValues);
+    closeGate();
+
+    // Prepare values to send, ensuring coordinates are formatted and verification flags are true
+    const finalVals = {
+      ...gateValues,
+      extraction_verified: "true",
+      coordinates_confirmed: "true"
+    };
+    if (finalVals.lat && finalVals.lng) {
+      finalVals.coordinates = `${finalVals.lat}, ${finalVals.lng}`;
+    }
+
+    if (gateMode === 'verification') {
+      // Compute changes vs original extraction
+      const ents = extractionVerification?.entities || {};
+      const entsCoords = ents.coordinates || {};
+      const changes = [];
+      Object.entries(gateValues).forEach(([field, value]) => {
+        let isChanged = false;
+        if (field === "lat" || field === "lng") {
+          isChanged = String(value).trim() !== String(entsCoords[field]);
+        } else {
+          isChanged = String(value).trim() !== String(ents[field]);
+        }
+        if (isChanged) {
+          if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
+            changes.push(`Use ${value} approach`);
+          } else {
+            changes.push(`${humanizeFieldName(field)}: ${value}`);
+          }
+        }
+      });
+      let response = "The extracted details are confirmed to be correct. Extraction Verified: true, Coordinates Confirmed: true";
+      if (changes.length > 0) {
+        response = `The extracted details are confirmed with the following corrections: ${changes.join(", ")}. Please use these values. Extraction Verified: true, Coordinates Confirmed: true`;
+        if (changes.some(c => c.startsWith("Lat") || c.startsWith("Lng"))) {
+          response += " Also update the coordinates to the new latitude and longitude.";
+        }
+      }
+      setExtractionVerification(null);
+      setClarificationFields([]);
+      setClarificationPrompt("");
+      submitQuestion(`${currentQuestion}. ${response}`, true, changes.length > 0 ? `Confirmed with corrections: ${changes.join(", ")}` : "Details confirmed");
+    } else {
+      // clarification flow
+      const entries = Object.entries(finalVals).filter(([k, v]) => {
+        if (k === "coordinates" && typeof v === "object") return false;
+        return String(v).trim();
+      });
+      const response = entries.map(([f, v]) => {
+        if (f === "recommended_approach" || f === "valuation_approach" || f === "approach") {
+          return `Use ${v} approach`;
+        }
+        return `${humanizeFieldName(f)}: ${v}`;
+      }).join(", ");
+      setClarificationPrompt("");
+      setClarificationFields([]);
+      submitQuestion(`${currentQuestion}. ${response}`, true, response);
+    }
+  };
+
+  // ── Stage1GateWizard render ───────────────────────────────────────
+  const renderGateField = (schema) => {
+    const val = gateValues[schema.field] ?? "";
+    const update = (v) => {
+      setGateValues(prev => {
+        const next = { ...prev, [schema.field]: v };
+        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "country") {
+          next.lat = "";
+          next.lng = "";
+          next.coordinates = "";
+        }
+        return next;
+      });
+    };
+    const isFilled = String(val).trim() !== "";
+
+    if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
+      return (
+        <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
+          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+            {schema.label || humanizeFieldName(schema.field)}
+            {isFilled && <span className="ml-1.5 inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
+          </span>
+          <select
+            value={val}
+            onChange={e => update(e.target.value)}
+            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+          >
+            <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
+            {schema.options?.map(opt => {
+              const isObj = typeof opt === 'object';
+              const optValue = isObj ? opt.value : opt;
+              const optLabel = isObj ? opt.label : humanizeFieldName(opt);
+              return <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>;
+            })}
+          </select>
+        </label>
+      );
+    }
+
+    return (
+      <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
+        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim flex items-center gap-1.5">
+          {schema.label || humanizeFieldName(schema.field)}
+          {isFilled && <span className="inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
+        </span>
+        <input
+          type={schema.type === "number" ? "number" : "text"}
+          value={val}
+          onChange={e => update(e.target.value)}
+          placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
+          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+        />
+        {schema.field === "age_years" && String(val) === "0" && (
+          <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">* Property marked as Under Construction</span>
+        )}
+      </label>
+    );
+  };
+
+  const GATE_META = [
+    { step: 1, label: "Property Identification", icon: "📍", desc: "Project name / coordinates, location & country" },
+    { step: 2, label: "Property Type", icon: "🏠", desc: "Select the type of property being valued" },
+    { step: 3, label: "Approach Selection", icon: "⚖️", desc: "Choose valuation approach (Villa only)" },
+    { step: 4, label: "Property Details", icon: "📋", desc: "Area, age, floor, and other required attributes" },
+    { step: 5, label: "Verify & Confirm", icon: "✅", desc: "Review all data before proceeding" },
+  ].filter(g => isVilla || g.step !== 3);
+
+  const Stage1GateWizard = gateActive ? (() => {
+    const currentMeta = GATE_META.find(g => g.step === gateStep) || GATE_META[0];
+    const activeType = wizardPropType;
+
+    // Dynamically build all fields for the active property type
+    const identityFields = [
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "country", label: "Country", type: "text" },
+    ];
+
+    const typeFields = [
+      {
+        field: "property_type", label: "Property Type", type: "select", options: [
+          { value: "apartment", label: "Apartment / Flat" },
+          { value: "villa", label: "Villa" },
+          { value: "plot", label: "Plot / Land" },
+          { value: "retail", label: "Retail / Shop" },
+          { value: "commercial_office", label: "Commercial Office" },
+          { value: "building_land", label: "Building + Land" },
+        ]
+      },
+      ...(activeType === "building_land" ? [
+        {
+          field: "building_type", label: "Building Type", type: "select", options: [
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" },
+            { value: "industrial", label: "Industrial" }
+          ]
+        }
+      ] : [])
+    ];
+
+    const approachFields = activeType === "villa" ? [
+      {
+        field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
+          { value: "market", label: "Market Approach" },
+          { value: "cost", label: "Cost Approach" },
+        ]
+      }
+    ] : [];
+
+    let detailFields = [];
+    if (activeType === "apartment") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "villa" || activeType === "building_land") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "plot") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        {
+          field: "land_type", label: "Land Type", type: "select", options: [
+            { value: "agricultural", label: "Agricultural" },
+            { value: "non_agricultural", label: "Non Agricultural" },
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" }
+          ]
+        },
+      ];
+    } else if (activeType === "retail") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "frontage", label: "Road Frontage (ft)", type: "number" },
+      ];
+    } else if (activeType === "commercial_office") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        {
+          field: "occupancy_status", label: "Occupancy Status", type: "select", options: [
+            { value: "vacant", label: "Vacant" },
+            { value: "leased", label: "Leased" },
+            { value: "self_use", label: "Self Use" }
+          ]
+        },
+      ];
+    } else {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    }
+
+    // Build step-specific fields
+    let stepFields = [];
+    if (gateStep === 1) stepFields = identityFields;
+    else if (gateStep === 2) stepFields = typeFields;
+    else if (gateStep === 3 && activeType === "villa") stepFields = approachFields;
+    else if (gateStep === 4) stepFields = detailFields;
+
+    // Validate mandatory for current step
+    const mandatoryStep = gateStep === 1
+      ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
+      : gateStep === 2
+        ? (gateValues["property_type"] && (gateValues["property_type"] !== "building_land" || gateValues["building_type"]))
+        : gateStep === 3
+          ? gateValues["recommended_approach"]
+          : gateStep === 4
+            ? detailFields.every(f => {
+              const val = gateValues[f.field];
+              return val !== undefined && val !== null && String(val).trim() !== "";
+            })
+            : true;
+
+    const visualStep = GATE_META.findIndex(g => g.step === gateStep) + 1;
+    const canAdvance = Boolean(mandatoryStep);
+
+    return (
+      <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+        {/* Header */}
+        <div
+          onClick={() => setGateCollapsed(!gateCollapsed)}
+          className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base">
+                {currentMeta.icon}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
+                    Gate {visualStep} of {GATE_META.length} — {currentMeta.label}
+                  </p>
+                  {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                </div>
+                <p className="mt-0.5 text-[10px] text-text-secondary">{currentMeta.desc}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Step progress pills */}
+          {!gateCollapsed && (
+            <div className="mt-3 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+              {GATE_META.map((g, idx) => (
+                <button
+                  key={g.step}
+                  onClick={() => gateStep > g.step && setGateStep(g.step)}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition
+                    ${g.step === gateStep
+                      ? "bg-warning text-bg-deep shadow"
+                      : g.step < gateStep
+                        ? "bg-success/20 text-success border border-success/30 cursor-pointer hover:bg-success/30"
+                        : "bg-border/20 text-text-dim cursor-default"
+                    }`}
+                >
+                  {g.step < gateStep ? "✓" : (idx + 1)} {g.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Gate body */}
+        {!gateCollapsed && (
+          <div className="flex flex-col gap-4 p-4">
+
+            {/* Show prompt/question from the agent if available */}
+            {gateStep === 3 && approachChoiceNeeded?.question && (
+              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
+              </div>
+            )}
+            {gateStep !== 3 && clarificationPrompt && (
+              <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
+                <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
+              </div>
+            )}
+
+            {/* Gate 5 = full review */}
+            {gateStep === 5 ? (
+              <div className="space-y-4">
+                <p className="text-xs text-text-secondary">Review all extracted details. Edit any field before confirming.</p>
+                <div className="flex flex-wrap gap-3">
+                  {(() => {
+                    const standardFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+                    const extraFields = gateAllFields.filter(gf => !standardFields.some(sf => sf.field === gf.field));
+                    const finalFields = [...standardFields, ...extraFields].map(f => {
+                      if (f.field === "lat" || f.field === "lng") {
+                        return { ...f, type: "text" };
+                      }
+                      return f;
+                    });
+                    if (!finalFields.some(f => f.field === "lat")) {
+                      finalFields.push({ field: "lat", label: "Latitude", type: "text" });
+                    }
+                    if (!finalFields.some(f => f.field === "lng")) {
+                      finalFields.push({ field: "lng", label: "Longitude", type: "text" });
+                    }
+                    return finalFields.map(f => renderGateField(f));
+                  })()}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setGateStep(4)}
+                    className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                  >← Back</button>
+                  <button
+                    type="button"
+                    onClick={gateSubmitFinal}
+                    className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                  >Confirm & Proceed →</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  {stepFields.map(f => renderGateField(f))}
+                  {stepFields.length === 0 && (
+                    <p className="text-xs text-text-dim italic">No additional fields required for this step.</p>
+                  )}
+                </div>
+
+                {/* Gate 1 Coordinate Verification */}
+                {gateStep === 1 && (
+                  <div className="mt-4 border-t border-border/40 pt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
+                      </span>
+                      <div className="flex gap-3 items-center">
+                        {mapConfirmation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const latVal = mapConfirmation.lat || "";
+                              const lngVal = mapConfirmation.lng || "";
+                              setGateValues(prev => ({
+                                ...prev,
+                                lat: latVal,
+                                lng: lngVal,
+                                coordinates: latVal && lngVal ? `${latVal}, ${lngVal}` : prev.coordinates
+                              }));
+                            }}
+                            className="text-[9px] font-black uppercase tracking-wider text-accent hover:underline cursor-pointer"
+                          >
+                            Pull from Map Confirmation
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={isGeocoding}
+                          onClick={handleGeocodeRefresh}
+                          className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
+                        >
+                          {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Geocode Tip Remark & Errors */}
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
+                      <p className="text-[10px] text-text-dim leading-relaxed">
+                        <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">"Sus, Pune"</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                      </p>
+                      {geocodeError && (
+                        <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
+                          ⚠️ {geocodeError}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                        <input
+                          type="text"
+                          value={gateValues["lat"] ?? ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGateValues(prev => ({
+                              ...prev,
+                              lat: val,
+                              coordinates: val && prev.lng ? `${val}, ${prev.lng}` : prev.coordinates
+                            }));
+                          }}
+                          placeholder="e.g. 19.0760"
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                        <input
+                          type="text"
+                          value={gateValues["lng"] ?? ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setGateValues(prev => ({
+                              ...prev,
+                              lng: val,
+                              coordinates: prev.lat && val ? `${prev.lat}, ${val}` : prev.coordinates
+                            }));
+                          }}
+                          placeholder="e.g. 72.8777"
+                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                  {gateStep > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setGateStep(prev => {
+                        let back = prev - 1;
+                        if (back === 3 && !isVilla) back = 2;
+                        return back;
+                      })}
+                      className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                    >← Back</button>
+                  ) : <span />}
+
+                  {gateStep < (isVilla ? 4 : 4) ? (
+                    <button
+                      type="button"
+                      disabled={!canAdvance}
+                      onClick={advanceGate}
+                      className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Next →</button>
+                  ) : (
+                    // Last data-entry gate → go to review (gate 5)
+                    <button
+                      type="button"
+                      disabled={!canAdvance}
+                      onClick={() => setGateStep(5)}
+                      className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Review & Confirm →</button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })() : null;
+
   const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
 
   return (
@@ -3973,7 +4806,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       dbTransactions={message.db_transactions || []}
                     />
                   )}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} />}
+                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
                   {message.factorial_data && (
                     <div className="flex flex-col gap-3">
                       <FactorialTable
@@ -4034,17 +4867,24 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
       <div className="border-t border-border bg-bg-card px-4 py-3.5 backdrop-blur">
         {/* ── Proceed to Listing Fetch CTA ────────────────── */}
+        {/* ── Proceed to Listing Fetch CTA ────────────────── */}
         {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3">
+            <div
+              onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
+              className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
                   <FileSearch className="h-5 w-5 text-accent-light" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                    Step 2 — Fetch Listings
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
+                      Step 2 — Fetch Listings
+                    </p>
+                    {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {selectedComps.size > 0
                       ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
@@ -4053,212 +4893,153 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                The listing pipeline will search for real listings for the subject property + your selected comparables.
-              </p>
-              <button
-                type="button"
-                onClick={submitListingFetch}
-                disabled={selectedComps.size === 0}
-                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-              >
-                Proceed to Next Step →
-              </button>
-            </div>
+            {!ctaListingCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  The listing pipeline will search for real listings for the subject property + your selected comparables.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitListingFetch}
+                  disabled={selectedComps.size === 0}
+                  className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                >
+                  Proceed to Next Step →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── Proceed to Data Cleaning CTA ────────────────── */}
         {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3">
+            <div
+              onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
+              className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
                   <Sparkles className="h-5 w-5 text-[#fb923c]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                    Step 3 — Clean Raw Listings
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                      Step 3 — Clean Raw Listings
+                    </p>
+                    {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-              </p>
-              <button
-                type="button"
-                onClick={submitCleaning}
-                className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-              >
-                Start Data Cleaning →
-              </button>
-            </div>
+            {!ctaCleanCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitCleaning}
+                  className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                >
+                  Start Data Cleaning →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── Proceed to Factorial Table CTA ────────────────── */}
         {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-            <div className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3">
+            <div
+              onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
+              className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
                   <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                    Step 4 — Generate Factorial Table
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
+                      Step 4 — Generate Factorial Table
+                    </p>
+                    {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                  </div>
                   <p className="mt-1 text-sm text-text-secondary">
                     {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-xs text-text-dim">
-                This will group data by project and calculate key rate statistics for valuation.
-              </p>
-              <button
-                type="button"
-                onClick={submitFactorial}
-                className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-              >
-                Generate Factorial Table →
-              </button>
-            </div>
+            {!ctaFactorialCollapsed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                <p className="text-xs text-text-dim">
+                  This will group data by project and calculate key rate statistics for valuation.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitFactorial}
+                  className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                >
+                  Generate Factorial Table →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {(clarificationFields.length > 0 || mapConfirmation || approachChoiceNeeded || extractionVerification) && (
+        {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
+        {Stage1GateWizard}
+
+        {/* ── Map Confirmation (standalone — not part of wizard) */}
+        {mapConfirmation && !gateActive && (
           <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
-            <div className="border-b border-warning/15 bg-warning/5 px-4 py-3">
+            <div
+              onClick={() => setMapCollapsed(!mapCollapsed)}
+              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
-                    {mapConfirmation ? (
-                      <MapPin className="h-5 w-5 text-warning" />
-                    ) : approachChoiceNeeded ? (
-                      <SlidersHorizontal className="h-5 w-5 text-warning" />
-                    ) : extractionVerification ? (
-                      <ShieldCheck className="h-5 w-5 text-warning" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5 text-warning" />
-                    )}
+                    <MapPin className="h-5 w-5 text-warning" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
-                      {mapConfirmation ? "Map Confirmation" : approachChoiceNeeded ? "Approach Selection" : extractionVerification ? "Extraction Verification" : "Clarification Required"}
-                    </p>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      {mapConfirmation ? mapConfirmation.message : approachChoiceNeeded ? approachChoiceNeeded.question : clarificationPrompt}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                      {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                    </div>
+                    <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setClarificationPrompt("");
-                    setClarificationFields([]);
-                    setClarificationValues({});
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setMapConfirmation(null);
-                    setApproachChoiceNeeded(null);
                   }}
                   className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
             </div>
-
-            <div className="flex flex-col gap-4 p-4">
-              {clarificationFields.length > 0 && (
-                <div className="flex flex-wrap gap-3">
-                  {clarificationFields.map((schema) => (
-                    <label key={schema.field} className="flex min-w-[170px] flex-1 flex-col gap-1.5">
-                      <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                        {schema.label || humanizeFieldName(schema.field)}
-                      </span>
-                      {schema.type === "select" ? (
-                        <select
-                           value={clarificationValues[schema.field] || ""}
-                           onChange={(event) =>
-                             setClarificationValues((prev) => ({
-                               ...prev,
-                               [schema.field]: event.target.value,
-                             }))
-                           }
-                           className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                        >
-                          <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
-                          {schema.options?.map(opt => {
-                            const isObj = typeof opt === 'object';
-                            const optValue = isObj ? opt.value : opt;
-                            const optLabel = isObj ? opt.label : humanizeFieldName(opt);
-                            return (
-                              <option key={optValue} value={optValue} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>{optLabel}</option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <>
-                          <input
-                            type={schema.type === "number" ? "number" : "text"}
-                            value={clarificationValues[schema.field] || ""}
-                            onChange={(event) =>
-                              setClarificationValues((prev) => ({
-                                ...prev,
-                                [schema.field]: event.target.value,
-                              }))
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                submitClarification();
-                              }
-                            }}
-                            placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
-                          />
-                          {schema.field === "age_years" && String(clarificationValues[schema.field]) === "0" && (
-                            <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">
-                              * Property marked as Under Construction
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {mapConfirmation && (
+            {!mapCollapsed && (
+              <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-end gap-3">
                   <button
                     type="button"
                     onClick={() => submitMapConfirmation(true)}
                     className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >
-                    Location Is Correct
-                  </button>
+                  >Location Is Correct</button>
                   <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                      Correct Lat, Lng
-                    </span>
+                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
                     <input
                       type="text"
                       value={clarificationValues.coordinates || ""}
-                      onChange={(event) =>
-                        setClarificationValues((prev) => ({
-                          ...prev,
-                          coordinates: event.target.value,
-                        }))
-                      }
+                      onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
                       placeholder={PLACEHOLDER_MAP.coordinates}
                       className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
@@ -4267,86 +5048,65 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     type="button"
                     onClick={() => submitMapConfirmation(false)}
                     className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >
-                    Apply Fix
-                  </button>
+                  >Apply Fix</button>
                 </div>
-              )}
-              {approachChoiceNeeded && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => submitApproachChoice(true)}
-                    className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
-                  >
-                    Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach
-                  </button>
-                  <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                    <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
-                      Or Override Approach
-                    </span>
-                    <select
-                      value={clarificationValues.override_approach || ""}
-                      onChange={(e) =>
-                        setClarificationValues({ ...clarificationValues, override_approach: e.target.value })
-                      }
-                      className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
-                    >
-                      <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
-                      <option key="market" value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                      <option
-                        key="cost"
-                        value="cost"
-                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
-                        disabled={subjectData?.property_type !== "villa"}
-                      >
-                        Cost Approach {subjectData?.property_type !== "villa" ? " (Villa Only)" : ""}
-                      </option>
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!clarificationValues.override_approach}
-                    onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
-                  >
-                    Apply Override
-                  </button>
-                </div>
-              )}
-
-              {clarificationFields.length > 0 && extractionVerification && (
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                  <p className="text-xs text-text-dim">
-                    Review and edit the extracted details before proceeding.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={submitExtractionVerification}
-                    className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110"
-                  >
-                    Confirm & Proceed
-                  </button>
-                </div>
-              )}
-
-              {clarificationFields.length > 0 && !extractionVerification && (
-                <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                  <p className="text-xs text-text-dim">
-                    Add the missing details and continue the same valuation request.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={submitClarification}
-                    className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105"
-                  >
-                    Apply Details
-                  </button>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
+
+        {/* ── Approach Choice (standalone fallback if wizard not active) */}
+        {approachChoiceNeeded && !gateActive && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel">
+            <div
+              onClick={() => setApproachCollapsed(!approachCollapsed)}
+              className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
+                  <SlidersHorizontal className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                    {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                  </div>
+                  <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                </div>
+              </div>
+            </div>
+            {!approachCollapsed && (
+              <div className="flex flex-wrap items-end gap-3 p-4 animate-in fade-in duration-200">
+                <button
+                  type="button"
+                  onClick={() => submitApproachChoice(true)}
+                  className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20"
+                >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+                  <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                  <select
+                    value={clarificationValues.override_approach || ""}
+                    onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
+                    className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                  >
+                    <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                    <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                    <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                      Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={!clarificationValues.override_approach}
+                  onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
+                  className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50"
+                >Apply Override</button>
+              </div>
+            )}
+          </div>
+        )}
+
 
         <div className="mb-3 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
           <span className="truncate pr-4">{currentStage}</span>
@@ -4356,7 +5116,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             className={`flex items-center gap-1.5 transition hover:text-accent-light ${showTokenBreakdown ? "text-accent-light" : ""}`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] animate-pulse" />
-            {tokenStats.total_tokens > 0 ? `${tokenStats.total_tokens.toLocaleString()} tokens` : "No usage yet"}
+            {calculatedTotalTokens > 0 ? `${calculatedTotalTokens.toLocaleString()} tokens` : "No usage yet"}
             <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>
           </button>
         </div>
@@ -4371,7 +5131,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               </div>
               <div className="text-right">
                 <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
-                <p className="text-sm font-mono font-bold text-success">${tokenStats.cost_usd.toFixed(4)}</p>
+                <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
                 {tokenStats.last_stage_tokens && (
                   <p className="text-[8px] text-accent-light font-bold mt-0.5">
                     +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
@@ -4383,11 +5143,13 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
-                {Object.entries(tokenStats.model_breakdown).length === 0 ? (
+                {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
                   <p className="text-[11px] text-text-dim italic">No model data yet...</p>
                 ) : (
-                  Object.entries(tokenStats.model_breakdown).map(([model, usage]) => (
-                    <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
+                  Object.entries(tokenStats.model_breakdown)
+                    .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
+                    .map(([model, usage]) => (
+                      <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[11px] font-bold text-accent-light">{model}</span>
                         <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>

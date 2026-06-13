@@ -8,6 +8,8 @@ import ResizeHandle from '@/components/shared/ResizeHandle';
 import type {
   Module1IntentOutput,
   Module2Output,
+  Module7PlottableEnrichmentCorridor,
+  Module7PlottableEnrichmentPoint,
   RuntimeGeneratedMapOption,
   VisualizationRetrievalState,
 } from '@/components/visualization_agent/types';
@@ -41,6 +43,11 @@ export default function VisualizationAgentPage() {
   const [retrievalOutput, setRetrievalOutput] = useState<VisualizationRetrievalState | null>(null);
   const [runtimeGeneratedMaps, setRuntimeGeneratedMaps] = useState<RuntimeGeneratedMapOption[]>([]);
   const [selectedInsightMapId, setSelectedInsightMapId] = useState<string | null>(null);
+  const [pendingPlottableEnrichment, setPendingPlottableEnrichment] = useState<{
+    mapId: string;
+    points: Module7PlottableEnrichmentPoint[];
+    corridors: Module7PlottableEnrichmentCorridor[];
+  } | null>(null);
   const restoredPanelWidthsRef = useRef(panelWidths);
 
   useEffect(() => {
@@ -148,6 +155,8 @@ export default function VisualizationAgentPage() {
               runtimeGeneratedMaps={runtimeGeneratedMaps}
               selectedInsightMapId={selectedInsightMapId}
               onInsightMapSelect={setSelectedInsightMapId}
+              onPlottableEnrichment={(mapId, points, corridors) =>
+                setPendingPlottableEnrichment({ mapId, points, corridors })}
             />
           </div>
 
@@ -177,6 +186,8 @@ export default function VisualizationAgentPage() {
               module2Output={module2Output}
               retrievalOutput={retrievalOutput}
               onRuntimeGeneratedMapsChange={setRuntimeGeneratedMaps}
+              pendingPlottableEnrichment={pendingPlottableEnrichment}
+              onPlottableEnrichmentApplied={() => setPendingPlottableEnrichment(null)}
             />
           </div>
         </div>

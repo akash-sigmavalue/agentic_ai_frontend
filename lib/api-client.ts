@@ -15,9 +15,11 @@ export const API_ROUTES = {
 
 export const CONNECTOR_API_ROUTES = {
   processWorkflow: '/v1/process',
+  workflowStream: '/connectors/workflow/run/stream',
   googleOAuthStart: '/oauth/google/start',
   gmailStatus: '/connectors/status/gmail',
   continueMissingField: '/connectors/continue-missing-field',
+  automationRules: '/connectors/automation-rules',
   gmailTokenTest: '/debug/gmail-token-test',
 } as const;
 

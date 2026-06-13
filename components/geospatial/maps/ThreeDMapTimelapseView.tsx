@@ -78,6 +78,8 @@ interface ThreeDMapTimelapseViewProps {
     layer?: { id?: string } | null;
     [key: string]: unknown;
   }) => { html?: string; text?: string } | null;
+  metricDomainMin?: number;
+  metricDomainMax?: number;
 }
 
 function rateToColor(normalizedValue: number): [number, number, number, number] {
@@ -132,6 +134,8 @@ export default function ThreeDMapTimelapseView({
   onInsightDataReady,
   extraDeckLayers = [],
   overlayTooltip,
+  metricDomainMin,
+  metricDomainMax,
 }: ThreeDMapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(
     initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India'
@@ -288,18 +292,32 @@ export default function ThreeDMapTimelapseView({
         }
       }
     }
+    const fallbackMin =
+      typeof metricDomainMin === 'number' && Number.isFinite(metricDomainMin)
+        ? metricDomainMin
+        : data.summary.global_min_rate || 0;
+    const fallbackMax =
+      typeof metricDomainMax === 'number' && Number.isFinite(metricDomainMax)
+        ? metricDomainMax
+        : data.summary.global_max_rate || 1;
     return {
-      min: mn === Infinity  ? (data.summary.global_min_rate || 0) : mn,
-      max: mx === -Infinity ? (data.summary.global_max_rate || 1) : mx,
+      min: mn === Infinity ? fallbackMin : mn,
+      max: mx === -Infinity ? fallbackMax : mx,
     };
-  }, [data, dateIndex]);
+  }, [data, dateIndex, metricDomainMin, metricDomainMax]);
 
   const layers = useMemo(() => {
     if (!data) return extraDeckLayers.length > 0 ? [...extraDeckLayers] : [];
     const dates = data.dates;
     const currentDateLabel = dates[dateIndex] ?? 'N/A';
-    const globalMin = data.summary.global_min_rate;
-    const globalMax = data.summary.global_max_rate;
+    const globalMin =
+      typeof metricDomainMin === 'number' && Number.isFinite(metricDomainMin)
+        ? metricDomainMin
+        : data.summary.global_min_rate;
+    const globalMax =
+      typeof metricDomainMax === 'number' && Number.isFinite(metricDomainMax)
+        ? metricDomainMax
+        : data.summary.global_max_rate;
     const rateRange = globalMax - globalMin || 1;
     const stepMin = stepStats.min;
     const stepRange = stepStats.max - stepStats.min || 1;
@@ -368,12 +386,11 @@ export default function ThreeDMapTimelapseView({
         const source = enrichedCell?.source ?? (rate != null ? 'actual' : 'no_data');
         const note = enrichedCell?.note ?? '';
 
-        // Treat rate=0 same as null — missing/corrupt data
         const rateNum = rate == null ? null : Number(rate);
         const effectiveRate = (rateNum != null && rateNum > 0) ? rateNum : null;
         const normalizedRate = effectiveRate == null
           ? 0
-          : Math.max(0, Math.min(1, (effectiveRate - stepMin) / stepRange));
+          : Math.max(0, Math.min(1, (effectiveRate - globalMin) / rateRange));
 
         // Map confidence to fill color opacity
         let fillColor: [number, number, number, number];
@@ -440,7 +457,7 @@ export default function ThreeDMapTimelapseView({
       const effectiveRate = rate != null && rate > 0 ? rate : null;
       const normalizedRate = effectiveRate == null
         ? 0
-        : Math.max(0, Math.min(1, (effectiveRate - stepMin) / stepRange));
+        : Math.max(0, Math.min(1, (effectiveRate - globalMin) / rateRange));
       const fillColor = effectiveRate == null ? [148, 163, 184, 230] as [number, number, number, number] : rateToColor(normalizedRate);
       const polygon = getPolygonCoords(building, 0);
       return [
@@ -494,7 +511,7 @@ export default function ThreeDMapTimelapseView({
     finalLayers.push(markerLayer, ...noFloorLayers, ...floorLayers);
 
     return [...finalLayers, ...extraDeckLayers];
-  }, [data, dateIndex, extraDeckLayers, showUnmatched, stepStats]);
+  }, [data, dateIndex, extraDeckLayers, metricDomainMin, metricDomainMax, showUnmatched, stepStats]);
 
   const tooltip = ({ object }: { object?: TooltipObject }) => {
     if (!object) return null;
@@ -604,36 +621,42 @@ export default function ThreeDMapTimelapseView({
         </div>
       </div>
 
-      <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 md:grid-cols-5">
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Overture buildings</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.overture_building_count ?? '...'}</p>
+      <details className="group border-b border-slate-200 bg-slate-50" open>
+        <summary className="flex cursor-pointer list-none select-none items-center justify-between px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100">
+          Map Summary Stats
+          <span className="transition-transform group-open:rotate-180">▼</span>
+        </summary>
+        <div className="grid gap-4 px-5 pb-4 md:grid-cols-5">
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Overture buildings</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.overture_building_count ?? '...'}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Time steps</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.time_steps ?? '...'}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current date</p>
+            <p className="mt-2 text-lg font-extrabold text-slate-900">{currentDateLabel}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Analysis Scale (sq.m.)</p>
+            <p className="mt-2 text-lg font-extrabold text-slate-900">
+              {data
+                ? `₹${Math.round(stepStats.min).toLocaleString()} – ₹${Math.round(stepStats.max).toLocaleString()}`
+                : '...'}
+            </p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Corrections</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">
+              {data
+                ? data.summary.corrected_buildings ?? data.summary.dry_run_estimated_corrections ?? 0
+                : '...'}
+            </p>
+          </div>
         </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Time steps</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.time_steps ?? '...'}</p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current date</p>
-          <p className="mt-2 text-lg font-extrabold text-slate-900">{currentDateLabel}</p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Analysis Scale (sq.m.)</p>
-          <p className="mt-2 text-lg font-extrabold text-slate-900">
-            {data
-              ? `₹${Math.round(stepStats.min).toLocaleString()} – ₹${Math.round(stepStats.max).toLocaleString()}`
-              : '...'}
-          </p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Corrections</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {data
-              ? data.summary.corrected_buildings ?? data.summary.dry_run_estimated_corrections ?? 0
-              : '...'}
-          </p>
-        </div>
-      </div>
+      </details>
 
       {data?.dates.length ? (
         <div className="border-b border-slate-200 bg-white px-5 py-3">
@@ -672,27 +695,32 @@ export default function ThreeDMapTimelapseView({
         </div>
       ) : null}
 
-      <div className="relative min-h-[400px] flex-[1.5] shrink-0">
-        {basemapControls}
-        <button
-          onClick={() => setIsFullscreen((prev) => !prev)}
-          className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
-          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-        >
-          {isFullscreen ? <Minimize2 className="h-4 w-4 text-slate-700" /> : <Maximize2 className="h-4 w-4 text-slate-700" />}
-        </button>
- 
-        <div className="absolute top-14 right-3 z-20 flex items-center gap-2 rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur px-3 py-2 hover:bg-white transition-colors cursor-pointer select-none">
-          <input 
-            type="checkbox" 
-            id="unmatched-toggle-timelapse" 
-            checked={showUnmatched} 
-            onChange={(e) => setShowUnmatched(e.target.checked)}
-            className="w-3.5 h-3.5 accent-[#525ceb]"
-          />
-          <label htmlFor="unmatched-toggle-timelapse" className="text-[10px] font-bold uppercase tracking-widest text-slate-700 cursor-pointer">
-            Unmatched building
-          </label>
+      <div className="relative min-h-[800px] flex-[1.5] shrink-0 [&_.maplibregl-ctrl-top-right]:mt-14">
+        <div className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-2 max-w-full pointer-events-none">
+          {basemapControls && (
+            <div className="pointer-events-auto h-9">
+              {basemapControls}
+            </div>
+          )}
+          <div className="pointer-events-auto flex h-9 items-center gap-2 rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur px-3 hover:bg-white transition-colors cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              id="unmatched-toggle-timelapse" 
+              checked={showUnmatched} 
+              onChange={(e) => setShowUnmatched(e.target.checked)}
+              className="w-3.5 h-3.5 accent-[#525ceb]"
+            />
+            <label htmlFor="unmatched-toggle-timelapse" className="text-[10px] font-bold uppercase tracking-widest text-slate-700 cursor-pointer">
+              Unmatched building
+            </label>
+          </div>
+          <button
+            onClick={() => setIsFullscreen((prev) => !prev)}
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4 text-slate-700" /> : <Maximize2 className="h-4 w-4 text-slate-700" />}
+          </button>
         </div>
         {isLoading ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50 text-slate-500">

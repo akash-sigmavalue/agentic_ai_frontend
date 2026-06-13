@@ -20,6 +20,8 @@ import type {
   ExecutionPlanStep,
   Module1IntentOutput,
   Module7GenerationOutput,
+  Module7PlottableEnrichmentCorridor,
+  Module7PlottableEnrichmentPoint,
   RuntimeGeneratedMapOption,
   VisualizationRetrievalResultSet,
   VisualizationRetrievalState,
@@ -36,6 +38,11 @@ interface ChatSectionProps {
   runtimeGeneratedMaps?: RuntimeGeneratedMapOption[];
   selectedInsightMapId?: string | null;
   onInsightMapSelect?: (mapId: string) => void;
+  onPlottableEnrichment?: (
+    mapId: string,
+    points: Module7PlottableEnrichmentPoint[],
+    corridors: Module7PlottableEnrichmentCorridor[],
+  ) => void;
 }
 
 interface Message {
@@ -77,12 +84,6 @@ interface Module1ResponseData {
   ledger_row?: TokenLedgerRow | null;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
-
-function getGlobalLlmModel(): string {
-  if (typeof window === 'undefined') return DEFAULT_MODEL;
-  return window.localStorage.getItem('sigmavalue_llm_model') || DEFAULT_MODEL;
-}
 const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
@@ -190,6 +191,8 @@ function Module7ChatInsightPanel({ output, mapLabel }: { output: Module7Generati
   const actions = Array.isArray(insights.recommended_actions) ? insights.recommended_actions : [];
   const caveats = Array.isArray(insights.caveats) ? insights.caveats : [];
   const enrichment = output.spatial_enrichment;
+  const insightFilter = output.insight_data_filter;
+  const filteredTotals = insightFilter?.filtered_totals as Record<string, unknown> | undefined;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -203,6 +206,11 @@ function Module7ChatInsightPanel({ output, mapLabel }: { output: Module7Generati
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {insightFilter?.filter_mode ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-violet-700">
+              Filtered {String(filteredTotals?.amenities_selected ?? 0)} amenities · {String(filteredTotals?.records_selected ?? 0)} records · {String(filteredTotals?.corridors_selected ?? 0)} corridors
+            </span>
+          ) : null}
           {enrichment?.is_enriched ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-sky-700">
               📍 {enrichment.osm_summary?.main_roads ?? 0} roads · {enrichment.osm_summary?.total_places ?? 0} places · {enrichment.point_count ?? 0} points
@@ -578,6 +586,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   runtimeGeneratedMaps = [],
   selectedInsightMapId = null,
   onInsightMapSelect,
+  onPlottableEnrichment,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
@@ -1078,17 +1087,20 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       setIsLoading(true);
       try {
         const output = await requestInsightGeneration(selectedInsightMap, query);
+        if (selectedInsightMap.insightContext.mapSource === 'interactive') {
+          const enrichmentPoints = output.plottable_enrichment?.points || [];
+          const enrichmentCorridors = output.plottable_enrichment?.corridors || [];
+          if (enrichmentPoints.length > 0 || enrichmentCorridors.length > 0) {
+            onPlottableEnrichment?.(selectedInsightMap.id, enrichmentPoints, enrichmentCorridors);
+          }
+        }
         const usageRow = output.usage.ledger[0];
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          provider:
-            usageRow?.provider ||
-            (typeof window !== 'undefined'
-              ? window.localStorage.getItem('sigmavalue_llm_provider') || 'openai'
-              : 'openai'),
+          provider: usageRow?.provider || 'backend',
           region: usageRow?.region || '',
-          model: usageRow?.model || getGlobalLlmModel(),
+          model: usageRow?.model || 'configured-in-backend',
           query_preview: `Insights: ${query}`.substring(0, 80),
           input_tokens: output.usage.total_input_tokens,
           cached_input_tokens: output.usage.total_cached_input_tokens,
@@ -1177,13 +1189,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     startHiddenDataRetrieval(query, assistantId);
 
     try {
-      const activeModel = getGlobalLlmModel();
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_query: query,
-          model: activeModel,
           demo_mode: DEMO_MODE_ENABLED,
         }),
       });
@@ -1755,14 +1765,6 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             )}
           </div>
 
-          {/* Runtime model information */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                {getGlobalLlmModel()}
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1796,7 +1798,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                     No map generated yet for Insights
                   </p>
                   <p className="mt-2 text-xs font-medium text-slate-400">
-                    Generate a map in Module 3.1 or Module 3 to continue.
+                    Generate a map in Module 3.1 or Module 3, or start plotting on the Interactive Map to continue.
                   </p>
                 </div>
               ) : (
@@ -1819,11 +1821,15 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                           <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{map.title}</p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
-                          <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest text-indigo-600">
-                            Module {map.sourceModule}
+                          <span className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest ${
+                            map.sourceModule === 'interactive'
+                              ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                              : 'border-indigo-100 bg-indigo-50 text-indigo-600'
+                          }`}>
+                            {map.sourceModule === 'interactive' ? 'Interactive' : `Module ${map.sourceModule}`}
                           </span>
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                            {map.family}
+                            {map.stage || map.family}
                           </span>
                         </div>
                       </button>
