@@ -1,1457 +1,1007 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MahaRERA Agent</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+  <title>Sigmavalue AI Pilot - Universal RERA Agent</title>
   <style>
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
     :root {
-      --bg: #f4f5f2;
-      --surface: #ffffff;
-      --surface-soft: #f9faf7;
-      --border: rgba(26, 26, 24, 0.11);
-      --border-strong: rgba(26, 26, 24, 0.2);
-      --text: #1a1a18;
-      --muted: #686a63;
-      --hint: #96998f;
-      --accent: #4f46b8;
-      --accent-soft: #ecebff;
-      --accent-text: #332b8b;
-      --success: #0f6e56;
-      --success-soft: #e0f5ed;
-      --warn: #8a530c;
-      --warn-soft: #faedda;
-      --danger: #a73434;
-      --danger-soft: #fce9e9;
-      --shadow: 0 18px 48px rgba(22, 24, 18, 0.08);
-      --radius: 8px;
-      --radius-sm: 6px;
+      --bg: #f4f5fa;
+      --panel: #ffffff;
+      --border: #e3e6ef;
+      --text: #1f2433;
+      --muted: #7a7f93;
+      --primary: #5b4cf5;
+      --primary-dark: #4536e0;
+      --accent: #eef0fb;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --err: #dc2626;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #171817;
-        --surface: #232421;
-        --surface-soft: #1d1e1c;
-        --border: rgba(255, 255, 255, 0.11);
-        --border-strong: rgba(255, 255, 255, 0.22);
-        --text: #f0f0e8;
-        --muted: #a7a99f;
-        --hint: #74766f;
-        --accent: #8178df;
-        --accent-soft: #29255f;
-        --accent-text: #c0bcff;
-        --success: #65c9a8;
-        --success-soft: #08372d;
-        --warn: #f0a33a;
-        --warn-soft: #422703;
-        --danger: #ee6d69;
-        --danger-soft: #4c1717;
-        --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-      }
+    * {
+      box-sizing: border-box;
     }
 
     body {
-      min-height: 100vh;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
-      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-    }
-
-    .app {
-      min-height: 100vh;
-      display: grid;
-      grid-template-columns: 236px minmax(0, 1fr);
-    }
-
-    .sidebar {
-      min-height: 100vh;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
+    .topbar {
       display: flex;
-      flex-direction: column;
-      padding: 18px 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 24px;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 11px;
-      padding: 0 18px 18px;
-      border-bottom: 1px solid var(--border);
+      gap: 12px;
     }
 
-    .brand-icon {
-      width: 34px;
-      height: 34px;
-      border-radius: var(--radius);
-      display: grid;
-      place-items: center;
-      background: var(--accent);
+    .brand .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), #8b7bff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: #fff;
-      font-size: 18px;
-    }
-
-    .brand-title {
-      font-size: 13px;
-      font-weight: 650;
-    }
-
-    .brand-subtitle {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .nav-label {
-      display: block;
-      padding: 18px 18px 6px;
-      color: var(--hint);
-      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-size: 13px;
     }
 
-    .nav-item {
-      width: 100%;
-      border: 0;
-      background: transparent;
+    .brand .name {
+      font-weight: 700;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .brand .sub {
+      font-size: 11px;
+      letter-spacing: 0.08em;
       color: var(--muted);
+      font-weight: 600;
+    }
+
+    .topbar-right {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 18px;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.15s ease, color 0.15s ease;
-    }
-
-    .nav-item:hover {
-      background: var(--surface-soft);
-      color: var(--text);
-    }
-
-    .nav-item.active {
-      background: var(--accent-soft);
-      color: var(--accent-text);
-      font-weight: 650;
-    }
-
-    .nav-item i {
-      font-size: 17px;
-    }
-
-    .sidebar-footer {
-      margin-top: auto;
-      padding: 16px 18px 0;
-      border-top: 1px solid var(--border);
-    }
-
-    .status-pill {
-      min-height: 28px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border-radius: 999px;
-      background: var(--success-soft);
-      color: var(--success);
-      padding: 5px 10px;
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--success);
-    }
-
-    .status-dot.offline {
-      background: var(--danger);
-    }
-
-    .main {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .topbar {
-      min-height: 66px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 22px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .topbar-title {
-      font-size: 15px;
-      font-weight: 700;
-    }
-
-    .topbar-subtitle {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 1px;
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
       flex-wrap: wrap;
       justify-content: flex-end;
     }
 
-    .content {
-      width: 100%;
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .section {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .card,
-    .panel {
-      background: var(--surface);
+    .pill-btn {
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .pill-btn.solid {
+      background: var(--accent);
+      border-color: transparent;
+      color: var(--primary-dark);
+    }
+
+    .layout {
+      display: flex;
+      min-height: calc(100vh - 65px);
+    }
+
+    .sidebar {
+      width: 220px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      padding: 18px 14px;
+      flex-shrink: 0;
+    }
+
+    .sidebar h3 {
+      font-size: 13px;
+      margin: 0 0 2px;
+      font-weight: 700;
+    }
+
+    .sidebar .agent-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 2px;
+    }
+
+    .nav-item.active {
+      background: var(--accent);
+      color: var(--primary-dark);
+      font-weight: 700;
+    }
+
+    .main {
+      flex: 1;
+      padding: 24px;
+      max-width: 980px;
+    }
+
+    .page-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .page-head h1 {
+      font-size: 18px;
+      margin: 0 0 4px;
+    }
+
+    .page-head p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .reset-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
     }
 
     .card {
-      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 22px;
+      margin-bottom: 18px;
     }
 
-    .card-header,
-    .panel-header {
+    .card-head {
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
       gap: 12px;
       margin-bottom: 14px;
     }
 
-    .card-title,
-    .panel-title {
+    .card-head h2 {
       font-size: 13px;
       font-weight: 700;
+      margin: 0;
+      letter-spacing: 0.02em;
     }
 
-    .field-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field.full {
-      grid-column: 1 / -1;
-    }
-
-    .field label {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-      width: 100%;
-      border: 1px solid var(--border-strong);
-      background: var(--surface-soft);
-      color: var(--text);
-      border-radius: var(--radius-sm);
-      padding: 9px 10px;
-      outline: none;
-      min-height: 38px;
-    }
-
-    .field textarea {
-      min-height: 86px;
-      resize: vertical;
-    }
-
-    .field input:focus,
-    .field select:focus,
-    .field textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-    }
-
-    .button-row {
-      margin-top: 14px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      min-height: 34px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      border: 1px solid var(--border-strong);
-      border-radius: var(--radius-sm);
-      padding: 7px 13px;
-      background: var(--surface-soft);
-      color: var(--text);
-      cursor: pointer;
-      font-weight: 650;
-      transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-    }
-
-    .btn:hover {
-      background: var(--bg);
-    }
-
-    .btn.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .btn:disabled {
-      cursor: not-allowed;
-      opacity: 0.55;
-    }
-
-    .btn.compact {
-      min-height: 28px;
-      padding: 4px 9px;
-      font-size: 12px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 22px;
-      border-radius: 999px;
-      padding: 2px 8px;
-      background: var(--accent-soft);
-      color: var(--accent-text);
+    .status-chip {
       font-size: 11px;
       font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--primary-dark);
       white-space: nowrap;
     }
 
-    .badge.success {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-
-    .badge.warn {
-      background: var(--warn-soft);
+    .status-chip.busy {
+      background: #fff7e6;
       color: var(--warn);
     }
 
-    .badge.danger {
-      background: var(--danger-soft);
-      color: var(--danger);
+    .status-chip.err {
+      background: #fdecec;
+      color: var(--err);
     }
 
-    .stream-bar {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      border: 1px solid var(--accent);
-      border-radius: var(--radius);
-      background: var(--accent-soft);
-      color: var(--accent-text);
-      padding: 10px 12px;
+    .status-chip.done {
+      background: #e9f8ee;
+      color: var(--ok);
+    }
+
+    label {
+      display: block;
       font-size: 12px;
-      font-weight: 650;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
     }
 
-    .spinner {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      border: 2px solid var(--border-strong);
-      border-top-color: var(--accent);
-      animation: spin 0.75s linear infinite;
-      flex: 0 0 auto;
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.5;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+    textarea,
+    input[type="text"],
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: #fcfcfe;
     }
 
-    .panel-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    textarea {
+      resize: vertical;
+      min-height: 78px;
+    }
+
+    textarea:focus,
+    input:focus,
+    select:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+      border-color: var(--primary);
+    }
+
+    .row {
+      display: flex;
       gap: 16px;
     }
 
-    .panel {
-      padding: 16px;
-      min-width: 0;
+    .row>div {
+      flex: 1;
     }
 
-    .steps,
-    .history-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    .field {
+      margin-bottom: 16px;
     }
 
-    .step {
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr) auto;
-      align-items: start;
-      gap: 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-soft);
-      padding: 9px 10px;
+    details.advanced {
+      margin-bottom: 4px;
+    }
+
+    details.advanced summary {
+      cursor: pointer;
       font-size: 12px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
     }
 
-    .step.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
+    details.advanced summary::-webkit-details-marker {
+      display: none;
     }
 
-    .step.done {
-      border-color: var(--success);
-      background: var(--success-soft);
+    details.advanced summary::before {
+      content: ">";
+      font-size: 10px;
     }
 
-    .step.failed {
-      border-color: var(--danger);
-      background: var(--danger-soft);
+    details.advanced[open] summary::before {
+      content: "v";
     }
 
-    .step-num {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--border);
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 750;
+    details.advanced .row {
+      margin-top: 14px;
     }
 
-    .step.active .step-num {
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    button.act {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.12s ease;
+    }
+
+    button.act:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    button.act:not(:disabled):hover {
+      filter: brightness(0.97);
+    }
+
+    .act.primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .act.primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .act.secondary {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 6px 11px;
+      border-radius: 8px;
       background: var(--accent);
-      color: #fff;
+      color: var(--primary-dark);
+      font-weight: 600;
+      display: flex;
+      gap: 6px;
+      align-items: center;
     }
 
-    .step.done .step-num {
-      background: var(--success);
-      color: #fff;
+    .badge b {
+      font-weight: 700;
     }
 
-    .step.failed .step-num {
-      background: var(--danger);
-      color: #fff;
-    }
-
-    .step-action {
-      font-weight: 750;
-      overflow-wrap: anywhere;
-    }
-
-    .step-desc {
-      color: var(--muted);
-      margin-top: 2px;
+    .badge.url {
+      font-family: var(--mono);
+      font-size: 11px;
+      max-width: 340px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .step-tag {
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 750;
-      text-transform: uppercase;
+    .log {
+      background: #11131c;
+      color: #d7dae6;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.7;
+      height: 220px;
+      overflow-y: auto;
     }
 
-    .log-box {
-      height: 244px;
-      overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-soft);
-      padding: 10px 12px;
-      font: 11px/1.75 Consolas, "Liberation Mono", monospace;
+    .log .line {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
-    .log-line {
+    .log .ts {
+      color: #6b7390;
+      margin-right: 8px;
+    }
+
+    .log .tag-error {
+      color: #ff8080;
+    }
+
+    .log .tag-data {
+      color: #7ee787;
+    }
+
+    .log .tag-step {
+      color: #8ab4ff;
+    }
+
+    .log .empty {
+      color: #555c75;
+    }
+
+    .results-meta {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
       gap: 8px;
     }
 
-    .log-time {
-      color: var(--hint);
-      flex: 0 0 auto;
-    }
-
-    .log-info {
-      color: var(--accent);
-    }
-
-    .log-success {
-      color: var(--success);
-    }
-
-    .log-warn {
-      color: var(--warn);
-    }
-
-    .log-danger {
-      color: var(--danger);
-    }
-
-    .log-muted {
-      color: var(--muted);
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .metric {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      padding: 13px 14px;
-      box-shadow: var(--shadow);
-    }
-
-    .metric-label {
-      color: var(--muted);
-      font-size: 11px;
+    .results-meta .count {
+      font-size: 13px;
       font-weight: 700;
     }
 
-    .metric-value {
-      margin-top: 3px;
-      font-size: 22px;
-      font-weight: 750;
-    }
-
-    .metric-sub {
-      color: var(--hint);
-      font-size: 10px;
-    }
-
     .table-wrap {
-      overflow-x: auto;
+      overflow: auto;
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border-radius: 8px;
+      max-height: 420px;
     }
 
     table {
-      width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
-      min-width: 760px;
+      width: 100%;
+      font-size: 12.5px;
     }
 
     th,
     td {
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
+      padding: 9px 12px;
       text-align: left;
-      vertical-align: top;
-    }
-
-    th {
-      color: var(--muted);
-      background: var(--surface-soft);
-      font-size: 11px;
-      font-weight: 750;
+      border-bottom: 1px solid var(--border);
       white-space: nowrap;
     }
 
-    tr:last-child td {
-      border-bottom: 0;
+    th {
+      background: #fafbff;
+      position: sticky;
+      top: 0;
+      font-weight: 700;
+      color: var(--text);
+      z-index: 1;
     }
 
     tr:hover td {
-      background: var(--surface-soft);
+      background: #f8f9ff;
     }
 
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      min-height: 20px;
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 10px;
-      font-weight: 750;
-    }
-
-    .tag.registered {
-      background: var(--success-soft);
-      color: var(--success);
-    }
-
-    .tag.ongoing {
-      background: var(--warn-soft);
-      color: var(--warn);
-    }
-
-    .tag.lapsed {
-      background: var(--danger-soft);
-      color: var(--danger);
-    }
-
-    .empty {
-      min-height: 96px;
-      border: 1px dashed var(--border-strong);
-      border-radius: var(--radius);
-      display: grid;
-      place-items: center;
-      color: var(--hint);
+    .empty-state {
       text-align: center;
-      padding: 18px;
+      padding: 40px 20px;
+      color: var(--muted);
       font-size: 13px;
     }
 
-    .empty i {
-      display: block;
-      font-size: 28px;
-      margin-bottom: 5px;
+    pre.plan {
+      background: #11131c;
+      color: #d7dae6;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow: auto;
+      max-height: 360px;
+      margin: 0;
     }
 
-    .hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 920px) {
-      .app {
-        grid-template-columns: 1fr;
+    @media (max-width: 760px) {
+      .topbar,
+      .page-head,
+      .row {
+        flex-direction: column;
+        align-items: stretch;
       }
 
-      .sidebar {
-        min-height: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--border);
-        padding: 12px 0;
-      }
-
-      .brand {
-        border-bottom: 0;
-        padding-bottom: 12px;
-      }
-
-      .nav-label {
-        display: none;
-      }
-
-      .nav-items {
-        display: flex;
-        overflow-x: auto;
-        padding: 0 12px;
-      }
-
-      .nav-item {
-        width: auto;
-        border-radius: var(--radius-sm);
-        padding: 9px 12px;
-        white-space: nowrap;
-      }
-
-      .sidebar-footer {
-        padding: 10px 18px 0;
-        border-top: 0;
-      }
-
-      .topbar {
-        align-items: flex-start;
+      .layout {
         flex-direction: column;
       }
 
-      .topbar-actions {
-        justify-content: flex-start;
+      .sidebar {
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
       }
 
-      .panel-grid,
-      .metrics,
-      .field-grid {
-        grid-template-columns: 1fr;
+      .main {
+        max-width: none;
+        padding: 16px;
+      }
+
+      .nav-item {
+        display: inline-flex;
       }
     }
   </style>
 </head>
 
 <body>
-  <div class="app">
-    <aside class="sidebar" aria-label="Primary">
-      <div class="brand">
-        <div class="brand-icon"><i class="ti ti-building-community" aria-hidden="true"></i></div>
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">SV</div>
+      <div>
+        <div class="name">Sigmavalue AI Pilot</div>
+        <div class="sub">INTELLIGENT WORKSPACE</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="pill-btn solid" type="button">Solution</button>
+      <button class="pill-btn" type="button">Agents</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <h3>Universal RERA Agent</h3>
+      <div class="agent-sub">Sigma Value - all India</div>
+      <div class="nav-item active">Query</div>
+      <div class="nav-item">History</div>
+      <div class="nav-item">Settings</div>
+    </div>
+
+    <div class="main">
+      <div class="page-head">
         <div>
-          <div class="brand-title">MahaRERA Agent</div>
-          <div class="brand-subtitle">Sigma Value</div>
+          <h1>New query</h1>
+          <p>Describe what you need in plain English: location, project type, district, promoter, or status. The agent finds the right state RERA portal automatically.</p>
+        </div>
+        <button class="reset-btn" id="resetBtn" type="button">Reset</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>AGENT INPUTS</h2>
+          <span class="status-chip" id="statusChip">Ready</span>
+        </div>
+
+        <div class="field">
+          <label for="query">What do you want to find?</label>
+          <textarea id="query" placeholder="e.g. Get all registered residential projects in Pune district, Maharashtra&#10;or: Show ongoing commercial projects by promoter Lodha in Thane&#10;or: List RERA registered projects in Ghaziabad, UP with status Ongoing"></textarea>
+          <div class="hint">Write naturally and include the city, district, state, project type, promoter, or status where useful. The agent extracts the location, picks the matching state RERA portal, and builds the search plan.</div>
+        </div>
+
+        <details class="advanced">
+          <summary>Advanced options (optional)</summary>
+          <div class="row">
+            <div class="field">
+              <label for="urlOverride">Portal URL override</label>
+              <input type="text" id="urlOverride" placeholder="Leave blank - auto-detected from your query" />
+              <div class="hint">Use this only when you want to force a specific portal URL.</div>
+            </div>
+            <div class="field">
+              <label for="districtHint">District hint</label>
+              <input type="text" id="districtHint" placeholder="Leave blank - auto-detected from your query" />
+              <div class="hint">Adds an explicit district filter on top of whatever is in your query.</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="apiBase">Agent API base URL</label>
+              <input type="text" id="apiBase" value="__MAHARERA_API_BASE_URL__" />
+              <div class="hint">Where your Universal RERA Agent FastAPI server is running.</div>
+            </div>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button class="act primary" id="runBtn" type="button">Run agent</button>
+          <button class="act secondary" id="askBtn" type="button">Ask agent</button>
+          <button class="act secondary" id="planBtn" type="button">Plan only</button>
+          <button class="act secondary" id="browserBtn" type="button">Browser test</button>
+        </div>
+
+        <div class="badges" id="badges"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>ACTIVITY LOG</h2>
+          <button class="reset-btn" id="clearLogBtn" style="padding: 5px 12px; font-size: 12px;" type="button">Clear</button>
+        </div>
+        <div class="log" id="log">
+          <div class="empty">No activity yet. Run, ask, or plan a query to see live progress here.</div>
         </div>
       </div>
 
-      <span class="nav-label">Main</span>
-      <div class="nav-items">
-        <button class="nav-item active" data-tab-button="query" type="button">
-          <i class="ti ti-search" aria-hidden="true"></i>
-          <span>Query</span>
-        </button>
-        <button class="nav-item" data-tab-button="history" type="button">
-          <i class="ti ti-history" aria-hidden="true"></i>
-          <span>History</span>
-        </button>
-        <button class="nav-item" data-tab-button="settings" type="button">
-          <i class="ti ti-settings" aria-hidden="true"></i>
-          <span>Settings</span>
-        </button>
+      <div class="card" id="planCard" style="display: none;">
+        <div class="card-head">
+          <h2>ACTION PLAN</h2>
+        </div>
+        <pre class="plan" id="planOutput"></pre>
       </div>
 
-      <div class="sidebar-footer">
-        <div class="status-pill">
-          <span class="status-dot offline" id="status-dot"></span>
-          <span id="status-text">API unchecked</span>
+      <div class="card">
+        <div class="card-head">
+          <h2>RESULTS</h2>
+        </div>
+        <div class="results-meta">
+          <div class="count" id="resultCount">0 records</div>
+          <div style="display: flex; gap: 8px;">
+            <button class="act secondary" id="exportCsvBtn" style="padding: 7px 14px;" type="button">Export CSV</button>
+            <button class="act secondary" id="exportJsonBtn" style="padding: 7px 14px;" type="button">Export JSON</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="tableWrap">
+          <div class="empty-state">No records yet. Run the agent to populate results here.</div>
         </div>
       </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <div class="topbar-title" id="tab-title">New query</div>
-          <div class="topbar-subtitle" id="tab-subtitle">Enter a MahaRERA URL and describe the records to extract</div>
-        </div>
-        <div class="topbar-actions">
-          <span class="badge warn hidden" id="run-badge">Running</span>
-          <button class="btn" id="reset-btn" type="button">
-            <i class="ti ti-refresh" aria-hidden="true"></i>
-            <span>Reset</span>
-          </button>
-        </div>
-      </header>
-
-      <div class="content">
-        <section class="section" id="tab-query">
-          <div class="card">
-            <div class="card-header">
-              <h1 class="card-title">Agent inputs</h1>
-              <span class="badge" id="input-badge">Ready</span>
-            </div>
-
-            <div class="field-grid">
-              <div class="field full">
-                <label for="inp-url">MahaRERA URL</label>
-                <input id="inp-url" type="url" value="https://maharera.maharashtra.gov.in/"
-                  placeholder="https://maharera.maharashtra.gov.in/..." />
-              </div>
-
-              <div class="field full">
-                <label for="inp-query">Natural language query</label>
-                <textarea id="inp-query"
-                  placeholder="Get all registered residential projects in Pune district">Get all registered residential projects in Pune district</textarea>
-              </div>
-
-              <div class="field">
-                <label for="inp-district">District hint</label>
-                <select id="inp-district">
-                  <option value="">Any district</option>
-                  <option>Pune</option>
-                  <option>Mumbai City</option>
-                  <option>Mumbai Suburban</option>
-                  <option>Thane</option>
-                  <option>Nashik</option>
-                  <option>Nagpur</option>
-                  <option>Aurangabad</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="inp-type">Registration type</label>
-                <select id="inp-type">
-                  <option value="">Any type</option>
-                  <option>New Project</option>
-                  <option>Ongoing Project</option>
-                  <option>Plot</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="button-row">
-              <button class="btn primary" id="run-btn" type="button">
-                <i class="ti ti-player-play" aria-hidden="true"></i>
-                <span>Run agent</span>
-              </button>
-              <button class="btn" id="ask-btn" type="button">
-                <i class="ti ti-message-circle" aria-hidden="true"></i>
-                <span>Ask agent</span>
-              </button>
-              <button class="btn" id="plan-btn" type="button">
-                <i class="ti ti-list-details" aria-hidden="true"></i>
-                <span>Plan only</span>
-              </button>
-              <button class="btn" id="browser-btn" type="button">
-                <i class="ti ti-browser" aria-hidden="true"></i>
-                <span>Browser test</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="card hidden" id="answer-card">
-            <div class="card-header">
-              <h2 class="card-title">Agent answer</h2>
-              <span class="badge success" id="answer-badge">Ready</span>
-            </div>
-            <p id="answer-text" style="color: var(--muted); font-size: 13px; line-height: 1.6;"></p>
-          </div>
-
-          <div class="stream-bar hidden" id="stream-bar">
-            <span class="spinner" aria-hidden="true"></span>
-            <span id="stream-message">Connecting...</span>
-          </div>
-
-          <div class="panel-grid hidden" id="live-panels">
-            <div class="panel">
-              <div class="panel-header">
-                <h2 class="panel-title">Action steps</h2>
-                <span class="badge" id="steps-badge">0 steps</span>
-              </div>
-              <div class="steps" id="step-list">
-                <div class="empty"><span><i class="ti ti-dots" aria-hidden="true"></i>Waiting for a plan</span></div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-header">
-                <h2 class="panel-title">Live log</h2>
-                <button class="btn compact" id="clear-log-btn" type="button">Clear</button>
-              </div>
-              <div class="log-box" id="log-box" aria-live="polite"></div>
-            </div>
-          </div>
-
-          <div class="metrics hidden" id="metrics">
-            <div class="metric">
-              <div class="metric-label">Records found</div>
-              <div class="metric-value" id="metric-records">0</div>
-              <div class="metric-sub">from RERA portal</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Pages scraped</div>
-              <div class="metric-value" id="metric-pages">0</div>
-              <div class="metric-sub">paginated results</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Steps executed</div>
-              <div class="metric-value" id="metric-steps">0</div>
-              <div class="metric-sub">browser actions</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Tokens used</div>
-              <div class="metric-value" id="metric-tokens">0</div>
-              <div class="metric-sub">LLM planning</div>
-            </div>
-          </div>
-
-          <div class="card hidden" id="results-card">
-            <div class="card-header">
-              <h2 class="card-title">Extracted RERA data</h2>
-              <div class="topbar-actions">
-                <span class="badge success" id="results-count">0 records</span>
-                <button class="btn compact" id="csv-btn" type="button">
-                  <i class="ti ti-download" aria-hidden="true"></i>
-                  <span>CSV</span>
-                </button>
-                <button class="btn compact" id="json-btn" type="button">
-                  <i class="ti ti-download" aria-hidden="true"></i>
-                  <span>JSON</span>
-                </button>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr id="table-head"></tr>
-                </thead>
-                <tbody id="table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section class="section hidden" id="tab-history">
-          <div class="card">
-            <div class="card-header">
-              <h1 class="card-title">Query history</h1>
-              <span class="badge" id="history-count">0 runs</span>
-            </div>
-            <div class="history-list" id="history-list">
-              <div class="empty"><span><i class="ti ti-history" aria-hidden="true"></i>No queries run yet</span></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="section hidden" id="tab-settings">
-          <div class="card">
-            <div class="card-header">
-              <h1 class="card-title">Connection</h1>
-              <span class="badge" id="settings-badge">Local backend</span>
-            </div>
-
-            <div class="field-grid">
-              <div class="field">
-                <label for="api-base">Backend base URL</label>
-                <input id="api-base" type="text" value="__MAHARERA_API_BASE_URL__" />
-              </div>
-
-              <div class="field">
-                <label for="cfg-model">LLM model</label>
-                <select id="cfg-model">
-                  <option>deepseek.v3.2</option>
-                  <option>moonshotai.kimi-k2.5</option>
-                  <option>gpt-4o-mini</option>
-                  <option>gpt-4o</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="cfg-headless">Browser mode</label>
-                <select id="cfg-headless">
-                  <option value="false">Visible</option>
-                  <option value="true">Headless</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="cfg-delay">Action delay (sec)</label>
-                <input id="cfg-delay" type="number" value="1.5" step="0.5" min="0" />
-              </div>
-            </div>
-
-            <div class="button-row">
-              <button class="btn primary" id="check-api-btn" type="button">
-                <i class="ti ti-plug" aria-hidden="true"></i>
-                <span>Test connection</span>
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
+    </div>
   </div>
 
   <script>
-    const state = {
-      extracted: [],
-      history: [],
-      eventSource: null,
-      steps: []
+    const els = {
+      query: document.getElementById("query"),
+      urlOverride: document.getElementById("urlOverride"),
+      districtHint: document.getElementById("districtHint"),
+      apiBase: document.getElementById("apiBase"),
+      runBtn: document.getElementById("runBtn"),
+      askBtn: document.getElementById("askBtn"),
+      planBtn: document.getElementById("planBtn"),
+      browserBtn: document.getElementById("browserBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+      clearLogBtn: document.getElementById("clearLogBtn"),
+      statusChip: document.getElementById("statusChip"),
+      badges: document.getElementById("badges"),
+      log: document.getElementById("log"),
+      planCard: document.getElementById("planCard"),
+      planOutput: document.getElementById("planOutput"),
+      resultCount: document.getElementById("resultCount"),
+      tableWrap: document.getElementById("tableWrap"),
+      exportCsvBtn: document.getElementById("exportCsvBtn"),
+      exportJsonBtn: document.getElementById("exportJsonBtn"),
     };
 
-    const tabMeta = {
-      query: {
-        title: "New query",
-        subtitle: "Enter a MahaRERA URL and describe the records to extract"
-      },
-      history: {
-        title: "Query history",
-        subtitle: "Previous runs and extraction summaries"
-      },
-      settings: {
-        title: "Settings",
-        subtitle: "Configure API connection and agent behavior"
-      }
-    };
+    let currentData = [];
+    let activeSource = null;
+    const allButtons = [els.runBtn, els.askBtn, els.planBtn, els.browserBtn];
 
-    const byId = (id) => document.getElementById(id);
-
-    function show(el) {
-      el.classList.remove("hidden");
+    function apiBase() {
+      return (els.apiBase.value || "http://localhost:8000").replace(/\/$/, "");
     }
 
-    function hide(el) {
-      el.classList.add("hidden");
+    function setStatus(text, kind) {
+      els.statusChip.textContent = text;
+      els.statusChip.className = "status-chip" + (kind ? " " + kind : "");
     }
 
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    function setTab(name) {
-      ["query", "history", "settings"].forEach((tabName) => {
-        byId("tab-" + tabName).classList.toggle("hidden", tabName !== name);
+    function setBusy(busy) {
+      allButtons.forEach((button) => {
+        button.disabled = busy;
       });
-
-      document.querySelectorAll("[data-tab-button]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.tabButton === name);
-      });
-
-      byId("tab-title").textContent = tabMeta[name].title;
-      byId("tab-subtitle").textContent = tabMeta[name].subtitle;
+      if (busy) setStatus("Running...", "busy");
     }
 
-    function getBaseUrl() {
-      return byId("api-base").value.trim() || "http://localhost:8000";
+    function logLine(html) {
+      const empty = els.log.querySelector(".empty");
+      if (empty) empty.remove();
+      const div = document.createElement("div");
+      div.className = "line";
+      const ts = new Date().toLocaleTimeString();
+      div.innerHTML = `<span class="ts">${ts}</span>${html}`;
+      els.log.appendChild(div);
+      els.log.scrollTop = els.log.scrollHeight;
     }
 
-    function addLog(message, level = "muted") {
-      const row = document.createElement("div");
-      const time = new Date().toLocaleTimeString("en-IN", { hour12: false });
-      row.className = "log-line";
-      row.innerHTML = `<span class="log-time">${escapeHtml(time)}</span><span class="log-${level}">${escapeHtml(message)}</span>`;
-      byId("log-box").appendChild(row);
-      byId("log-box").scrollTop = byId("log-box").scrollHeight;
-    }
-
-    function clearLog() {
-      byId("log-box").innerHTML = "";
-    }
-
-    function setRunning(isRunning, message = "Connecting...") {
-      byId("run-btn").disabled = isRunning;
-      byId("ask-btn").disabled = isRunning;
-      byId("plan-btn").disabled = isRunning;
-      byId("browser-btn").disabled = isRunning;
-      byId("run-badge").classList.toggle("hidden", !isRunning);
-      byId("stream-message").textContent = message;
-      byId("input-badge").textContent = isRunning ? "Running" : "Ready";
-      byId("input-badge").classList.toggle("warn", isRunning);
-    }
-
-    function renderSteps(steps) {
-      state.steps = steps;
-      const list = byId("step-list");
-
-      if (!steps.length) {
-        list.innerHTML = '<div class="empty"><span><i class="ti ti-dots" aria-hidden="true"></i>Waiting for a plan</span></div>';
-        byId("steps-badge").textContent = "0 steps";
-        return;
+    function clearAll() {
+      els.log.innerHTML = '<div class="empty">No activity yet. Run, ask, or plan a query to see live progress here.</div>';
+      els.badges.innerHTML = "";
+      els.planCard.style.display = "none";
+      els.planOutput.textContent = "";
+      currentData = [];
+      renderTable([]);
+      setStatus("Ready");
+      if (activeSource) {
+        activeSource.close();
+        activeSource = null;
       }
+    }
 
-      list.innerHTML = steps.map((step, index) => {
-        const status = step.state || "pending";
-        const label = status === "done" ? '<i class="ti ti-check" aria-hidden="true"></i>' : escapeHtml(step.num || index + 1);
-        return `
-          <div class="step ${escapeHtml(status)}">
-            <div class="step-num">${label}</div>
-            <div>
-              <div class="step-action">${escapeHtml(step.action || "Action")}</div>
-              <div class="step-desc">${escapeHtml(step.description || step.desc || "")}</div>
-            </div>
-            <span class="step-tag">${escapeHtml(status)}</span>
-          </div>`;
-      }).join("");
-
-      byId("steps-badge").textContent = `${steps.length} steps`;
+    function addBadge(label, value, extraClass) {
+      const span = document.createElement("span");
+      span.className = "badge" + (extraClass ? " " + extraClass : "");
+      span.innerHTML = `<b>${escapeHtml(label)}</b> ${escapeHtml(value)}`;
+      els.badges.appendChild(span);
     }
 
     function renderTable(data) {
-      state.extracted = Array.isArray(data) ? data : [];
-
-      if (!state.extracted.length) {
-        hide(byId("results-card"));
+      currentData = data || [];
+      els.resultCount.textContent = `${currentData.length} record${currentData.length === 1 ? "" : "s"}`;
+      if (!currentData.length) {
+        els.tableWrap.innerHTML = '<div class="empty-state">No records yet. Run the agent to populate results here.</div>';
         return;
       }
 
-      const keys = Object.keys(state.extracted[0]);
-      byId("table-head").innerHTML = keys.map((key) => `<th>${escapeHtml(key)}</th>`).join("");
-      byId("table-body").innerHTML = state.extracted.map((row) => {
-        const cells = keys.map((key) => {
-          const raw = row[key] ?? "";
-          if (key.toLowerCase() === "status") {
-            const normalized = String(raw).toLowerCase();
-            const cls = normalized.includes("registered") ? "registered" : normalized.includes("ongoing") ? "ongoing" : "lapsed";
-            return `<td><span class="tag ${cls}">${escapeHtml(raw || "Unknown")}</span></td>`;
+      const cols = Array.from(currentData.reduce((set, row) => {
+        Object.keys(row).forEach((key) => set.add(key));
+        return set;
+      }, new Set()));
+
+      let html = "<table><thead><tr>" + cols.map((col) => `<th>${escapeHtml(col)}</th>`).join("") + "</tr></thead><tbody>";
+      for (const row of currentData) {
+        html += "<tr>" + cols.map((col) => `<td>${escapeHtml(row[col] ?? "")}</td>`).join("") + "</tr>";
+      }
+      html += "</tbody></table>";
+      els.tableWrap.innerHTML = html;
+    }
+
+    function appendTable(rows) {
+      renderTable(currentData.concat(rows || []));
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
+
+    function buildQuery() {
+      const q = els.query.value.trim();
+      const district = els.districtHint.value.trim();
+      return { q, district };
+    }
+
+    function streamFrom(path, params, handlers) {
+      if (activeSource) {
+        activeSource.close();
+        activeSource = null;
+      }
+
+      const url = new URL(apiBase() + path);
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          url.searchParams.set(key, value);
+        }
+      });
+
+      logLine(`Connecting to <span class="tag-step">${escapeHtml(url.pathname)}</span> ...`);
+      const source = new EventSource(url.toString());
+      activeSource = source;
+
+      source.onmessage = (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (handlers.onEvent) handlers.onEvent(msg);
+      };
+
+      source.onerror = () => {
+        logLine('<span class="tag-error">Connection closed or errored.</span>');
+        setBusy(false);
+        source.close();
+        if (activeSource === source) activeSource = null;
+      };
+    }
+
+    els.runBtn.addEventListener("click", () => {
+      const { q, district } = buildQuery();
+      if (!q) {
+        alert("Describe what you want to find first.");
+        return;
+      }
+
+      clearAll();
+      setBusy(true);
+      setStatus("Resolving...", "busy");
+
+      streamFrom("/crawl/stream", {
+        query: q,
+        url: els.urlOverride.value.trim(),
+        district,
+      }, {
+        onEvent: (msg) => {
+          switch (msg.type) {
+            case "log":
+              logLine(escapeHtml(msg.message));
+              break;
+            case "location_resolved":
+              addBadge("Location", `${msg.state || "-"}${msg.district ? " / " + msg.district : ""}`);
+              addBadge("Confidence", msg.confidence || "unknown");
+              break;
+            case "portal_resolved":
+              addBadge("Portal", msg.state || "-");
+              addBadge("URL", msg.portal_url || "-", "url");
+              break;
+            case "plan_ready":
+              logLine(`<span class="tag-step">Plan ready</span> - ${escapeHtml(msg.query_understanding || "")} (${escapeHtml(msg.step_count || 0)} steps)`);
+              els.planCard.style.display = "";
+              els.planOutput.textContent = JSON.stringify(msg.steps || [], null, 2);
+              break;
+            case "step_started":
+              logLine(`<span class="tag-step">Step ${escapeHtml(msg.step)}</span> ${escapeHtml(msg.action)} - ${escapeHtml(msg.description || "")}`);
+              break;
+            case "step_done":
+              break;
+            case "step_failed":
+              logLine(`<span class="tag-error">Step ${escapeHtml(msg.step)} failed:</span> ${escapeHtml(msg.error || "")}`);
+              break;
+            case "data_extracted":
+              logLine(`<span class="tag-data">+${escapeHtml(msg.record_count || 0)} records extracted</span>`);
+              appendTable(msg.data || []);
+              break;
+            case "done":
+              setStatus("Done", "done");
+              setBusy(false);
+              logLine(`<span class="tag-data">Done.</span> ${escapeHtml(msg.record_count || 0)} total records, ${escapeHtml(msg.pages || 0)} page(s), ${escapeHtml(msg.steps_executed || 0)} steps, ${escapeHtml(msg.tokens_used || 0)} tokens.`);
+              if (activeSource) {
+                activeSource.close();
+                activeSource = null;
+              }
+              break;
+            case "error":
+              setStatus("Error", "err");
+              setBusy(false);
+              logLine(`<span class="tag-error">Error: ${escapeHtml(msg.message || "")}</span>`);
+              if (activeSource) {
+                activeSource.close();
+                activeSource = null;
+              }
+              break;
           }
-          return `<td>${escapeHtml(raw || "-")}</td>`;
-        }).join("");
-        return `<tr>${cells}</tr>`;
-      }).join("");
-
-      byId("results-count").textContent = `${state.extracted.length} records`;
-      show(byId("results-card"));
-    }
-
-    function setMetrics(records = 0, pages = 0, steps = 0, tokens = 0) {
-      byId("metric-records").textContent = records;
-      byId("metric-pages").textContent = pages;
-      byId("metric-steps").textContent = steps;
-      byId("metric-tokens").textContent = tokens;
-      show(byId("metrics"));
-    }
-
-    function addToHistory(query, records, steps) {
-      state.history.unshift({
-        query,
-        records,
-        steps,
-        time: new Date().toLocaleString("en-IN")
+        },
       });
+    });
 
-      byId("history-count").textContent = `${state.history.length} runs`;
-      byId("history-list").innerHTML = state.history.map((item, index) => `
-        <div class="step done">
-          <div class="step-num">${index + 1}</div>
-          <div>
-            <div class="step-action">${escapeHtml(item.query)}</div>
-            <div class="step-desc">${escapeHtml(item.records)} records - ${escapeHtml(item.steps)} steps - ${escapeHtml(item.time)}</div>
-          </div>
-          <span class="step-tag">done</span>
-        </div>
-      `).join("");
-    }
-
-    function finishRun() {
-      hide(byId("stream-bar"));
-      setRunning(false);
-      if (state.eventSource) {
-        state.eventSource.close();
-        state.eventSource = null;
-      }
-    }
-
-    function resetAll() {
-      if (state.eventSource) {
-        state.eventSource.close();
-        state.eventSource = null;
-      }
-      state.extracted = [];
-      state.steps = [];
-      clearLog();
-      renderSteps([]);
-      ["live-panels", "stream-bar", "metrics", "results-card", "answer-card", "run-badge"].forEach((id) => hide(byId(id)));
-      setRunning(false);
-    }
-
-    function readAgentInput() {
-      const url = byId("inp-url").value.trim();
-      const query = byId("inp-query").value.trim();
-      const district = byId("inp-district").value.trim();
-      const registrationType = byId("inp-type").value.trim();
-
-      if (!url || !query) {
-        window.alert("Please enter both the MahaRERA URL and query.");
-        return null;
+    async function runPlan(conversational) {
+      const { q, district } = buildQuery();
+      if (!q) {
+        alert("Describe what you want to find first.");
+        return;
       }
 
-      return { url, query, district, registrationType };
-    }
-
-    function buildQuery(input) {
-      const params = new URLSearchParams({
-        url: input.url,
-        query: input.query
-      });
-      if (input.district) params.set("district", input.district);
-      if (input.registrationType) params.set("registration_type", input.registrationType);
-      return params.toString();
-    }
-
-    function runAgent() {
-      const input = readAgentInput();
-      if (!input) return;
-
-      resetAll();
-      show(byId("live-panels"));
-      show(byId("stream-bar"));
-      setRunning(true, "Starting agent...");
-      addLog("Starting MahaRERA agent", "info");
-      addLog("URL: " + input.url, "muted");
-      addLog("Query: " + input.query, "muted");
-
-      const streamUrl = `${getBaseUrl()}/crawl/stream?${buildQuery(input)}`;
-      state.eventSource = new EventSource(streamUrl);
-
-      state.eventSource.onmessage = (event) => {
-        let payload;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          addLog("Received malformed event from backend", "warn");
-          return;
-        }
-
-        byId("stream-message").textContent = payload.message || payload.type || "Processing...";
-
-        if (payload.type === "plan_ready") {
-          const steps = (payload.steps || []).map((step, index) => ({
-            num: index + 1,
-            action: step.action,
-            description: step.description,
-            state: "pending"
-          }));
-          renderSteps(steps);
-          addLog(`Plan ready: ${payload.step_count || steps.length} steps`, "info");
-        } else if (payload.type === "step_started") {
-          state.steps = state.steps.map((step) => step.num === payload.step ? { ...step, state: "active" } : step);
-          renderSteps(state.steps);
-          addLog(`Step ${payload.step}: ${payload.action || "started"}`, "info");
-        } else if (payload.type === "step_done") {
-          state.steps = state.steps.map((step) => step.num === payload.step ? { ...step, state: "done" } : step);
-          renderSteps(state.steps);
-          addLog(`Step ${payload.step} done`, "success");
-        } else if (payload.type === "step_failed") {
-          state.steps = state.steps.map((step) => step.num === payload.step ? { ...step, state: "failed" } : step);
-          renderSteps(state.steps);
-          addLog(`Step ${payload.step} failed: ${payload.error || ""}`, "danger");
-        } else if (payload.type === "data_extracted") {
-          renderTable(payload.data || []);
-          addLog(`Extracted ${payload.record_count || 0} records`, "success");
-        } else if (payload.type === "log") {
-          addLog(payload.message || "", "muted");
-        } else if (payload.type === "done") {
-          const records = payload.record_count || state.extracted.length || 0;
-          const steps = payload.steps_executed || state.steps.filter((step) => step.state === "done").length;
-          setMetrics(records, payload.pages || 1, steps, payload.tokens_used || 0);
-          addToHistory(input.query, records, steps);
-          addLog("Agent completed", "success");
-          finishRun();
-        } else if (payload.type === "error") {
-          addLog(payload.message || "Backend error", "danger");
-          finishRun();
-        }
-      };
-
-      state.eventSource.onerror = () => {
-        addLog("Backend stream not reachable at " + getBaseUrl(), "danger");
-        finishRun();
-      };
-    }
-
-    async function askAgent() {
-      const input = readAgentInput();
-      if (!input) return;
-
-      resetAll();
-      show(byId("stream-bar"));
-      setRunning(true, "Asking agent...");
-      addLog("Asking MahaRERA planner", "info");
+      clearAll();
+      setBusy(true);
+      setStatus(conversational ? "Thinking..." : "Planning...", "busy");
+      logLine(conversational
+        ? `Asking the agent how it would approach: "${escapeHtml(q)}"`
+        : `Generating a plan for: "${escapeHtml(q)}"`);
 
       try {
-        const response = await fetch(`${getBaseUrl()}/ask`, {
+        const resp = await fetch(apiBase() + "/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input)
+          body: JSON.stringify({
+            url: els.urlOverride.value.trim(),
+            query: district ? `${q} (filter by district: ${district})` : q,
+          }),
         });
-
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || `HTTP ${response.status}`);
+        const data = await resp.json();
+        if (data.status !== "ok") {
+          throw new Error(data.message || "Planner returned an error");
         }
 
-        byId("answer-text").textContent = data.answer || "The agent returned a plan, but no answer text.";
-        byId("answer-badge").textContent = data.model_used || "Answered";
-        show(byId("answer-card"));
+        addBadge("Location", `${(data.location || {}).state || "-"}${(data.location || {}).district ? " / " + data.location.district : ""}`);
+        addBadge("Confidence", (data.location || {}).confidence || "unknown");
+        addBadge("Portal", data.portal_url || "-", "url");
 
-        const steps = (data.steps || []).map((step, index) => ({
-          num: index + 1,
-          action: step.action,
-          description: step.description,
-          state: "pending"
-        }));
-        if (steps.length) {
-          show(byId("live-panels"));
-          renderSteps(steps);
+        if (conversational) {
+          logLine(`<span class="tag-step">Understanding:</span> ${escapeHtml(data.query_understanding || "")}`);
+          logLine(`The agent would open <span class="tag-step">${escapeHtml(data.portal_url || "")}</span> and run a ${escapeHtml(data.step_count || 0)}-step plan to get this data. Click "Plan only" to see the full step list, or "Run agent" to execute it.`);
+        } else {
+          logLine(`<span class="tag-step">Plan ready</span> - ${escapeHtml(data.query_understanding || "")} (${escapeHtml(data.step_count || 0)} steps, ${escapeHtml(data.tokens_used || 0)} tokens)`);
+          els.planCard.style.display = "";
+          els.planOutput.textContent = JSON.stringify(data.steps || [], null, 2);
         }
-        addLog("Agent answered query", "success");
-        if (data.tokens_used) addLog(`Tokens used: ${data.tokens_used}`, "muted");
-      } catch (error) {
-        addLog("Agent answer not reachable: " + error.message, "danger");
+        setStatus("Done", "done");
+      } catch (err) {
+        setStatus("Error", "err");
+        logLine(`<span class="tag-error">Error: ${escapeHtml(err.message)}</span>`);
       } finally {
-        hide(byId("stream-bar"));
-        setRunning(false);
+        setBusy(false);
       }
     }
 
-    async function planOnly() {
-      const input = readAgentInput();
-      if (!input) return;
+    els.planBtn.addEventListener("click", () => runPlan(false));
+    els.askBtn.addEventListener("click", () => runPlan(true));
 
-      resetAll();
-      show(byId("live-panels"));
-      show(byId("stream-bar"));
-      setRunning(true, "Calling planner...");
-      addLog("Planning only, no browser actions", "info");
+    els.browserBtn.addEventListener("click", () => {
+      clearAll();
+      setBusy(true);
+      setStatus("Opening browser...", "busy");
 
-      try {
-        const response = await fetch(`${getBaseUrl()}/plan`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input)
-        });
+      const overrideUrl = els.urlOverride.value.trim();
+      logLine(overrideUrl
+        ? `Opening a test browser session at <span class="tag-step">${escapeHtml(overrideUrl)}</span> ...`
+        : "Opening a test browser session on the default portal ...");
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || `HTTP ${response.status}`);
-        }
+      streamFrom("/browser/test", { url: overrideUrl }, {
+        onEvent: (msg) => {
+          switch (msg.type) {
+            case "log":
+              logLine(escapeHtml(msg.message));
+              break;
+            case "browser_ready":
+              addBadge("Page title", msg.title || "-");
+              addBadge("Dropdowns found", msg.dropdowns || 0);
+              addBadge("Text inputs found", msg.inputs || 0);
+              if (msg.dropdown_details && msg.dropdown_details.length) {
+                els.planCard.style.display = "";
+                els.planOutput.textContent = JSON.stringify(msg.dropdown_details, null, 2);
+              }
+              break;
+            case "done":
+              setStatus("Done", "done");
+              setBusy(false);
+              logLine(`<span class="tag-data">${escapeHtml(msg.message || "Done")}</span>`);
+              if (activeSource) {
+                activeSource.close();
+                activeSource = null;
+              }
+              break;
+            case "error":
+              setStatus("Error", "err");
+              setBusy(false);
+              logLine(`<span class="tag-error">Error: ${escapeHtml(msg.message || "")}</span>`);
+              if (activeSource) {
+                activeSource.close();
+                activeSource = null;
+              }
+              break;
+          }
+        },
+      });
+    });
 
-        const steps = (data.steps || []).map((step, index) => ({
-          num: index + 1,
-          action: step.action,
-          description: step.description,
-          state: "pending"
-        }));
-        renderSteps(steps);
-        addLog(`Plan generated: ${data.step_count || steps.length} steps`, "success");
-        if (data.tokens_used) addLog(`Tokens used: ${data.tokens_used}`, "muted");
-      } catch (error) {
-        addLog("Planner not reachable: " + error.message, "danger");
-      } finally {
-        hide(byId("stream-bar"));
-        setRunning(false);
+    els.exportJsonBtn.addEventListener("click", () => {
+      if (!currentData.length) {
+        alert("No data to export yet.");
+        return;
       }
-    }
+      downloadBlob(JSON.stringify(currentData, null, 2), "application/json", "rera_results.json");
+    });
 
-    function browserTest() {
-      const input = readAgentInput();
-      if (!input) return;
-
-      resetAll();
-      show(byId("live-panels"));
-      show(byId("stream-bar"));
-      setRunning(true, "Launching browser...");
-      addLog("Starting browser test", "info");
-
-      state.eventSource = new EventSource(`${getBaseUrl()}/browser/test?url=${encodeURIComponent(input.url)}`);
-
-      state.eventSource.onmessage = (event) => {
-        let payload;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          addLog("Received malformed browser event", "warn");
-          return;
-        }
-
-        byId("stream-message").textContent = payload.message || payload.type || "Testing browser...";
-
-        if (payload.type === "log") {
-          addLog(payload.message || "", "muted");
-        } else if (payload.type === "browser_ready") {
-          addLog(`Detected ${payload.dropdowns || 0} dropdowns, ${payload.inputs || 0} inputs, ${payload.buttons || 0} buttons`, "success");
-        } else if (payload.type === "done") {
-          addLog("Browser test complete", "success");
-          finishRun();
-        } else if (payload.type === "error") {
-          addLog(payload.message || "Browser test failed", "danger");
-          finishRun();
-        }
-      };
-
-      state.eventSource.onerror = () => {
-        addLog("Browser test endpoint not reachable at " + getBaseUrl(), "danger");
-        finishRun();
-      };
-    }
-
-    async function checkAPI() {
-      const dot = byId("status-dot");
-      const text = byId("status-text");
-      text.textContent = "Checking...";
-
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch(`${getBaseUrl()}/health`, { signal: controller.signal });
-        clearTimeout(timeout);
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        dot.classList.remove("offline");
-        text.textContent = "API ready";
-        addLog(`API connected${data.model ? ": " + data.model : ""}`, "success");
-      } catch {
-        dot.classList.add("offline");
-        text.textContent = "API offline";
-        if (byId("log-box")) addLog("API not reachable at " + getBaseUrl(), "danger");
+    els.exportCsvBtn.addEventListener("click", () => {
+      if (!currentData.length) {
+        alert("No data to export yet.");
+        return;
       }
-    }
+      const cols = Array.from(currentData.reduce((set, row) => {
+        Object.keys(row).forEach((key) => set.add(key));
+        return set;
+      }, new Set()));
+      const esc = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const lines = [cols.map(esc).join(",")];
+      for (const row of currentData) lines.push(cols.map((col) => esc(row[col])).join(","));
+      downloadBlob(lines.join("\n"), "text/csv", "rera_results.csv");
+    });
 
-    function downloadFile(content, fileName, mimeType) {
+    function downloadBlob(content, type, filename) {
+      const blob = new Blob([content], { type });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
-      link.download = fileName;
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
       link.click();
       URL.revokeObjectURL(link.href);
     }
 
-    function downloadCSV() {
-      if (!state.extracted.length) return;
-
-      const keys = Object.keys(state.extracted[0]);
-      const csv = [
-        keys.join(","),
-        ...state.extracted.map((row) => keys.map((key) => {
-          const value = String(row[key] ?? "").replace(/"/g, '""');
-          return `"${value}"`;
-        }).join(","))
-      ].join("\n");
-
-      downloadFile(csv, "maharera_data.csv", "text/csv;charset=utf-8");
-    }
-
-    function downloadJSON() {
-      if (!state.extracted.length) return;
-      downloadFile(JSON.stringify(state.extracted, null, 2), "maharera_data.json", "application/json;charset=utf-8");
-    }
-
-    document.querySelectorAll("[data-tab-button]").forEach((button) => {
-      button.addEventListener("click", () => setTab(button.dataset.tabButton));
+    els.resetBtn.addEventListener("click", () => {
+      els.query.value = "";
+      els.urlOverride.value = "";
+      els.districtHint.value = "";
+      clearAll();
     });
-    byId("run-btn").addEventListener("click", runAgent);
-    byId("ask-btn").addEventListener("click", askAgent);
-    byId("plan-btn").addEventListener("click", planOnly);
-    byId("browser-btn").addEventListener("click", browserTest);
-    byId("reset-btn").addEventListener("click", resetAll);
-    byId("clear-log-btn").addEventListener("click", clearLog);
-    byId("check-api-btn").addEventListener("click", checkAPI);
-    byId("csv-btn").addEventListener("click", downloadCSV);
-    byId("json-btn").addEventListener("click", downloadJSON);
-    window.addEventListener("load", () => setTimeout(checkAPI, 600));
+
+    els.clearLogBtn.addEventListener("click", () => {
+      els.log.innerHTML = '<div class="empty">No activity yet. Run, ask, or plan a query to see live progress here.</div>';
+    });
   </script>
 </body>
 
