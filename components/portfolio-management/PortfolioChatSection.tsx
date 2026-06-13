@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, Coins, Database, Loader2, Send, TerminalSquare, User, X } from 'lucide-react';
+import { BarChart3, Bot, CheckCircle2, Coins, Database, Loader2, Send, TerminalSquare, User, X, ChevronDown, ChevronUp } from 'lucide-react';
+import type { PortfolioVisualSpec } from '@/types/portfolio-visuals';
+import PortfolioVisualsModal from '@/components/portfolio-management/visuals/PortfolioVisualsModal';
 
 const makeChatId = (prefix = 'chat') => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
@@ -18,9 +20,17 @@ type ChatMessage = {
   role: 'assistant' | 'user';
   content: string;
   status?: string;
+  workflowEvents?: ChatWorkflowEvent[];
   sql?: string;
   resultSets?: PortfolioResultSet[];
+  visualSpec?: PortfolioVisualSpec;
   error?: string;
+};
+
+type ChatWorkflowEvent = {
+  id: string;
+  label: string;
+  type: string;
 };
 
 type ChatTokenUsageEvent = {
@@ -58,6 +68,42 @@ const normalizeTokenUsage = (value: unknown): ChatTokenUsageEvent => {
 const formatTokenNumber = (value: unknown) => toNumber(value).toLocaleString('en-IN');
 const formatUsd = (value: unknown) => `$${toNumber(value).toFixed(6)}`;
 
+const resultSetColumns = (resultSet: PortfolioResultSet) => {
+  if (resultSet.columns?.length) return resultSet.columns;
+  const rows = resultSet.rows || [];
+  return Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
+};
+
+const workflowLabel = (type: string, content?: unknown) => {
+  const text = toText(content).trim();
+  if (text) return text;
+  if (type === 'start') return 'Starting Portfolio Agent...';
+  if (type === 'sql_query') return 'Portfolio SQL query generated.';
+  if (type === 'result_set') return 'Portfolio records retrieved.';
+  if (type === 'report_chunk') return 'Writing answer...';
+  if (type === 'visual_ready') return 'Portfolio visual prepared.';
+  if (type === 'done') return 'Complete';
+  return 'Portfolio Agent is working...';
+};
+
+const appendWorkflowEvent = (message: ChatMessage, type: string, content?: unknown) => {
+  const label = workflowLabel(type, content);
+  const existingEvents = message.workflowEvents || [];
+  const lastEvent = existingEvents[existingEvents.length - 1];
+  if (lastEvent?.type === type && lastEvent.label === label) return message;
+  return {
+    ...message,
+    workflowEvents: [
+      ...existingEvents,
+      {
+        id: `${type}-${existingEvents.length}-${Date.now()}`,
+        label,
+        type,
+      },
+    ].slice(-6),
+  };
+};
+
 const PortfolioChatSection = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -69,6 +115,10 @@ const PortfolioChatSection = () => {
   const [chatInput, setChatInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [tokenPopoverOpen, setTokenPopoverOpen] = useState(false);
+  const [openResultKey, setOpenResultKey] = useState<string | null>(null);
+  const [minimizedTables, setMinimizedTables] = useState<Set<string>>(new Set());
+  const [selectedVisualSpec, setSelectedVisualSpec] = useState<PortfolioVisualSpec | null>(null);
+  const [selectedResultSet, setSelectedResultSet] = useState<PortfolioResultSet | null>(null);
   const [tokenUsageEvents, setTokenUsageEvents] = useState<ChatTokenUsageEvent[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -93,6 +143,18 @@ const PortfolioChatSection = () => {
     setChatMessages((current) => current.map((message) => (message.id === assistantId ? patcher(message) : message)));
   };
 
+  const toggleTableMinimize = (resultKey: string) => {
+    setMinimizedTables((prev) => {
+      const next = new Set(prev);
+      if (next.has(resultKey)) {
+        next.delete(resultKey);
+      } else {
+        next.add(resultKey);
+      }
+      return next;
+    });
+  };
+
   const sendChatMessage = () => {
     const text = chatInput.trim();
     if (!text || isStreaming) return;
@@ -108,6 +170,7 @@ const PortfolioChatSection = () => {
         role: 'assistant',
         content: '',
         status: 'Connecting to Portfolio Agent...',
+        workflowEvents: [{ id: 'start-0', label: 'Connecting to Portfolio Agent...', type: 'start' }],
         resultSets: [],
       },
     ]);
@@ -141,14 +204,21 @@ const PortfolioChatSection = () => {
         case 'start':
         case 'stage':
         case 'observation_preview':
-          updateAssistantMessage(assistantId, (message) => ({ ...message, status: toText(payload.content) }));
+          updateAssistantMessage(assistantId, (message) => ({
+            ...appendWorkflowEvent(message, payload.type || 'stage', payload.content),
+            status: toText(payload.content),
+          }));
           break;
         case 'sql_query':
-          updateAssistantMessage(assistantId, (message) => ({ ...message, sql: toText(payload.content), status: 'Portfolio SQL query generated.' }));
+          updateAssistantMessage(assistantId, (message) => ({
+            ...appendWorkflowEvent(message, 'sql_query', 'Portfolio SQL query generated.'),
+            sql: toText(payload.content),
+            status: 'Portfolio SQL query generated.',
+          }));
           break;
         case 'result_set':
           updateAssistantMessage(assistantId, (message) => ({
-            ...message,
+            ...appendWorkflowEvent(message, 'result_set', 'Portfolio records retrieved.'),
             resultSets: [...(message.resultSets || []), payload.content as PortfolioResultSet],
             status: 'Portfolio records retrieved.',
           }));
@@ -158,14 +228,21 @@ const PortfolioChatSection = () => {
           break;
         case 'report_chunk':
           updateAssistantMessage(assistantId, (message) => ({
-            ...message,
+            ...appendWorkflowEvent(message, 'report_chunk', 'Writing answer...'),
             content: `${message.content}${toText(payload.content)}`,
             status: 'Writing answer...',
           }));
           break;
+        case 'visual_ready':
+          updateAssistantMessage(assistantId, (message) => ({
+            ...appendWorkflowEvent(message, 'visual_ready', 'Portfolio visual prepared.'),
+            visualSpec: payload.content as PortfolioVisualSpec,
+            status: 'Portfolio visual prepared.',
+          }));
+          break;
         case 'error':
           updateAssistantMessage(assistantId, (message) => ({
-            ...message,
+            ...appendWorkflowEvent(message, 'error', 'Portfolio Agent error.'),
             error: toText(payload.content),
             content: message.content || `Error: ${toText(payload.content)}`,
             status: 'Portfolio Agent error.',
@@ -175,7 +252,7 @@ const PortfolioChatSection = () => {
           break;
         case 'done':
           updateAssistantMessage(assistantId, (message) => ({
-            ...message,
+            ...appendWorkflowEvent(message, 'done', payload.status === 'success' ? 'Complete' : `Finished: ${payload.status || 'unknown'}`),
             content: message.content || 'No matching portfolio records were found.',
             status: payload.status === 'success' ? 'Complete' : `Finished: ${payload.status || 'unknown'}`,
           }));
@@ -190,7 +267,7 @@ const PortfolioChatSection = () => {
 
     source.onerror = () => {
       updateAssistantMessage(assistantId, (message) => ({
-        ...message,
+        ...appendWorkflowEvent(message, 'error', 'Portfolio chat stream disconnected.'),
         error: 'Portfolio chat stream disconnected. Please confirm the backend is running and try again.',
         content: message.content || 'Portfolio chat stream disconnected. Please confirm the backend is running and try again.',
         status: 'Disconnected',
@@ -289,6 +366,8 @@ const PortfolioChatSection = () => {
       <div className="flex-1 space-y-5 overflow-y-auto overflow-x-hidden bg-white p-5">
         {chatMessages.map((message) => {
           const isUser = message.role === 'user';
+          const isFinished = message.status === 'Complete' || String(message.status || '').startsWith('Finished:');
+          const showWorkflow = !isUser && !!message.workflowEvents?.length && !isFinished && (!message.content || isStreaming);
           return (
             <div className={`flex max-w-full gap-3 ${isUser ? 'flex-row-reverse' : ''}`} key={message.id}>
               <div className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 shadow-sm ${isUser ? 'text-slate-900' : 'text-slate-500'}`}>
@@ -301,18 +380,118 @@ const PortfolioChatSection = () => {
                     <span>{message.status}</span>
                   </div>
                 )}
+                {showWorkflow && (
+                  <div className="mb-3 grid gap-1.5 rounded-2xl border border-slate-200 bg-white/70 p-2 whitespace-normal">
+                    {message.workflowEvents?.map((event, index) => {
+                      const isLatest = index === (message.workflowEvents?.length || 0) - 1;
+                      return (
+                        <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-600" key={event.id}>
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isLatest && isStreaming ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {isLatest && isStreaming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 size={12} />}
+                          </span>
+                          <span className="min-w-0 truncate">{event.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 {message.content || (!isUser ? 'Thinking...' : '')}
                 {!!message.resultSets?.length && (
                   <div className="mt-3 grid gap-2">
-                    {message.resultSets.map((resultSet, index) => (
-                      <div className="rounded-2xl border border-slate-200 bg-white/70 p-3 text-xs text-slate-700" key={`${message.id}-result-${index}`}>
-                        <div className="mb-1.5 flex items-center gap-1.5 font-black text-slate-900">
-                          <Database size={14} />
-                          <span>{resultSet.title || 'Portfolio Data'}</span>
+                    {message.resultSets.map((resultSet, index) => {
+                      const resultKey = `${message.id}-result-${index}`;
+                      const isOpen = openResultKey === resultKey;
+                      const rows = resultSet.rows || [];
+                      const columns = resultSetColumns(resultSet);
+                      return (
+                        <div className="rounded-2xl border border-slate-200 bg-white/70 text-xs text-slate-700" key={resultKey}>
+                          <button
+                            className="flex w-full cursor-pointer items-start gap-2 rounded-2xl border-0 bg-transparent p-3 text-left text-xs text-slate-700 transition hover:bg-white"
+                            type="button"
+                            onClick={() => setOpenResultKey(isOpen ? null : resultKey)}
+                            title="Show retrieved portfolio data"
+                          >
+                            <Database className="mt-0.5 shrink-0 text-slate-500" size={14} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-black text-slate-900">{resultSet.title || 'Portfolio Data'}</span>
+                              <span className="mt-1 block font-bold text-slate-500">{resultSet.row_count ?? rows.length} row(s) returned</span>
+                            </span>
+                          </button>
+
+                          {isOpen && (
+                            <div className="border-t border-slate-200 p-3 pt-2">
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <span className="font-black uppercase text-slate-500">Retrieved Data</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100"
+                                    type="button"
+                                    onClick={() => toggleTableMinimize(resultKey)}
+                                    title={minimizedTables.has(resultKey) ? 'Expand table' : 'Minimize table'}
+                                    aria-label={minimizedTables.has(resultKey) ? 'Expand table' : 'Minimize table'}
+                                  >
+                                    {minimizedTables.has(resultKey) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </button>
+                                  <button
+                                    className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+                                    type="button"
+                                    onClick={() => setOpenResultKey(null)}
+                                    title="Close retrieved data"
+                                    aria-label="Close retrieved data"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {!minimizedTables.has(resultKey) && (
+                                <>
+                                  {rows.length && columns.length ? (
+                                    <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white whitespace-normal">
+                                      <table className="min-w-full border-collapse text-left text-[11px]">
+                                        <thead className="sticky top-0 bg-slate-50 text-slate-500">
+                                          <tr>
+                                            {columns.map((column) => (
+                                              <th className="border-b border-slate-200 px-3 py-2 font-black" key={column}>{column}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {rows.map((row, rowIndex) => (
+                                            <tr className="border-b border-slate-100 last:border-b-0" key={`${resultKey}-row-${rowIndex}`}>
+                                              {columns.map((column) => (
+                                                <td className="max-w-48 break-words px-3 py-2 align-top font-semibold text-slate-700" key={`${resultKey}-${rowIndex}-${column}`}>
+                                                  {toText(row?.[column]) || '-'}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-200 bg-white p-3 font-semibold text-slate-500">
+                                      No row data was included in this result set.
+                                    </div>
+                                  )}
+
+                                  <details className="mt-2 rounded-xl border border-slate-200 bg-white p-3 whitespace-normal">
+                                    <summary className="cursor-pointer font-black text-slate-900">Raw JSON</summary>
+                                    <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-600">{JSON.stringify(resultSet, null, 2)}</pre>
+                                  </details>
+                                </>
+                              )}
+
+                              {minimizedTables.has(resultKey) && (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-xs font-semibold text-slate-500">
+                                  Table minimized — {rows.length} row(s) • {columns.length} column(s)
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div>{resultSet.row_count ?? resultSet.rows?.length ?? 0} row(s) returned</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {message.sql && (
@@ -323,6 +502,25 @@ const PortfolioChatSection = () => {
                     </summary>
                     <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed">{message.sql}</pre>
                   </details>
+                )}
+                {!isUser && message.visualSpec && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-2 text-xs text-slate-700">
+                    <button
+                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 font-black transition ${
+                        message.visualSpec.visual_available
+                          ? 'border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                      }`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedVisualSpec(message.visualSpec || null);
+                        setSelectedResultSet(message.resultSets?.[0] || null);
+                      }}
+                      title={message.visualSpec.visual_available ? 'Open visuals preview' : message.visualSpec.reason || 'No visual available'}
+                    >
+                      <BarChart3 size={13} /> Visuals
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -357,6 +555,10 @@ const PortfolioChatSection = () => {
           {isStreaming ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Send size={18} />}
         </button>
       </div>
+      <PortfolioVisualsModal visualSpec={selectedVisualSpec} resultSet={selectedResultSet} onClose={() => {
+        setSelectedVisualSpec(null);
+        setSelectedResultSet(null);
+      }} />
     </aside>
   );
 };

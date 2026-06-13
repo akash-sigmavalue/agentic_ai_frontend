@@ -69,7 +69,7 @@ export interface VisualizationRetrievalTokenEvent {
 }
 
 export interface VisualizationRetrievalState {
-  status: 'running' | 'success' | 'error' | 'needs_clarification';
+  status: 'running' | 'success' | 'error' | 'needs_clarification' | 'no_data' | 'updating_query';
   agentRoute?: string;
   retrievalIntent?: Record<string, unknown>;
   sqlQuery?: string;
@@ -78,6 +78,11 @@ export interface VisualizationRetrievalState {
   tokenEvents: VisualizationRetrievalTokenEvent[];
   metrics?: Record<string, unknown>;
   error?: string;
+  originalQuery?: string;
+  updatedQuery?: string;
+  fallbackReason?: string;
+  fallbackAttempted?: boolean;
+  debugTrace?: string[];
 }
 
 export interface Module2InputsConsidered {

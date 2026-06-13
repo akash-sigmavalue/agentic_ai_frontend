@@ -37,6 +37,7 @@
     "react-map-gl": "^8.1.1",
     "react-markdown": "^10.1.0",
     "react-pdf": "^10.4.1",
+    "react-zoom-pan-pinch": "^4.0.3",
     "reactflow": "^11.11.4",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",

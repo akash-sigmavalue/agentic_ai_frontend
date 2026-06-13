@@ -200,6 +200,47 @@ function findNumericMetricField(
   return direct;
 }
 
+/**
+ * Smarter time-field resolver.
+ * 1. First tries the explicit candidate list (mapped_fields, TIME_FIELDS).
+ * 2. Falls back to scanning column VALUES across a sample of records for
+ *    year-like integers (2000-2099) — catches 'YEAR', 'Year', 'transaction_year', etc.
+ *    that may not exactly match the normalised TIME_FIELDS list.
+ * 3. Finally checks string values matching a 4-digit year pattern.
+ */
+function findTimeFieldWithFallback(
+  records: Record<string, unknown>[],
+  candidates: Array<string | null | undefined>,
+): string | undefined {
+  if (records.length === 0) return undefined;
+  const first = records[0];
+
+  // Step 1 — standard candidate matching (normalised key comparison)
+  const standard = findField(first, candidates);
+  if (standard) return standard;
+
+  // Step 2 — value-based scan: column whose values look like calendar years
+  const sampleSize = Math.min(10, records.length);
+  for (const key of Object.keys(first)) {
+    const firstVal = toFiniteNumber(first[key]);
+    if (firstVal === null || !Number.isInteger(firstVal) || firstVal < 2000 || firstVal > 2099) continue;
+    // Confirm consistency across sample rows
+    let yearLikeCount = 0;
+    for (let i = 0; i < sampleSize; i++) {
+      const v = toFiniteNumber(records[i][key]);
+      if (v !== null && Number.isInteger(v) && v >= 2000 && v <= 2099) yearLikeCount++;
+    }
+    if (yearLikeCount >= Math.ceil(sampleSize * 0.7)) return key;
+  }
+
+  // Step 3 — string year pattern ('2021', '2022', ...)
+  for (const [key, value] of Object.entries(first)) {
+    if (typeof value === 'string' && /^(19|20)\d{2}$/.test(value.trim())) return key;
+  }
+
+  return undefined;
+}
+
 function buildLabel(module1: Module1IntentOutput | null) {
   const objective = String(module1?.business_objective || '').trim();
   const fallbackMetric = String(module1?.map_output_requirements?.base_map_metric || 'Generated Visualization');
@@ -288,7 +329,7 @@ function extractGeneratedRecords(
     String(mapReadiness.plotting_level || ''),
     ...GEO_LABEL_FIELDS,
   ]);
-  const timeField = findField(first, [
+  const timeField = findTimeFieldWithFallback(rawRecords, [
     String(mapReadiness.time_field || ''),
     String(mapped.time_field || ''),
     ...TIME_FIELDS,

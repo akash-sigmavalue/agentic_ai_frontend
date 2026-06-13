@@ -15,6 +15,7 @@ export const API_ROUTES = {
 
 export const CONNECTOR_API_ROUTES = {
   processWorkflow: '/v1/process',
+  streamWorkflow: '/connectors/workflow/run/stream',
   workflowStream: '/connectors/workflow/run/stream',
   googleOAuthStart: '/oauth/google/start',
   gmailStatus: '/connectors/status/gmail',

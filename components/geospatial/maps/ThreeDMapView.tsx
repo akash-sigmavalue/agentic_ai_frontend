@@ -65,6 +65,10 @@ interface ThreeDMapViewProps {
   maxBuildings?: number;
   mapStyle?: string | StyleSpecification;
   basemapControls?: React.ReactNode;
+  extraDeckLayers?: any[];
+  extraMapChildren?: React.ReactNode;
+  hideConfigurationPanel?: boolean;
+  hideSummaryCards?: boolean;
   mapId?: string;
   mapLabel?: string;
   onInsightDataReady?: (payload: {
@@ -72,6 +76,11 @@ interface ThreeDMapViewProps {
     mapLabel: string;
     plottedData: Record<string, unknown>;
   } | null) => void;
+  overlayTooltip?: (info: {
+    object?: unknown;
+    layer?: { id?: string } | null;
+    [key: string]: unknown;
+  }) => { html?: string; text?: string } | null;
 }
 
 function rateToColor(normalizedValue: number) {
@@ -128,9 +137,14 @@ export default function ThreeDMapView({
   maxBuildings,
   mapStyle,
   basemapControls,
+  extraDeckLayers = [],
+  extraMapChildren,
+  hideConfigurationPanel = false,
+  hideSummaryCards = false,
   mapId = 'default:3d',
   mapLabel = 'Default 3D Building Map',
   onInsightDataReady,
+  overlayTooltip,
 }: ThreeDMapViewProps) {
   const [placeName, setPlaceName] = useState(initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India');
   const [radius, setRadius] = useState(initialRadius || 450);
@@ -256,7 +270,7 @@ export default function ThreeDMapView({
   }, []);
 
   const layers = useMemo(() => {
-    if (!data) return [];
+    if (!data) return extraDeckLayers.length > 0 ? [...extraDeckLayers] : [];
 
     const featureCollection = data.geojson as FeatureCollection<Geometry, BuildingFeatureProperties>;
     const features = featureCollection.features as BuildingFeature[];
@@ -265,7 +279,11 @@ export default function ThreeDMapView({
     const noFloorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data === false);
     const floorCustomFeatures = customFeatures.filter((feature) => feature.properties?.runtime_has_floor_data !== false);
     const noFloorRates = noFloorCustomFeatures
-      .flatMap((feature) => feature.properties?.floor_rates || [])
+      .flatMap((feature) => {
+        const match = runtimeBuildings?.find((b: any) => b.name === feature.properties?.building_name) as any;
+        if (match && typeof match.metric_value === 'number') return [match.metric_value];
+        return feature.properties?.floor_rates || [];
+      })
       .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
     const noFloorMin = noFloorRates.length ? Math.min(...noFloorRates) : 0;
     const noFloorMax = noFloorRates.length ? Math.max(...noFloorRates) : 1;
@@ -314,10 +332,20 @@ export default function ThreeDMapView({
       opacity: 1,
       getElevation: (feature) => Number(feature.properties?.height_render ?? 15),
       getFillColor: (feature) => {
-        const metric = feature.properties?.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        const match = runtimeBuildings?.find((b: any) => b.name === feature.properties?.building_name) as any;
+        let metric = match && typeof match.metric_value === 'number' ? match.metric_value : undefined;
+        if (metric === undefined) {
+          metric = feature.properties?.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        }
         if (metric == null) return [148, 163, 184, 230];
         const normalized = Math.max(0, Math.min(1, (metric - noFloorMin) / noFloorRange));
         return rateToColor(normalized);
+      },
+      updateTriggers: {
+        getFillColor: [runtimeBuildings],
+      },
+      transitions: {
+        getFillColor: { duration: 700 },
       },
       pickable: true,
       autoHighlight: true,
@@ -328,7 +356,8 @@ export default function ThreeDMapView({
     const floorLayers = floorCustomFeatures.flatMap((building) => {
       const name = String(building.properties?.building_name || 'Custom Building');
       const totalFloors = Number(building.properties?.num_floors || 0);
-      const floorRates = building.properties?.floor_rates as Array<number | null> | undefined;
+      const match = runtimeBuildings?.find((b: any) => b.name === name) as any;
+      const floorRates = (match?.floor_rates || building.properties?.floor_rates) as Array<number | null> | undefined;
       const minRate = Number(building.properties?.min_rate || 0);
       const maxRate = Number(building.properties?.max_rate || 1);
 
@@ -371,6 +400,12 @@ export default function ThreeDMapView({
           opacity: 1,
           getElevation: () => FLOOR_HEIGHT,
           getFillColor: fillColor,
+          updateTriggers: {
+            getFillColor: [runtimeBuildings],
+          },
+          transitions: {
+            getFillColor: { duration: 700 },
+          },
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 255, 150],
@@ -383,8 +418,8 @@ export default function ThreeDMapView({
     if (showUnmatched) finalLayers.push(normalLayer);
     finalLayers.push(runtimeBuildingLayer, markerLayer, ...floorLayers);
 
-    return finalLayers;
-  }, [data, showUnmatched]);
+    return [...finalLayers, ...extraDeckLayers];
+  }, [data, extraDeckLayers, showUnmatched, runtimeBuildings]);
 
   const tooltip = ({ object }: { object?: TooltipObject }) => {
     if (!object) return null;
@@ -409,7 +444,10 @@ export default function ThreeDMapView({
 
     if ('properties' in object && object.properties) {
       if (object.properties.is_custom && object.properties.runtime_has_floor_data === false) {
-        const metric = object.properties.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
+        const match = runtimeBuildings?.find((b: any) => b.name === object.properties?.building_name) as any;
+        const metric = match && typeof match.metric_value === 'number' 
+          ? match.metric_value 
+          : object.properties.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
         return {
           html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : `Rs.${metric.toLocaleString()}/sq.m.`}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
         };
@@ -424,100 +462,104 @@ export default function ThreeDMapView({
 
   return (
     <div className={`flex flex-col bg-slate-50 overflow-y-auto overflow-x-hidden ${isFullscreen ? 'fixed inset-0 z-[9999] h-screen' : 'h-full'}`}>
-      <div className="border-b border-slate-200 bg-white/80 px-5 py-4 backdrop-blur">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex min-w-[260px] flex-col gap-2 flex-[2]">
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Search location</span>
-            <input
-              ref={searchInputRef}
-              value={placeName}
-              onChange={(event) => setPlaceName(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
-              placeholder="Pune, Maharashtra, India"
-            />
-          </label>
+      {!hideConfigurationPanel ? (
+        <div className="border-b border-slate-200 bg-white/80 px-5 py-4 backdrop-blur">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex min-w-[260px] flex-col gap-2 flex-[2]">
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Search location</span>
+              <input
+                ref={searchInputRef}
+                value={placeName}
+                onChange={(event) => setPlaceName(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
+                placeholder="Pune, Maharashtra, India"
+              />
+            </label>
 
-          <label className="flex min-w-[170px] flex-col gap-2 flex-[1]">
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Radius (m)</span>
-            <input
-              type="number"
-              min={150}
-              max={1000}
-              step={50}
-              value={radius}
-              onChange={(event) => {
-                const raw = event.target.value;
-                if (raw === '') return; // don't send invalid 0 on delete
-                setRadius(Number(raw));
-              }}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
-            />
-          </label>
+            <label className="flex min-w-[170px] flex-col gap-2 flex-[1]">
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Radius (m)</span>
+              <input
+                type="number"
+                min={150}
+                max={1000}
+                step={50}
+                value={radius}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  if (raw === '') return; // don't send invalid 0 on delete
+                  setRadius(Number(raw));
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
+              />
+            </label>
 
-          <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 min-w-[190px]">
-            <input type="checkbox" checked={useGeocoding} onChange={(event) => setUseGeocoding(event.target.checked)} />
-            Correct coordinates
-          </label>
+            <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 min-w-[190px]">
+              <input type="checkbox" checked={useGeocoding} onChange={(event) => setUseGeocoding(event.target.checked)} />
+              Correct coordinates
+            </label>
 
-          <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 min-w-[120px]">
-            <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} />
-            Dry run
-          </label>
+            <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 min-w-[120px]">
+              <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} />
+              Dry run
+            </label>
 
-          <button
-            onClick={() => void loadMap()}
-            disabled={isLoading || !placeName.trim()}
-            className="min-w-[160px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#434ce0] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-            Load 3D map
-          </button>
+            <button
+              onClick={() => void loadMap()}
+              disabled={isLoading || !placeName.trim()}
+              className="min-w-[160px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#434ce0] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+              Load 3D map
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-3">
+            <label className="flex min-w-[220px] flex-1 flex-col gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">City hint</span>
+              <input
+                value={cityForApi}
+                onChange={(event) => setCityForApi(event.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
+                placeholder="Pune"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
+              <input
+                type="checkbox"
+                checked={includeDebugLogs}
+                onChange={(event) => setIncludeDebugLogs(event.target.checked)}
+              />
+              Include debug logs
+            </label>
+          </div>
         </div>
+      ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          <label className="flex min-w-[220px] flex-1 flex-col gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">City hint</span>
-            <input
-              value={cityForApi}
-              onChange={(event) => setCityForApi(event.target.value)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-[#525ceb] focus:ring-2 focus:ring-[#525ceb]/15"
-              placeholder="Pune"
-            />
-          </label>
-
-          <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
-            <input
-              type="checkbox"
-              checked={includeDebugLogs}
-              onChange={(event) => setIncludeDebugLogs(event.target.checked)}
-            />
-            Include debug logs
-          </label>
+      {!hideSummaryCards ? (
+        <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 md:grid-cols-4">
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Overture buildings</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.overture_building_count ?? '...'}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Custom matches</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">
+              {data ? data.summary.exact_matches + data.summary.snapped_matches : '...'}
+            </p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Selected  markers</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.visible_excel_markers ?? '...'}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Corrections</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">
+              {data?.summary.corrected_buildings ?? data?.summary.dry_run_estimated_corrections ?? '...'}
+            </p>
+          </div>
         </div>
-      </div>
-
-      <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 md:grid-cols-4">
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Overture buildings</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.overture_building_count ?? '...'}</p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Custom matches</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {data ? data.summary.exact_matches + data.summary.snapped_matches : '...'}
-          </p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Selected  markers</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">{data?.summary.visible_excel_markers ?? '...'}</p>
-        </div>
-        <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Corrections</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-900">
-            {data?.summary.corrected_buildings ?? data?.summary.dry_run_estimated_corrections ?? '...'}
-          </p>
-        </div>
-      </div>
+      ) : null}
 
       <div className="relative min-h-[400px] flex-[1.5] shrink-0">
         {basemapControls}
@@ -560,11 +602,12 @@ export default function ThreeDMapView({
             layers={layers}
             viewState={viewState}
             onViewStateChange={({ viewState: nextViewState }) => setViewState(nextViewState as typeof viewState)}
-            getTooltip={tooltip}
+            getTooltip={(info) => overlayTooltip?.(info) || tooltip(info)}
             style={{ position: 'absolute', inset: '0px' }}
           >
             <Map mapLib={import('maplibre-gl')} mapStyle={mapStyle || DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>
               <NavigationControl position="top-right" />
+              {extraMapChildren}
             </Map>
           </DeckGL>
         ) : null}
