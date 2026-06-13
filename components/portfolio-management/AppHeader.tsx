@@ -26,7 +26,6 @@ export default function AppHeader({
   openUploadModal,
   setAgentListOpen,
   saveAllAndRefreshDashboard,
-  addSection,
   tokenUsageSummary
 }) {
   const [tokenPopoverOpen, setTokenPopoverOpen] = useState(false);
@@ -152,7 +151,6 @@ export default function AppHeader({
 
         <button className={`${primaryButton} bg-violet-600 hover:bg-violet-700 max-[640px]:w-full`} onClick={() => setAgentListOpen(true)}><Bot size={16} /> Agents</button>
         <button className={`${primaryButton} bg-green-600 hover:bg-green-700 max-[640px]:w-full`} onClick={saveAllAndRefreshDashboard}><RefreshCw size={16} /> Save All</button>
-        <button className={`${primaryButton} max-[640px]:w-full`} onClick={addSection}><Plus size={16} /> Add Section</button>
       </div>
     </header>
   );
