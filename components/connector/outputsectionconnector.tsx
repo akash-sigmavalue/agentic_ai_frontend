@@ -9,6 +9,7 @@ import AiPanelHeader from "./AiPanelHeader";
 import WorkflowFormBox from "./WorkflowFormBox";
 import GmailActionForm from "./GmailActionForm";
 import EditableReplyDraft from "./EditableReplyDraft";
+import { fetchAttachment, getConnectorFileUrl } from "./api";
 
 type OutputSectionConnectorProps = {
   response: WorkflowResponse | null;
@@ -338,6 +339,182 @@ function isReplyDraftOperation(operationType: WorkflowOperationType) {
   return operationType === "reply" || operationType === "reply_to_thread";
 }
 
+function getPrimaryIntent(response: WorkflowResponse | null) {
+  return firstString(
+    isRecord(response?.plan?.gmail_intent) ? response?.plan?.gmail_intent.primary_intent : "",
+    deepFindString(response?.plan?.gmail_intent, ["primary_intent"]),
+  ).toLowerCase();
+}
+
+function isReplyReviewOperation(response: WorkflowResponse | null, operationType: WorkflowOperationType) {
+  const primaryIntent = getPrimaryIntent(response);
+  return (
+    isReplyDraftOperation(operationType) ||
+    operationType === "send" ||
+    primaryIntent === "send_reply" ||
+    primaryIntent === "draft_reply"
+  );
+}
+
+function isReplyActuallySent(response: WorkflowResponse | null, completionResult: CompletionResult | null) {
+  const status = firstString(response?.status, completionResult?.status).toLowerCase();
+  return Boolean(
+    response?.delivery_status === "sent" ||
+    response?.reply_sent ||
+    completionResult?.reply_sent ||
+    status === "sent" ||
+    status === "reply_sent" ||
+    status === "email_sent"
+  );
+}
+
+function looksLikeUiStatusMessage(value: string) {
+  const text = value.toLowerCase();
+  return (
+    text.includes("review the confirmation") ||
+    text.includes("output section") ||
+    text.includes("workflow completed") ||
+    text.includes("prepared the result")
+  );
+}
+
+function getEditableReplyText(response: WorkflowResponse | null, completionResult: CompletionResult | null) {
+  const explicitDraft = firstString(response?.reply_draft, completionResult?.reply_draft);
+  if (explicitDraft) return explicitDraft;
+
+  const generatedReply = firstString(
+    deepFindString(response?.partial_intent, ["reply_draft", "draft_reply", "generated_reply", "reply_body", "reply_text", "draft_body", "message_body", "email_body"]),
+    deepFindString(response?.step_results, ["reply_draft", "draft_reply", "generated_reply", "reply_body", "reply_text", "draft_body", "message_body", "email_body"]),
+  );
+  if (generatedReply && !looksLikeRawGmailPayload(generatedReply) && !looksLikeUiStatusMessage(generatedReply)) {
+    return generatedReply;
+  }
+
+  const possibleReply = firstString(response?.reply, completionResult?.reply);
+  return possibleReply && !looksLikeUiStatusMessage(possibleReply) ? possibleReply : "";
+}
+
+function collectWorkflowErrors(response: WorkflowResponse | null) {
+  const errors: string[] = [];
+  const topLevel = firstString(response?.error, response?.message);
+  if (topLevel && String(response?.status || "").toLowerCase().includes("fail")) {
+    errors.push(topLevel);
+  }
+
+  for (const item of response?.raw_mcp_results || []) {
+    if (item.ok !== false) continue;
+    const message = firstString(item.error, isRecord(item.data) ? item.data.error : "");
+    if (!message) continue;
+    const tool = firstString(item.tool, item.server);
+    errors.push(tool ? `${tool}: ${message}` : message);
+  }
+
+  for (const step of response?.step_results || []) {
+    if (!String(step.status || "").toLowerCase().includes("fail")) continue;
+    const message = firstString(step.output?.error, step.output?.message, step.output);
+    if (message) errors.push(`${step.step_id || step.tool || "Step"}: ${message}`);
+  }
+
+  return Array.from(new Set(errors));
+}
+
+function needsReplyConfirmation(response: WorkflowResponse | null, completionResult: CompletionResult | null, operationType: WorkflowOperationType) {
+  if (!isReplyReviewOperation(response, operationType) || isReplyActuallySent(response, completionResult)) return false;
+
+  const status = firstString(response?.status).toLowerCase();
+  return Boolean(
+    status === "needs_confirmation" ||
+    status === "pending_confirmation" ||
+    response?.can_send ||
+    firstString(response?.chat_message, response?.message, response?.reply).toLowerCase().includes("review the confirmation")
+  );
+}
+
+function WorkflowErrorPanel({ response }: { response: WorkflowResponse | null }) {
+  const errors = collectWorkflowErrors(response);
+  if (!errors.length) return null;
+
+  return (
+    <article className="rounded-[22px] border border-red-300/70 bg-red-50 p-5 text-red-900 shadow-sm dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-100">
+      <div className="mb-2 w-fit rounded-full border border-red-400/40 bg-red-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 dark:text-red-200">
+        Workflow failed
+      </div>
+      <h3 className="text-base font-black">The Gmail action did not complete</h3>
+      <div className="mt-3 space-y-2 text-sm leading-6">
+        {errors.map((error) => (
+          <p key={error} className="break-words rounded-2xl bg-white/70 p-3 dark:bg-slate-950/40">
+            {error}
+          </p>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function buildConfirmedReplyPrompt(response: WorkflowResponse | null, draftBody?: string) {
+  const originalPrompt = firstString(
+    response?.partial_intent?.original_prompt,
+    response?.plan?.goal,
+    response?.message,
+    response?.summary,
+    "Send the prepared Gmail reply",
+  );
+
+  return [
+    `[confirmed] ${originalPrompt}`,
+    "Operation: send_reply",
+    "Send Directly: true",
+    draftBody?.trim() ? "" : "",
+    draftBody?.trim() ? "Edited Reply Body:" : "",
+    draftBody?.trim() || "",
+  ].filter((line) => line !== "").join("\n");
+}
+
+function buildDraftInsteadPrompt(response: WorkflowResponse | null, draftBody?: string) {
+  const originalPrompt = firstString(
+    response?.partial_intent?.original_prompt,
+    response?.plan?.goal,
+    response?.message,
+    response?.summary,
+    "Create a Gmail reply draft",
+  );
+
+  return [
+    `Create draft instead of sending: ${originalPrompt}`,
+    "Operation: draft_reply",
+    "Send Directly: false",
+    draftBody?.trim() ? "" : "",
+    draftBody?.trim() ? "Draft Reply Body:" : "",
+    draftBody?.trim() || "",
+  ].filter((line) => line !== "").join("\n");
+}
+
+function buildGenerateReviewDraftPrompt(response: WorkflowResponse | null) {
+  const originalPrompt = firstString(
+    response?.partial_intent?.original_prompt,
+    response?.plan?.goal,
+    response?.message,
+    response?.summary,
+    "Generate a Gmail reply draft for review",
+  );
+
+  return [
+    originalPrompt,
+    "Operation: draft_reply",
+    "Generate the reply body for review.",
+    "Do not send the email.",
+  ].join("\n");
+}
+
+function shouldShowResultTextWithUiResult(response: WorkflowResponse | null, operationType: WorkflowOperationType) {
+  if (!response?.ui_result) return true;
+  if (operationType === "analyze" || operationType === "classify" || operationType === "insight") return true;
+
+  const primaryIntent = getPrimaryIntent(response);
+
+  return primaryIntent === "extract_data" || primaryIntent === "summarize_email";
+}
+
 function FormattedAiResult({ text, operationType }: { text: string; operationType: WorkflowOperationType }) {
   const title =
     operationType === "analyze" || operationType === "classify" || operationType === "insight"
@@ -370,6 +547,16 @@ function FormattedAiResult({ text, operationType }: { text: string; operationTyp
                   {children}
                 </blockquote>
               ),
+              table: ({ children }) => (
+                <div className="mb-4 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({ children }) => <thead className="bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white">{children}</thead>,
+              th: ({ children }) => <th className="border-b border-slate-200 px-4 py-3 font-black dark:border-slate-700">{children}</th>,
+              td: ({ children }) => <td className="border-b border-slate-200 px-4 py-3 align-top last:border-b-0 dark:border-slate-800">{children}</td>,
               code: ({ children }) => (
                 <code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[0.9em] font-bold text-slate-900 dark:bg-slate-800 dark:text-slate-100">
                   {children}
@@ -380,6 +567,67 @@ function FormattedAiResult({ text, operationType }: { text: string; operationTyp
             {text}
           </ReactMarkdown>
         </div>
+      </div>
+    </article>
+  );
+}
+
+function ReplyConfirmationPanel({
+  response,
+  draftText,
+  onSendPrompt,
+}: {
+  response: WorkflowResponse | null;
+  draftText?: string;
+  onSendPrompt?: (prompt: string) => void;
+}) {
+  if (!onSendPrompt) return null;
+  const hasDraftText = Boolean(draftText?.trim());
+
+  return (
+    <article className="overflow-hidden rounded-[24px] border border-yellow-400/40 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.12)] dark:border-yellow-400/25 dark:bg-slate-950/70">
+      <div className="border-b border-slate-200/70 bg-yellow-500/10 p-4 dark:border-slate-800/80">
+        <div className="mb-2 w-fit rounded-full border border-yellow-400/40 bg-yellow-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-yellow-700 dark:text-yellow-300">
+          Confirmation required
+        </div>
+        <h3 className="text-base font-black text-slate-950 dark:text-white">Review before sending</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          {hasDraftText
+            ? "Gmail replies should not be sent until you confirm. Choose whether to send now or create a draft."
+            : "The backend asked for confirmation, but it did not return the draft text to review."}
+        </p>
+      </div>
+      {!hasDraftText ? (
+        <div className="m-4 rounded-2xl border border-red-300/50 bg-red-500/10 p-4 text-sm leading-6 text-red-700 dark:border-red-500/25 dark:text-red-200">
+          Direct send is disabled because there is no reply body visible in the UI. Generate a draft first, then review it before sending.
+        </div>
+      ) : null}
+      <div className="flex flex-wrap gap-3 p-4">
+        <button
+          type="button"
+          onClick={() => onSendPrompt(buildConfirmedReplyPrompt(response, draftText))}
+          disabled={!hasDraftText}
+          className="rounded-full bg-red-500 px-5 py-2.5 text-xs font-black text-white shadow-[0_12px_35px_rgba(239,68,68,0.28)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Send Reply
+        </button>
+        {hasDraftText ? (
+          <button
+            type="button"
+            onClick={() => onSendPrompt(buildDraftInsteadPrompt(response, draftText))}
+            className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2.5 text-xs font-black text-blue-600 transition hover:bg-blue-500/15 dark:text-blue-300"
+          >
+            Create Draft
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSendPrompt(buildGenerateReviewDraftPrompt(response))}
+            className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2.5 text-xs font-black text-blue-600 transition hover:bg-blue-500/15 dark:text-blue-300"
+          >
+            Generate Draft
+          </button>
+        )}
       </div>
     </article>
   );
@@ -406,18 +654,7 @@ function attachmentKey(file: Partial<GmailAttachmentFile>, index: number) {
 
 function absoluteFileUrl(url?: string | null) {
   const clean = String(url || "").trim();
-  if (!clean) return "";
-  if (/^(https?:|blob:|data:)/i.test(clean)) return clean;
-
-  const base =
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "";
-
-  const normalizedBase = String(base || "").replace(/\/$/, "");
-  if (!normalizedBase) return clean;
-  return clean.startsWith("/") ? `${normalizedBase}${clean}` : `${normalizedBase}/${clean}`;
+  return clean ? getConnectorFileUrl(clean) : "";
 }
 
 function fileSizeLabel(size?: number | null) {
@@ -476,16 +713,40 @@ function collectPdfAttachments(response: WorkflowResponse | null): GmailAttachme
   return output;
 }
 
+function mergePreparedPdfAttachments(
+  files: GmailAttachmentFile[],
+  preparedFiles: Record<string, GmailAttachmentFile>,
+) {
+  if (!Object.keys(preparedFiles).length) return files;
+
+  return files.map((file, index) => {
+    const key = attachmentKey(file, index);
+    const stableKey = [file.message_id, file.attachment_id, file.filename].filter(Boolean).join("|");
+    return preparedFiles[key] || preparedFiles[stableKey] || file;
+  });
+}
+
 function PdfAttachmentCard({
   file,
+  attachmentIndex,
   onView,
+  onPrepare,
+  onDownload,
+  isPreparing,
+  error,
 }: {
   file: GmailAttachmentFile;
+  attachmentIndex: number;
   onView: (file: GmailAttachmentFile) => void;
+  onPrepare: (file: GmailAttachmentFile, index: number) => void;
+  onDownload: (file: GmailAttachmentFile, index: number) => void;
+  isPreparing: boolean;
+  error?: string;
 }) {
   const viewUrl = absoluteFileUrl(file.view_url || file.file_url);
   const downloadUrl = absoluteFileUrl(file.download_url || file.view_url || file.file_url);
   const size = fileSizeLabel(file.file_size_bytes || file.size || null);
+  const canPrepare = Boolean(file.message_id && file.attachment_id);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-500/20 dark:bg-red-500/10">
@@ -499,6 +760,7 @@ function PdfAttachmentCard({
             <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
               PDF attachment{size ? ` • ${size}` : ""}{file.stored ? " • stored" : ""}
             </p>
+            {error ? <p className="mt-1 text-xs font-bold text-red-500">{error}</p> : null}
           </div>
         </div>
       </div>
@@ -511,6 +773,15 @@ function PdfAttachmentCard({
             className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-red-700"
           >
             View PDF
+          </button>
+        ) : canPrepare ? (
+          <button
+            type="button"
+            onClick={() => onPrepare(file, attachmentIndex)}
+            disabled={isPreparing}
+            className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+          >
+            {isPreparing ? "Preparing..." : "Preview PDF"}
           </button>
         ) : (
           <span className="rounded-full bg-yellow-500/15 px-3 py-2 text-xs font-bold text-yellow-700 dark:text-yellow-300">
@@ -527,6 +798,15 @@ function PdfAttachmentCard({
           >
             Download
           </a>
+        ) : canPrepare ? (
+          <button
+            type="button"
+            onClick={() => onDownload(file, attachmentIndex)}
+            disabled={isPreparing}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
+          >
+            Download
+          </button>
         ) : null}
       </div>
     </div>
@@ -546,34 +826,36 @@ function PdfViewerModal({
   if (!url) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-      <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4 dark:border-slate-800">
+    <div className="fixed inset-0 z-[10000] bg-slate-950/75 px-4 pb-6 pt-24 backdrop-blur-sm sm:px-6">
+      <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-[20px] border border-slate-700/80 bg-slate-950 shadow-2xl">
+        <div className="relative z-10 flex min-h-[76px] shrink-0 items-center justify-between gap-4 border-b border-slate-800 bg-slate-950 px-5 py-4">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-wide text-red-500">PDF Preview</p>
-            <h3 className="truncate text-sm font-black text-slate-950 dark:text-white">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-400">PDF Preview</p>
+            <h3 className="mt-1 truncate text-sm font-black text-white">
               {file.filename || "PDF attachment"}
             </h3>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <a
               href={absoluteFileUrl(file.download_url || file.view_url || file.file_url)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-slate-200 px-4 py-2 text-xs font-black text-slate-700 dark:border-slate-700 dark:text-white"
+              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-slate-800"
             >
-              Open
+              Download
             </a>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full bg-slate-900 px-4 py-2 text-xs font-black text-white dark:bg-white dark:text-slate-950"
+              className="rounded-full bg-white px-4 py-2 text-xs font-black text-slate-950 hover:bg-slate-200"
             >
               Close
             </button>
           </div>
         </div>
-        <iframe title={file.filename || "PDF attachment"} src={url} className="h-full w-full flex-1 bg-white" />
+        <div className="min-h-0 flex-1 bg-neutral-900">
+          <iframe title={file.filename || "PDF attachment"} src={url} className="h-full w-full bg-white" />
+        </div>
       </div>
     </div>
   );
@@ -582,9 +864,17 @@ function PdfViewerModal({
 function PdfAttachmentPanel({
   files,
   onView,
+  onPrepare,
+  onDownload,
+  preparingKey,
+  errors,
 }: {
   files: GmailAttachmentFile[];
   onView: (file: GmailAttachmentFile) => void;
+  onPrepare: (file: GmailAttachmentFile, index: number) => void;
+  onDownload: (file: GmailAttachmentFile, index: number) => void;
+  preparingKey: string | null;
+  errors: Record<string, string>;
 }) {
   if (!files.length) return null;
 
@@ -605,7 +895,16 @@ function PdfAttachmentPanel({
       </div>
       <div className="space-y-3">
         {files.map((file, index) => (
-          <PdfAttachmentCard key={attachmentKey(file, index)} file={file} onView={onView} />
+          <PdfAttachmentCard
+            key={attachmentKey(file, index)}
+            file={file}
+            attachmentIndex={index}
+            onView={onView}
+            onPrepare={onPrepare}
+            onDownload={onDownload}
+            isPreparing={preparingKey === attachmentKey(file, index)}
+            error={errors[attachmentKey(file, index)]}
+          />
         ))}
       </div>
     </article>
@@ -937,13 +1236,32 @@ export default function OutputSectionConnector({
   convStep = "idle",
 }: OutputSectionConnectorProps) {
   const [selectedPdf, setSelectedPdf] = useState<GmailAttachmentFile | null>(null);
+  const [preparedPdfFiles, setPreparedPdfFiles] = useState<Record<string, GmailAttachmentFile>>({});
+  const [preparingPdfKey, setPreparingPdfKey] = useState<string | null>(null);
+  const [pdfPrepareErrors, setPdfPrepareErrors] = useState<Record<string, string>>({});
   const [rawJsonCopied, setRawJsonCopied] = useState(false);
   const [showUsageDetails, setShowUsageDetails] = useState(false);
-  const pdfAttachments = useMemo(() => collectPdfAttachments(response), [response]);
+  const basePdfAttachments = useMemo(() => collectPdfAttachments(response), [response]);
+  const pdfAttachments = useMemo(
+    () => mergePreparedPdfAttachments(basePdfAttachments, preparedPdfFiles),
+    [basePdfAttachments, preparedPdfFiles],
+  );
   const operationType = normalizeOperation(response);
-  const editableDraftText = firstString(response?.reply_draft, completionResult?.reply_draft);
-  const hasEditableDraft = Boolean(editableDraftText && isReplyDraftOperation(operationType) && !looksLikeRawGmailPayload(editableDraftText));
-  const resultText = response?.ui_result || hasEditableDraft ? "" : getResultText(response, completionResult);
+  const replyWasSent = isReplyActuallySent(response, completionResult);
+  const editableDraftText = getEditableReplyText(response, completionResult);
+  const hasEditableDraft = Boolean(
+    editableDraftText &&
+    isReplyReviewOperation(response, operationType) &&
+    !replyWasSent &&
+    !looksLikeRawGmailPayload(editableDraftText),
+  );
+  const hasReplyConfirmation = Boolean(
+    !hasEditableDraft &&
+    needsReplyConfirmation(response, completionResult, operationType),
+  );
+  const resultText = hasEditableDraft || !shouldShowResultTextWithUiResult(response, operationType)
+    ? ""
+    : getResultText(response, completionResult);
   const uiEmails = response?.ui_result?.emails || [];
   const hasUiResult = Boolean(response?.ui_result);
   const hasForm = Boolean(response?.requires_form && response?.form_schema);
@@ -951,10 +1269,12 @@ export default function OutputSectionConnector({
   const draftId = extractDraftId(response);
   const draftSubject = firstString(response?.subject, deepFindString(response?.step_results, ["subject"]));
   const draftRecipient = firstString(response?.from_email, deepFindString(response?.step_results, ["from_email", "from"]));
-  const hasOutput = Boolean(hasForm || hasEditableDraft || hasUiResult || pdfAttachments.length || response || completionResult || resultText);
+  const hasOutput = Boolean(hasForm || hasEditableDraft || hasReplyConfirmation || hasUiResult || pdfAttachments.length || response || completionResult || resultText);
   const emailsFound = uiEmails.length || response?.emails_found || countByTool(response, ["search", "fetch", "thread", "email"]);
   const repliesGenerated = response?.replies_generated || countByTool(response, ["generate", "compose", "reply"]);
-  const repliesSent = response?.replies_sent_count || countByTool(response, ["send", "reply_to_thread"]);
+  const repliesSent = replyWasSent
+    ? response?.replies_sent_count || countByTool(response, ["send", "reply_to_thread"])
+    : 0;
   const showForm = Boolean(!response?.requires_form && response && onSendPrompt && (convStep === "waiting_email" || convStep === "waiting_field"));
   const rawResponseJson = response
     ? JSON.stringify(response, null, 2)
@@ -985,6 +1305,95 @@ export default function OutputSectionConnector({
 
     setRawJsonCopied(true);
     window.setTimeout(() => setRawJsonCopied(false), 1500);
+  };
+
+  const preparePdfAttachment = async (
+    file: GmailAttachmentFile,
+    index: number,
+    options: { preview?: boolean; download?: boolean } = {},
+  ) => {
+    const key = attachmentKey(file, index);
+    const stableKey = [file.message_id, file.attachment_id, file.filename].filter(Boolean).join("|");
+
+    if ((file.view_url || file.file_url) && options.preview) {
+      setSelectedPdf(file);
+      return file;
+    }
+
+    const existing = preparedPdfFiles[key] || preparedPdfFiles[stableKey];
+    if (existing) {
+      if (options.preview) setSelectedPdf(existing);
+      if (options.download) {
+        const downloadUrl = absoluteFileUrl(existing.download_url || existing.view_url || existing.file_url);
+        if (downloadUrl) window.open(downloadUrl, "_blank", "noopener,noreferrer");
+      }
+      return existing;
+    }
+
+    if (!file.message_id || !file.attachment_id) {
+      setPdfPrepareErrors((prev) => ({
+        ...prev,
+        [key]: "This PDF is missing Gmail attachment identifiers.",
+      }));
+      return null;
+    }
+
+    setPreparingPdfKey(key);
+    setPdfPrepareErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    try {
+      const result = await fetchAttachment(
+        file.message_id,
+        file.attachment_id,
+        file.filename || undefined,
+        file.mime_type || "application/pdf",
+      );
+      const stored =
+        normalizeAttachment(result.attachment_file) ||
+        normalizeAttachment(result.pdf_attachments?.[0]) ||
+        normalizeAttachment(result.attachments?.[0]);
+
+      if (!stored?.view_url && !stored?.download_url && !stored?.file_url) {
+        throw new Error("Backend did not return a stored PDF URL.");
+      }
+
+      const merged: GmailAttachmentFile = {
+        ...file,
+        ...stored,
+        filename: stored.filename || file.filename,
+        message_id: stored.message_id || file.message_id,
+        attachment_id: stored.attachment_id || file.attachment_id,
+        mime_type: stored.mime_type || file.mime_type || "application/pdf",
+        is_pdf: true,
+        stored: true,
+      };
+
+      setPreparedPdfFiles((prev) => ({
+        ...prev,
+        [key]: merged,
+        [stableKey]: merged,
+      }));
+
+      if (options.preview) setSelectedPdf(merged);
+      if (options.download) {
+        const downloadUrl = absoluteFileUrl(merged.download_url || merged.view_url || merged.file_url);
+        if (downloadUrl) window.open(downloadUrl, "_blank", "noopener,noreferrer");
+      }
+
+      return merged;
+    } catch (error) {
+      setPdfPrepareErrors((prev) => ({
+        ...prev,
+        [key]: error instanceof Error ? error.message : "Unable to prepare PDF.",
+      }));
+      return null;
+    } finally {
+      setPreparingPdfKey(null);
+    }
   };
 
   return (
@@ -1058,6 +1467,8 @@ export default function OutputSectionConnector({
             </div>
 
 
+            <WorkflowErrorPanel response={response} />
+
             {response?.requires_form && response?.form_schema && onSendPrompt ? (
               <GmailActionForm
                 schema={response.form_schema}
@@ -1067,7 +1478,18 @@ export default function OutputSectionConnector({
               />
             ) : null}
 
-            <PdfAttachmentPanel files={pdfAttachments} onView={setSelectedPdf} />
+            <PdfAttachmentPanel
+              files={pdfAttachments}
+              onView={setSelectedPdf}
+              onPrepare={(file, index) => void preparePdfAttachment(file, index, { preview: true })}
+              onDownload={(file, index) => void preparePdfAttachment(file, index, { download: true })}
+              preparingKey={preparingPdfKey}
+              errors={pdfPrepareErrors}
+            />
+
+            {resultText ? (
+              <FormattedAiResult text={resultText} operationType={operationType} />
+            ) : null}
 
             {response?.ui_result ? <EmailResultPanel response={response} onViewPdf={setSelectedPdf} /> : null}
 
@@ -1089,8 +1511,8 @@ export default function OutputSectionConnector({
               />
             ) : null}
 
-            {resultText ? (
-              <FormattedAiResult text={resultText} operationType={operationType} />
+            {hasReplyConfirmation ? (
+              <ReplyConfirmationPanel response={response} draftText={editableDraftText} onSendPrompt={onSendPrompt} />
             ) : null}
 
             {showForm && response ? (

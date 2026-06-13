@@ -24,22 +24,40 @@ type RunWorkflowOptions = {
   appendUserMessage?: boolean;
 };
 
+const GMAIL_CONNECT_PROMPT_MESSAGE = "Please connect your email with me to continue this Gmail workflow.";
+
 function hasGmailStep(response: WorkflowResponse | null) {
-  return response?.plan?.steps?.some((step) => step.system === "gmail") ?? false;
+  if (response?.plan?.steps?.some((step) => step.system === "gmail")) return true;
+
+  const intent = response?.plan?.gmail_intent;
+  if (typeof intent === "string" && /gmail|email|inbox/i.test(intent)) return true;
+  if (intent && typeof intent === "object" && /gmail|email|inbox/i.test(JSON.stringify(intent))) return true;
+
+  return response?.raw_mcp_results?.some((item) => item.connector === "gmail" || item.server === "gmail") ?? false;
 }
 
 function isGmailNotConnectedError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return /gmail is not connected/i.test(message) || /connect google oauth/i.test(message);
+  return /gmail is not connected/i.test(message) ||
+    /connect google oauth/i.test(message) ||
+    /gmail.*not connected/i.test(message) ||
+    /connect.*gmail/i.test(message) ||
+    /email.*not connected/i.test(message) ||
+    /requires?_oauth/i.test(message);
 }
 
 function responseRequiresGmailOAuth(response: WorkflowResponse | null) {
   if (!response) return false;
   if (response.requires_oauth && response.connector === "gmail") return true;
+  if (isGmailNotConnectedError(response.error || response.message || response.chat_message || response.status || "")) {
+    return true;
+  }
 
   return (
     response.raw_mcp_results?.some(
-      (item) => item.connector === "gmail" && item.requires_oauth === true,
+      (item) =>
+        (item.connector === "gmail" && item.requires_oauth === true) ||
+        isGmailNotConnectedError(item.error || JSON.stringify(item.data || {})),
     ) ?? false
   );
 }
@@ -134,6 +152,7 @@ export default function ConnectorPageClient() {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [showGmailConnectPrompt, setShowGmailConnectPrompt] = useState(false);
   const [activatingFlow, setActivatingFlow] = useState(false);
   const [activateFlowResult, setActivateFlowResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [convStep, setConvStep] = useState<ConvStep>("idle");
@@ -146,6 +165,16 @@ export default function ConnectorPageClient() {
     setGmailConnected(false);
     setGmailEmail(null);
     setPendingPrompt(null);
+    setShowGmailConnectPrompt(false);
+  };
+
+  const markGmailConnectionRequired = (promptToKeep: string, message = GMAIL_CONNECT_PROMPT_MESSAGE) => {
+    setNeedsGmail(true);
+    setGmailConnected(false);
+    setGmailEmail(null);
+    setPendingPrompt(promptToKeep);
+    setStatusMessage(message);
+    setShowGmailConnectPrompt(true);
   };
 
   // On mount: silently check Gmail connection so the "Connect Gmail" button
@@ -153,7 +182,6 @@ export default function ConnectorPageClient() {
   // The backend uses AUTH_DISABLED_USER_ID=1 and has no auth guard on this route.
   useEffect(() => {
     void syncGmailConnectionStatus("", { requireWorkflow: false });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // const syncGmailConnectionStatus = async (promptToKeep: string) => {
@@ -175,11 +203,12 @@ export default function ConnectorPageClient() {
   //     setConnectorStatusLoading(false);
   //   }
   // };
-  const syncGmailConnectionStatus = async (
+  async function syncGmailConnectionStatus(
     promptToKeep: string,
-    options: { requireWorkflow?: boolean } = {},
-  ) => {
+    options: { requireWorkflow?: boolean; showPromptOnMissing?: boolean } = {},
+  ) {
     const requireWorkflow = options.requireWorkflow ?? false;
+    const showPromptOnMissing = options.showPromptOnMissing ?? requireWorkflow;
 
     setConnectorStatusLoading(true);
     try {
@@ -196,11 +225,13 @@ export default function ConnectorPageClient() {
             ? status.email
               ? `Gmail connected as ${status.email}. Continue the pending workflow.`
               : "Gmail connected. Continue the pending workflow."
-            : "This workflow needs Gmail access.",
+            : GMAIL_CONNECT_PROMPT_MESSAGE,
         );
+        setShowGmailConnectPrompt(showPromptOnMissing && !status.connected);
       } else {
         setNeedsGmail(false);
         setPendingPrompt(null);
+        setShowGmailConnectPrompt(false);
         setStatusMessage(
           status.connected
             ? status.email
@@ -216,6 +247,7 @@ export default function ConnectorPageClient() {
       if (requireWorkflow) {
         setNeedsGmail(true);
         setPendingPrompt(promptToKeep);
+        setShowGmailConnectPrompt(showPromptOnMissing);
       }
 
       setStatusMessage("Unable to check Gmail connection.");
@@ -319,7 +351,9 @@ export default function ConnectorPageClient() {
       //   setStatusMessage(getSafeChatMessage(workflowResponse));
       // }
       if (responseRequiresGmailOAuth(workflowResponse)) {
-        await syncGmailConnectionStatus(cleaned, { requireWorkflow: true });
+        await syncGmailConnectionStatus(cleaned, { requireWorkflow: true, showPromptOnMissing: true });
+      } else if (hasGmailStep(workflowResponse)) {
+        await syncGmailConnectionStatus(cleaned, { requireWorkflow: false, showPromptOnMissing: true });
       } else {
         clearGmailState();
         setStatusMessage(getSafeChatMessage(workflowResponse));
@@ -333,10 +367,7 @@ export default function ConnectorPageClient() {
       setStreamingSteps([]);
       setConvMessages((prev) => [...prev, { role: "agent", text: message }]);
       if (isGmailNotConnectedError(error)) {
-        setNeedsGmail(true);
-        setGmailConnected(false);
-        setGmailEmail(null);
-        setPendingPrompt(cleaned);
+        markGmailConnectionRequired(cleaned);
       }
       setConvStep("idle");
     } finally {
@@ -360,7 +391,8 @@ export default function ConnectorPageClient() {
       return;
     }
     setStatusMessage("Gmail setup opened. Complete Google sign-in, then recheck the connection.");
-  };
+    setShowGmailConnectPrompt(false);
+  }
 
   // const handleRecheckGmailConnection = async () => {
   //   if (!pendingPrompt && !hasGmailStep(response)) {
@@ -549,6 +581,68 @@ export default function ConnectorPageClient() {
             />
           </section>
         </div>
+
+        {showGmailConnectPrompt && needsGmail && !gmailConnected ? (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gmail-connect-title"
+              className="w-full max-w-md overflow-hidden rounded-[20px] border border-red-500/25 bg-white p-5 shadow-2xl dark:bg-slate-950"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-red-500">Connection required</p>
+                  <h2 id="gmail-connect-title" className="mt-2 text-xl font-black text-slate-950 dark:text-white">
+                    Connect your email
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGmailConnectPrompt(false)}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-lg font-black text-slate-500 hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900"
+                  aria-label="Close Gmail connection prompt"
+                >
+                  x
+                </button>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                {GMAIL_CONNECT_PROMPT_MESSAGE}
+              </p>
+              {pendingPrompt ? (
+                <p className="mt-3 line-clamp-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                  Pending query: {pendingPrompt}
+                </p>
+              ) : null}
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGmailConnectPrompt(false)}
+                  className="rounded-full border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+                >
+                  Not now
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRecheckGmailConnection}
+                  disabled={connectorStatusLoading}
+                  className="rounded-full border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  {connectorStatusLoading ? "Checking..." : "Recheck"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConnectGmail}
+                  className="rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white shadow-[0_10px_22px_rgba(234,67,53,.28)]"
+                >
+                  Connect Gmail
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );
