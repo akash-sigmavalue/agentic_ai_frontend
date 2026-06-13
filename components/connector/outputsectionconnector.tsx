@@ -9,7 +9,7 @@ import AiPanelHeader from "./AiPanelHeader";
 import WorkflowFormBox from "./WorkflowFormBox";
 import GmailActionForm from "./GmailActionForm";
 import EditableReplyDraft from "./EditableReplyDraft";
-import { fetchAttachment, getConnectorFileUrl } from "./api";
+import { fetchAttachment, getConnectorFileUrl, summarizeAttachment } from "./api";
 
 type OutputSectionConnectorProps = {
   response: WorkflowResponse | null;
@@ -664,6 +664,11 @@ function fileSizeLabel(size?: number | null) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function documentAnalysisAnswer(value: unknown) {
+  if (!isRecord(value)) return "";
+  return firstString(value.answer, value.summary, value.message);
+}
+
 function normalizeAttachment(file: unknown): GmailAttachmentFile | null {
   if (!isRecord(file)) return null;
   const normalized: GmailAttachmentFile = {
@@ -732,23 +737,117 @@ function PdfAttachmentCard({
   onView,
   onPrepare,
   onDownload,
+  onSummarize,
   isPreparing,
+  isSummarizing,
   error,
+  summary,
 }: {
   file: GmailAttachmentFile;
   attachmentIndex: number;
   onView: (file: GmailAttachmentFile) => void;
   onPrepare: (file: GmailAttachmentFile, index: number) => void;
   onDownload: (file: GmailAttachmentFile, index: number) => void;
+  onSummarize: (file: GmailAttachmentFile, index: number) => void;
   isPreparing: boolean;
+  isSummarizing: boolean;
   error?: string;
+  summary?: string;
 }) {
   const viewUrl = absoluteFileUrl(file.view_url || file.file_url);
   const downloadUrl = absoluteFileUrl(file.download_url || file.view_url || file.file_url);
   const size = fileSizeLabel(file.file_size_bytes || file.size || null);
   const canPrepare = Boolean(file.message_id && file.attachment_id);
 
-  return (
+  const cardBody = (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-red-500/15 text-lg">ðŸ“„</span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-slate-950 dark:text-white">
+                {file.filename || "PDF attachment"}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                PDF attachment{size ? ` â€¢ ${size}` : ""}{file.stored ? " â€¢ stored" : ""}
+              </p>
+              {error ? <p className="mt-1 text-xs font-bold text-red-500">{error}</p> : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {viewUrl ? (
+            <button
+              type="button"
+              onClick={() => onView(file)}
+              className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-red-700"
+            >
+              View PDF
+            </button>
+          ) : canPrepare ? (
+            <button
+              type="button"
+              onClick={() => onPrepare(file, attachmentIndex)}
+              disabled={isPreparing}
+              className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+            >
+              {isPreparing ? "Preparing..." : "Preview PDF"}
+            </button>
+          ) : (
+            <span className="rounded-full bg-yellow-500/15 px-3 py-2 text-xs font-bold text-yellow-700 dark:text-yellow-300">
+              Download required
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onSummarize(file, attachmentIndex)}
+            disabled={isSummarizing || !canPrepare}
+            className="rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-black text-blue-600 hover:bg-blue-500/15 disabled:opacity-60 dark:text-blue-300"
+          >
+            {isSummarizing ? "Summarizing..." : "Summarize PDF"}
+          </button>
+
+          {downloadUrl ? (
+            <a
+              href={downloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
+            >
+              Download
+            </a>
+          ) : canPrepare ? (
+            <button
+              type="button"
+              onClick={() => onDownload(file, attachmentIndex)}
+              disabled={isPreparing}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
+            >
+              Download
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {summary ? (
+        <div className="mt-4 rounded-2xl border border-blue-500/20 bg-white/80 p-4 text-sm leading-7 text-slate-700 dark:bg-slate-950/40 dark:text-slate-200">
+          <div className="mb-3 w-fit rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-500">
+            PDF Summary
+          </div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
+        </div>
+      ) : null}
+    </>
+  );
+
+  return summary ? (
+    <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-500/20 dark:bg-red-500/10">
+      {cardBody}
+    </div>
+  ) : (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-500/20 dark:bg-red-500/10">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
@@ -788,6 +887,15 @@ function PdfAttachmentCard({
             Download required
           </span>
         )}
+
+        <button
+          type="button"
+          onClick={() => onSummarize(file, attachmentIndex)}
+          disabled={isSummarizing || !canPrepare}
+          className="rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-black text-blue-600 hover:bg-blue-500/15 disabled:opacity-60 dark:text-blue-300"
+        >
+          {isSummarizing ? "Summarizing..." : "Summarize PDF"}
+        </button>
 
         {downloadUrl ? (
           <a
@@ -866,15 +974,21 @@ function PdfAttachmentPanel({
   onView,
   onPrepare,
   onDownload,
+  onSummarize,
   preparingKey,
+  summarizingKey,
   errors,
+  summaries,
 }: {
   files: GmailAttachmentFile[];
   onView: (file: GmailAttachmentFile) => void;
   onPrepare: (file: GmailAttachmentFile, index: number) => void;
   onDownload: (file: GmailAttachmentFile, index: number) => void;
+  onSummarize: (file: GmailAttachmentFile, index: number) => void;
   preparingKey: string | null;
+  summarizingKey: string | null;
   errors: Record<string, string>;
+  summaries: Record<string, string>;
 }) {
   if (!files.length) return null;
 
@@ -894,18 +1008,25 @@ function PdfAttachmentPanel({
         </span>
       </div>
       <div className="space-y-3">
-        {files.map((file, index) => (
-          <PdfAttachmentCard
-            key={attachmentKey(file, index)}
-            file={file}
-            attachmentIndex={index}
-            onView={onView}
-            onPrepare={onPrepare}
-            onDownload={onDownload}
-            isPreparing={preparingKey === attachmentKey(file, index)}
-            error={errors[attachmentKey(file, index)]}
-          />
-        ))}
+        {files.map((file, index) => {
+          const key = attachmentKey(file, index);
+          const stableKey = [file.message_id, file.attachment_id, file.filename].filter(Boolean).join("|");
+          return (
+            <PdfAttachmentCard
+              key={key}
+              file={file}
+              attachmentIndex={index}
+              onView={onView}
+              onPrepare={onPrepare}
+              onDownload={onDownload}
+              onSummarize={onSummarize}
+              isPreparing={preparingKey === key}
+              isSummarizing={summarizingKey === key || summarizingKey === stableKey}
+              error={errors[key] || errors[stableKey]}
+              summary={summaries[key] || summaries[stableKey]}
+            />
+          );
+        })}
       </div>
     </article>
   );
@@ -1071,6 +1192,7 @@ function EmailResultPanel({ response, onViewPdf }: { response: WorkflowResponse;
   const emails = collectDisplayEmails(response);
   const summary = firstString(result?.summary);
   const showSummary = Boolean(summary && !(emails.length && summary.toLowerCase().includes("no email data")));
+  const isDocumentSummary = result?.kind === "document_summary_result";
   const totalPages = Math.max(1, Math.ceil(emails.length / EMAILS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * EMAILS_PER_PAGE;
@@ -1082,8 +1204,12 @@ function EmailResultPanel({ response, onViewPdf }: { response: WorkflowResponse;
     <article className="rounded-[22px] border border-slate-200/70 bg-white/85 p-5 shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:border-slate-700/80 dark:bg-slate-950/50">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="mb-2 w-fit rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-red-500">
-            Gmail Result
+          <div className={`mb-2 w-fit rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${
+            isDocumentSummary
+              ? "border-blue-500/20 bg-blue-500/10 text-blue-500"
+              : "border-red-500/20 bg-red-500/10 text-red-500"
+          }`}>
+            {isDocumentSummary ? "Document Analysis" : "Gmail Result"}
           </div>
           <h3 className="text-base font-black text-slate-950 dark:text-white">
             {result?.title || "Processed email result"}
@@ -1095,9 +1221,43 @@ function EmailResultPanel({ response, onViewPdf }: { response: WorkflowResponse;
       </div>
 
       {showSummary ? (
-        <p className="mb-4 rounded-2xl border border-slate-200/70 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-200">
-          {summary}
-        </p>
+        <div className="mb-4 rounded-2xl border border-slate-200/70 bg-slate-50 p-4 text-sm leading-7 text-slate-700 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-200">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1: ({ children }) => <h2 className="mb-4 text-xl font-black leading-7 text-slate-950 dark:text-white">{children}</h2>,
+              h2: ({ children }) => <h3 className="mb-3 mt-6 border-b border-slate-200 pb-2 text-lg font-black leading-7 text-slate-950 first:mt-0 dark:border-slate-800 dark:text-white">{children}</h3>,
+              h3: ({ children }) => <h4 className="mb-2 mt-5 text-base font-black leading-6 text-slate-950 first:mt-0 dark:text-white">{children}</h4>,
+              p: ({ children }) => <p className="mb-4 break-words leading-7 last:mb-0">{children}</p>,
+              ul: ({ children }) => <ul className="mb-4 list-disc space-y-2 pl-5 last:mb-0">{children}</ul>,
+              ol: ({ children }) => <ol className="mb-4 list-decimal space-y-2 pl-5 last:mb-0">{children}</ol>,
+              li: ({ children }) => <li className="break-words pl-1 leading-7">{children}</li>,
+              strong: ({ children }) => <strong className="font-black text-slate-950 dark:text-white">{children}</strong>,
+              blockquote: ({ children }) => (
+                <blockquote className="mb-4 rounded-2xl border-l-4 border-blue-500 bg-blue-500/10 px-4 py-3 text-slate-700 dark:text-slate-200">
+                  {children}
+                </blockquote>
+              ),
+              table: ({ children }) => (
+                <div className="mb-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
+                  <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({ children }) => <thead className="bg-slate-100 text-slate-950 dark:bg-slate-800 dark:text-white">{children}</thead>,
+              th: ({ children }) => <th className="border-b border-slate-200 px-4 py-3 font-black dark:border-slate-700">{children}</th>,
+              td: ({ children }) => <td className="border-b border-slate-200 px-4 py-3 align-top dark:border-slate-800">{children}</td>,
+              code: ({ children }) => (
+                <code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[0.9em] font-bold text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+                  {children}
+                </code>
+              ),
+            }}
+          >
+            {summary}
+          </ReactMarkdown>
+        </div>
       ) : null}
 
       {emails.length > 0 ? (
@@ -1238,7 +1398,9 @@ export default function OutputSectionConnector({
   const [selectedPdf, setSelectedPdf] = useState<GmailAttachmentFile | null>(null);
   const [preparedPdfFiles, setPreparedPdfFiles] = useState<Record<string, GmailAttachmentFile>>({});
   const [preparingPdfKey, setPreparingPdfKey] = useState<string | null>(null);
+  const [summarizingPdfKey, setSummarizingPdfKey] = useState<string | null>(null);
   const [pdfPrepareErrors, setPdfPrepareErrors] = useState<Record<string, string>>({});
+  const [pdfSummaries, setPdfSummaries] = useState<Record<string, string>>({});
   const [rawJsonCopied, setRawJsonCopied] = useState(false);
   const [showUsageDetails, setShowUsageDetails] = useState(false);
   const basePdfAttachments = useMemo(() => collectPdfAttachments(response), [response]);
@@ -1396,6 +1558,75 @@ export default function OutputSectionConnector({
     }
   };
 
+  const summarizePdfAttachment = async (file: GmailAttachmentFile, index: number) => {
+    const key = attachmentKey(file, index);
+    const stableKey = [file.message_id, file.attachment_id, file.filename].filter(Boolean).join("|");
+
+    if (!file.message_id || !file.attachment_id) {
+      setPdfPrepareErrors((prev) => ({
+        ...prev,
+        [key]: "This PDF is missing Gmail attachment identifiers.",
+      }));
+      return;
+    }
+
+    setSummarizingPdfKey(key);
+    setPdfPrepareErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    try {
+      const result = await summarizeAttachment(
+        file.message_id,
+        file.attachment_id,
+        file.filename || undefined,
+        file.mime_type || "application/pdf",
+      );
+      const stored =
+        normalizeAttachment(result.attachment_file) ||
+        normalizeAttachment(result.pdf_attachments?.[0]) ||
+        normalizeAttachment(result.attachments?.[0]);
+      const answer = documentAnalysisAnswer(result.document_analysis);
+
+      if (stored) {
+        const merged: GmailAttachmentFile = {
+          ...file,
+          ...stored,
+          filename: stored.filename || file.filename,
+          message_id: stored.message_id || file.message_id,
+          attachment_id: stored.attachment_id || file.attachment_id,
+          mime_type: stored.mime_type || file.mime_type || "application/pdf",
+          is_pdf: true,
+          stored: true,
+        };
+        setPreparedPdfFiles((prev) => ({
+          ...prev,
+          [key]: merged,
+          [stableKey]: merged,
+        }));
+      }
+
+      if (!answer) {
+        throw new Error("Backend did not return a PDF summary.");
+      }
+
+      setPdfSummaries((prev) => ({
+        ...prev,
+        [key]: answer,
+        [stableKey]: answer,
+      }));
+    } catch (error) {
+      setPdfPrepareErrors((prev) => ({
+        ...prev,
+        [key]: error instanceof Error ? error.message : "Unable to summarize PDF.",
+      }));
+    } finally {
+      setSummarizingPdfKey(null);
+    }
+  };
+
   return (
     <>
     <PdfViewerModal file={selectedPdf} onClose={() => setSelectedPdf(null)} />
@@ -1483,8 +1714,11 @@ export default function OutputSectionConnector({
               onView={setSelectedPdf}
               onPrepare={(file, index) => void preparePdfAttachment(file, index, { preview: true })}
               onDownload={(file, index) => void preparePdfAttachment(file, index, { download: true })}
+              onSummarize={(file, index) => void summarizePdfAttachment(file, index)}
               preparingKey={preparingPdfKey}
+              summarizingKey={summarizingPdfKey}
               errors={pdfPrepareErrors}
+              summaries={pdfSummaries}
             />
 
             {resultText ? (

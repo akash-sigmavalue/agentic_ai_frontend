@@ -36,6 +36,7 @@ export interface GmailAttachmentDownloadResponse {
   attachment?: Record<string, unknown> | null;
   downloaded?: Record<string, unknown> | null;
   processed?: Record<string, unknown> | null;
+  document_analysis?: Record<string, unknown> | null;
   attachment_file?: GmailAttachmentFileResponse | null;
   pdf_attachment?: GmailAttachmentFileResponse | null;
   attachments?: GmailAttachmentFileResponse[];
@@ -480,6 +481,33 @@ export function fetchAttachment(
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiFetch<GmailAttachmentDownloadResponse>(
     `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}${suffix}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function summarizeAttachment(
+  messageId: string,
+  attachmentId: string,
+  filename?: string,
+  mimeType?: string,
+  question?: string,
+): Promise<GmailAttachmentDownloadResponse> {
+  const query = new URLSearchParams();
+  query.set("summarize", "true");
+  if (filename) {
+    query.set("filename", filename);
+  }
+  if (mimeType) {
+    query.set("mime_type", mimeType);
+  }
+  if (question) {
+    query.set("question", question);
+  }
+
+  return apiFetch<GmailAttachmentDownloadResponse>(
+    `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}?${query.toString()}`,
     {
       method: "GET",
     },
