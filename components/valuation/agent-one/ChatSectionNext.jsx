@@ -38,7 +38,8 @@ const PLACEHOLDER_MAP = {
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
   age_years: "e.g. 5, or '0' for Under Construction",
-  location_name: "City / Locality / Area (e.g. Baner, Pune)",
+  location_name: "Locality / Micro-market (e.g. Baner, Kalyani Nagar)",
+  city_name: "Broader city (e.g. Pune, Mumbai, Dubai)",
   country: "e.g. India, USA, UK",
   coordinates: "lat, lng - e.g. 18.559, 73.789",
   land_type: "agricultural / non_agricultural / residential / commercial",
@@ -1607,13 +1608,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </th>
                 <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
                   <div className="flex items-center justify-center gap-1">
-                    CC (₹/sqft)
-                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
-                      <Info size={11} className="inline-block" />
-                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-32 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-1 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
-                        Construction Cost
-                      </span>
-                    </div>
+                    Construction Cost (₹/sqft)
                   </div>
                 </th>
                 <TableHeaderCell columnKey="plot_derived_rate_per_sqft" label={`${derivedRateLabel} Derived Rate / Sqft`} align="right" className="text-accent-light font-bold" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -1710,7 +1705,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
-                            placeholder="CC"
+                            placeholder="Construction Cost (₹/sqft)"
                             className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
                             value={rowOverrides[rKey]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
                             onChange={(e) => {
@@ -1833,7 +1828,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             />
             <input
               type="number"
-              placeholder="CC (₹/sqft)"
+                        placeholder="Construction Cost (₹/sqft)"
               value={ccGlobal}
               onChange={e => setCcGlobal(e.target.value)}
               className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
@@ -1882,7 +1877,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       />
                       <input
                         type="number"
-                        placeholder="CC (₹/sqft)"
+                        placeholder="Construction Cost (₹/sqft)"
                         value={ccGlobal}
                         onChange={e => setCcGlobal(e.target.value)}
                         className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
@@ -4212,6 +4207,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       ...schemas.map(s => s.field),
       "project_name",
       "location_name",
+      "city_name",
       "country",
       "city",
       "property_type",
@@ -4246,7 +4242,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     // Autofill from sData (extracted from query)
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
-        const valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        // Handle city_name: also check legacy 'city' key from backend
+        let valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        if (field === "city_name" && (valFromData === undefined || valFromData === null || valFromData === "")) {
+          valFromData = sData["city"] || (sData.entities ? sData.entities["city"] : undefined);
+        }
         if (valFromData !== undefined && valFromData !== null && valFromData !== "") {
           if (!(field === "project_name" && valFromData === "Subject Property")) {
             if (field === "coordinates" && typeof valFromData === 'object') {
@@ -4935,7 +4935,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   };
 
   // ── Gate Wizard Helpers ───────────────────────────────────────────
-  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
+  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city_name", "city", "country"];
   const PROP_TYPE_FIELDS = ["property_type"];
   const APPROACH_FIELDS = ["approach", "recommended_approach", "valuation_approach"];
 
@@ -5042,7 +5042,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const update = (v) => {
       setGateValues(prev => {
         const next = { ...prev, [schema.field]: v };
-        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "country") {
+        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "city_name" || schema.field === "country") {
           next.lat = "";
           next.lng = "";
           next.coordinates = "";
@@ -5112,6 +5112,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const identityFields = [
       ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
       { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "city_name", label: "City Name", type: "text" },
       { field: "country", label: "Country", type: "text" },
     ];
 

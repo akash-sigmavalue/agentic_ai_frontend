@@ -180,6 +180,7 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={content.property_type} />
         <DetailRow label="Location" value={content.location_name} />
+        <DetailRow label="City" value={content.city_name || content.city} />
         <DetailRow label="Country" value={content.country} />
         <DetailRow label="Project" value={content.project_name} />
         <DetailRow label="Latitude" value={content.coordinates?.lat !== undefined ? content.coordinates.lat : (content.lat !== undefined ? content.lat : null)} />
@@ -231,6 +232,7 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={ent.property_type} />
         <DetailRow label="Location" value={ent.location_name} />
+        <DetailRow label="City" value={ent.city_name || ent.city} />
         <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
         <DetailRow label="Latitude" value={ent.coordinates?.lat !== undefined ? ent.coordinates.lat : (ent.lat !== undefined ? ent.lat : null)} />
