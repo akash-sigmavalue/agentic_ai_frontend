@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Mail, Send } from "lucide-react";
-import {
-  extractEmailsFromText,
-  inferExecutionType,
-} from "./types";
-import type { ConvMessage, ConvStep, WorkflowResponse } from "./types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ConvMessage, ConvStep } from "./types";
+import AiEmptyState from "./AiEmptyState";
+import AiPanelHeader from "./AiPanelHeader";
 
 type ChatSectionConnectorProps = {
   prompt: string;
@@ -22,14 +19,18 @@ type ChatSectionConnectorProps = {
   currentFieldOptions?: string[];
   currentFieldSkippable?: boolean;
   currentFieldQuestion?: string | null;
-  response?: Pick<
-    WorkflowResponse,
-    "from_email" | "to" | "execution_type" | "analysis" | "final_answer" | "reply_draft" | "reply"
-  > | null;
-  partialIntent?: {
-    to?: string | null;
-  } | null;
 };
+
+const promptChips = [
+  "📩 Summarize all unread emails from this week",
+  "✍️ Draft a reply to the last email from my manager",
+  "🧾 Find every invoice attachment from October",
+  "🏷️ Label all newsletters and archive promotions",
+];
+
+function cleanChipPrompt(value: string) {
+  return value.replace(/^[^A-Za-z]+/, "").trim();
+}
 
 export default function ChatSectionConnector({
   prompt,
@@ -45,368 +46,208 @@ export default function ChatSectionConnector({
   currentFieldOptions = [],
   currentFieldSkippable = false,
   currentFieldQuestion = null,
-  response = null,
-  partialIntent = null,
 }: ChatSectionConnectorProps) {
   const [inputValue, setInputValue] = useState("");
+  const [showTyping, setShowTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  void statusMessage;
-  const showTyping =
-    convStep === "waiting_email" ||
-    convStep === "waiting_frequency" ||
-    convStep === "waiting_field";
 
-  const skippedEmail =
-    extractEmailsFromText(prompt)[0] ||
-    response?.from_email ||
-    response?.to ||
-    partialIntent?.to ||
-    "";
-  const skippedFrequency = inferExecutionType(prompt, response?.execution_type);
+  const assistantStatus = useMemo(() => {
+    if (isLoading || convStep === "submitting" || convStep === "streaming") return "Running";
+    if (convStep === "done") return "Completed";
+    if (convStep.startsWith("waiting")) return "Needs Input";
+    return "Ready";
+  }, [convStep, isLoading]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [convMessages, showTyping]);
+    const scrollContainer = scrollRef.current;
 
-  useEffect(() => {
-    if (convStep === "waiting_email" && skippedEmail) {
-      handleConvUserReply(skippedEmail);
+    if (!scrollContainer) {
       return;
     }
 
-    if (convStep === "waiting_frequency" && skippedFrequency) {
-      handleConvUserReply(skippedFrequency);
+    const hasOverflow = scrollContainer.scrollHeight > scrollContainer.clientHeight;
+    scrollContainer.scrollTop = hasOverflow ? scrollContainer.scrollHeight : 0;
+  }, [convMessages, showTyping]);
+
+  useEffect(() => {
+    if (convStep === "waiting_email" || convStep === "waiting_frequency" || convStep === "waiting_field") {
+      setShowTyping(true);
+      const t = setTimeout(() => setShowTyping(false), 650);
+      return () => clearTimeout(t);
     }
-  }, [convStep, handleConvUserReply, skippedEmail, skippedFrequency]);
+    setShowTyping(false);
+    return undefined;
+  }, [convStep]);
+
+  const submitFieldReply = (value?: string) => {
+    const finalValue = (value ?? inputValue).trim();
+    if (!finalValue && !currentFieldSkippable) return;
+    handleConvUserReply(finalValue || "skip");
+    setInputValue("");
+  };
+
+  const fieldLabel = currentFieldName ? currentFieldName.replace(/_/g, " ") : "required detail";
+  const isFieldMode = convStep === "waiting_email" || convStep === "waiting_frequency" || convStep === "waiting_field";
+  const hasConversation = convMessages.length > 0 || isFieldMode || isLoading;
 
   return (
-    <div
-      className="flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-      style={{ height: "100%" }}
-    >
+    <section className="connector-panel flex h-full min-h-[520px] max-h-full flex-col overflow-hidden rounded-[20px] border border-slate-200/70 bg-white/85 shadow-[0_18px_54px_rgba(15,23,42,.10)] dark:border-slate-700/80 dark:bg-slate-900/85 lg:min-h-0">
       <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes typingBounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-4px); }
-        }
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
       `}</style>
 
-      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-        <div className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-[#525ceb] text-sm font-semibold text-white">
-          AI
-        </div>
+      <AiPanelHeader
+        icon="🤖"
+        kicker="Workflow Assistant"
+        title={assistantStatus}
+        right={
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            gmail-agent
+          </span>
+        }
+      />
 
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">Workflow Assistant</p>
-          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-500">
-            {convStep === "idle" ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
-                <span>Ready</span>
-              </>
-            ) : convStep === "submitting" ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-                <span>Processing...</span>
-              </>
-            ) : convStep === "streaming" ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-500" />
-                <span>Executing steps...</span>
-              </>
-            ) : convStep === "done" ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>Done</span>
-              </>
-            ) : (
-              <>
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                <span>Thinking...</span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={scrollRef}
-        className="flex-1 min-h-0 space-y-3 overflow-y-auto px-4 py-4"
-      >
-        {convStep === "idle" && convMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Mail className="h-8 w-8 text-slate-300" />
-            <p className="mt-2 text-center text-sm text-slate-400">
-              Describe your Gmail workflow above
-            </p>
-          </div>
-        ) : (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 pb-0">
+        {!hasConversation ? (
           <>
-            {convMessages.map((message, index) =>
-              message.role === "agent" || message.role === "assistant" ? (
-                <div
-                  key={`${message.role}-${index}`}
-                  className="flex items-end justify-start gap-2"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
-                    AI
-                  </div>
-                  <div
-                    className="max-w-[78%] rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-2.5 text-sm leading-relaxed text-slate-800"
-                    style={{ animation: "fadeSlideUp 0.2s ease" }}
-                  >
-                    {message.text || message.content}
-                  </div>
-                </div>
-              ) : (
-                <div key={`${message.role}-${index}`} className="flex justify-end">
-                  <div
-                    className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#525ceb] px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm shadow-indigo-200"
-                    style={{ animation: "fadeSlideUp 0.2s ease" }}
-                  >
-                    {message.text || message.content}
-                  </div>
-                </div>
-              ),
-            )}
-
-            {showTyping && (
-              <div className="flex items-end justify-start gap-2">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#525ceb] text-[10px] font-semibold text-white">
-                  AI
-                </div>
-                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-3">
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
-                    style={{ animation: "typingBounce 0.9s ease infinite" }}
-                  />
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
-                    style={{ animation: "typingBounce 0.9s ease infinite 0.15s" }}
-                  />
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
-                    style={{ animation: "typingBounce 0.9s ease infinite 0.3s" }}
-                  />
-                </div>
-              </div>
-            )}
+        <div className="mb-2 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          🔎 <span>Try a prompt</span>
+        </div>
+        <div className="flex flex-col gap-2 border-b border-dashed border-slate-300 pb-3 dark:border-slate-700">
+          {promptChips.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setPrompt(cleanChipPrompt(item))}
+                  className="connector-chip w-fit max-w-full rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left text-[13px] font-semibold text-slate-800 transition hover:border-blue-400 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
           </>
-        )}
+        ) : null}
+
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-3 pr-1 custom-scrollbar">
+          {convMessages.length === 0 && !isFieldMode && !isLoading ? (
+            <AiEmptyState
+              icon="🧠"
+              title="Describe your AI Gmail workflow"
+              text="The agent will understand your prompt, plan the workflow, call Gmail tools, and generate clean summaries."
+            />
+          ) : (
+            <div className="space-y-3">
+              {convMessages.map((message, index) =>
+                message.role === "agent" || message.role === "assistant" ? (
+                  <div key={`${message.role}-${index}`} className="flex items-end gap-2 justify-start">
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-500/15 text-xs font-black text-blue-500">
+                      AI
+                    </div>
+                    <div className="connector-card max-w-[82%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100" style={{ animation: "fadeSlideUp 0.2s ease" }}>
+                      {message.text || message.content}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={`${message.role}-${index}`} className="flex justify-end">
+                    <div className="max-w-[82%] rounded-2xl rounded-br-sm bg-red-500 px-4 py-3 text-sm font-semibold leading-relaxed text-white shadow-[0_10px_22px_rgba(234,67,53,.24)]" style={{ animation: "fadeSlideUp 0.2s ease" }}>
+                      {message.text || message.content}
+                    </div>
+                  </div>
+                ),
+              )}
+
+              {showTyping ? (
+                <div className="flex items-end gap-2 justify-start">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-500/15 text-xs font-black text-blue-500">AI</div>
+                  <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border border-slate-200 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                    {[0, 1, 2].map((dot) => (
+                      <span key={dot} className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400" style={{ animation: "typingBounce 0.9s ease infinite", animationDelay: `${dot * 0.12}s` }} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {isLoading ? (
+                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                  🧠 Got it — the AI agent is converting your prompt into a live Gmail workflow.
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="border-t border-slate-100 px-4 py-3">
-        {convStep === "waiting_field" ||
-        convStep === "waiting_email" ||
-        convStep === "waiting_frequency" ? (
-          convStep === "waiting_email" && skippedEmail ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
-              <span>✓</span> Email skipped: Using {skippedEmail}
+      <div className="connector-panel-footer shrink-0 border-t border-slate-200 p-4 dark:border-slate-700">
+        {isFieldMode ? (
+          <div className="connector-card rounded-[20px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+            <div className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              {currentFieldQuestion || `Provide ${fieldLabel}`}
             </div>
-          ) : convStep === "waiting_frequency" && skippedFrequency ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
-              <span>✓</span> Frequency skipped: Running as {skippedFrequency.replace("_", "-")}
-            </div>
-          ) : currentFieldType === "choice" ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                {(currentFieldOptions.length > 0
-                  ? currentFieldOptions
-                  : convStep === "waiting_frequency"
-                    ? ["one_time", "automated"]
-                    : []
-                ).map((option) => (
+
+            {currentFieldType === "choice" || convStep === "waiting_frequency" ? (
+              <div className="flex flex-wrap gap-2">
+                {(currentFieldOptions.length ? currentFieldOptions : ["one_time", "automated"]).map((option) => (
                   <button
                     key={option}
                     type="button"
-                    onClick={() => handleConvUserReply(option)}
-                    disabled={isLoading}
-                    className="flex-1 rounded-2xl border border-[#525ceb] px-4 py-2.5 text-sm font-semibold text-[#525ceb] transition hover:bg-indigo-50 disabled:opacity-50"
+                    onClick={() => submitFieldReply(option)}
+                    className="rounded-full bg-red-500 px-4 py-2 text-sm font-black text-white shadow-[0_10px_22px_rgba(234,67,53,.28)]"
                   >
-                    {currentFieldName === "action_mode"
-                      ? option === "send"
-                        ? "Send automatically"
-                        : option === "draft"
-                          ? "Save as draft"
-                          : option === "one_time"
-                            ? "Run once now"
-                            : option === "automated"
-                              ? "Automate (every new email)"
-                              : option
-                      : option === "one_time"
-                        ? "Run once now"
-                        : option === "automated"
-                          ? "Automate (every new email)"
-                          : option}
+                    {option.replace(/_/g, " ")}
                   </button>
                 ))}
+                {currentFieldSkippable ? (
+                  <button type="button" onClick={() => submitFieldReply("skip")} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                    Skip
+                  </button>
+                ) : null}
               </div>
-
-              {currentFieldSkippable && (
-                <button
-                  type="button"
-                  onClick={() => handleConvUserReply("skip")}
-                  disabled={isLoading}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Skip
-                </button>
-              )}
-            </div>
-          ) : currentFieldType === "email" || convStep === "waiting_email" ? (
-            <div className="space-y-2">
-              {currentFieldQuestion ? (
-                <p className="text-xs font-medium leading-relaxed text-slate-500">
-                  {currentFieldQuestion}
-                </p>
-              ) : null}
-              <div className="flex items-center gap-2">
+            ) : (
+              <div className="flex gap-2">
                 <input
-                  type="email"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && inputValue.trim()) {
-                      handleConvUserReply(inputValue.trim());
-                      setInputValue("");
-                    }
+                  onChange={(event) => setInputValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") submitFieldReply();
                   }}
-                  placeholder="email@example.com"
-                  className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-                  autoFocus
+                  type={currentFieldType === "email" || convStep === "waiting_email" ? "email" : "text"}
+                  placeholder={currentFieldType === "email" || convStep === "waiting_email" ? "name@example.com" : `Enter ${fieldLabel}`}
+                  className="connector-input min-w-0 flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-950 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 />
-                <button
-                  onClick={() => {
-                    if (inputValue.trim()) {
-                      handleConvUserReply(inputValue.trim());
-                      setInputValue("");
-                    }
-                  }}
-                  disabled={!inputValue.trim() || isLoading}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
+                <button type="button" onClick={() => submitFieldReply()} className="rounded-full bg-red-500 px-5 py-3 text-sm font-black text-white shadow-[0_10px_22px_rgba(234,67,53,.28)]">
+                  Send
                 </button>
               </div>
-            </div>
-          ) : currentFieldType === "text_optional" ? (
-            <div className="space-y-2">
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (inputValue.trim()) {
-                        handleConvUserReply(inputValue.trim());
-                        setInputValue("");
-                      }
-                    }
-                  }}
-                  className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-                  placeholder="Type your answer or skip..."
-                  rows={2}
-                  autoFocus
-                />
-                <button
-                  onClick={() => {
-                    if (inputValue.trim()) {
-                      handleConvUserReply(inputValue.trim());
-                      setInputValue("");
-                    }
-                  }}
-                  disabled={!inputValue.trim() || isLoading}
-                  className="mb-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleConvUserReply("skip")}
-                disabled={isLoading || !currentFieldSkippable}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-              >
-                Skip
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && inputValue.trim()) {
-                    handleConvUserReply(inputValue.trim());
-                    setInputValue("");
-                  }
-                }}
-                placeholder={currentFieldQuestion || "Type your answer..."}
-                className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-                autoFocus
-              />
-              <button
-                onClick={() => {
-                  if (inputValue.trim()) {
-                    handleConvUserReply(inputValue.trim());
-                    setInputValue("");
-                  }
-                }}
-                disabled={!inputValue.trim() || isLoading}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          )
-        ) : convStep === "submitting" || convStep === "streaming" ? (
-          <div className="flex items-center gap-2 px-1 text-sm text-slate-500">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
-            {convStep === "streaming"
-              ? "Watching agent steps live..."
-              : "Setting up your workflow..."}
+            )}
           </div>
         ) : (
-          <div className="flex items-end gap-2">
+          <div className="connector-input-wrap flex h-28 flex-col overflow-hidden rounded-[18px] border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
                   handleRunWorkflow();
                 }
               }}
-              className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-              placeholder={
-                convStep === "done"
-                  ? "Ask another question or describe a new workflow..."
-                  : "Describe your Gmail workflow... (e.g. when John sends me email analyze and reply)"
-              }
-              rows={3}
-            />
-            <button
-              onClick={() => handleRunWorkflow()}
               disabled={isLoading}
-              className="mb-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#525ceb] text-white transition hover:bg-[#434dd8] disabled:opacity-50"
-            >
-              {isLoading ? (
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </button>
+              className="connector-input flex-1 resize-none bg-transparent p-3 text-sm font-medium text-slate-950 outline-none placeholder:text-slate-400 disabled:opacity-60 dark:text-white"
+              placeholder="Type your Gmail workflow here..."
+            />
+            <div className="flex h-11 items-center justify-between border-t border-slate-200 px-3 dark:border-slate-800">
+              <div className="hidden items-center gap-2 text-sm text-slate-500 dark:text-slate-400 sm:flex">
+                <span>📎</span><span>🏷️</span><span>🔽</span><span className="text-xs">to: <b className="text-slate-950 dark:text-white">gmail-agent</b></span>
+              </div>
+              <button onClick={handleRunWorkflow} disabled={isLoading} className="ml-auto rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white shadow-[0_10px_22px_rgba(234,67,53,.28)] disabled:opacity-70">
+                {isLoading ? "⏳ Running..." : "🚀 Run workflow"}
+              </button>
+            </div>
           </div>
         )}
+        <div className="mt-3 truncate text-xs text-slate-500 dark:text-slate-400">{statusMessage}</div>
       </div>
-    </div>
+    </section>
   );
 }

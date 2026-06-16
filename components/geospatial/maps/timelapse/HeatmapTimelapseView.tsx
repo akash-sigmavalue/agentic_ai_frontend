@@ -42,6 +42,12 @@ interface HeatmapTimelapseViewProps {
     mapLabel: string;
     plottedData: Record<string, unknown>;
   } | null) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: (info: {
+    object?: unknown;
+    layer?: { id?: string } | null;
+    [key: string]: unknown;
+  }) => { html?: string; text?: string } | null;
 }
 
 interface HeatmapFeatureProperties {
@@ -219,6 +225,8 @@ export default function HeatmapTimelapseView({
   basemapControls,
   autoLoad = false,
   onInsightDataReady,
+  extraDeckLayers = [],
+  overlayTooltip,
 }: HeatmapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(initialPlaceName);
   const [radius, setRadius] = useState(initialRadius);
@@ -377,7 +385,7 @@ export default function HeatmapTimelapseView({
 
   // Base layer rendering
   const layers = useMemo(() => {
-    if (!data || !data.geojson) return [];
+    if (!data || !data.geojson) return extraDeckLayers.length > 0 ? [...extraDeckLayers] : [];
 
     const buildingLayer = new GeoJsonLayer<HeatmapFeatureProperties>({
       id: 'heatmap-buildings',
@@ -440,8 +448,9 @@ export default function HeatmapTimelapseView({
       },
     });
 
-    return runtimeHubs.length > 0 ? [buildingLayer, runtimeHubLayer] : [buildingLayer];
-  }, [data, dateIndex, metricScale, runtimeHubs]);
+    const baseLayers = runtimeHubs.length > 0 ? [buildingLayer, runtimeHubLayer] : [buildingLayer];
+    return [...baseLayers, ...extraDeckLayers];
+  }, [data, dateIndex, extraDeckLayers, metricScale, runtimeHubs]);
 
   return (
     <div className={`flex flex-col bg-slate-50 overflow-y-auto overflow-x-hidden ${isFullscreen ? 'fixed inset-0 z-[9999] h-screen' : 'h-full'}`}>
@@ -575,7 +584,11 @@ export default function HeatmapTimelapseView({
             layers={layers}
             viewState={viewState}
             onViewStateChange={({ viewState: nextViewState }) => setViewState(nextViewState as typeof viewState)}
-            getTooltip={({ object }: { object?: TooltipObject }) => {
+            getTooltip={(info) => {
+              const overlay = overlayTooltip?.(info);
+              if (overlay) return overlay;
+
+              const { object } = info as { object?: TooltipObject };
               if (!object) return null;
               if ('name' in object && Array.isArray(object.rates)) {
                 const hub = object as RuntimeHeatmapHub;

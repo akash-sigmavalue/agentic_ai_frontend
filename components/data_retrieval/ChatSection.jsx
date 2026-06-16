@@ -106,7 +106,7 @@ export default function ChatSection({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, clarificationState.awaiting, clarificationState.meta]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -133,9 +133,9 @@ export default function ChatSection({
         {/* <small className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{backendLabel}</small> */}
       </div>
 
-      <div className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5">
+      <div className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overflow-x-hidden">
         {messages.length === 0 ? (
-          <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
+          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full text-2xl" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>🤖</div>
             <h3 className="m-0 text-[15px] font-semibold" style={{ color: "var(--text-secondary)" }}>How can I help you?</h3>
             <p className="m-0 max-w-[220px] text-xs leading-6" style={{ color: "var(--text-muted)" }}>
@@ -187,6 +187,28 @@ export default function ChatSection({
             ))}
           </>
         )}
+
+        {clarificationState.awaiting && clarificationState.meta ? (
+          <div
+            className="shrink-0 rounded-2xl border p-3"
+            style={{
+              borderColor: "color-mix(in srgb, var(--warning) 22%, transparent)",
+              background: "color-mix(in srgb, var(--warning) 6%, var(--bg-card))",
+            }}
+          >
+            <ClarificationFields
+              clarification={clarificationState.meta}
+              fieldValues={clarificationState.fieldValues}
+              onFieldChange={onClarificationFieldChange}
+              selectedOptions={clarificationState.selectedOptions}
+              onToggleOption={onClarificationToggle}
+              otherText={clarificationState.otherText}
+              onOtherTextChange={onClarificationOtherChange}
+              interactive
+            />
+          </div>
+        ) : null}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -206,21 +228,7 @@ export default function ChatSection({
         </div>
       </div>
 
-      <div className="border-t p-3" style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}>
-        {clarificationState.awaiting && clarificationState.meta ? (
-          <div className="mb-3 rounded-2xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--warning) 22%, transparent)", background: "color-mix(in srgb, var(--warning) 6%, var(--bg-card))" }}>
-            <ClarificationFields
-              clarification={clarificationState.meta}
-              fieldValues={clarificationState.fieldValues}
-              onFieldChange={onClarificationFieldChange}
-              selectedOptions={clarificationState.selectedOptions}
-              onToggleOption={onClarificationToggle}
-              otherText={clarificationState.otherText}
-              onOtherTextChange={onClarificationOtherChange}
-              interactive
-            />
-          </div>
-        ) : null}
+      <div className="shrink-0 border-t p-3" style={{ borderColor: "var(--border-soft)", background: "var(--bg-card)" }}>
         <div className="flex items-end gap-2 rounded-xl border px-3.5 py-2 transition-all duration-200" style={{ borderColor: "var(--border-soft)", background: "var(--bg-input)" }}>
           <textarea
             ref={textareaRef}

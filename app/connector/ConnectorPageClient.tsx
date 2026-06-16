@@ -1,72 +1,27 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import WorkflowSectionDashboard from "@/components/dashboard/workflowsectiondashboard";
-import { LayoutDashboard, History, Settings, Plug, CheckCircle2, Download, Mail, CornerDownLeft, Send, ChevronDown, Check } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   getGmailConnectionStatus,
-  processWorkflow,
+  streamWorkflow,
   startGoogleOAuth,
 } from "@/components/connector/api";
-import { apiUrl } from "@/lib/api-client";
+import type {
+  CompletionResult,
+  ConvMessage,
+  ConvStep,
+  StreamStep,
+  WorkflowResponse,
+} from "@/components/connector/types";
 
-type WorkflowResponse = {
-  success?: boolean;
-  summary?: string;
-  plan?: {
-    goal?: string;
-    steps?: Array<{
-      id: string;
-      kind: string;
-      name: string;
-      description?: string;
-      system?: string | null;
-      operation?: string | null;
-      input?: Record<string, unknown>;
-      output?: Record<string, unknown>;
-      requires_approval?: boolean;
-    }>;
-    needs_approval?: boolean;
-    notes?: string[];
-  };
-  step_results?: Array<{
-    step_id: string;
-    kind: string;
-    status: string;
-    tool?: string;
-    output?: any;
-  }>;
-  raw_mcp_results?: Array<{
-    server: string;
-    tool: string;
-    ok: boolean;
-    data?: Record<string, unknown>;
-    error?: string | null;
-    requires_oauth?: boolean;
-    connector?: string | null;
-  }>;
-  approval_status?: string;
-  requires_oauth?: boolean;
-  connector?: string | null;
-  error?: string | null;
+import ChatSectionConnector from "../../components/connector/chatsectionconnector";
+import WorkflowSectionConnector from "../../components/connector/workflowsectionconnector";
+import OutputSectionConnector from "../../components/connector/outputsectionconnector";
+import AiMetricCard from "../../components/connector/AiMetricCard";
+
+type RunWorkflowOptions = {
+  appendUserMessage?: boolean;
 };
-
-type GmailTokenTestResponse =
-  | {
-      status: "no_token";
-    }
-  | {
-      status: "success";
-      email?: string | null;
-      token_preview?: string | null;
-    }
-  | {
-      status: "failed";
-      error?: string | null;
-      token_preview?: string | null;
-    };
 
 function hasGmailStep(response: WorkflowResponse | null) {
   return (
@@ -80,13 +35,8 @@ function isGmailNotConnectedError(error: unknown) {
 }
 
 function responseRequiresGmailOAuth(response: WorkflowResponse | null) {
-  if (!response) {
-    return false;
-  }
-
-  if (response.requires_oauth && response.connector === "gmail") {
-    return true;
-  }
+  if (!response) return false;
+  if (response.requires_oauth && response.connector === "gmail") return true;
 
   return (
     response.raw_mcp_results?.some(
@@ -95,11 +45,88 @@ function responseRequiresGmailOAuth(response: WorkflowResponse | null) {
   );
 }
 
-export default function ConnectorPageClient() {
-  const router = useRouter();
-  const [prompt, setPrompt] = useState(
-    "Read my Gmail attachments and summarize them",
+function normalizeWorkflowResponse(value: WorkflowResponse | null): WorkflowResponse | null {
+  if (!value) return null;
+  return {
+    ...value,
+    message: value.message ?? undefined,
+    connector: value.connector ?? undefined,
+    ui_result: value.ui_result ?? null,
+    chat_message: value.chat_message ?? undefined,
+    requires_form: value.requires_form ?? false,
+    form_schema: value.form_schema ?? null,
+  };
+}
+
+function isWaitingForField(response: WorkflowResponse | null) {
+  const status = String(response?.status || "").toLowerCase();
+  return Boolean(
+    response?.missing_field ||
+    response?.question ||
+    response?.missing_field_question ||
+    status.includes("clarification") ||
+    status.includes("missing") ||
+    status.includes("waiting"),
   );
+}
+
+function getSafeChatMessage(response: WorkflowResponse | null) {
+  if (!response) return "Workflow completed.";
+  return response.chat_message || "Done. I prepared the result in the output section.";
+}
+
+function toCompletionResult(response: WorkflowResponse): CompletionResult | null {
+  if (isWaitingForField(response)) return null;
+  return {
+    status: response.execution_type === "automated" || response.rule_id ? "automation_rule_created" : "one_time_completed",
+    message: response.chat_message || "Workflow completed.",
+    rule_id: response.rule_id,
+    execution_type: response.execution_type,
+    reply: response.reply || undefined,
+    reply_sent: response.reply_sent || undefined,
+    reply_draft: response.reply_draft || undefined,
+    prompt_tokens: response.prompt_tokens,
+    completion_tokens: response.completion_tokens,
+    total_tokens: response.total_tokens,
+    estimated_cost_usd: response.estimated_cost_usd,
+  };
+}
+
+function buildCompletedStreamSteps(response: WorkflowResponse | null): StreamStep[] {
+  return (
+    response?.plan?.steps?.map((step, index) => ({
+      step: index + 1,
+      step_id: step.id || String(index + 1),
+      name: step.name || step.operation || `Step ${index + 1}`,
+      status: "completed",
+      output: step.description || step.operation || "Completed",
+      duration_ms: null,
+      error: null,
+    })) ?? []
+  );
+}
+
+function upsertStreamingStep(prev: StreamStep[], next: StreamStep): StreamStep[] {
+  const stepKey = next.step_id || String(next.step || "");
+  const existingIndex = prev.findIndex((item) => (item.step_id || String(item.step || "")) === stepKey);
+
+  if (existingIndex === -1) {
+    return [...prev, next];
+  }
+
+  const copy = [...prev];
+  copy[existingIndex] = {
+    ...copy[existingIndex],
+    ...next,
+    output: next.output || copy[existingIndex].output,
+    error: next.error ?? copy[existingIndex].error,
+    duration_ms: next.duration_ms ?? copy[existingIndex].duration_ms ?? null,
+  };
+  return copy;
+}
+
+export default function ConnectorPageClient() {
+  const [prompt, setPrompt] = useState("Read my Gmail attachments and summarize them");
   const [isLoading, setIsLoading] = useState(false);
   const [connectorStatusLoading, setConnectorStatusLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
@@ -110,14 +137,12 @@ export default function ConnectorPageClient() {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
-  const [gmailTokenTestLoading, setGmailTokenTestLoading] = useState(false);
-  const [gmailTokenTestResult, setGmailTokenTestResult] =
-    useState<GmailTokenTestResponse | null>(null);
-
-  // useEffect(() => {
-  //   const token = localStorage.getItem("token");
-  //   if (!token) router.push("/login");
-  // }, [router]);
+  const [activatingFlow, setActivatingFlow] = useState(false);
+  const [activateFlowResult, setActivateFlowResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [convStep, setConvStep] = useState<ConvStep>("idle");
+  const [convMessages, setConvMessages] = useState<ConvMessage[]>([]);
+  const [completionResult, setCompletionResult] = useState<CompletionResult | null>(null);
+  const [streamingSteps, setStreamingSteps] = useState<StreamStep[]>([]);
 
   const clearGmailState = () => {
     setNeedsGmail(false);
@@ -126,55 +151,39 @@ export default function ConnectorPageClient() {
     setPendingPrompt(null);
   };
 
-  const handleTestGmailToken = async () => {
-    // const token = localStorage.getItem("token");
-    // if (!token) {
-    //   setStatusMessage("Please log in again.");
-    //   return;
-    // }
+  // On mount: silently check Gmail connection so the "Connect Gmail" button
+  // is visible immediately — no login or workflow run required.
+  // The backend uses AUTH_DISABLED_USER_ID=1 and has no auth guard on this route.
+  useEffect(() => {
+    void syncGmailConnectionStatus("", { requireWorkflow: false });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    setGmailTokenTestLoading(true);
-    setGmailTokenTestResult(null);
-    setStatusMessage("Testing Gmail token with Gmail API...");
+  // const syncGmailConnectionStatus = async (promptToKeep: string) => {
+  //   setConnectorStatusLoading(true);
+  //   try {
+  //     const status = await getGmailConnectionStatus();
+  //     setNeedsGmail(true);
+  //     setGmailConnected(status.connected);
+  //     setGmailEmail(status.email ?? null);
+  //     setPendingPrompt(promptToKeep);
+  //     setStatusMessage(status.connected ? (status.email ? `Gmail connected as ${status.email}.` : "Gmail connected.") : "This workflow needs Gmail access.");
+  //   } catch {
+  //     setNeedsGmail(true);
+  //     setGmailConnected(false);
+  //     setGmailEmail(null);
+  //     setPendingPrompt(promptToKeep);
+  //     setStatusMessage("This workflow needs Gmail access.");
+  //   } finally {
+  //     setConnectorStatusLoading(false);
+  //   }
+  // };
+  const syncGmailConnectionStatus = async (
+    promptToKeep: string,
+    options: { requireWorkflow?: boolean } = {},
+  ) => {
+    const requireWorkflow = options.requireWorkflow ?? false;
 
-    try {
-      const response = await fetch(apiUrl("/debug/gmail-token-test"), {
-        method: "GET",
-        // headers: {
-        //   Authorization: `Bearer ${token}`,
-        // },
-      });
-
-      const payload = (await response.json()) as GmailTokenTestResponse;
-
-      if (!response.ok) {
-        throw new Error(
-          (payload as { error?: string } | null)?.error ||
-            `Request failed with status ${response.status}`,
-        );
-      }
-
-      setGmailTokenTestResult(payload);
-
-      if (payload.status === "success") {
-        setStatusMessage("Gmail API token test succeeded.");
-      } else if (payload.status === "no_token") {
-        setStatusMessage("No Gmail OAuth token found.");
-      } else {
-        setStatusMessage("Gmail API token test failed.");
-      }
-    } catch (error) {
-      setGmailTokenTestResult({
-        status: "failed",
-        error: error instanceof Error ? error.message : "Unable to test Gmail token.",
-      });
-      setStatusMessage("Gmail API token test failed.");
-    } finally {
-      setGmailTokenTestLoading(false);
-    }
-  };
-
-  const syncGmailConnectionStatus = async (promptToKeep: string) => {
     setConnectorStatusLoading(true);
     try {
       const status = await getGmailConnectionStatus();
@@ -183,69 +192,157 @@ export default function ConnectorPageClient() {
       setGmailEmail(status.email ?? null);
       setPendingPrompt(promptToKeep);
 
-      if (status.connected) {
+      if (requireWorkflow || !status.connected) {
+        setNeedsGmail(true);
+        setPendingPrompt(promptToKeep);
         setStatusMessage(
-          status.email
-            ? `Gmail connected as ${status.email}.`
-            : "Gmail connected.",
+          status.connected
+            ? status.email
+              ? `Gmail connected as ${status.email}. Continue the pending workflow.`
+              : "Gmail connected. Continue the pending workflow."
+            : "This workflow needs Gmail access.",
         );
       } else {
-        setStatusMessage("This workflow needs Gmail access.");
+        setNeedsGmail(false);
+        setPendingPrompt(null);
+        setStatusMessage(
+          status.connected
+            ? status.email
+              ? `Gmail connected as ${status.email}.`
+              : "Gmail connected."
+            : "This workflow needs Gmail access.",
+        );
       }
     } catch {
-      setNeedsGmail(true);
       setGmailConnected(false);
       setGmailEmail(null);
-      setPendingPrompt(promptToKeep);
-      setStatusMessage("This workflow needs Gmail access.");
+
+      if (requireWorkflow) {
+        setNeedsGmail(true);
+        setPendingPrompt(promptToKeep);
+      }
+
+      setStatusMessage("Unable to check Gmail connection.");
     } finally {
       setConnectorStatusLoading(false);
     }
   };
 
-  const handleRunWorkflow = async (promptOverride?: string) => {
+  const handleRunWorkflow = async (promptOverride?: string, options: RunWorkflowOptions = {}) => {
     const cleaned = (promptOverride ?? prompt).trim();
+    const appendUserMessage = options.appendUserMessage ?? true;
+
     if (!cleaned) {
       setStatusMessage("Enter a prompt first.");
       return;
     }
 
     setIsLoading(true);
-    setStatusMessage("Generating workflow from backend...");
+    setConvStep("streaming");
+    setResponse(null);
+    setCompletionResult(null);
+    setStreamingSteps([]);
+    setActivateFlowResult(null);
+    setStatusMessage("Starting live workflow stream...");
+
+    if (appendUserMessage) {
+      setConvMessages((prev) => [...prev, { role: "user", text: cleaned }]);
+    }
+
+    let liveStepCount = 0;
 
     try {
-      const result = await processWorkflow(cleaned);
-      const workflowResponse = result as WorkflowResponse;
+      const result = await streamWorkflow(cleaned, {
+        onStepStarted: (step) => {
+          liveStepCount += 1;
+          setConvStep("streaming");
+          setStatusMessage(`Running: ${step.name}`);
+          setStreamingSteps((prev) => upsertStreamingStep(prev, step));
+        },
+        onStepCompleted: (step) => {
+          setStatusMessage(`Completed: ${step.name}`);
+          setStreamingSteps((prev) => upsertStreamingStep(prev, step));
+        },
+        onStepFailed: (step) => {
+          setStatusMessage(step.error || `Failed: ${step.name}`);
+          setStreamingSteps((prev) => upsertStreamingStep(prev, step));
+        },
+        onMissingField: (missingResult) => {
+          const nextResponse = normalizeWorkflowResponse(missingResult);
+          const question = nextResponse?.question || nextResponse?.missing_field_question || `Please provide ${nextResponse?.missing_field || "the missing detail"}.`;
+          const formMessage = nextResponse?.chat_message || "Please complete the required details in the output section.";
+          setResponse(nextResponse);
+          setCompletionResult(null);
+          setStatusMessage(nextResponse?.requires_form ? formMessage : question);
+        },
+        onCompleted: (completedResult) => {
+          const nextResponse = normalizeWorkflowResponse(completedResult);
+          setResponse(nextResponse);
+        },
+        onError: (message) => {
+          setStatusMessage(message);
+        },
+      });
+
+      const workflowResponse = normalizeWorkflowResponse(result as WorkflowResponse);
       setResponse(workflowResponse);
 
+      if (isWaitingForField(workflowResponse)) {
+        const question = workflowResponse?.question || workflowResponse?.missing_field_question || `Please provide ${workflowResponse?.missing_field || "the missing detail"}.`;
+        const formMessage = workflowResponse?.chat_message || "Please complete the required details in the output section.";
+
+        if (liveStepCount === 0) {
+          setStreamingSteps(buildCompletedStreamSteps(workflowResponse));
+        }
+        setCompletionResult(null);
+        setConvMessages((prev) => [...prev, { role: "agent", text: workflowResponse?.requires_form ? formMessage : question }]);
+        setStatusMessage(workflowResponse?.requires_form ? formMessage : question);
+
+        // Phase 2: when backend provides a form, keep clarification inside OutputSectionConnector.
+        // This prevents the chat input area from becoming the clarification form.
+        setConvStep(workflowResponse?.requires_form ? "done" : workflowResponse?.field_type === "email" ? "waiting_email" : "waiting_field");
+        return;
+      }
+
+      if (workflowResponse) {
+        setCompletionResult(toCompletionResult(workflowResponse));
+        // Phase 1: do not push final email/result text into chat.
+        // Clean result is rendered only inside OutputSectionConnector via response.ui_result.
+      }
+
+      // if (responseRequiresGmailOAuth(workflowResponse)) {
+      //   setNeedsGmail(true);
+      //   setGmailConnected(false);
+      //   setGmailEmail(null);
+      //   setPendingPrompt(cleaned);
+      //   setStatusMessage(workflowResponse?.error || "This workflow needs Gmail access.");
+      // } else if (hasGmailStep(workflowResponse)) {
+      //   await syncGmailConnectionStatus(cleaned);
+      // } else {
+      //   clearGmailState();
+      //   setStatusMessage(getSafeChatMessage(workflowResponse));
+      // }
       if (responseRequiresGmailOAuth(workflowResponse)) {
-        setNeedsGmail(true);
-        setGmailConnected(false);
-        setGmailEmail(null);
-        setPendingPrompt(cleaned);
-        setStatusMessage(
-          workflowResponse.error ||
-            "This workflow needs Gmail access.",
-        );
-      } else if (hasGmailStep(workflowResponse)) {
-        await syncGmailConnectionStatus(cleaned);
+        await syncGmailConnectionStatus(cleaned, { requireWorkflow: true });
       } else {
         clearGmailState();
-        setStatusMessage("Workflow generated successfully.");
+        setStatusMessage(getSafeChatMessage(workflowResponse));
       }
+      setConvStep("done");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to generate workflow.";
-
+      const message = error instanceof Error ? error.message : "Unable to generate workflow.";
       setStatusMessage(message);
       setResponse(null);
-
+      setCompletionResult(null);
+      setStreamingSteps([]);
+      setConvMessages((prev) => [...prev, { role: "agent", text: message }]);
       if (isGmailNotConnectedError(error)) {
         setNeedsGmail(true);
         setGmailConnected(false);
         setGmailEmail(null);
         setPendingPrompt(cleaned);
       }
+      setConvStep("idle");
     } finally {
       setIsLoading(false);
     }
@@ -253,16 +350,11 @@ export default function ConnectorPageClient() {
 
   const handleConnectGmail = async () => {
     let authUrl = "";
-
     try {
       const data = await startGoogleOAuth();
       authUrl = data.auth_url;
     } catch (error) {
-      setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to start Google OAuth.",
-      );
+      setStatusMessage(error instanceof Error ? error.message : "Unable to start Google OAuth.");
       return;
     }
 
@@ -271,19 +363,23 @@ export default function ConnectorPageClient() {
       setStatusMessage("Popup blocked. Please allow popups to connect Gmail.");
       return;
     }
-
-    setStatusMessage(
-      "Gmail setup opened. Complete Google sign-in, then recheck the connection.",
-    );
+    setStatusMessage("Gmail setup opened. Complete Google sign-in, then recheck the connection.");
   };
 
+  // const handleRecheckGmailConnection = async () => {
+  //   if (!pendingPrompt && !hasGmailStep(response)) {
+  //     setStatusMessage("No Gmail workflow is waiting for a connection.");
+  //     return;
+  //   }
+  //   await syncGmailConnectionStatus(pendingPrompt ?? prompt.trim());
+  // }; 
   const handleRecheckGmailConnection = async () => {
-    if (!pendingPrompt && !hasGmailStep(response)) {
-      setStatusMessage("No Gmail workflow is waiting for a connection.");
+    if (pendingPrompt) {
+      await syncGmailConnectionStatus(pendingPrompt, { requireWorkflow: true });
       return;
     }
 
-    await syncGmailConnectionStatus(pendingPrompt ?? prompt.trim());
+    await syncGmailConnectionStatus(prompt.trim(), { requireWorkflow: false });
   };
 
   const handleContinueWorkflow = async () => {
@@ -291,463 +387,174 @@ export default function ConnectorPageClient() {
       setStatusMessage("No pending workflow to continue.");
       return;
     }
-
     await handleRunWorkflow(pendingPrompt);
   };
 
-  const connectors =
-    response?.plan?.steps
-      ?.map((step) => step.system)
-      .filter((value): value is string => Boolean(value)) || [];
+  const handleConvUserReply = async (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
-  const uniqueConnectors = [...new Set(connectors)];
+    setConvMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+    setStatusMessage("Submitting conversation response...");
+    setIsLoading(true);
+    setConvStep("submitting");
+
+    try {
+      if (response?.missing_field && response.partial_intent) {
+        const continued = (await continueMissingField({
+          missing_field: response.missing_field,
+          user_answer: trimmed,
+          partial_intent: response.partial_intent,
+        })) as unknown as WorkflowResponse;
+        const nextResponse = normalizeWorkflowResponse(continued);
+        setResponse(nextResponse);
+        setCompletionResult(nextResponse ? toCompletionResult(nextResponse) : null);
+        setStreamingSteps(buildCompletedStreamSteps(nextResponse));
+
+        if (isWaitingForField(nextResponse)) {
+          const question = nextResponse?.question || nextResponse?.missing_field_question || "Please provide the missing detail.";
+          const formMessage = nextResponse?.chat_message || "Please complete the required details in the output section.";
+          setConvMessages((prev) => [...prev, { role: "agent", text: nextResponse?.requires_form ? formMessage : question }]);
+          setConvStep(nextResponse?.requires_form ? "done" : nextResponse?.field_type === "email" ? "waiting_email" : "waiting_field");
+          setStatusMessage(nextResponse?.requires_form ? formMessage : question);
+          return;
+        }
+
+        // Phase 1: after successful continuation, do not show final output in chat.
+        setConvStep("done");
+        setStatusMessage(getSafeChatMessage(nextResponse));
+        return;
+      }
+
+      await handleRunWorkflow(trimmed, { appendUserMessage: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to continue workflow.";
+      setStatusMessage(message);
+      setConvMessages((prev) => [...prev, { role: "agent", text: message }]);
+      setConvStep("idle");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleActivateFlow = async () => {
+    setActivatingFlow(true);
+    setActivateFlowResult(null);
+    try {
+      if (!response) {
+        setActivateFlowResult({ ok: false, message: "Run a workflow first before activating automation." });
+        return;
+      }
+      setActivateFlowResult({ ok: true, message: "Automation activated." });
+      setStatusMessage("Automation activated.");
+    } finally {
+      setActivatingFlow(false);
+    }
+  };
+
+  const normalizedResponse = normalizeWorkflowResponse(response);
+  const totalSteps = normalizedResponse?.plan?.steps?.length || streamingSteps.length || 0;
+  const totalTokens = normalizedResponse?.total_tokens || completionResult?.total_tokens || 0;
+  const costValue = normalizedResponse?.estimated_cost_usd ?? completionResult?.estimated_cost_usd;
+  const assistantStatus = isLoading ? "Running" : convStep === "done" ? "Completed" : convStep.startsWith("waiting") ? "Needs Input" : "Ready";
+
+  const metricCards = useMemo(
+    () => [
+      { icon: "📬", label: "Status", value: assistantStatus, note: gmailConnected ? "Gmail connected" : needsGmail ? "OAuth needed" : "AI ready", color: "red" as const },
+      { icon: "🛠️", label: "Steps", value: totalSteps, note: "planned", color: "blue" as const },
+      { icon: "🤖", label: "Tokens", value: totalTokens ? totalTokens.toLocaleString() : "—", note: "used", color: "green" as const },
+      { icon: "💸", label: "Cost", value: costValue != null ? `$${Number(costValue).toFixed(4)}` : "—", note: "est.", color: "yellow" as const },
+    ],
+    [assistantStatus, costValue, gmailConnected, needsGmail, totalSteps, totalTokens],
+  );
+
+  const handleReset = () => {
+    setResponse(null);
+    setCompletionResult(null);
+    setStreamingSteps([]);
+    setConvMessages([]);
+    setConvStep("idle");
+    setStatusMessage("Prompt workflow workspace ready.");
+  };
 
   return (
-    <main className="relative flex h-dvh w-screen flex-col overflow-hidden bg-[#f8fafc] text-slate-900">
-      <aside className="fixed bottom-0 left-0 top-20 z-40 flex w-20 flex-col items-center border-r border-slate-200/60 bg-white py-6 shadow-sm">
-        <div className="flex w-full flex-1 flex-col items-center gap-6">
-          <button className="p-3 text-slate-400 transition-all hover:text-[#525ceb]">
-            <div className="flex flex-col items-center gap-1">
-              <div className="h-0.5 w-6 rounded-full bg-current" />
-              <div className="h-0.5 w-6 rounded-full bg-current" />
-            </div>
-          </button>
-
-          <div className="flex flex-col gap-4">
-            <Link
-              href="/dashboard"
-              title="Dashboard"
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200/80 bg-slate-100/80 text-slate-400 transition-all duration-300 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-600"
-            >
-              <LayoutDashboard className="h-5 w-5" />
-            </Link>
-            <Link
-              href="/dashboard?tab=history"
-              title="History"
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200/80 bg-slate-100/80 text-slate-400 transition-all duration-300 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-600"
-            >
-              <History className="h-5 w-5" />
-            </Link>
-            <Link
-              href="/dashboard?tab=settings"
-              title="Settings"
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200/80 bg-slate-100/80 text-slate-400 transition-all duration-300 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-600"
-            >
-              <Settings className="h-5 w-5" />
-            </Link>
-            <div
-              title="Connector"
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#525ceb] text-white shadow-lg shadow-indigo-200"
-            >
-              <Plug className="h-5 w-5" />
-            </div>
-          </div>
+    <div>
+      <main className="connector-page relative h-dvh w-screen overflow-hidden bg-slate-50 pt-20 text-slate-950 dark:bg-[#0b0f1a] dark:text-white">
+        <style>{`
+          @keyframes floatOrb { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-18px) scale(1.04); } }
+          @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        `}</style>
+        <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+          <div className="absolute inset-[-20%] opacity-40" style={{ backgroundImage: "linear-gradient(rgba(66,133,244,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(66,133,244,.10) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+          <div className="absolute -left-28 top-20 h-[420px] w-[420px] animate-[floatOrb_9s_ease-in-out_infinite] rounded-full bg-blue-500/20 blur-3xl" />
+          <div className="absolute -right-28 top-36 h-[420px] w-[420px] animate-[floatOrb_9s_ease-in-out_infinite] rounded-full bg-red-500/20 blur-3xl [animation-delay:-2s]" />
+          <div className="absolute bottom-[-180px] left-[45%] h-[420px] w-[420px] animate-[floatOrb_9s_ease-in-out_infinite] rounded-full bg-green-500/20 blur-3xl [animation-delay:-4s]" />
         </div>
 
-        <div className="mb-6 mt-auto">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-black text-[#1a1c3d] shadow-sm">
-            C
-          </div>
-        </div>
-      </aside>
+        <div className="relative z-10 ml-0 flex h-full min-h-0 flex-col px-3 py-4 sm:px-5 lg:px-4 xl:px-6">
+          {/* <header className="hidden border border-danger-300 bg-danger-50/70 p-5 shadow-sm md:flex md:items-center md:justify-between md:rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-red-500 to-red-400 text-2xl shadow-[0_12px_35px_rgba(234,67,53,.25)]">🧠</div>
+              <div>
+                <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white">Gmail AI Workflow Agent</h1>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Prompt → neural planning → Gmail actions → AI summarized output</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-black text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 dark:text-white">{statusMessage}</span>
+              <button onClick={handleReset} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">🔄 Reset</button>
+            </div>
+          </header> */}
 
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.24]"
-        style={{
-          backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      />
+          
 
-      <div className="relative z-10 ml-20 flex h-full min-h-0 flex-col pt-20">
-        <section className="grid flex-1 min-h-0 gap-5 px-6 pb-6 pt-6 xl:grid-cols-[0.95fr_1fr_1.08fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Prompt
-            </p>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="mt-4 h-48 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:bg-white"
-              placeholder="Type your workflow prompt..."
+          <section className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(240px,30fr)_minmax(260px,31fr)_minmax(320px,39fr)]">
+            <ChatSectionConnector
+              prompt={prompt}
+              setPrompt={setPrompt}
+              isLoading={isLoading}
+              statusMessage={statusMessage}
+              handleRunWorkflow={() => void handleRunWorkflow()}
+              convStep={convStep}
+              convMessages={convMessages}
+              handleConvUserReply={handleConvUserReply}
+              currentFieldName={normalizedResponse?.missing_field ?? null}
+              currentFieldType={normalizedResponse?.field_type ?? "text"}
+              currentFieldOptions={normalizedResponse?.field_options ?? []}
+              currentFieldSkippable={normalizedResponse?.field_skippable ?? false}
+              currentFieldQuestion={normalizedResponse?.question || normalizedResponse?.missing_field_question || null}
             />
-            <button
-              onClick={() => handleRunWorkflow()}
-              disabled={isLoading}
-              className="mt-4 inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#434dd8] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isLoading ? "Generating..." : "Generate Workflow"}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestGmailToken}
-              disabled={gmailTokenTestLoading}
-              className="mt-3 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {gmailTokenTestLoading ? "Testing..." : "Test Gmail Token"}
-            </button>
-            <p className="mt-3 text-sm text-slate-600">{statusMessage}</p>
 
-            {gmailTokenTestResult && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                {gmailTokenTestResult.status === "success" && (
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-700">
-                      Gmail API Working
-                    </p>
-                    <p className="mt-2 text-sm text-slate-700">
-                      Email:{" "}
-                      <span className="font-medium text-slate-900">
-                        {gmailTokenTestResult.email || "Unknown"}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      Token:{" "}
-                      <span className="font-mono text-slate-900">
-                        {gmailTokenTestResult.token_preview || "masked"}
-                      </span>
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Token is valid. Issue is likely from Google MCP server.
-                    </p>
-                  </div>
-                )}
+            <WorkflowSectionConnector
+              response={normalizedResponse}
+              needsGmail={needsGmail}
+              gmailConnected={gmailConnected}
+              gmailEmail={gmailEmail}
+              pendingPrompt={pendingPrompt}
+              isLoading={isLoading}
+              connectorStatusLoading={connectorStatusLoading}
+              handleConnectGmail={handleConnectGmail}
+              handleRecheckGmailConnection={handleRecheckGmailConnection}
+              handleContinueWorkflow={handleContinueWorkflow}
+              handleActivateFlow={handleActivateFlow}
+              activatingFlow={activatingFlow}
+              activateFlowResult={activateFlowResult}
+              completionResult={completionResult}
+              convStep={convStep}
+              streamingSteps={streamingSteps}
+            />
 
-                {gmailTokenTestResult.status === "failed" && (
-                  <div>
-                    <p className="text-sm font-semibold text-rose-700">
-                      Gmail API Failed
-                    </p>
-                    <p className="mt-2 text-sm text-slate-700">
-                      Error:{" "}
-                      <span className="font-medium text-slate-900">
-                        {gmailTokenTestResult.error || "Unknown error"}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      Token:{" "}
-                      <span className="font-mono text-slate-900">
-                        {gmailTokenTestResult.token_preview || "masked"}
-                      </span>
-                    </p>
-                  </div>
-                )}
-
-                {gmailTokenTestResult.status === "no_token" && (
-                  <div>
-                    <p className="text-sm font-semibold text-amber-700">
-                      No Gmail Token Found
-                    </p>
-                    <p className="mt-2 text-sm text-slate-700">
-                      Connect Gmail first, then run the token test again.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Workflow
-            </p>
-
-            {needsGmail && (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
-                  Gmail Required
-                </p>
-                <p className="mt-2 text-sm font-medium text-slate-900">
-                  {gmailConnected
-                    ? `Gmail connected as ${gmailEmail || "the signed-in account"}`
-                    : "This workflow needs Gmail access."}
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {!gmailConnected && (
-                    <button
-                      type="button"
-                      onClick={handleConnectGmail}
-                      className="inline-flex items-center justify-center rounded-2xl bg-[#525ceb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#434dd8]"
-                    >
-                      Connect Gmail
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleRecheckGmailConnection}
-                    disabled={connectorStatusLoading}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {connectorStatusLoading
-                      ? "Rechecking..."
-                      : "Recheck connection"}
-                  </button>
-                  {gmailConnected && pendingPrompt && (
-                    <button
-                      type="button"
-                      onClick={handleContinueWorkflow}
-                      disabled={isLoading}
-                      className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isLoading ? "Continuing..." : "Continue Workflow"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {response?.plan?.goal ? (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Goal
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-slate-900">
-                    {response.plan.goal}
-                  </p>
-                </div>
-
-                {uniqueConnectors.length > 0 && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Connectors
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {uniqueConnectors.map((connector) => (
-                        <span
-                          key={connector}
-                          className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700"
-                        >
-                          {connector}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="h-[500px] w-full mt-4 pb-4">
-                  <WorkflowSectionDashboard 
-                    data={{
-                      nodes: response.plan.steps?.map((step, i, arr) => ({
-                        id: step.id,
-                        position: { x: 250, y: i * 150 },
-                        data: { 
-                          label: step.name,
-                          status: 'Done'
-                        },
-                        type: i === 0 ? 'input' : (i === arr.length - 1 ? 'output' : 'default'),
-                      })) || [],
-                      edges: response.plan.steps?.slice(0, -1).map((step, i) => {
-                        const allSteps = response.plan!.steps!;
-                        return {
-                          id: `e-${step.id}-${allSteps[i+1].id}`,
-                          source: step.id,
-                          target: allSteps[i+1].id,
-                          animated: true,
-                          type: 'smoothstep'
-                        };
-                      }) || []
-                    }} 
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                Generate a workflow to preview steps here.
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col h-full rounded-tl-3xl bg-white shadow-[0_0_40px_-15px_rgba(0,0,0,0.05)] border-l border-t border-slate-200/60 p-6 overflow-hidden">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black uppercase tracking-[0.15em] text-slate-500">
-                OUTPUT
-              </h3>
-              {response && (
-                <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
-                  <Download size={14} /> Download Report
-                </button>
-              )}
-            </div>
-
-            {response ? (
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                {/* Banner */}
-                <div className="relative mb-8 overflow-hidden rounded-2xl border border-emerald-100 bg-emerald-50/50 p-6">
-                  <div className="flex items-center gap-4 relative z-10">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
-                      <Check size={24} strokeWidth={3} />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-black text-emerald-700 tracking-tight">
-                        Workflow Completed Successfully!
-                      </h4>
-                      <p className="mt-1 max-w-md text-sm font-medium leading-relaxed text-emerald-800/70">
-                        {response.summary || "I found specific emails and processed them according to your workflow automatically."}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Decorative Icon */}
-                  <div className="absolute -right-2 top-1/2 -translate-y-1/2 opacity-90">
-                    <div className="relative flex h-24 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-400 to-emerald-500 shadow-xl shadow-emerald-500/20">
-                       <Check size={40} className="text-white" strokeWidth={3} />
-                       {/* Envelope Flap Overlay */}
-                       <div className="absolute top-0 left-0 border-l-[56px] border-l-transparent border-r-[56px] border-r-transparent border-t-[40px] border-t-emerald-300 opacity-50 drop-shadow-sm rounded-t-3xl" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Execution Summary Cards */}
-                <div className="mb-8">
-                  <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
-                    EXECUTION SUMMARY
-                  </h4>
-                  <div className="grid grid-cols-4 gap-4">
-                    {/* Card 1 */}
-                    <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="text-xs font-black tracking-tight text-slate-500">Emails Found</div>
-                      </div>
-                      <div className="mt-3 flex items-end gap-3">
-                        <div className="text-sky-400"><Mail size={24} strokeWidth={2.5} /></div>
-                        <span className="text-3xl font-black leading-none text-[#1e345c]">
-                          {(() => {
-                            const step = response.step_results?.find(s => s.tool === 'gmail.get_thread' || s.tool === 'fetch_matching_threads' || s.tool === 'gmail.search_threads');
-                            const threads = step?.output?.threads || step?.output?.data?.threads || step?.output;
-                            return Array.isArray(threads) ? threads.length : (threads ? 1 : 0);
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Card 2 */}
-                    <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="text-xs font-black tracking-tight text-slate-500">Replies Generated</div>
-                      </div>
-                      <div className="mt-3 flex items-end gap-3">
-                        <div className="text-indigo-400 -scale-x-100"><CornerDownLeft size={24} strokeWidth={2.5} /></div>
-                        <span className="text-3xl font-black leading-none text-[#1e345c]">
-                          {(() => {
-                            const step = response.step_results?.find(s => s.tool === 'llm.generate_reply' || s.tool === 'generate_gmail_replies');
-                            return Array.isArray(step?.output) ? step.output.length : (step?.output ? 1 : 0);
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Card 3 */}
-                    <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="text-xs font-black tracking-tight text-slate-500">Replies Sent</div>
-                      </div>
-                      <div className="mt-3 flex items-end gap-3">
-                        <div className="text-indigo-500"><Send size={22} strokeWidth={2.5} /></div>
-                        <span className="text-3xl font-black leading-none text-[#1e345c]">
-                          {(() => {
-                            const sendSteps = response.step_results?.filter(s => s.tool === 'gmail.reply_to_thread' || s.tool === 'gmail.send_email' || s.tool === 'send_gmail_reply') || [];
-                            return sendSteps.reduce((acc, step) => acc + (Array.isArray(step.output) ? step.output.length : 1), 0);
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Card 4 */}
-                    <div className="flex flex-col justify-center rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div className="text-xs font-black tracking-tight text-slate-500">Status</div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2">
-                        <div className="text-emerald-500"><CheckCircle2 size={24} strokeWidth={2.5} /></div>
-                        <span className="text-lg font-black text-emerald-600 tracking-tight">Completed</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recent Emails Processed */}
-                <div className="mb-8">
-                  <h4 className="mb-4 text-xs font-black uppercase tracking-wider text-[#1e345c]">
-                    RECENT EMAILS PROCESSED
-                  </h4>
-                  <div className="rounded-[20px] border border-slate-200/80 bg-white px-2 py-2 shadow-sm">
-                    {(() => {
-                      const fetchStep = response.step_results?.find(s => s.tool === 'gmail.get_thread' || s.tool === 'fetch_matching_threads' || s.tool === 'gmail.search_threads');
-                      let threads = fetchStep?.output?.threads || fetchStep?.output?.data?.threads || fetchStep?.output;
-                      if (!Array.isArray(threads)) threads = [];
-                      if (threads.length === 0) {
-                        return <div className="text-sm font-medium text-slate-500 p-6 text-center">No recent emails processed in this execution.</div>;
-                      }
-
-                      return threads.map((email: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-4 rounded-2xl p-4 transition hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                          {/* Number Bubble */}
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-[1.5px] border-indigo-200 bg-white text-xs font-bold text-indigo-600 shadow-sm">
-                            {idx + 1}
-                          </div>
-                          
-                          {/* Icon */}
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-400 shadow-sm">
-                            <Mail size={16} strokeWidth={2.5} />
-                          </div>
-
-                          {/* Text Context */}
-                          <div className="flex flex-1 flex-col truncate">
-                            <h5 className="truncate text-sm font-bold text-[#1e345c]">
-                              {email.subject || email.snippet?.substring(0, 40) || 'Email interaction'}
-                            </h5>
-                            <p className="truncate text-xs font-medium text-slate-500 mt-0.5">
-                              From: {email.from_email || email.sender || email.from || 'unknown sender'}
-                            </p>
-                          </div>
-
-                          {/* Pill Tag */}
-                          <div className="flex-shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                            Reply Sent
-                          </div>
-
-                          {/* Timestamp */}
-                          <div className="ml-2 flex-shrink-0 text-xs font-semibold text-slate-400">
-                            {idx === 0 ? "2:15 PM" : idx === 1 ? "2:03 PM" : idx === 2 ? "1:45 PM" : "Yesterday"}
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-
-                {/* Raw MCP Results Toggle */}
-                {response.raw_mcp_results && response.raw_mcp_results.length > 0 && (
-                  <details className="group mt-4 mb-2 rounded-2xl border border-slate-200 bg-slate-50">
-                    <summary className="flex cursor-pointer list-none items-center justify-between p-4 outline-none">
-                       <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-500">
-                         RAW OUTPUT (DEBUG)
-                         <span className="block mt-1 text-[10px] tracking-normal font-medium normal-case text-slate-400">Click to view full JSON response</span>
-                       </span>
-                       <ChevronDown size={16} className="text-slate-400 transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="border-t border-slate-200 p-4">
-                      <pre className="overflow-x-auto text-[10px] leading-relaxed text-slate-600">
-                        {JSON.stringify(response.raw_mcp_results, null, 2)}
-                      </pre>
-                    </div>
-                  </details>
-                )}
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center m-2">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500 shadow-sm">
-                  <Mail size={24} strokeWidth={2} />
-                </div>
-                <h4 className="text-base font-black text-slate-900 tracking-tight">Waiting for Output</h4>
-                <p className="mt-2 max-w-[240px] text-xs font-medium leading-relaxed text-slate-500">
-                  Run a prompt to see the workflow execution summary and emails processed here.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-    </main>
+            <OutputSectionConnector
+              response={normalizedResponse}
+              completionResult={completionResult}
+              onSendPrompt={(nextPrompt) => void handleRunWorkflow(nextPrompt)}
+              partialIntent={normalizedResponse?.partial_intent ?? null}
+              convStep={convStep}
+            />
+          </section>
+        </div>
+      </main>
+    </div>
   );
 }
 

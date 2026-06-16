@@ -2,15 +2,38 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
+import { Cpu, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import AgentListDropdown from './AgentListDropdown';
+import { apiFetch } from '@/lib/api-client';
+
+const THEME_STORAGE_KEY = 'sigmavalue_theme';
+const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+
+function subscribeToThemeChanges(callback: () => void) {
+  window.addEventListener('storage', callback);
+  window.addEventListener(THEME_CHANGE_EVENT, callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener(THEME_CHANGE_EVENT, callback);
+  };
+}
+
+function getThemeSnapshot() {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+}
+
+function getServerThemeSnapshot() {
+  return false;
+}
 
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sigmavalue_theme') === 'dark';
-  });
+  const isDark = React.useSyncExternalStore(
+    subscribeToThemeChanges,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const pathname = usePathname();
   const shouldSyncLlmSelection = pathname !== '/maharera_agent';
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
@@ -23,7 +46,6 @@ const Header = () => {
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-    localStorage.setItem('sigmavalue_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
   React.useEffect(() => {
@@ -100,7 +122,8 @@ const Header = () => {
   };
 
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'light' : 'dark');
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   };
 
   const shellClass = isDark
