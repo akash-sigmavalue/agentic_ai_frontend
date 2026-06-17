@@ -11,10 +11,12 @@ import GmailActionForm from "./GmailActionForm";
 import EditableReplyDraft from "./EditableReplyDraft";
 import { fetchAttachment, getConnectorFileUrl, summarizeAttachment } from "./api";
 
+type WorkflowPromptPayload = string | Record<string, unknown>;
+
 type OutputSectionConnectorProps = {
   response: WorkflowResponse | null;
   completionResult?: CompletionResult | null;
-  onSendPrompt?: (prompt: string) => void;
+  onSendPrompt?: (prompt: WorkflowPromptPayload) => void;
   partialIntent?: Record<string, unknown> | null;
   convStep?: ConvStep;
 };
@@ -118,6 +120,9 @@ function normalizeOperation(response: WorkflowResponse | null): WorkflowOperatio
     categorise: "classify",
     // G6 – Reply
     reply_to_email: "reply",
+    send_reply: "reply",
+    gmail_reply: "reply",
+    generate_reply: "reply",
     draft_reply: "reply",
     create_draft: "reply",
     // G7 – Send New Email
@@ -298,41 +303,309 @@ function extractDraftId(response: WorkflowResponse | null): string {
   );
 }
 
-function buildSendEditedReplyPrompt(response: WorkflowResponse | null, editedBody: string) {
-  const threadId = extractThreadId(response);
-  const subject = firstString(response?.subject, deepFindString(response?.step_results, ["subject"]));
-  const recipient = firstString(response?.from_email, deepFindString(response?.step_results, ["from_email", "from"]));
-
-  return [
-    "[confirmed] Send edited Gmail reply",
-    threadId ? `Thread ID: ${threadId}` : "Thread ID: missing_from_response",
-    subject ? `Subject: ${subject}` : "",
-    recipient ? `Recipient / To: ${recipient}` : "",
-    "Send Directly: true",
-    "Operation: send_reply",
-    "",
-    "Edited Reply Body:",
-    editedBody.trim(),
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildSaveEditedDraftPrompt(response: WorkflowResponse | null, editedBody: string) {
+function buildReplyActionPayload(
+  response: WorkflowResponse | null,
+  editedBody: string,
+  options: { sendDirectly: boolean; draftOnly: boolean },
+): Record<string, unknown> {
   const threadId = extractThreadId(response);
   const draftId = extractDraftId(response);
+  const subject = firstString(response?.subject, deepFindString(response?.step_results, ["subject"]));
+  const recipient = firstString(
+    response?.from_email,
+    deepFindString(response?.step_results, ["from_email", "sender_email", "from"]),
+  );
+  const cleanBody = editedBody.trim();
+  const operation = options.draftOnly ? "draft_reply" : "send_reply";
 
-  return [
-    "Save this edited Gmail reply as draft",
-    threadId ? `Thread ID: ${threadId}` : "Thread ID: missing_from_response",
-    draftId ? `Draft ID: ${draftId}` : "",
-    "Operation: draft_reply",
-    "",
-    "Edited Reply Body:",
-    editedBody.trim(),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const partialIntent = {
+    ...(isRecord(response?.partial_intent) ? response?.partial_intent : {}),
+    operation,
+    thread_id: threadId || undefined,
+    draft_id: draftId || undefined,
+    subject: subject || undefined,
+    recipient: recipient || undefined,
+    reply_body: cleanBody,
+    edited_reply_body: cleanBody,
+    body: cleanBody,
+    message_body: cleanBody,
+    reply_instruction: cleanBody,
+    reply_instructions: cleanBody,
+    confirmed: !options.draftOnly,
+    user_confirmed: !options.draftOnly,
+    send_directly: options.sendDirectly,
+    draft_only: options.draftOnly,
+    intent_details: {
+      send_reply: {
+        is_required: !options.draftOnly,
+        thread_id: threadId || undefined,
+        reply_body: cleanBody,
+        edited_reply_body: cleanBody,
+        body: cleanBody,
+        reply_instruction: cleanBody,
+        reply_instructions: cleanBody,
+        tone: "professional",
+        requires_explicit_confirmation: true,
+      },
+      draft_reply: {
+        is_required: options.draftOnly,
+        thread_id: threadId || undefined,
+        draft_id: draftId || undefined,
+        reply_body: cleanBody,
+        edited_reply_body: cleanBody,
+        body: cleanBody,
+        reply_instruction: cleanBody,
+        reply_instructions: cleanBody,
+        draft_tone: "professional",
+      },
+    },
+  };
+
+  return {
+    prompt: options.draftOnly ? "Create edited Gmail reply draft" : "[confirmed] Send edited Gmail reply",
+    confirmed: !options.draftOnly,
+    user_confirmed: !options.draftOnly,
+    send_directly: options.sendDirectly,
+    draft_only: options.draftOnly,
+    thread_id: threadId || undefined,
+    draft_id: draftId || undefined,
+    reply_body: cleanBody,
+    edited_reply_body: cleanBody,
+    body: cleanBody,
+    partial_intent: partialIntent,
+    team_context: {
+      confirmed: !options.draftOnly,
+      user_confirmed: !options.draftOnly,
+      send_directly: options.sendDirectly,
+      draft_only: options.draftOnly,
+      thread_id: threadId || undefined,
+      reply_body: cleanBody,
+      edited_reply_body: cleanBody,
+      partial_intent: partialIntent,
+    },
+  };
+}
+
+function buildSendEditedReplyPayload(response: WorkflowResponse | null, editedBody: string) {
+  return buildReplyActionPayload(response, editedBody, { sendDirectly: true, draftOnly: false });
+}
+
+function buildSaveEditedDraftPayload(response: WorkflowResponse | null, editedBody: string) {
+  return buildReplyActionPayload(response, editedBody, { sendDirectly: false, draftOnly: true });
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => firstString(item))
+      .filter(Boolean);
+  }
+
+  const single = firstString(value);
+  return single ? [single] : [];
+}
+
+function getPartialIntentRecord(response: WorkflowResponse | null): Record<string, unknown> {
+  return isRecord(response?.partial_intent) ? response.partial_intent : {};
+}
+
+function getPartialIntentArgs(response: WorkflowResponse | null): Record<string, unknown> {
+  const partialIntent = getPartialIntentRecord(response);
+  return isRecord(partialIntent.args) ? partialIntent.args : {};
+}
+
+function extractNewEmailRecipients(response: WorkflowResponse | null): string[] {
+  const partialIntent = getPartialIntentRecord(response);
+  const args = getPartialIntentArgs(response);
+  const intentDetails = isRecord(args.intent_details) ? args.intent_details : {};
+
+  const recipients = [
+    ...asStringArray(args.to),
+    ...asStringArray(partialIntent.to),
+    ...asStringArray(intentDetails.to),
+  ];
+
+  const deepRecipient = firstString(
+    deepFindString(response?.partial_intent, ["recipient", "to_email", "email"]),
+    deepFindString(response?.plan, ["recipient", "to_email"]),
+  );
+
+  if (deepRecipient) recipients.push(deepRecipient);
+
+  return Array.from(new Set(recipients.filter(Boolean)));
+}
+
+function extractNewEmailSubject(response: WorkflowResponse | null): string {
+  const partialIntent = getPartialIntentRecord(response);
+  const args = getPartialIntentArgs(response);
+  const intentDetails = isRecord(args.intent_details) ? args.intent_details : {};
+
+  return firstString(
+    args.subject,
+    partialIntent.subject,
+    intentDetails.subject,
+    response?.subject,
+    deepFindString(response?.partial_intent, ["subject"]),
+    deepFindString(response?.plan, ["subject"]),
+  );
+}
+
+function extractNewEmailBody(response: WorkflowResponse | null, editedBody?: string): string {
+  const partialIntent = getPartialIntentRecord(response);
+  const args = getPartialIntentArgs(response);
+  const intentDetails = isRecord(args.intent_details) ? args.intent_details : {};
+
+  return firstString(
+    editedBody,
+    args.body,
+    args.body_instruction,
+    partialIntent.body,
+    partialIntent.reply,
+    partialIntent.message_body,
+    partialIntent.body_instruction,
+    intentDetails.body,
+    intentDetails.body_instruction,
+    response?.reply,
+    response?.reply_body,
+    response?.generated_reply,
+    deepFindString(response?.partial_intent, ["body", "reply", "message_body", "body_instruction", "email_body"]),
+    deepFindString(response?.step_results, ["body", "email_body", "message_body"]),
+  );
+}
+
+function isNewEmailOperation(response: WorkflowResponse | null, operationType?: WorkflowOperationType): boolean {
+  const partialIntent = getPartialIntentRecord(response);
+  const primaryIntent = firstString(
+    partialIntent.primary_intent,
+    deepFindString(response?.plan?.gmail_intent, ["primary_intent"]),
+    deepFindString(response?.intent_understanding, ["primary_intent"]),
+  ).toLowerCase();
+  const operation = firstString(partialIntent.operation).toLowerCase();
+  const tool = firstString(partialIntent.tool, deepFindString(response?.plan, ["tool"])).toLowerCase();
+
+  return Boolean(
+    primaryIntent === "send_new_email" ||
+    operation === "send_new_email" ||
+    tool === "gmail.send_email" ||
+    (operationType === "send" && primaryIntent !== "send_reply" && primaryIntent !== "draft_reply")
+  );
+}
+
+function buildNewEmailActionPayload(
+  response: WorkflowResponse | null,
+  editedBody: string,
+  options: { sendDirectly: boolean; draftOnly: boolean },
+): Record<string, unknown> {
+  const sourcePartialIntent = getPartialIntentRecord(response);
+  const sourceArgs = getPartialIntentArgs(response);
+  const to = extractNewEmailRecipients(response);
+  const subject = extractNewEmailSubject(response);
+  const cleanBody = extractNewEmailBody(response, editedBody).trim();
+  const operation = options.draftOnly ? "create_draft" : "send_new_email";
+  const tool = options.draftOnly ? "gmail.create_draft" : "gmail.send_email";
+
+  const args = {
+    ...sourceArgs,
+    to,
+    cc: Array.isArray(sourceArgs.cc) ? sourceArgs.cc : [],
+    bcc: Array.isArray(sourceArgs.bcc) ? sourceArgs.bcc : [],
+    subject,
+    body: cleanBody,
+    body_instruction: cleanBody,
+    tone: firstString(sourceArgs.tone, "professional"),
+    send_directly: options.sendDirectly,
+    intent_details: {
+      ...(isRecord(sourceArgs.intent_details) ? sourceArgs.intent_details : {}),
+      is_required: true,
+      to,
+      subject,
+      body: cleanBody,
+      body_instruction: cleanBody,
+      tone: firstString(sourceArgs.tone, "professional"),
+      requires_explicit_confirmation: true,
+    },
+  };
+
+  const partialIntent = {
+    ...sourcePartialIntent,
+    operation,
+    primary_intent: "send_new_email",
+    tool,
+    args,
+    to,
+    recipient: to[0] || undefined,
+    subject,
+    body: cleanBody,
+    body_instruction: cleanBody,
+    message_body: cleanBody,
+    reply: cleanBody,
+    confirmed: !options.draftOnly,
+    user_confirmed: !options.draftOnly,
+    send_directly: options.sendDirectly,
+    draft_only: options.draftOnly,
+  };
+
+  const promptLines = [
+    options.draftOnly ? "Create new Gmail email draft" : "[confirmed] Send new Gmail email",
+    `Operation: ${operation}`,
+    `Send Directly: ${options.sendDirectly ? "true" : "false"}`,
+    to.length ? `Recipient: ${to.join(", ")}` : "",
+    subject ? `Subject: ${subject}` : "",
+    cleanBody ? "Body:" : "",
+    cleanBody,
+  ].filter(Boolean);
+
+  return {
+    prompt: promptLines.join("\n"),
+    confirmed: !options.draftOnly,
+    user_confirmed: !options.draftOnly,
+    send_directly: options.sendDirectly,
+    draft_only: options.draftOnly,
+    operation,
+    primary_intent: "send_new_email",
+    tool,
+    to,
+    subject,
+    body: cleanBody,
+    body_instruction: cleanBody,
+    args,
+    partial_intent: partialIntent,
+    team_context: {
+      confirmed: !options.draftOnly,
+      user_confirmed: !options.draftOnly,
+      send_directly: options.sendDirectly,
+      draft_only: options.draftOnly,
+      operation,
+      primary_intent: "send_new_email",
+      tool,
+      to,
+      subject,
+      body: cleanBody,
+      body_instruction: cleanBody,
+      args,
+      partial_intent: partialIntent,
+    },
+  };
+}
+
+function buildSendNewEmailPayload(response: WorkflowResponse | null, editedBody: string) {
+  return buildNewEmailActionPayload(response, editedBody, { sendDirectly: true, draftOnly: false });
+}
+
+function buildSaveNewEmailDraftPayload(response: WorkflowResponse | null, editedBody: string) {
+  return buildNewEmailActionPayload(response, editedBody, { sendDirectly: false, draftOnly: true });
+}
+
+function buildPrimarySendPayload(response: WorkflowResponse | null, operationType: WorkflowOperationType, editedBody: string) {
+  return isNewEmailOperation(response, operationType)
+    ? buildSendNewEmailPayload(response, editedBody)
+    : buildSendEditedReplyPayload(response, editedBody);
+}
+
+function buildPrimaryDraftPayload(response: WorkflowResponse | null, operationType: WorkflowOperationType, editedBody: string) {
+  return isNewEmailOperation(response, operationType)
+    ? buildSaveNewEmailDraftPayload(response, editedBody)
+    : buildSaveEditedDraftPayload(response, editedBody);
 }
 
 function isReplyDraftOperation(operationType: WorkflowOperationType) {
@@ -349,10 +622,12 @@ function getPrimaryIntent(response: WorkflowResponse | null) {
 function isReplyReviewOperation(response: WorkflowResponse | null, operationType: WorkflowOperationType) {
   const primaryIntent = getPrimaryIntent(response);
   return (
+    isNewEmailOperation(response, operationType) ||
     isReplyDraftOperation(operationType) ||
     operationType === "send" ||
     primaryIntent === "send_reply" ||
-    primaryIntent === "draft_reply"
+    primaryIntent === "draft_reply" ||
+    primaryIntent === "send_new_email"
   );
 }
 
@@ -379,19 +654,54 @@ function looksLikeUiStatusMessage(value: string) {
 }
 
 function getEditableReplyText(response: WorkflowResponse | null, completionResult: CompletionResult | null) {
-  const explicitDraft = firstString(response?.reply_draft, completionResult?.reply_draft);
-  if (explicitDraft) return explicitDraft;
+  const explicitDraft = firstString(
+    response?.reply_draft,
+    completionResult?.reply_draft,
+    response?.reply,
+    completionResult?.reply,
+    response?.generated_reply,
+    response?.reply_body,
+  );
+
+  if (explicitDraft && !looksLikeRawGmailPayload(explicitDraft) && !looksLikeUiStatusMessage(explicitDraft)) {
+    return explicitDraft;
+  }
+
+  const replyKeys = [
+    "reply",
+    "body",
+    "text",
+    "content",
+    "reply_draft",
+    "draft_reply",
+    "generated_reply",
+    "reply_body",
+    "reply_text",
+    "draft_body",
+    "message_body",
+    "email_body",
+  ];
+
+  const replyStep = (response?.step_results || []).find((step) => {
+    const haystack = `${step?.tool || ""} ${step?.kind || ""} ${step?.step_id || ""}`.toLowerCase();
+    return (
+      haystack.includes("llm.generate_reply") ||
+      haystack.includes("generate_gmail_reply") ||
+      haystack.includes("generate") && haystack.includes("reply")
+    );
+  });
 
   const generatedReply = firstString(
-    deepFindString(response?.partial_intent, ["reply_draft", "draft_reply", "generated_reply", "reply_body", "reply_text", "draft_body", "message_body", "email_body"]),
-    deepFindString(response?.step_results, ["reply_draft", "draft_reply", "generated_reply", "reply_body", "reply_text", "draft_body", "message_body", "email_body"]),
+    deepFindString(replyStep?.output, replyKeys),
+    deepFindString(response?.partial_intent, replyKeys),
+    deepFindString(response?.step_results, replyKeys),
   );
+
   if (generatedReply && !looksLikeRawGmailPayload(generatedReply) && !looksLikeUiStatusMessage(generatedReply)) {
     return generatedReply;
   }
 
-  const possibleReply = firstString(response?.reply, completionResult?.reply);
-  return possibleReply && !looksLikeUiStatusMessage(possibleReply) ? possibleReply : "";
+  return "";
 }
 
 function collectWorkflowErrors(response: WorkflowResponse | null) {
@@ -575,14 +885,17 @@ function FormattedAiResult({ text, operationType }: { text: string; operationTyp
 function ReplyConfirmationPanel({
   response,
   draftText,
+  operationType,
   onSendPrompt,
 }: {
   response: WorkflowResponse | null;
   draftText?: string;
-  onSendPrompt?: (prompt: string) => void;
+  operationType: WorkflowOperationType;
+  onSendPrompt?: (prompt: WorkflowPromptPayload) => void;
 }) {
   if (!onSendPrompt) return null;
   const hasDraftText = Boolean(draftText?.trim());
+  const isNewEmail = isNewEmailOperation(response, operationType);
 
   return (
     <article className="overflow-hidden rounded-[24px] border border-yellow-400/40 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.12)] dark:border-yellow-400/25 dark:bg-slate-950/70">
@@ -593,8 +906,10 @@ function ReplyConfirmationPanel({
         <h3 className="text-base font-black text-slate-950 dark:text-white">Review before sending</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
           {hasDraftText
-            ? "Gmail replies should not be sent until you confirm. Choose whether to send now or create a draft."
-            : "The backend asked for confirmation, but it did not return the draft text to review."}
+            ? isNewEmail
+              ? "New Gmail emails should not be sent until you confirm. Choose whether to send now or create a draft."
+              : "Gmail replies should not be sent until you confirm. Choose whether to send now or create a draft."
+            : "The backend asked for confirmation, but it did not return the email body to review."}
         </p>
       </div>
       {!hasDraftText ? (
@@ -605,16 +920,16 @@ function ReplyConfirmationPanel({
       <div className="flex flex-wrap gap-3 p-4">
         <button
           type="button"
-          onClick={() => onSendPrompt(buildConfirmedReplyPrompt(response, draftText))}
+          onClick={() => onSendPrompt(buildPrimarySendPayload(response, operationType, draftText || ""))}
           disabled={!hasDraftText}
           className="rounded-full bg-red-500 px-5 py-2.5 text-xs font-black text-white shadow-[0_12px_35px_rgba(239,68,68,0.28)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Send Reply
+          {isNewEmail ? "Send Email" : "Send Reply"}
         </button>
         {hasDraftText ? (
           <button
             type="button"
-            onClick={() => onSendPrompt(buildDraftInsteadPrompt(response, draftText))}
+            onClick={() => onSendPrompt(buildPrimaryDraftPayload(response, operationType, draftText || ""))}
             className="rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-2.5 text-xs font-black text-blue-600 transition hover:bg-blue-500/15 dark:text-blue-300"
           >
             Create Draft
@@ -628,6 +943,172 @@ function ReplyConfirmationPanel({
             Generate Draft
           </button>
         )}
+      </div>
+    </article>
+  );
+}
+
+
+type GmailFormField = {
+  name?: string;
+  label?: string;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  default?: string;
+};
+
+function getResponseStatus(response: WorkflowResponse | null) {
+  return firstString(response?.status).toLowerCase();
+}
+
+function getMissingFieldName(response: WorkflowResponse | null) {
+  return firstString(response?.missing_field, response?.form_schema?.missing_field);
+}
+
+function isClarificationResponse(response: WorkflowResponse | null) {
+  const status = getResponseStatus(response);
+  return Boolean(
+    status === "needs_clarification" ||
+    status.includes("clarification") ||
+    response?.requires_form === true ||
+    getMissingFieldName(response),
+  );
+}
+
+function getVisibleClarificationFields(response: WorkflowResponse | null): GmailFormField[] {
+  const fields = (response?.form_schema?.fields || []) as GmailFormField[];
+  const missingField = getMissingFieldName(response);
+
+  if (!missingField) return fields;
+
+  const exactMatch = fields.filter((field) => field.name === missingField);
+  if (exactMatch.length) return exactMatch;
+
+  return [
+    {
+      name: missingField,
+      label: missingField.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      type: response?.field_type || "text",
+      required: true,
+      placeholder: response?.question || response?.missing_field_question || "Provide the missing detail...",
+    },
+  ];
+}
+
+function buildClarificationPrompt(response: WorkflowResponse | null, fieldName: string, value: string) {
+  const originalPrompt = firstString(
+    response?.partial_intent?.original_prompt,
+    response?.plan?.goal,
+    response?.summary,
+    response?.message,
+    "Continue the previous Gmail workflow",
+  );
+
+  const operation = firstString(response?.partial_intent?.operation, "send_reply");
+  const searchQuery = firstString(response?.partial_intent?.search_query);
+  const messageInstruction = firstString(
+    deepFindString(response?.partial_intent, ["reply_instructions", "reply_instruction", "message_instruction", "body_instruction"]),
+    deepFindString(response?.plan, ["reply_instructions", "reply_instruction", "message_instruction", "body_instruction"]),
+  );
+
+  return [
+    originalPrompt,
+    "",
+    "[clarification provided]",
+    `Missing Field: ${fieldName}`,
+    `User Answer: ${value.trim()}`,
+    searchQuery ? `Previous Search Query: ${searchQuery}` : "",
+    operation ? `Operation: ${operation}` : "",
+    messageInstruction ? `Original Message Instruction: ${messageInstruction}` : "",
+    "Continue the same Gmail workflow using this clarification. Do not ask the same missing field again.",
+  ].filter(Boolean).join("\n");
+}
+
+function CompactClarificationForm({
+  response,
+  onSendPrompt,
+}: {
+  response: WorkflowResponse | null;
+  onSendPrompt?: (prompt: WorkflowPromptPayload) => void;
+}) {
+  const fields = getVisibleClarificationFields(response);
+  const firstField = fields[0];
+  const missingField = firstString(firstField?.name, getMissingFieldName(response), "search_filter");
+  const [value, setValue] = useState(firstString(firstField?.default));
+  const label = firstString(firstField?.label, missingField.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()));
+  const placeholder = firstString(
+    firstField?.placeholder,
+    response?.question,
+    response?.missing_field_question,
+    "Sender, subject, keyword, latest, unread, date range...",
+  );
+  const type = firstString(firstField?.type, "text").toLowerCase();
+  const options = Array.isArray(firstField?.options) ? firstField.options : [];
+
+  const submitClarification = () => {
+    const answer = value.trim();
+    if (!answer || !onSendPrompt) return;
+    onSendPrompt(buildClarificationPrompt(response, missingField, answer));
+  };
+
+  return (
+    <article className="overflow-hidden rounded-[24px] border border-orange-400/40 bg-white/90 shadow-[0_20px_70px_rgba(15,23,42,0.10)] dark:border-orange-400/25 dark:bg-slate-950/70">
+      <div className="border-b border-slate-200/70 bg-orange-500/10 p-4 dark:border-slate-800/80">
+        <div className="mb-2 w-fit rounded-full border border-orange-400/40 bg-orange-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-orange-700 dark:text-orange-300">
+          More details required
+        </div>
+        <h3 className="text-base font-black text-slate-950 dark:text-white">
+          {response?.form_schema?.title || "Complete missing Gmail detail"}
+        </h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          {response?.question || response?.summary || response?.form_schema?.description || "Please provide the missing detail to continue this workflow."}
+        </p>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <label className="block text-xs font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          {label}
+        </label>
+
+        {type === "select" && options.length ? (
+          <select
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="">Select {label}</option>
+            {options.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        ) : (
+          <textarea
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            rows={4}
+            placeholder={placeholder}
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
+          />
+        )}
+
+        {missingField === "search_filter" ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+            Examples: <b>from:hdfcbank</b>, <b>subject:bank account</b>, <b>HDFC account opening</b>, <b>after:2026/6/1 hdfc</b>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-3 pt-1">
+          <button
+            type="button"
+            onClick={submitClarification}
+            disabled={!value.trim() || !onSendPrompt}
+            className="rounded-full bg-orange-500 px-5 py-2.5 text-xs font-black text-white shadow-[0_12px_35px_rgba(249,115,22,0.24)] transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Continue Workflow
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -1427,10 +1908,15 @@ export default function OutputSectionConnector({
   const uiEmails = response?.ui_result?.emails || [];
   const hasUiResult = Boolean(response?.ui_result);
   const hasForm = Boolean(response?.requires_form && response?.form_schema);
+  const isNewEmailReview = isNewEmailOperation(response, operationType);
   const threadId = extractThreadId(response);
   const draftId = extractDraftId(response);
-  const draftSubject = firstString(response?.subject, deepFindString(response?.step_results, ["subject"]));
-  const draftRecipient = firstString(response?.from_email, deepFindString(response?.step_results, ["from_email", "from"]));
+  const draftSubject = isNewEmailReview
+    ? extractNewEmailSubject(response)
+    : firstString(response?.subject, deepFindString(response?.step_results, ["subject"]));
+  const draftRecipient = isNewEmailReview
+    ? extractNewEmailRecipients(response).join(", ")
+    : firstString(response?.from_email, deepFindString(response?.step_results, ["from_email", "from"]));
   const hasOutput = Boolean(hasForm || hasEditableDraft || hasReplyConfirmation || hasUiResult || pdfAttachments.length || response || completionResult || resultText);
   const emailsFound = uiEmails.length || response?.emails_found || countByTool(response, ["search", "fetch", "thread", "email"]);
   const repliesGenerated = response?.replies_generated || countByTool(response, ["generate", "compose", "reply"]);
@@ -1701,12 +2187,19 @@ export default function OutputSectionConnector({
             <WorkflowErrorPanel response={response} />
 
             {response?.requires_form && response?.form_schema && onSendPrompt ? (
-              <GmailActionForm
-                schema={response.form_schema}
-                originalPrompt={String(response.partial_intent?.original_prompt || response.plan?.goal || "")}
-                partialIntent={partialIntent}
-                onSubmit={(nextPrompt) => onSendPrompt(nextPrompt)}
-              />
+              isClarificationResponse(response) && getMissingFieldName(response) ? (
+                <CompactClarificationForm
+                  response={response}
+                  onSendPrompt={onSendPrompt}
+                />
+              ) : (
+                <GmailActionForm
+                  schema={response.form_schema}
+                  originalPrompt={String(response.partial_intent?.original_prompt || response.plan?.goal || "")}
+                  partialIntent={partialIntent}
+                  onSubmit={(nextPrompt) => onSendPrompt(nextPrompt)}
+                />
+              )
             ) : null}
 
             <PdfAttachmentPanel
@@ -1730,13 +2223,13 @@ export default function OutputSectionConnector({
             {hasEditableDraft ? (
               <EditableReplyDraft
                 initialBody={editableDraftText}
-                threadId={threadId || null}
+                threadId={isNewEmailReview ? "new_email" : threadId || null}
                 draftId={draftId || null}
                 subject={draftSubject || null}
                 recipient={draftRecipient || null}
                 fromEmail={response?.from_email || null}
-                onSend={(editedBody) => onSendPrompt?.(buildSendEditedReplyPrompt(response, editedBody))}
-                onSaveDraft={(editedBody) => onSendPrompt?.(buildSaveEditedDraftPrompt(response, editedBody))}
+                onSend={(editedBody) => onSendPrompt?.(buildPrimarySendPayload(response, operationType, editedBody))}
+                onSaveDraft={(editedBody) => onSendPrompt?.(buildPrimaryDraftPayload(response, operationType, editedBody))}
                 onRegenerate={() =>
                   onSendPrompt?.(
                     `Regenerate the Gmail reply for this same thread using a professional tone. Original goal: ${response?.plan?.goal || "reply to email"}`,
@@ -1746,7 +2239,7 @@ export default function OutputSectionConnector({
             ) : null}
 
             {hasReplyConfirmation ? (
-              <ReplyConfirmationPanel response={response} draftText={editableDraftText} onSendPrompt={onSendPrompt} />
+              <ReplyConfirmationPanel response={response} draftText={editableDraftText} operationType={operationType} onSendPrompt={onSendPrompt} />
             ) : null}
 
             {showForm && response ? (

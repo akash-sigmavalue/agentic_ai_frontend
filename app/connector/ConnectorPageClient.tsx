@@ -24,7 +24,51 @@ type RunWorkflowOptions = {
   appendUserMessage?: boolean;
 };
 
+type WorkflowPromptPayload = string | Record<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function getWorkflowPromptText(input: WorkflowPromptPayload | undefined, fallbackPrompt: string) {
+  if (typeof input === "string") return input.trim();
+  if (isRecord(input)) {
+    const promptValue = input.prompt;
+    if (typeof promptValue === "string" && promptValue.trim()) return promptValue.trim();
+
+    const partialIntent = input.partial_intent;
+    if (isRecord(partialIntent) && typeof partialIntent.original_prompt === "string" && partialIntent.original_prompt.trim()) {
+      return partialIntent.original_prompt.trim();
+    }
+  }
+  return fallbackPrompt.trim();
+}
+
+function buildWorkflowRequestPayload(input: WorkflowPromptPayload | undefined, promptText: string): WorkflowPromptPayload {
+  if (!isRecord(input)) return promptText;
+  return {
+    ...input,
+    prompt: typeof input.prompt === "string" && input.prompt.trim() ? input.prompt.trim() : promptText,
+  };
+}
+
+function payloadToChatText(input: WorkflowPromptPayload, promptText: string) {
+  if (typeof input === "string") return promptText;
+  const operation = typeof input.operation === "string" ? input.operation : undefined;
+  const partialIntent = isRecord(input.partial_intent) ? input.partial_intent : null;
+  const threadId = typeof input.thread_id === "string" ? input.thread_id : typeof partialIntent?.thread_id === "string" ? partialIntent.thread_id : undefined;
+  const sendDirectly = input.send_directly === true || partialIntent?.send_directly === true;
+
+  return [
+    promptText,
+    operation ? `Operation: ${operation}` : "",
+    threadId ? `Thread ID: ${threadId}` : "",
+    sendDirectly ? "Send Directly: true" : "",
+  ].filter(Boolean).join(" | ");
+}
+
 const GMAIL_CONNECT_PROMPT_MESSAGE = "Please connect your email with me to continue this Gmail workflow.";
+const NO_SENDER_SEARCH_MARKER = "[system clarification: no sender filter required]";
 
 function hasGmailStep(response: WorkflowResponse | null) {
   if (response?.plan?.steps?.some((step) => step.system === "gmail")) return true;
@@ -90,6 +134,65 @@ function isWaitingForField(response: WorkflowResponse | null) {
 function getSafeChatMessage(response: WorkflowResponse | null) {
   if (!response) return "Workflow completed.";
   return response.chat_message || "Done. I prepared the result in the output section.";
+}
+
+function formatGmailDate(date: Date) {
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function isFalseSenderClarificationForSearch(response: WorkflowResponse | null) {
+  if (!response) return false;
+
+  const missingField = String(response.missing_field || response.form_schema?.missing_field || "").toLowerCase();
+  const question = String(response.question || response.missing_field_question || response.summary || "").toLowerCase();
+  const isSenderQuestion =
+    ["sender_name_or_email", "sender_email", "from_email", "sender"].includes(missingField) ||
+    question.includes("who is the email from");
+
+  if (!isSenderQuestion) return false;
+
+  const planText = JSON.stringify({
+    plan: response.plan,
+    partial_intent: response.partial_intent,
+  }).toLowerCase();
+
+  const hasSearchStep = Boolean(
+    response.plan?.steps?.some((step) => {
+      const stepText = `${step.system || ""} ${step.operation || ""} ${step.name || ""}`.toLowerCase();
+      return stepText.includes("gmail") && stepText.includes("search");
+    }),
+  );
+  const isReadOnlySearch =
+    hasSearchStep ||
+    planText.includes('"primary_intent":"search_email"') ||
+    planText.includes('"operation":"search"') ||
+    planText.includes('"action_category":"read_only"');
+  const hasUsableSearchFilter =
+    planText.includes("subject_keywords") ||
+    planText.includes("body_keywords") ||
+    planText.includes("date_range") ||
+    planText.includes("has_attachment") ||
+    planText.includes("filename:pdf") ||
+    planText.includes("valuation");
+  const intentSaysNoClarification =
+    planText.includes('"clarification"') && planText.includes('"required":false');
+
+  return isReadOnlySearch && hasUsableSearchFilter && intentSaysNoClarification;
+}
+
+function buildNoSenderSearchPrompt(prompt: string) {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  return [
+    prompt,
+    "",
+    NO_SENDER_SEARCH_MARKER,
+    "Run this as a read-only Gmail search across all senders. Do not ask for sender_name_or_email, sender_email, or from_email.",
+    `If the request says today, use Gmail's exclusive date window after:${formatGmailDate(today)} before:${formatGmailDate(tomorrow)}.`,
+    "For PDF requests, include filename:pdf and return matching PDF attachments when available.",
+  ].join("\n");
 }
 
 function toCompletionResult(response: WorkflowResponse): CompletionResult | null {
@@ -256,8 +359,10 @@ export default function ConnectorPageClient() {
     }
   };
 
-  const handleRunWorkflow = async (promptOverride?: string, options: RunWorkflowOptions = {}) => {
-    const cleaned = (promptOverride ?? prompt).trim();
+  const handleRunWorkflow = async (promptOverride?: WorkflowPromptPayload, options: RunWorkflowOptions = {}) => {
+    const workflowInput = promptOverride ?? prompt;
+    const cleaned = getWorkflowPromptText(workflowInput, prompt);
+    const requestPayload = buildWorkflowRequestPayload(workflowInput, cleaned);
     const appendUserMessage = options.appendUserMessage ?? true;
 
     if (!cleaned) {
@@ -274,13 +379,13 @@ export default function ConnectorPageClient() {
     setStatusMessage("Starting live workflow stream...");
 
     if (appendUserMessage) {
-      setConvMessages((prev) => [...prev, { role: "user", text: cleaned }]);
+      setConvMessages((prev) => [...prev, { role: "user", text: payloadToChatText(requestPayload, cleaned) }]);
     }
 
     let liveStepCount = 0;
 
     try {
-      const result = await streamWorkflow(cleaned, {
+      const result = await streamWorkflow(requestPayload as any, {
         onStepStarted: (step) => {
           liveStepCount += 1;
           setConvStep("streaming");
@@ -297,6 +402,11 @@ export default function ConnectorPageClient() {
         },
         onMissingField: (missingResult) => {
           const nextResponse = normalizeWorkflowResponse(missingResult);
+          if (isFalseSenderClarificationForSearch(nextResponse) && !cleaned.includes(NO_SENDER_SEARCH_MARKER)) {
+            setStatusMessage("Sender is not required for this search. Refining the Gmail query...");
+            return;
+          }
+
           const question = nextResponse?.question || nextResponse?.missing_field_question || `Please provide ${nextResponse?.missing_field || "the missing detail"}.`;
           const formMessage = nextResponse?.chat_message || "Please complete the required details in the output section.";
           setResponse(nextResponse);
@@ -314,6 +424,14 @@ export default function ConnectorPageClient() {
 
       const workflowResponse = normalizeWorkflowResponse(result as WorkflowResponse);
       setResponse(workflowResponse);
+
+      if (isFalseSenderClarificationForSearch(workflowResponse) && !cleaned.includes(NO_SENDER_SEARCH_MARKER)) {
+        setResponse(null);
+        setCompletionResult(null);
+        setStatusMessage("Sender is not required for this search. Running it across all senders...");
+        await handleRunWorkflow(buildNoSenderSearchPrompt(cleaned), { appendUserMessage: false });
+        return;
+      }
 
       if (isWaitingForField(workflowResponse)) {
         const question = workflowResponse?.question || workflowResponse?.missing_field_question || `Please provide ${workflowResponse?.missing_field || "the missing detail"}.`;
