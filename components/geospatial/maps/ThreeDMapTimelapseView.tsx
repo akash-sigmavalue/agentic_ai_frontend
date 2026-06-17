@@ -72,6 +72,12 @@ interface ThreeDMapTimelapseViewProps {
     mapLabel: string;
     plottedData: Record<string, unknown>;
   } | null) => void;
+  extraDeckLayers?: any[];
+  overlayTooltip?: (info: {
+    object?: unknown;
+    layer?: { id?: string } | null;
+    [key: string]: unknown;
+  }) => { html?: string; text?: string } | null;
 }
 
 function rateToColor(normalizedValue: number): [number, number, number, number] {
@@ -124,6 +130,8 @@ export default function ThreeDMapTimelapseView({
   mapId = 'default:3d-timelapse',
   mapLabel = 'Default 3D Map Timelapse',
   onInsightDataReady,
+  extraDeckLayers = [],
+  overlayTooltip,
 }: ThreeDMapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(
     initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India'
@@ -287,7 +295,7 @@ export default function ThreeDMapTimelapseView({
   }, [data, dateIndex]);
 
   const layers = useMemo(() => {
-    if (!data) return [];
+    if (!data) return extraDeckLayers.length > 0 ? [...extraDeckLayers] : [];
     const dates = data.dates;
     const currentDateLabel = dates[dateIndex] ?? 'N/A';
     const globalMin = data.summary.global_min_rate;
@@ -485,8 +493,8 @@ export default function ThreeDMapTimelapseView({
     if (showUnmatched) finalLayers.push(normalLayer);
     finalLayers.push(markerLayer, ...noFloorLayers, ...floorLayers);
 
-    return finalLayers;
-  }, [data, dateIndex, showUnmatched, stepStats]);
+    return [...finalLayers, ...extraDeckLayers];
+  }, [data, dateIndex, extraDeckLayers, showUnmatched, stepStats]);
 
   const tooltip = ({ object }: { object?: TooltipObject }) => {
     if (!object) return null;
@@ -705,7 +713,7 @@ export default function ThreeDMapTimelapseView({
             layers={layers}
             viewState={viewState}
             onViewStateChange={({ viewState: nextViewState }) => setViewState(nextViewState as typeof viewState)}
-            getTooltip={tooltip}
+            getTooltip={(info) => overlayTooltip?.(info) || tooltip(info)}
             style={{ position: 'absolute', inset: '0px' }}
           >
             <Map mapLib={import('maplibre-gl')} mapStyle={mapStyle || DEFAULT_STYLE} reuseMaps style={{ width: '100%', height: '100%' }}>

@@ -24,20 +24,13 @@ function formatTokenNumber(value) {
 function shortStageLabel(stage, index) {
   const base = stage.base_id || stage.id || "";
   const map = {
-    stage_1: "S1",
-    stage_1_5: "S1.5",
-    stage_1_6: "S1.6",
-    stage_2: "S2",
-    stage_2_1: "S2.1",
-    stage_3: "S3",
-    stage_3_1: "S3A",
-    stage_3_2: "S3B",
-    stage_3_3: "S3C",
-    stage_3_4: "S3D",
-    stage_4: "S4",
+    ui_stage_1: "S1",
+    ui_stage_2: "S2",
+    ui_stage_3: "S3",
+    ui_stage_4: "S4",
   };
   if (map[base]) {
-    return stage.iteration ? `${map[base]}.${stage.iteration}` : map[base];
+    return map[base];
   }
   return `S${index + 1}`;
 }
@@ -383,7 +376,7 @@ export default function PipelineStagesSection({
               Agentic Execution Flow
             </h2>
             <p className="m-0 mt-1 text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
-              Data retrieval agent v2 · prompt stages & steps
+              Data retrieval agent v2 · 4-stage execution flow
             </p>
           </div>
           <span

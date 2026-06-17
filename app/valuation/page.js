@@ -26,6 +26,9 @@ export default function HomePage() {
   const [amenityUpdates, setAmenityUpdates] = useState(null);
   const [roadUpdates, setRoadUpdates] = useState(null);
 
+  // Valuation result state lifted from ChatSection for the Report tab in MapSection
+  const [valuationResult, setValuationResult] = useState(null);
+
   // Resize split panel widths (percentages)
   const [leftWidth, setLeftWidth] = useState(33); // 33%
   const [middleWidth, setMiddleWidth] = useState(34); // 34%
@@ -166,12 +169,14 @@ export default function HomePage() {
                 onClear={() => {
                   setEvents([]);
                   setMarkers([]);
+                  setValuationResult(null);
                 }}
                 onEvent={(event) => setEvents((prev) => [...prev, event])}
                 onMarkersUpdate={(m) => {
                   setMarkers(m);
                 }}
                 factorialData={factorialData}
+                onValuationResult={setValuationResult}
               />
             </div>
 
@@ -208,7 +213,14 @@ export default function HomePage() {
 
             {/* Map Section */}
             <div className="resize-panel-right w-full xl:h-full min-h-0">
-              <MapSection markers={markers} factorialData={factorialData} onDensityUpdate={setDensityUpdates} onAmenityUpdate={setAmenityUpdates} onRoadUpdate={setRoadUpdates} />
+              <MapSection
+                markers={markers}
+                factorialData={factorialData}
+                onDensityUpdate={setDensityUpdates}
+                onAmenityUpdate={setAmenityUpdates}
+                onRoadUpdate={setRoadUpdates}
+                valuationResult={valuationResult}
+              />
             </div>
           </section>
         </div>
