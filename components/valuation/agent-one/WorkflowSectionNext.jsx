@@ -441,12 +441,17 @@ function StepDetails({ step }) {
       : content.subject_final_rate;
     const mktValue = content.subject_market_value;
     const subjectRow = content.comparable_factoring_table?.find(r => r.role === "SUBJECT");
+    const webRate = content.openai_websearch_rate || {};
+    const webEvidenceCount = Array.isArray(webRate.evidence) ? webRate.evidence.length : 0;
     
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Final Rate" value={finalRate ? `₹${Number(finalRate).toLocaleString()}/sqft` : null} />
         <DetailRow label="Adjusted Rate" value={content.subject_adjusted_rate ? `₹${Number(content.subject_adjusted_rate).toLocaleString()}/sqft` : null} />
         <DetailRow label="Market Value" value={mktValue ? `₹${Number(mktValue).toLocaleString()}` : null} />
+        <DetailRow label="Original Method" value={content.original_method_rate_psf ? `INR ${Number(content.original_method_rate_psf).toLocaleString()}/sqft` : null} />
+        <DetailRow label="OpenAI Web Rate" value={content.openai_websearch_rate_psf ? `INR ${Number(content.openai_websearch_rate_psf).toLocaleString()}/sqft` : null} />
+        <DetailRow label="Web Evidence" value={webEvidenceCount ? `${webRate.listing_count || webEvidenceCount} listing(s), ${webEvidenceCount} URL(s)` : null} />
         <DetailRow label="Methodology" value={content.methodology} />
         <DetailRow label="Rate Basis" value={formatRateBasis(content.rate_basis)} />
         <DetailRow label="Confidence" value={content.confidence} />

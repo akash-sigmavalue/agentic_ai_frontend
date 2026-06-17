@@ -35,6 +35,11 @@ function fmtCurrency(val, formatter) {
   return formatter.format(Number(val));
 }
 
+function getWebRateEvidence(factorialAnalysis) {
+  const webRate = factorialAnalysis?.openai_websearch_rate || {};
+  return Array.isArray(webRate.evidence) ? webRate.evidence.filter((item) => item?.url) : [];
+}
+
 function fmtPct(val) {
   if (val == null) return "—";
   const n = Number(val) * 100;
@@ -366,6 +371,8 @@ function SlideCover({ valuationResult }) {
   const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
   const table = factorialAnalysis?.comparable_factoring_table || [];
   const subjectRow = table.find(r => r.role === "SUBJECT");
+  const webRate = factorialAnalysis?.openai_websearch_rate || {};
+  const webEvidence = getWebRateEvidence(factorialAnalysis);
   const currencyCode = subjectData?.currency || "INR";
   const formatter = buildFormatter(currencyCode);
 
@@ -475,6 +482,38 @@ function SlideCover({ valuationResult }) {
           )}
         </div>
       </div>
+
+      {factorialAnalysis?.openai_websearch_rate_psf ? (
+        <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4 mb-4 shrink-0">
+          <p className="text-[8px] font-black uppercase tracking-[0.25em] text-cyan-300 mb-3">Rate Cross-Check</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-widest text-text-dim mb-1">Original Method</p>
+              <p className="font-mono text-[14px] font-black text-text-primary">INR {Number(factorialAnalysis.original_method_rate_psf || finalRate || 0).toLocaleString()}/sqft</p>
+            </div>
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-widest text-text-dim mb-1">OpenAI Web Search</p>
+              <p className="font-mono text-[14px] font-black text-cyan-300">INR {Number(factorialAnalysis.openai_websearch_rate_psf || 0).toLocaleString()}/sqft</p>
+            </div>
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-widest text-text-dim mb-1">Evidence</p>
+              <p className="text-[10px] font-bold text-text-secondary">{webRate.listing_count || webEvidence.length || 0} listing(s) · {webEvidence.length} URL(s)</p>
+            </div>
+          </div>
+          {webRate.summary && (
+            <p className="mt-3 text-[9px] leading-relaxed text-text-secondary">{webRate.summary}</p>
+          )}
+          {webEvidence.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {webEvidence.slice(0, 4).map((item, idx) => (
+                <a key={`${item.url}-${idx}`} href={item.url} target="_blank" rel="noreferrer" className="block truncate text-[9px] font-semibold text-cyan-300 underline underline-offset-2">
+                  {item.portal || "Listing"}: {item.title || item.url}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Property Summary Grid */}
       <div className="rounded-2xl border border-border-soft bg-bg-card/80 p-4 shrink-0">

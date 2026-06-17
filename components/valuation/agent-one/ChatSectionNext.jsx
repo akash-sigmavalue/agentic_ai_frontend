@@ -223,11 +223,15 @@ function summarizeEvent(event) {
   if (event.type === "comparable_results") {
     const c = event.content;
     let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Select comparables below and proceed to fetch listings.`;
+    if (c?.web_rate_estimate?.estimated_rate_psf) {
+      baseMsg += ` OpenAI web rate: ₹${Number(c.web_rate_estimate.estimated_rate_psf).toLocaleString()}/sqft from ${c.web_rate_estimate.listing_count || 0} listing(s).`;
+    }
     if (c?.web_error) {
       baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
     }
     return baseMsg;
   }
+  if (event.type === "web_rate_search_start") return event.content || "Searching current web listings for subject rate evidence...";
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
     const p = event.content;
@@ -2494,6 +2498,10 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   const compRows = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
   const finalRate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
+  const webRate = data.openai_websearch_rate || {};
+  const webRatePsf = Number(data.openai_websearch_rate_psf || webRate.estimated_rate_psf || 0);
+  const originalMethodRate = Number(data.original_method_rate_psf || finalRate || 0);
+  const webEvidence = Array.isArray(webRate.evidence) ? webRate.evidence : [];
 
   const MainContent = (
     <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
@@ -2718,6 +2726,64 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
 
         {/* ── REASONING REPORT ──────────────────────────────────────── */}
+        {(data.openai_websearch_rate || data.openai_websearch_rate_psf != null || data.rate_reconciliation) && (
+          <section className="rounded-[2rem] border border-cyan-500/25 bg-cyan-500/[0.06] p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.28em] text-cyan-300">OpenAI Web Rate Cross-Check</p>
+                <p className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-text-dim">Current sale-listing evidence from web search</p>
+              </div>
+              <span className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-200">
+                {webRate.listing_count || webEvidence.length || 0} listing(s)
+              </span>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-bg-input/50 p-3">
+                <p className="mb-1 text-[8px] font-black uppercase tracking-widest text-text-dim">Original Method</p>
+                <p className="font-mono text-[15px] font-black text-text-primary">{fmtRate(originalMethodRate)}/{area_unit || "sqft"}</p>
+              </div>
+              <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-3">
+                <p className="mb-1 text-[8px] font-black uppercase tracking-widest text-cyan-200">OpenAI Web Rate</p>
+                <p className="font-mono text-[15px] font-black text-cyan-200">
+                  {webRatePsf > 0 ? `${fmtRate(webRatePsf)}/${area_unit || "sqft"}` : "Not found"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-bg-input/50 p-3">
+                <p className="mb-1 text-[8px] font-black uppercase tracking-widest text-text-dim">Median / Range</p>
+                <p className="font-mono text-[12px] font-black text-text-secondary">
+                  {webRate.median_rate_psf ? `${fmtRate(webRate.median_rate_psf)} median` : "Median not found"}
+                </p>
+                {(webRate.min_rate_psf || webRate.max_rate_psf) && (
+                  <p className="mt-1 text-[9px] font-semibold text-text-dim">
+                    {fmtRate(webRate.min_rate_psf)} - {fmtRate(webRate.max_rate_psf)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {webRate.summary && (
+              <p className="mt-4 text-[10px] leading-relaxed text-text-secondary">{webRate.summary}</p>
+            )}
+
+            {webEvidence.length > 0 && (
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {webEvidence.slice(0, 4).map((item, idx) => (
+                  <a
+                    key={`${item.url || item.title}-${idx}`}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate rounded-lg border border-cyan-500/15 bg-bg-input/40 px-3 py-2 text-[9px] font-semibold text-cyan-200 underline-offset-2 hover:text-cyan-100 hover:underline"
+                  >
+                    {item.portal || "Listing"}: {item.title || item.url}
+                  </a>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
@@ -3105,6 +3171,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [ctaCleanCollapsed, setCtaCleanCollapsed] = useState(false);
   const [ctaFactorialCollapsed, setCtaFactorialCollapsed] = useState(false);
   const [comparableData, setComparableData] = useState(null);
+  const [webRateEstimate, setWebRateEstimate] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
   const [dbNoResults, setDbNoResults] = useState(false);
   const [subjectData, setSubjectData] = useState(null);
@@ -3303,6 +3370,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setApproachChoiceNeeded(null);
     setExtractionVerification(null);
     setComparableData(null);
+    setWebRateEstimate(null);
     setSelectedComps(new Set());
     setDbNoResults(false);
     setSubjectData(null);
@@ -4070,6 +4138,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           factorial_data: factData,
           subject: subject,
           comparables: comps,
+          web_rate_estimate: webRateEstimate,
           radii: { road_m: 200, amenity_m: 2000, density_m: 500 }
         })
       });
@@ -4566,6 +4635,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
             setComparableData(comps);
+            setWebRateEstimate(event.content?.web_rate_estimate || null);
             // Store subject's DB entry (if found) for listing fetch
             const subjectDbProject = event.content?.subject_db_project || null;
             if (subjectDbProject) {
