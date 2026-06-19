@@ -2192,7 +2192,9 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
                   <td className="px-4 py-3 text-center">
-                    {row.rate_derived_from === "micromarket" ? (
+                    {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
+                      <span className="text-text-dim text-[9px]">—</span>
+                    ) : row.rate_derived_from === "micromarket" ? (
                       <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
                         Micromarket
                       </span>
