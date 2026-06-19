@@ -2130,13 +2130,6 @@ export default function OutputSectionConnector({
           >
             Analyze
           </button>
-          <button
-            type="button"
-            onClick={() => onSendPrompt?.("Create a new Gmail automation rule")}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            ⊕ New rule
-          </button>
           {showUsageDetails ? (
             <div className="absolute right-0 top-10 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-2xl dark:border-slate-700 dark:bg-slate-950">
               <div className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">

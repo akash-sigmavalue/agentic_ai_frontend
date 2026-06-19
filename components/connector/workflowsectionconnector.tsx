@@ -280,10 +280,6 @@ function getResponseStatus(response: WorkflowResponse | null) {
   return String(response?.status || "").toLowerCase();
 }
 
-function isAutomationPlan(response: WorkflowResponse | null) {
-  const plan = response?.plan;
-  return typeof (plan as { type?: unknown })?.type === "string" && (plan as { type?: string }).type === "automation";
-}
 
 function isWaitingForConfirmation(response: WorkflowResponse | null) {
   return getResponseStatus(response) === "needs_confirmation";
@@ -435,20 +431,6 @@ export default function WorkflowSectionConnector({
               </div>
             ) : null}
 
-            {response?.execution_type === "automated" || isAutomationPlan(response) ? (
-              <div className="connector-card mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-black text-slate-950 dark:text-white">⚡ Automation workflow</div>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Activate only after checking the generated workflow.</p>
-                  </div>
-                  <button onClick={handleActivateFlow} disabled={activatingFlow} className="rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white disabled:opacity-60">
-                    {activatingFlow ? "Activating..." : "Activate automation"}
-                  </button>
-                </div>
-                {activateFlowResult ? <p className={`mt-3 text-xs font-bold ${activateFlowResult.ok ? "text-green-500" : "text-red-500"}`}>{activateFlowResult.message}</p> : null}
-              </div>
-            ) : null}
           </>
         )}
       </div>
