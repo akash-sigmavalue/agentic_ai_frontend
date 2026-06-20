@@ -38,7 +38,8 @@ import {
   Minimize2,
   Maximize2,
   RotateCw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Settings
 } from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -820,136 +821,266 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         {/* Floating Settings Card Overlay */}
         {factorialData && factorialData.table && (
           !isControlsExpanded ? (
-            <button
-              onClick={() => setIsControlsExpanded(true)}
-              className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md px-3 py-2 text-xs font-bold text-accent shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:scale-105 hover:bg-bg-card transition cursor-pointer"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>Map Controls</span>
-            </button>
+            <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 rounded-2xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
+              <button
+                onClick={() => setMapMode("amenity")}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  mapMode === "amenity"
+                    ? "bg-cyan-500/20 text-[#22d3ee] border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.35)]"
+                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                }`}
+                title="Amenities Layout"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Amenities</span>
+              </button>
+
+              <button
+                onClick={() => setMapMode("density")}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  mapMode === "density"
+                    ? "bg-amber-500/20 text-[#f59e0b] border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
+                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                }`}
+                title="Built-Up Density & Congestion"
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Density</span>
+              </button>
+
+              <button
+                onClick={() => setMapMode("roads")}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  mapMode === "roads"
+                    ? "bg-purple-500/20 text-[#a78bfa] border border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.35)]"
+                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                }`}
+                title="Road Infrastructure"
+              >
+                <Milestone className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Roads</span>
+              </button>
+
+              <button
+                onClick={() => setMapMode("cbd")}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  mapMode === "cbd"
+                    ? "bg-emerald-500/20 text-[#10b981] border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                }`}
+                title="CBD Proximity"
+              >
+                <Building className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">CBD</span>
+              </button>
+
+              <div className="w-[1px] h-5 bg-white/[0.08] mx-1" />
+
+              <button
+                onClick={() => setIsControlsExpanded(true)}
+                className="flex items-center justify-center h-8 w-8 rounded-xl border border-white/10 bg-white/5 hover:bg-accent/20 hover:text-accent transition-all duration-200 text-text-secondary cursor-pointer"
+                title="Open Settings Panel"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            </div>
           ) : (
-            <div className="absolute top-3 right-3 z-[1000] w-[300px] max-h-[85%] overflow-y-auto custom-scrollbar rounded-xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-3 text-xs text-left">
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 shrink-0">
-                <span className="font-display text-[10px] font-extrabold uppercase tracking-widest text-[#22d3ee] flex items-center gap-1.5">
-                  <SlidersHorizontal className="h-3.5 w-3.5" />
-                  Map Controls
+            <div className="absolute top-3 right-3 z-[1000] w-[340px] max-h-[85%] overflow-y-auto custom-scrollbar rounded-2xl border border-white/[0.08] bg-bg-card/95 backdrop-blur-xl p-5 shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col gap-4 text-xs text-left animate-in slide-in-from-top-3 duration-300">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
+                <span className="font-display text-[10px] font-black uppercase tracking-[0.2em] text-[#22d3ee] flex items-center gap-1.5">
+                  <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
+                  Map Layer Settings
                 </span>
                 <div className="flex items-center gap-2">
                   {(isFetchingAmenities || isFetchingDensity || isFetchingRoads || isFetchingCbd) && (
-                    <span className="text-[9px] text-[#22d3ee] animate-pulse">Syncing...</span>
+                    <span className="text-[9px] text-[#22d3ee] font-black uppercase tracking-wider animate-pulse flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+                      Syncing...
+                    </span>
                   )}
                   <button
                     onClick={() => setIsControlsExpanded(false)}
-                    className="text-text-dim hover:text-text-primary text-[10px] font-black uppercase transition p-0.5 cursor-pointer"
-                    title="Close Controls"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/10 text-text-dim hover:text-white transition duration-200 cursor-pointer"
+                    title="Collapse Settings"
                   >
                     ✕
                   </button>
                 </div>
               </div>
 
-              {/* Select View Mode */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Map View Mode</label>
-                <select
-                  value={mapMode}
-                  onChange={(e) => setMapMode(e.target.value)}
-                  className="w-full rounded-lg border border-white/[0.08] bg-bg-input px-2.5 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent transition cursor-pointer"
-                >
-                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="amenity">Amenities Layout</option>
-                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="density">Built-Up Density & Congestion</option>
-                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="roads">Road Infrastructure</option>
-                  <option style={{ backgroundColor: 'var(--bg-dark, #0b0e14)', color: 'var(--text-primary, #f8fafc)' }} value="cbd">CBD Proximity</option>
-                </select>
+              {/* View Mode Cards (2x2 Grid) */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-text-dim">Layer Selection</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Amenities Mode */}
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("amenity")}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
+                      mapMode === "amenity"
+                        ? "border-cyan-500/40 bg-cyan-500/[0.08] shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className={`h-4 w-4 ${mapMode === "amenity" ? "text-cyan-400" : "text-text-dim group-hover:text-cyan-400 transition-colors"}`} />
+                      <span className={`text-[10px] font-bold ${mapMode === "amenity" ? "text-white" : "text-text-secondary"}`}>Amenities</span>
+                    </div>
+                    <span className="text-[8px] text-text-dim leading-normal mt-0.5">Hospitals, schools, transit & retail</span>
+                  </button>
+
+                  {/* Density Mode */}
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("density")}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
+                      mapMode === "density"
+                        ? "border-amber-500/40 bg-amber-500/[0.08] shadow-[0_0_12px_rgba(245,158,11,0.15)]"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className={`h-4 w-4 ${mapMode === "density" ? "text-amber-400" : "text-text-dim group-hover:text-amber-400 transition-colors"}`} />
+                      <span className={`text-[10px] font-bold ${mapMode === "density" ? "text-white" : "text-text-secondary"}`}>Density</span>
+                    </div>
+                    <span className="text-[8px] text-text-dim leading-normal mt-0.5">Built-up score & local congestion</span>
+                  </button>
+
+                  {/* Roads Mode */}
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("roads")}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
+                      mapMode === "roads"
+                        ? "border-purple-500/40 bg-purple-500/[0.08] shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Milestone className={`h-4 w-4 ${mapMode === "roads" ? "text-purple-400" : "text-text-dim group-hover:text-purple-400 transition-colors"}`} />
+                      <span className={`text-[10px] font-bold ${mapMode === "roads" ? "text-white" : "text-text-secondary"}`}>Roads</span>
+                    </div>
+                    <span className="text-[8px] text-text-dim leading-normal mt-0.5">Road width & connectivity</span>
+                  </button>
+
+                  {/* CBD Mode */}
+                  <button
+                    type="button"
+                    onClick={() => setMapMode("cbd")}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
+                      mapMode === "cbd"
+                        ? "border-emerald-500/40 bg-emerald-500/[0.08] shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Building className={`h-4 w-4 ${mapMode === "cbd" ? "text-emerald-400" : "text-text-dim group-hover:text-emerald-400 transition-colors"}`} />
+                      <span className={`text-[10px] font-bold ${mapMode === "cbd" ? "text-white" : "text-text-secondary"}`}>CBD</span>
+                    </div>
+                    <span className="text-[8px] text-text-dim leading-normal mt-0.5">Proximity to commercial cores</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Amenity Filters */}
+              {/* Amenity Filters - Icon Chips */}
               {mapMode === "amenity" && availableCategories.length > 0 && (
-                <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
-                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Amenity Filters</label>
-                  <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="flex flex-col gap-2 border-t border-white/[0.05] pt-3">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-text-dim">Amenity Category Filters</label>
+                  <div className="flex flex-wrap gap-2 max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
                     {availableCategories.map(cat => {
                       const label = cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                       const isChecked = activeFilters.includes(cat);
                       return (
-                        <label key={cat} className="flex items-center justify-between cursor-pointer group select-none py-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
-                            <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition font-medium">{label}</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              if (activeFilters.includes(cat)) {
-                                setSelectedCategories(activeFilters.filter(c => c !== cat));
-                              } else {
-                                setSelectedCategories([...activeFilters, cat]);
-                              }
-                            }}
-                            className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded cursor-pointer"
-                          />
-                        </label>
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            if (activeFilters.includes(cat)) {
+                              setSelectedCategories(activeFilters.filter(c => c !== cat));
+                            } else {
+                              setSelectedCategories([...activeFilters, cat]);
+                            }
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[9px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                            isChecked
+                              ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-400 font-extrabold shadow-sm"
+                              : "bg-white/[0.02] border-white/10 text-text-secondary hover:bg-white/[0.05] hover:text-white"
+                          }`}
+                        >
+                          <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
+                          <span>{label}</span>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
               )}
 
-              {/* Visibility Toggle */}
-              <div className="flex flex-col gap-1.5 border-t border-white/[0.04] pt-2">
-                <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Project Visibility</label>
-                <div className="flex flex-col gap-1.5 max-h-[100px] overflow-y-auto custom-scrollbar pr-1">
+              {/* Visibility Toggle - Styled Switches */}
+              <div className="flex flex-col gap-2 border-t border-white/[0.05] pt-3">
+                <label className="text-[9px] font-black uppercase tracking-wider text-text-dim">Project Visibility</label>
+                <div className="flex flex-col gap-2.5 max-h-[110px] overflow-y-auto custom-scrollbar pr-1">
                   {availableProjects.map((proj, i) => {
                     const name = proj.label || proj.project_name || "Subject";
                     const isChecked = !hiddenProjects.has(name);
                     return (
-                      <label key={i} className="flex items-center justify-between cursor-pointer group select-none py-0.5">
-                        <span className="text-[10px] text-text-secondary group-hover:text-text-primary transition font-medium truncate max-w-[85%]">{name}</span>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
+                      <div key={i} className="flex items-center justify-between py-0.5">
+                        <span className="text-[10px] text-text-secondary font-medium truncate max-w-[70%]" title={name}>{name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
                             const newHidden = new Set(hiddenProjects);
                             if (isChecked) newHidden.add(name);
                             else newHidden.delete(name);
                             setHiddenProjects(newHidden);
                           }}
-                          className="accent-accent w-3.5 h-3.5 bg-bg-deep border-border rounded cursor-pointer"
-                        />
-                      </label>
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isChecked ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.3)]' : 'bg-white/15'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${isChecked ? 'translate-x-4.5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Radius and Refresh */}
+              {/* Radius Control Range Slider & Refresh Button */}
               {mapMode !== "cbd" && (
-                <div className="flex flex-col gap-2 border-t border-white/[0.04] pt-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 flex flex-col gap-1">
-                      <label className="text-[9px] font-extrabold uppercase tracking-wider text-text-dim">Radius (m)</label>
-                      <input
-                        type="number"
-                        value={mapMode === "amenity" ? amenityRadius : mapMode === "density" ? densityRadius : roadRadius}
-                        onChange={(e) => {
-                          if (mapMode === "amenity") setAmenityRadius(Number(e.target.value));
-                          else if (mapMode === "density") setDensityRadius(Number(e.target.value));
-                          else setRoadRadius(Number(e.target.value));
-                        }}
-                        step={100}
-                        className="w-full rounded-lg border border-white/[0.08] bg-bg-input px-2.5 py-1 text-[11px] text-text-primary outline-none focus:border-accent font-mono"
-                      />
+                <div className="flex flex-col gap-3.5 border-t border-white/[0.05] pt-3.5 mt-1">
+                  {/* Slider */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-[9px] text-text-dim uppercase font-black tracking-widest">
+                      <span>Geospatial Radius</span>
+                      <span className="font-mono text-cyan-400 font-extrabold text-[10px]">
+                        {(mapMode === "amenity" ? amenityRadius : mapMode === "density" ? densityRadius : roadRadius).toLocaleString()} m
+                      </span>
                     </div>
-                    <button
-                      onClick={handleRefresh}
-                      disabled={isFetchingAmenities || isFetchingDensity || isFetchingRoads}
-                      className="flex items-center justify-center gap-1.5 self-end h-[28px] rounded-lg border border-accent/20 bg-accent/5 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep disabled:opacity-50 whitespace-nowrap cursor-pointer"
-                    >
-                      <RotateCw className={`h-3 w-3 ${isFetchingAmenities || isFetchingDensity || isFetchingRoads ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </button>
+                    <input
+                      type="range"
+                      min="500"
+                      max="5000"
+                      step="100"
+                      value={mapMode === "amenity" ? amenityRadius : mapMode === "density" ? densityRadius : roadRadius}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (mapMode === "amenity") setAmenityRadius(val);
+                        else if (mapMode === "density") setDensityRadius(val);
+                        else setRoadRadius(val);
+                      }}
+                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
                   </div>
+
+                  {/* CTA Refresh */}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isFetchingAmenities || isFetchingDensity || isFetchingRoads}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_12px_rgba(6,182,212,0.2)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                  >
+                    <RotateCw className={`h-3.5 w-3.5 ${isFetchingAmenities || isFetchingDensity || isFetchingRoads ? 'animate-spin' : ''}`} />
+                    {isFetchingAmenities || isFetchingDensity || isFetchingRoads ? "Syncing Analysis..." : `Refresh ${mapMode} Data`}
+                  </button>
                 </div>
               )}
             </div>

@@ -108,6 +108,18 @@ function formatAmenitySummary(summary) {
   return "—";
 }
 
+function getUpdatedAmenitySummary(row, factorialData) {
+  if (!row) return null;
+  const projName = (row.project_name || "").toLowerCase().trim();
+  if (factorialData?.table) {
+    const match = factorialData.table.find(r => (r.project_name || "").toLowerCase().trim() === projName);
+    if (match && match.amenity_summary) {
+      return match.amenity_summary;
+    }
+  }
+  return row.amenity_summary;
+}
+
 function haversineDistanceKM(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const R = 6371; // Earth radius in km
@@ -362,7 +374,7 @@ function SlideReportMap({ valuationResult }) {
 
 // ── SLIDE 1: Valuation Certificate Cover ────────────────────────────────────
 function SlideCover({ valuationResult }) {
-  const { subjectData, factorialAnalysis, costCalculation, type, timestamp } = valuationResult;
+  const { subjectData, factorialAnalysis, costCalculation, type, timestamp, factorialData } = valuationResult;
   const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
   const table = factorialAnalysis?.comparable_factoring_table || [];
   const subjectRow = table.find(r => r.role === "SUBJECT");
@@ -491,7 +503,7 @@ function SlideCover({ valuationResult }) {
             ["Configuration", subjectData?.configuration || subjectData?.unit_configuration],
             ["Approach", subjectData?.recommended_approach?.toUpperCase()],
             ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(4)}, ${Number(subjectData.lng || 0).toFixed(4)}` : null],
-            ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+            ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
           ].filter(([_, v]) => v).map(([label, value]) => {
             const isFullWidth = label === "Neighborhood Amenities";
             return (
@@ -530,7 +542,7 @@ function SlideCover({ valuationResult }) {
 
 // ── SLIDE 2: Comparable Factoring Grid ─────────────────────────────────────
 function SlideComparableGrid({ valuationResult }) {
-  const { factorialAnalysis, subjectData } = valuationResult;
+  const { factorialAnalysis, subjectData, factorialData } = valuationResult;
   const currencyCode = subjectData?.currency || "INR";
   const formatter = buildFormatter(currencyCode);
 
@@ -579,7 +591,7 @@ function SlideComparableGrid({ valuationResult }) {
                 </td>
                 <td className="px-2 py-2.5 text-center font-mono font-bold text-accent text-[9px]">{subjectRow.road_type || "—"}</td>
                 <td className="px-2 py-2.5 text-center text-[9px] text-text-dim">
-                  {getAmenitiesCount(subjectRow.amenity_summary)}
+                  {getAmenitiesCount(getUpdatedAmenitySummary(subjectRow, factorialData))}
                 </td>
                 <td className="px-2 py-2.5 text-center font-mono text-accent text-[9px]">
                   {subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}
@@ -607,7 +619,7 @@ function SlideComparableGrid({ valuationResult }) {
                   </td>
                   <td className="px-2 py-2.5 text-center font-mono text-text-dim text-[9px]">{row.road_type || "—"}</td>
                   <td className="px-2 py-2.5 text-center text-[9px] text-text-dim">
-                    {getAmenitiesCount(row.amenity_summary)}
+                    {getAmenitiesCount(getUpdatedAmenitySummary(row, factorialData))}
                   </td>
                   <td className="px-2 py-2.5 text-center font-mono text-text-dim text-[9px]">
                     {row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}
@@ -1256,7 +1268,7 @@ function downloadPDF(valuationResult) {
         ["Plot Area", subjectData?.plot_area_sqft ? `${Number(subjectData.plot_area_sqft).toLocaleString()} sqft` : null],
         ["Approach", subjectData?.recommended_approach?.toUpperCase()],
         ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(5)}, ${Number(subjectData.lng || 0).toFixed(5)}` : null],
-        ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+        ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
       ].filter(([, v]) => v).map(([l, v]) => {
         const isAmenities = l === "Neighborhood Amenities";
         return `<div class="info-item" ${isAmenities ? 'style="grid-column: span 2;"' : ''}><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`;
@@ -1362,7 +1374,7 @@ function downloadPDF(valuationResult) {
         <tr class="subject-row">
           <td>${subjectRow.project_name} <span style="background:#0891b2;color:white;font-size:7px;padding:1px 4px;border-radius:3px;font-weight:900;">SUBJECT</span></td>
           <td class="text-center mono">${subjectRow.road_type || "—"}</td>
-          <td class="text-center">${getAmenitiesCount(subjectRow.amenity_summary)}</td>
+          <td class="text-center">${getAmenitiesCount(getUpdatedAmenitySummary(subjectRow, factorialData))}</td>
           <td class="text-center mono">${subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}</td>
           <td class="text-center">${subjectRow.cbd_nearest_km != null ? Number(subjectRow.cbd_nearest_km).toFixed(1) : "—"}</td>
           <td class="text-right mono">${fmtCurrency(subjectRow.avg_rate, formatter)}</td>
@@ -1374,7 +1386,7 @@ function downloadPDF(valuationResult) {
           return `<tr>
             <td>${row.project_name}</td>
             <td class="text-center mono">${row.road_type || "—"}</td>
-            <td class="text-center">${getAmenitiesCount(row.amenity_summary)}</td>
+            <td class="text-center">${getAmenitiesCount(getUpdatedAmenitySummary(row, factorialData))}</td>
             <td class="text-center mono">${row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}</td>
             <td class="text-center">${row.cbd_nearest_km != null ? Number(row.cbd_nearest_km).toFixed(1) : "—"}</td>
             <td class="text-right mono">${fmtCurrency(row.avg_rate, formatter)}</td>
