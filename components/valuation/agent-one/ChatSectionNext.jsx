@@ -1585,6 +1585,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         <thead className="sticky top-0 z-[11] bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_config" label="Config" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="raw_price" label="Raw Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -1592,6 +1593,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <TableHeaderCell columnKey="exchange_rate_remark" label="Exchange Rate" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_area_sqft" label="Raw Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="final_super_builtup_area" label="Normalized Area (SBUA)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            {isPlotSubject && (
+              <TableHeaderCell columnKey="plot_area_sqft" label="Plot Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            )}
             <TableHeaderCell columnKey="rate_per_sqft" label="Rate / Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
 
             {showPlotControls && (
@@ -1638,10 +1642,35 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
             const rKey = getRowKey(lst);
+            // project_category is "plot" / "land" / "villa" — use it as the primary signal.
+            // Fall back to plot_area_sqft presence if project_category is absent.
+            const rowCategory = (lst.project_category || "").toLowerCase().trim();
+            const isRowPlot = ["plot", "land"].includes(rowCategory)
+              || (!rowCategory && lst.plot_area_sqft != null && lst.plot_area_sqft > 0);
+            // For plot rows: use plot_area_sqft first, then cleaned_area_sqft as fallback
+            const plotAreaValue = lst.plot_area_sqft || (isRowPlot ? lst.cleaned_area_sqft : null);
+            // Rate/sqft divisor: plot rows use plotAreaValue, others use final_super_builtup_area
+            const rowAreaForRate = isRowPlot
+              ? plotAreaValue
+              : (lst.final_super_builtup_area || lst.cleaned_area_sqft);
             return (
               <tr key={`${activeTab}_${idx}_${rKey}`} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
                 <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                   {lst.cleaned_match_project || lst.project_name || "—"}
+                </td>
+                {/* Property Category badge */}
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {lst.project_category ? (
+                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                      ["plot", "land"].includes((lst.project_category || "").toLowerCase())
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
+                        ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                        : "bg-text-dim/10 text-text-dim border-border/40"
+                    }`}>
+                      {lst.project_category}
+                    </span>
+                  ) : "—"}
                 </td>
                 <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
@@ -1668,12 +1697,24 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">
                   {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
                 </td>
+                {/* Normalized Area (SBUA) — only filled for villa / non-plot rows */}
                 <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                  {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
+                  {!isRowPlot && lst.final_super_builtup_area
+                    ? `${Math.round(lst.final_super_builtup_area)} sqft`
+                    : "—"}
                 </td>
+                {/* Plot Area — only filled for plot rows; falls back to cleaned_area_sqft */}
+                {isPlotSubject && (
+                  <td className="px-3 py-2 text-right font-mono text-emerald-400 font-bold whitespace-nowrap">
+                    {isRowPlot && plotAreaValue
+                      ? `${Math.round(plotAreaValue).toLocaleString()} sqft`
+                      : "—"}
+                  </td>
+                )}
+                {/* Rate / Sqft — uses the relevant area field per row type */}
                 <td className="px-3 py-2 text-right font-mono text-text-primary">
-                  {lst.cleaned_price_value && lst.final_super_builtup_area
-                    ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
+                  {lst.cleaned_price_value && rowAreaForRate
+                    ? Math.round(lst.cleaned_price_value / rowAreaForRate).toLocaleString()
                     : "—"}
                 </td>
 
@@ -5404,7 +5445,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               .filter(([k, v]) => {
                 if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
                 if (v === null || v === "" || typeof v === 'object') return false;
-                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) {
+                  const valStr = String(v).trim().toLowerCase();
+                  if (!valStr || ["subject property", "unknown", "unnamed_project", "unnamed project"].includes(valStr)) {
+                    return false;
+                  }
+                }
                 return true;
               })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
@@ -6014,10 +6060,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const Stage1GateWizard = gateActive ? (() => {
     const currentMeta = GATE_META.find(g => g.step === gateStep) || GATE_META[0];
     const activeType = wizardPropType;
+    const currentProjName = gateValues["project_name"] || subjectData?.project_name || "";
+    const isProjectNamePresent = currentProjName && !["subject property", "unknown", "unnamed_project", "unnamed project"].includes(currentProjName.toLowerCase().trim());
 
     // Dynamically build all fields for the active property type
     const identityFields = [
-      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
       { field: "location_name", label: "Location / Locality", type: "text" },
       { field: "city_name", label: "City Name", type: "text" },
       { field: "country", label: "Country", type: "text" },
