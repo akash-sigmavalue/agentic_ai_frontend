@@ -22,7 +22,8 @@ import {
   ArrowDown,
   Filter,
   Search,
-  X
+  X,
+  Zap
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -2233,7 +2234,9 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
                   <td className="px-4 py-3 text-center">
-                    {row.rate_derived_from === "micromarket" ? (
+                    {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
+                      <span className="text-text-dim text-[9px]">—</span>
+                    ) : row.rate_derived_from === "micromarket" ? (
                       <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
                         Micromarket
                       </span>
@@ -2497,9 +2500,13 @@ function CbdCell({ km, name, isSubject }) {
   );
 }
 
-function FactoringResultCard({ data, area_unit, subjectData }) {
+function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
+  
+  // Cache original data for Reset functionality when the card is first mounted
+  const [originalData] = useState(() => JSON.parse(JSON.stringify(data)));
+
   if (!data) return null;
 
   const {
@@ -2535,6 +2542,142 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   const compRows = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
   const finalRate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
+
+  const subjectListings = Number(subjectData?.listing_count || blending.subject_listing_count || 0);
+  const capLimit = subjectListings >= 10 ? 0.10 : 0.20;
+
+  // Custom helper function to check if a project has custom factor overrides
+  const isProjectModified = (projectName) => {
+    const origRow = originalData.comparable_factoring_table?.find(r => r.project_name === projectName);
+    const currRow = comparable_factoring_table.find(r => r.project_name === projectName);
+    if (!origRow || !currRow) return false;
+    return (
+      origRow.factor_road !== currRow.factor_road ||
+      origRow.factor_amenity !== currRow.factor_amenity ||
+      origRow.factor_density !== currRow.factor_density ||
+      origRow.factor_cbd !== currRow.factor_cbd
+    );
+  };
+
+  // Custom helper to check if weights have been modified from original
+  const isWeightsModified = () => {
+    return (
+      originalData.blending?.w1 !== blending.w1 ||
+      originalData.blending?.w2 !== blending.w2
+    );
+  };
+
+  // Helper to check if a comparable hit the cap
+  const isCapped = (projectName) => {
+    const currRow = comparable_factoring_table.find(r => r.project_name === projectName);
+    if (!currRow) return false;
+    const sum = (currRow.factor_road ?? 0) + (currRow.factor_amenity ?? 0) + (currRow.factor_density ?? 0) + (currRow.factor_cbd ?? 0);
+    return Math.abs(sum) > capLimit;
+  };
+
+  // Recalculates other dependent fields and triggers parent update handler
+  const recalculateAndTrigger = (newTable, w1, w2) => {
+    const compRowsOnly = newTable.filter((r) => r.role !== "SUBJECT");
+    const compCount = compRowsOnly.length;
+    const factoredCompAvg = compCount > 0 
+      ? Math.round(compRowsOnly.reduce((sum, r) => sum + (r.factored_rate ?? 0), 0) / compCount)
+      : 0;
+
+    const sRate = subjectRow ? Number(subjectRow.avg_rate ?? 0) : 0;
+
+    let finalRate = 0;
+    if (subjectListings > 0 && sRate > 0) {
+      finalRate = Math.round(w1 * sRate + w2 * factoredCompAvg);
+    } else {
+      finalRate = Math.round(factoredCompAvg);
+    }
+
+    // Dynamic reconciliation note updates if edits are capped
+    let note = reconciliation_note || "";
+    note = note.replace(/\[Client-Side Adjustment Capped\].*?\./g, "").trim();
+    const cappedProjects = newTable
+      .filter(r => r.role !== "SUBJECT")
+      .filter(r => {
+        const sum = (r.factor_road ?? 0) + (r.factor_amenity ?? 0) + (r.factor_density ?? 0) + (r.factor_cbd ?? 0);
+        return Math.abs(sum) > capLimit;
+      })
+      .map(r => r.project_name);
+
+    if (cappedProjects.length > 0) {
+      note = `[Client-Side Adjustment Capped] Total adjustments capped at ${(capLimit * 100).toFixed(0)}% for projects: ${cappedProjects.join(", ")}. ${note}`;
+    }
+
+    const isWeightsMod = (w1 !== originalData.blending?.w1 || w2 !== originalData.blending?.w2);
+    const updatedData = {
+      ...data,
+      comparable_factoring_table: newTable,
+      blending: {
+        ...blending,
+        factored_comp_avg: factoredCompAvg,
+        w1,
+        w2,
+        final_rate: finalRate,
+        weight_reasoning: isWeightsMod ? null : (originalData.blending?.weight_reasoning || blending.weight_reasoning),
+      },
+      subject_final_rate: finalRate,
+      subject_rate_range: {
+        low: Math.round(finalRate * 0.95),
+        high: Math.round(finalRate * 1.05),
+      },
+      reconciliation_note: note,
+    };
+
+    onUpdateData?.(updatedData);
+  };
+
+  const handleFactorChange = (projectName, factorKey, valPct) => {
+    const decimalVal = Number((valPct / 100).toFixed(4));
+    const updatedTable = comparable_factoring_table.map((row) => {
+      if (row.project_name !== projectName) return row;
+
+      const updatedRow = { ...row, [factorKey]: decimalVal };
+      const road = updatedRow.factor_road ?? 0;
+      const amenity = updatedRow.factor_amenity ?? 0;
+      const density = updatedRow.factor_density ?? 0;
+      const cbd = updatedRow.factor_cbd ?? 0;
+
+      const rawSum = road + amenity + density + cbd;
+      const totalFactor = Math.max(-capLimit, Math.min(capLimit, rawSum));
+      const factoredRate = Math.round((updatedRow.avg_rate ?? 0) * (1 + totalFactor));
+
+      return {
+        ...updatedRow,
+        total_factor: totalFactor,
+        factored_rate: factoredRate,
+      };
+    });
+
+    recalculateAndTrigger(updatedTable, blending.w1, blending.w2);
+  };
+
+  const handleResetProject = (projectName) => {
+    const origRow = originalData.comparable_factoring_table?.find(r => r.project_name === projectName);
+    if (!origRow) return;
+
+    const updatedTable = comparable_factoring_table.map((row) => {
+      if (row.project_name !== projectName) return row;
+      return JSON.parse(JSON.stringify(origRow));
+    });
+
+    recalculateAndTrigger(updatedTable, blending.w1, blending.w2);
+  };
+
+  const handleWeightChange = (newW1) => {
+    const roundedW1 = Math.round(newW1 * 100) / 100;
+    const roundedW2 = Math.round((1.0 - roundedW1) * 100) / 100;
+    recalculateAndTrigger(comparable_factoring_table, roundedW1, roundedW2);
+  };
+
+  const handleResetWeights = () => {
+    const origW1 = originalData.blending?.w1 ?? 0.5;
+    const origW2 = originalData.blending?.w2 ?? 0.5;
+    recalculateAndTrigger(comparable_factoring_table, origW1, origW2);
+  };
 
   const MainContent = (
     <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
@@ -2588,7 +2731,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
             <div>
               <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">Per-Comparable Factor Adjustment Table</h3>
-              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
+              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±{(capLimit * 100).toFixed(0)}% per comparable (subject listings: {subjectListings})</p>
             </div>
           </div>
 
@@ -2634,10 +2777,16 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 {compRows.map((row, i) => {
                   const totalF = row.total_factor != null ? Number(row.total_factor) : null;
                   const factoredRate = row.factored_rate;
+                  const isModified = isProjectModified(row.project_name);
                   return (
                     <tr key={i} className="border-b border-border-dim hover:bg-bg-input/50 transition-colors">
                       <td className="px-5 py-4">
-                        <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                          {isModified && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-warning" title="Modified by appraiser"></span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-center font-mono text-text-dim">{row.road_type || "—"}</td>
                       <td className="px-4 py-4 text-center">
@@ -2661,36 +2810,229 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
             </table>
           </div>
 
-          {/* Factor breakdown legend */}
+          {/* Factor breakdown and adjustment sliders */}
           {compRows.some(r => r.factor_reasoning) && (
-            <div className="mt-4 space-y-2">
-              {compRows.filter(r => r.factor_reasoning).map((row, i) => (
-                <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
+            <div className="mt-6 space-y-4">
+              <h4 className="text-[9px] font-black uppercase tracking-[0.25em] text-text-primary">Factor Adjustment Controls</h4>
+              <div className="grid gap-4 md:grid-cols-2">
+                {compRows.map((row, i) => {
+                  const isModified = isProjectModified(row.project_name);
+                  const isRowCapped = isCapped(row.project_name);
+                  const roadVal = row.factor_road ?? 0;
+                  const amenityVal = row.factor_amenity ?? 0;
+                  const densityVal = row.factor_density ?? 0;
+                  const cbdVal = row.factor_cbd ?? 0;
+                  
+                  return (
+                    <div key={i} className="rounded-2xl border border-border-soft bg-bg-input/25 p-5 space-y-4 flex flex-col justify-between hover:border-border transition-all">
+                      <div>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-text-secondary text-[11px]">{row.project_name}</span>
+                            {isModified && (
+                              <span className="px-2 py-0.5 rounded bg-warning/20 border border-warning/30 text-[8px] text-warning font-black uppercase tracking-wider">Edited</span>
+                            )}
+                          </div>
+                          {isModified && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetProject(row.project_name)}
+                              className="text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
 
-                  {/* Attribute percentage chips */}
-                  <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
-                    <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_road > 0 ? "text-green-400" : row.factor_road < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Road: {row.factor_road != null ? (row.factor_road >= 0 ? "+" : "") + (row.factor_road * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_amenity > 0 ? "text-green-400" : row.factor_amenity < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Amenity: {row.factor_amenity != null ? (row.factor_amenity >= 0 ? "+" : "") + (row.factor_amenity * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_density > 0 ? "text-green-400" : row.factor_density < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Density: {row.factor_density != null ? (row.factor_density >= 0 ? "+" : "") + (row.factor_density * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_cbd > 0 ? "text-green-400" : row.factor_cbd < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      CBD: {row.factor_cbd != null ? (row.factor_cbd >= 0 ? "+" : "") + (row.factor_cbd * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-accent/15 border border-accent/25 font-mono text-[9px] font-black ${row.total_factor > 0 ? "text-green-400" : row.total_factor < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Total: {row.total_factor != null ? (row.total_factor >= 0 ? "+" : "") + (row.total_factor * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                  </div>
+                        {/* Interactive Sliders for 4 Geospatial factors */}
+                        <div className="space-y-3.5">
+                          {/* Road Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Road Type Adjustment</span>
+                              <span className={`font-mono ${adjColor(roadVal)}`}>{fmtPct(roadVal)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              step="1"
+                              value={Math.round(roadVal * 1000)}
+                              onChange={(e) => handleFactorChange(row.project_name, "factor_road", Number(e.target.value) / 10)}
+                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                            />
+                          </div>
 
-                  <p className="text-[10px] text-text-secondary leading-relaxed">{row.factor_reasoning}</p>
+                          {/* Amenity Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Amenity Adjustment</span>
+                              <span className={`font-mono ${adjColor(amenityVal)}`}>{fmtPct(amenityVal)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              step="1"
+                              value={Math.round(amenityVal * 1000)}
+                              onChange={(e) => handleFactorChange(row.project_name, "factor_amenity", Number(e.target.value) / 10)}
+                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                            />
+                          </div>
+
+                          {/* Density Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Density Score Adjustment</span>
+                              <span className={`font-mono ${adjColor(densityVal)}`}>{fmtPct(densityVal)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              step="1"
+                              value={Math.round(densityVal * 1000)}
+                              onChange={(e) => handleFactorChange(row.project_name, "factor_density", Number(e.target.value) / 10)}
+                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                            />
+                          </div>
+
+                          {/* CBD Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>CBD Distance Adjustment</span>
+                              <span className={`font-mono ${adjColor(cbdVal)}`}>{fmtPct(cbdVal)}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="-50"
+                              max="50"
+                              step="1"
+                              value={Math.round(cbdVal * 1000)}
+                              onChange={(e) => handleFactorChange(row.project_name, "factor_cbd", Number(e.target.value) / 10)}
+                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Net Adjustments capped info */}
+                        <div className="mt-4 flex items-center justify-between text-[10px] bg-black/30 px-3.5 py-2.5 rounded-xl border border-white/5 font-mono">
+                          <span className="text-text-dim uppercase tracking-wider text-[8px] font-bold">Net Correction:</span>
+                          <div className="flex items-center gap-2">
+                            {isRowCapped && (
+                              <span className="text-[8px] bg-warning/20 border border-warning/30 text-warning px-1.5 py-0.5 rounded font-black uppercase tracking-widest animate-pulse">Capped at ±{(capLimit * 100).toFixed(0)}%</span>
+                            )}
+                            <span className={`font-black ${adjColor(row.total_factor)}`}>{fmtPct(row.total_factor)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3.5 mt-2">
+                        <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
+                        <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── VALUATION BLENDING & WEIGHTS CONFIGURATION ─────────────────── */}
+        <section className="rounded-[2rem] border border-border-soft bg-bg-card/75 p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-purple/20 border border-accent-purple/30 text-sm">🧪</span>
+              <div>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-text-primary">Appraisal Blending & Weights</h3>
+                <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Adjust confidence weight balance for final valuation</p>
+              </div>
+            </div>
+            {isWeightsModified() && (
+              <button
+                type="button"
+                onClick={handleResetWeights}
+                className="text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer"
+              >
+                Reset Weights
+              </button>
+            )}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Blending stats */}
+            <div className="space-y-4">
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-4 space-y-2">
+                <p className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Formula:</p>
+                <p className="font-mono text-[10px] text-white/90 font-bold leading-relaxed font-semibold">
+                  Blended Rate = (w₁ × Subject Rate) + (w₂ × Comparables Avg)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-[10px] font-mono">
+                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
+                  <span className="text-text-dim block mb-1">Subject Rate:</span>
+                  <span className="font-bold text-green-400">{fmtRate(blending.subject_own_rate)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">({blending.subject_listing_count || 0} listings)</span>
                 </div>
-              ))}
+                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
+                  <span className="text-text-dim block mb-1">Comparables Avg:</span>
+                  <span className="font-bold text-blue-400">{fmtRate(blending.factored_comp_avg)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">(from {compRows.length} comparables)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Weight Sliders */}
+            <div className="space-y-4 flex flex-col justify-center">
+              {subjectListings > 0 ? (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
+                      <span>Subject Weight (w₁)</span>
+                      <span className="text-accent font-mono font-bold">{((blending.w1 ?? 0.5) * 100).toFixed(0)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round((blending.w1 ?? 0.5) * 100)}
+                      onChange={(e) => handleWeightChange(Number(e.target.value) / 100)}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
+                      <span>Comparable Weight (w₂)</span>
+                      <span className="text-accent-purple font-mono font-bold">{((blending.w2 ?? 0.5) * 100).toFixed(0)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round((blending.w2 ?? 0.5) * 100)}
+                      onChange={(e) => handleWeightChange(1 - Number(e.target.value) / 100)}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-purple"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                  <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">Weights Locked</p>
+                  <p className="text-[10px] text-text-dim leading-relaxed font-semibold">
+                    Subject property has 0 listings. Valuation is weighted 100% (w₂ = 1.0) on the average of the selected market comparables.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {blending.weight_reasoning && (
+            <div className="text-[9px] text-text-dim italic leading-relaxed border-t border-white/5 pt-3 font-semibold font-semibold">
+              Note: {blending.weight_reasoning}
             </div>
           )}
         </section>
@@ -2724,19 +3066,19 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
 
               <div className="flex-1 space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80 font-black">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)]">
                     {fmtRate(finalRate)}
                   </h2>
-                  <span className="text-xs text-text-dim font-bold">/ {area_unit || "sqft"}</span>
+                  <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
                 </div>
                 {selectedArea > 0 ? (
-                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider">
+                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider font-semibold">
                     Calculated on <span className="text-accent-light">{selectedArea.toLocaleString()} {area_unit || "sqft"}</span> of {areaLabel}
                   </p>
                 ) : (
-                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse">
+                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse font-semibold">
                     Please enter the {areaLabel} in subject details to view final valuation
                   </p>
                 )}
@@ -2744,11 +3086,11 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
               {selectedArea > 0 && (
                 <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80">Valuation Value</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
                     {formatter.format(finalRate * selectedArea)}
                   </h2>
-                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest">
+                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest font-semibold">
                     {fmtRate(finalRate)}/{area_unit || "sqft"} × {selectedArea.toLocaleString()} {area_unit || "sqft"} ({areaLabel})
                   </p>
                 </div>
@@ -2761,7 +3103,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
         {/* ── REASONING REPORT ──────────────────────────────────────── */}
         {raw_markdown_report && (
           <section>
-            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
+            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all font-semibold">
               <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
               <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
@@ -2775,8 +3117,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
         {reconciliation_note && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
-            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
-            <p className="text-[10px] text-text-secondary leading-relaxed">{reconciliation_note}</p>
+            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1 font-semibold">Reconciliation Note</p>
+            <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{reconciliation_note}</p>
           </div>
         )}
 
@@ -2792,13 +3134,13 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           <div className="flex items-center gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</p>
-              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary font-black">Comparable Factoring Analysis</p>
+              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50 font-semibold">Per-comparable adjustment → Confidence-weighted blend</p>
             </div>
           </div>
           <button
             onClick={() => setIsSectionMaximized(false)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim font-semibold"
           >
             ✕ Collapse
           </button>
@@ -3075,9 +3417,21 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult }) {
+export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [revertNotice, setRevertNotice] = useState("");
+  const [backupValuationState, setBackupValuationState] = useState(null);
+
+  // Clear revert notice after 3 seconds
+  useEffect(() => {
+    if (revertNotice) {
+      const timer = setTimeout(() => {
+        setRevertNotice("");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [revertNotice]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
   const [tokenStats, setTokenStats] = useState({
@@ -3160,6 +3514,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [isFactorialAnalysisStreaming, setIsFactorialAnalysisStreaming] = useState(false);
   const [pipelineDone, setPipelineDone] = useState(false);
   const [currentStage, setCurrentStage] = useState("Stage 0: Initialization");
+  const [originalQuestion, setOriginalQuestion] = useState("");
 
   // Cost Approach States
   const [costInputsSchema, setCostInputsSchema] = useState(null);
@@ -3373,6 +3728,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setCtaFactorialCollapsed(false);
     markersRef.current = [];
     onMarkersUpdate?.([]);
+    setBackupValuationState(null);
   };
 
   // ── Toggle comparable selection ────────────────────────────────
@@ -3438,9 +3794,269 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     onMarkersUpdate?.(allMarkers);
   }, [subjectData, comparableData, selectedComps, factorialData]);
 
+  // ── Go Back to Comparable Selection (Step 2) ──────────────────
+  const handleBackToComparables = () => {
+    // Save current state as backup so user can revert/cancel this action
+    setBackupValuationState({
+      messages: [...messages],
+      listingData,
+      dbTransactions,
+      cleanedData,
+      factorialData,
+      factorialAnalysisData,
+      costCalculationData,
+      selectedComps: new Set(selectedComps),
+      events: events ? [...events] : [],
+    });
+
+    setListingData(null);
+    setDbTransactions([]);
+    setCleanedData(null);
+    setFactorialData(null);
+    setFactorialAnalysisData(null);
+    setCostCalculationData(null);
+    setSelectedComps(new Set()); // Reset selected comps so markers are stripped automatically
+
+    // Truncate chat messages after the comparable results message
+    setMessages((prev) => {
+      const compResultsIdx = prev.findIndex((m) => m.meta === "comparable results" || m.comparables);
+      if (compResultsIdx !== -1) {
+        return prev.slice(0, compResultsIdx + 1);
+      }
+      return prev;
+    });
+
+    // Pipeline sync and visual feedback
+    onEventsReset?.("comparable_results");
+    onValuationResult?.(null);
+    setRevertNotice("⏪ Pipeline rewound to comparable selection");
+  };
+
+  const handleCancelModification = () => {
+    if (!backupValuationState) return;
+
+    const {
+      messages: backupMessages,
+      listingData: backupListingData,
+      dbTransactions: backupDbTransactions,
+      cleanedData: backupCleanedData,
+      factorialData: backupFactorialData,
+      factorialAnalysisData: backupFactorialAnalysisData,
+      costCalculationData: backupCostCalculationData,
+      selectedComps: backupSelectedComps,
+      events: backupEvents,
+    } = backupValuationState;
+
+    setMessages(backupMessages);
+    setListingData(backupListingData);
+    setDbTransactions(backupDbTransactions);
+    setCleanedData(backupCleanedData);
+    setFactorialData(backupFactorialData);
+    setFactorialAnalysisData(backupFactorialAnalysisData);
+    setCostCalculationData(backupCostCalculationData);
+    setSelectedComps(backupSelectedComps);
+
+    if (setEvents && backupEvents) {
+      setEvents(backupEvents);
+    }
+
+    // Reconstruct and restore valuationResult
+    if (backupFactorialAnalysisData) {
+      onValuationResult?.({
+        type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
+        factorialAnalysis: backupFactorialAnalysisData,
+        subjectData: subjectDataRef.current || subjectData,
+        factorialData: backupFactorialData,
+        costCalculation: backupCostCalculationData,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    setBackupValuationState(null);
+    setRevertNotice("🔄 Modification cancelled, previous valuation restored");
+  };
+
+  // ── Edit Past Profiling Inputs (Stage 1 / 2) ───────────────────
+  const handleEditPropertyDetails = () => {
+    const activeType = (subjectData?.property_type || "").toLowerCase().trim();
+
+    // Construct identity, type, approach, and detail fields matching current property type
+    const identityFields = [
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "city_name", label: "City Name", type: "text" },
+      { field: "country", label: "Country", type: "text" },
+    ];
+    const typeFields = [
+      {
+        field: "property_type", label: "Property Type", type: "select", options: [
+          { value: "apartment", label: "Apartment / Flat" },
+          { value: "villa", label: "Villa" },
+          { value: "plot", label: "Plot / Land" },
+          { value: "retail", label: "Retail / Shop" },
+          { value: "commercial_office", label: "Commercial Office" },
+          { value: "building_land", label: "Building + Land" },
+        ]
+      },
+      ...(activeType === "building_land" ? [
+        {
+          field: "building_type", label: "Building Type", type: "select", options: [
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" },
+            { value: "industrial", label: "Industrial" }
+          ]
+        }
+      ] : [])
+    ];
+    const approachFields = activeType === "villa" ? [
+      {
+        field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
+          { value: "market", label: "Market Approach" },
+          { value: "cost", label: "Cost Approach" },
+        ]
+      }
+    ] : [];
+
+    let detailFields = [];
+    if (activeType === "apartment") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "villa" || activeType === "building_land") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "plot") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        {
+          field: "land_type", label: "Land Type", type: "select", options: [
+            { value: "agricultural", label: "Agricultural" },
+            { value: "non_agricultural", label: "Non Agricultural" },
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" }
+          ]
+        },
+      ];
+    } else if (activeType === "retail") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "frontage", label: "Road Frontage (ft)", type: "number" },
+      ];
+    } else if (activeType === "commercial_office") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        {
+          field: "occupancy_status", label: "Occupancy Status", type: "select", options: [
+            { value: "vacant", label: "Vacant" },
+            { value: "leased", label: "Leased" },
+            { value: "self_use", label: "Self Use" }
+          ]
+        },
+      ];
+    } else {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    }
+
+    const allFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+    const initialVals = buildGateInitialValues(allFields, subjectData, mapConfirmation);
+
+    setGateAllFields(allFields);
+    setGateValues(initialVals);
+    setGateMode('verification'); // lets user edit and verify
+    setGateStep(5); // start directly at Gate 5 Review step for convenience
+    setGateActive(true);
+  };
+
+  // ── Recalculate Cost Value (Client-side Math for Realtime Updates) ──
+  const recalculateCostValue = (derivedRate, subject, costInputs) => {
+    const plotArea = Number(subject?.plot_area_sqft || 0);
+    const builtupArea = Number(subject?.builtup_area_sqft || 0);
+    const age = Number(subject?.age_years || 0);
+    const constRate = Number(costInputs.construction_rate_per_sqft || 0);
+    const totalLife = Number(costInputs.total_life_of_building || 60);
+    const sym = getCurrencySymbol(subject?.currency);
+
+    const landValue = derivedRate * plotArea;
+    const constructionCost = constRate * builtupArea;
+    const depreciationRate = Math.min(age / totalLife, 1.0);
+    const depreciatedBuilding = constructionCost * (1.0 - depreciationRate);
+    const costValue = landValue + depreciatedBuilding;
+
+    return {
+      success: true,
+      property_type: subject?.property_type || "villa",
+      inputs: {
+        derived_plot_rate_per_sqft: derivedRate,
+        plot_area_sqft: plotArea,
+        builtup_area_sqft: builtupArea,
+        construction_rate_per_sqft: constRate,
+        age_of_property: age,
+        total_life_of_building: totalLife,
+      },
+      calculations: {
+        land_value: landValue,
+        construction_cost: constructionCost,
+        depreciation_rate_pct: depreciationRate * 100,
+        depreciated_building_value: depreciatedBuilding,
+      },
+      result: {
+        cost_value: costValue,
+      },
+      formula_audit: {
+        step_1: `Land Value = ${derivedRate} ${sym}/sqft × ${plotArea} sqft (Plot Area) = ${sym}${Math.round(landValue).toLocaleString()}`,
+        step_2: `Replacement Construction Cost = ${constRate} ${sym}/sqft × ${builtupArea} sqft (Built-up Area) = ${sym}${Math.round(constructionCost).toLocaleString()}`,
+        step_3: `Depreciation = ${age} yrs / ${totalLife} yrs = ${(depreciationRate * 100).toFixed(2)}%`,
+        step_4: `Depreciated Building Value = ${sym}${Math.round(constructionCost).toLocaleString()} × (100% − ${(depreciationRate * 100).toFixed(2)}%) = ${sym}${Math.round(depreciatedBuilding).toLocaleString()}`,
+        step_5: `Cost Value = ${sym}${Math.round(landValue).toLocaleString()} (Land) + ${sym}${Math.round(depreciatedBuilding).toLocaleString()} (Building) = ${sym}${Math.round(costValue).toLocaleString()}`,
+      }
+    };
+  };
+
+  // ── Handle Custom Override Factoring Updates ─────────────────
+  const handleUpdateFactoringData = (updatedData) => {
+    setFactorialAnalysisData(updatedData);
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.factorial_analysis_data) {
+          return { ...msg, factorial_analysis_data: updatedData };
+        }
+        return msg;
+      })
+    );
+
+    // If Cost Approach has already been executed, also recalculate cost approach details locally
+    let updatedCost = costCalculationData;
+    if (costCalculationData && subjectData?.recommended_approach === "cost") {
+      updatedCost = recalculateCostValue(
+        updatedData.subject_final_rate,
+        subjectData,
+        costInputsValues
+      );
+      setCostCalculationData(updatedCost);
+    }
+
+    onValuationResult?.({
+      type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
+      factorialAnalysis: updatedData,
+      subjectData: subjectDataRef.current || subjectData,
+      factorialData: factorialData,
+      costCalculation: updatedCost,
+      timestamp: new Date().toISOString(),
+    });
+  };
+
   // ── Proceed to Listing Fetch (Step 2) ──────────────────────────
   const submitListingFetch = async () => {
     if (!comparableData || selectedComps.size === 0 || !subjectData || isListingStreaming) return;
+
+    setBackupValuationState(null);
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
@@ -4385,6 +5001,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (!isContinuation) {
       onClear?.();
       setMessages([]);
+      setOriginalQuestion(trimmed);
     }
 
     setMessages((prev) => [
@@ -5033,9 +5650,20 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       finalVals.coordinates = `${finalVals.lat}, ${finalVals.lng}`;
     }
 
+    // Truncate messages to keep only the first user query/prompt when re-submitting from profiling wizard
+    setMessages((prev) => {
+      if (prev.length > 0) {
+        return [prev[0]];
+      }
+      return prev;
+    });
+
     if (gateMode === 'verification') {
+      // Clear parent state since this is a re-run of profiling wizard
+      onClear?.();
+
       // Compute changes vs original extraction
-      const ents = extractionVerification?.entities || {};
+      const ents = extractionVerification?.entities || subjectData || {};
       const entsCoords = ents.coordinates || {};
       const changes = [];
       Object.entries(gateValues).forEach(([field, value]) => {
@@ -5288,6 +5916,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 <p className="mt-0.5 text-[10px] text-text-secondary">{currentMeta.desc}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeGate();
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-warning/30 bg-warning/10 text-warning hover:bg-warning/20 transition cursor-pointer"
+              title="Close Wizard"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Step progress pills */}
@@ -5454,51 +6093,60 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
             {/* Sticky footer buttons */}
             <div className="border-t border-border/40 bg-bg-card/90 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
-              {gateStep === 5 ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setGateStep(4)}
-                    className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
-                  >← Back</button>
-                  <button
-                    type="button"
-                    onClick={gateSubmitFinal}
-                    className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
-                  >Confirm & Proceed →</button>
-                </>
-              ) : (
-                <>
-                  {gateStep > 1 ? (
+              <button
+                type="button"
+                onClick={closeGate}
+                className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/20"
+              >
+                Cancel
+              </button>
+              <div className="flex items-center gap-3">
+                {gateStep === 5 ? (
+                  <>
                     <button
                       type="button"
-                      onClick={() => setGateStep(prev => {
-                        let back = prev - 1;
-                        if (back === 3 && !isVilla) back = 2;
-                        return back;
-                      })}
+                      onClick={() => setGateStep(4)}
                       className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
                     >← Back</button>
-                  ) : <span />}
+                    <button
+                      type="button"
+                      onClick={gateSubmitFinal}
+                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                    >Confirm & Proceed →</button>
+                  </>
+                ) : (
+                  <>
+                    {gateStep > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setGateStep(prev => {
+                          let back = prev - 1;
+                          if (back === 3 && !isVilla) back = 2;
+                          return back;
+                        })}
+                        className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                      >← Back</button>
+                    ) : null}
 
-                  {gateStep < (isVilla ? 4 : 4) ? (
-                    <button
-                      type="button"
-                      disabled={!canAdvance}
-                      onClick={advanceGate}
-                      className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Next →</button>
-                  ) : (
-                    // Last data-entry gate → go to review (gate 5)
-                    <button
-                      type="button"
-                      disabled={!canAdvance}
-                      onClick={() => setGateStep(5)}
-                      className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Review & Confirm →</button>
-                  )}
-                </>
-              )}
+                    {gateStep < (isVilla ? 4 : 4) ? (
+                      <button
+                        type="button"
+                        disabled={!canAdvance}
+                        onClick={advanceGate}
+                        className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >Next →</button>
+                    ) : (
+                      // Last data-entry gate → go to review (gate 5)
+                      <button
+                        type="button"
+                        disabled={!canAdvance}
+                        onClick={() => setGateStep(5)}
+                        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >Review & Confirm →</button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -5517,7 +6165,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
-        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
+        <div className="flex items-center gap-2">
+          {subjectData && !anyStreaming && (
+            <button
+              type="button"
+              onClick={handleEditPropertyDetails}
+              className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+              Edit Details
+            </button>
+          )}
+          <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
@@ -5545,43 +6205,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               ))}
             </div>
 
-            <div className="mt-8 border-t border-border/50 pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-accent uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-accent animate-pulse" /> Special Factorial Analysis
-                </h4>
-                <button onClick={() => setShowSpecialForm(!showSpecialForm)} className="text-[10px] font-bold uppercase tracking-wider text-text-dim hover:text-white transition">
-                  {showSpecialForm ? "Close" : "Setup Coordinates"}
-                </button>
-              </div>
 
-              {showSpecialForm && (
-                <div className="space-y-4 rounded-2xl border border-border bg-bg-input/50 p-5 shadow-inner">
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Subject Project</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Name" value={specialSubjectName} onChange={e => setSpecialSubjectName(e.target.value)} className="flex-1 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lat" value={specialSubjectLat} onChange={e => setSpecialSubjectLat(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lng" value={specialSubjectLng} onChange={e => setSpecialSubjectLng(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Comparable Project</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Name" value={specialCompName} onChange={e => setSpecialCompName(e.target.value)} className="flex-1 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lat" value={specialCompLat} onChange={e => setSpecialCompLat(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lng" value={specialCompLng} onChange={e => setSpecialCompLng(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                    </div>
-                  </div>
-                  <button onClick={runSpecialAnalysis} className="w-full rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg transition hover:scale-[1.02] active:scale-[0.98]">
-                    Run Direct Factorial Analysis
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         ) : (
           <div className="space-y-4">
+            {revertNotice && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-warning/25 bg-warning/10 px-4 py-3 text-xs font-semibold text-warning shadow-md backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                <span>{revertNotice}</span>
+              </div>
+            )}
             {messages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}
@@ -5599,12 +6231,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 >
                   {message.content}
                   {message.comparables && (
-                    <ComparableTable
-                      comparables={message.comparables}
-                      selectedComps={selectedComps}
-                      onToggle={handleCompToggle}
-                      selectable={pipelineDone && !isListingStreaming && !listingData}
-                    />
+                    <div className="space-y-3">
+                      <ComparableTable
+                        comparables={message.comparables}
+                        selectedComps={selectedComps}
+                        onToggle={handleCompToggle}
+                        selectable={pipelineDone && !isListingStreaming && !listingData}
+                      />
+                      {listingData && (
+                        <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                          <span className="text-[10px] text-text-dim font-medium">Comparable selection is locked.</span>
+                          <button
+                            type="button"
+                            onClick={handleBackToComparables}
+                            className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+                          >
+                            Modify Selection
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   {/* DB found nothing but web results exist — amber warning */}
                   {message.db_no_results && message.comparables && (
@@ -5643,7 +6289,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       />
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
+                  {message.factorial_analysis_data && (
+                    <FactoringResultCard
+                      data={message.factorial_analysis_data}
+                      area_unit={subjectData?.area_unit || "sqft"}
+                      subjectData={subjectData}
+                      onUpdateData={handleUpdateFactoringData}
+                    />
+                  )}
                   {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
 
                   {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
@@ -5718,14 +6371,25 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                     <p className="text-xs text-text-dim">
                       The listing pipeline will search for real listings for the subject property + your selected comparables.
                     </p>
-                    <button
-                      type="button"
-                      onClick={submitListingFetch}
-                      disabled={selectedComps.size === 0}
-                      className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-                    >
-                      Proceed to Next Step →
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {backupValuationState && (
+                        <button
+                          type="button"
+                          onClick={handleCancelModification}
+                          className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 cursor-pointer animate-in fade-in duration-300"
+                        >
+                          Cancel Modification
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={submitListingFetch}
+                        disabled={selectedComps.size === 0}
+                        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                      >
+                        Proceed to Next Step →
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -6050,7 +6714,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </button>
         </div>
 
-        {messages.length === 0 && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
+        {(messages.length === 0 || (!listingData && !anyStreaming)) && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
           <div className="relative mt-2.5">
             <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
             <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
