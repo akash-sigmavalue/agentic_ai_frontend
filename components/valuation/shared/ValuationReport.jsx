@@ -388,9 +388,13 @@ function SlideCover({ valuationResult }) {
     subjectData?.carpet_area_sqft ||
     subjectData?.plot_area_sqft || 0
   );
+  // Prefer precomputed market_value when set by instant area/age recalculation;
+  // otherwise derive from finalRate × area as usual.
   const marketValue = type === "cost"
     ? (costCalculation?.result?.cost_value || costCalculation?.depreciated_property_value || 0)
-    : (finalRate * area);
+    : (factorialAnalysis?.market_value_computed && factorialAnalysis?.market_value
+        ? factorialAnalysis.market_value
+        : finalRate * area);
 
   const confidence = factorialAnalysis?.confidence || "Medium";
   const methodology = factorialAnalysis?.methodology || (type === "cost" ? "Cost Approach" : "Market Comparison Approach");

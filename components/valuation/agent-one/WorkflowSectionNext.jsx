@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   ChevronDown,
   SlidersHorizontal,
-  FileText
+  FileText,
+  FastForward
 } from "lucide-react";
 
 // ── Stage metadata matching ACTUAL backend pipeline ───────────────────────────
@@ -486,6 +487,34 @@ function StepDetails({ step }) {
     );
   }
 
+  if (type === "area_age_recalc" && content) {
+    const fields = content.changed_fields || [];
+    const approach = content.approach || "market";
+    const sym = approach === "cost" ? "Cost" : "Market";
+    const newVal = approach === "cost" ? content.new_cost_value : content.new_market_value;
+    return (
+      <div className={`${boxClass} space-y-0.5`}>
+        <DetailRow label="Changed Fields" value={fields.join(", ") || "—"} />
+        <DetailRow label="Approach" value={approach} />
+        {newVal != null && <DetailRow label={`New ${sym} Value`} value={`₹${Number(newVal).toLocaleString()}`} />}
+        <DetailRow label="Pipeline Re-Run" value="Skipped — instant client-side update" />
+      </div>
+    );
+  }
+
+  if (type === "incremental_listing" && content) {
+    const newCnt = content.new_count || 0;
+    const skipCnt = content.skipped_count || 0;
+    const names = (content.skipped_names || []).join(", ");
+    return (
+      <div className={`${boxClass} space-y-0.5`}>
+        <DetailRow label="New Fetches" value={`${newCnt} comparable${newCnt !== 1 ? "s" : ""}`} />
+        <DetailRow label="Skipped" value={skipCnt > 0 ? `${skipCnt} (${names})` : "None"} />
+        <DetailRow label="Strategy" value="Incremental — existing data preserved" />
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -497,10 +526,12 @@ function getStepIcon(type) {
     approach_choice_needed:   GitBranch,
     map_confirmation:         MapPin,
     extraction_verification:  CheckCircle2,
+    area_age_recalc:          Zap,
     workflow:                 ClipboardList,
     comparable_results:       Building2,
     listing_results:          Search,
     transaction_results:      Database,
+    incremental_listing:      FastForward,
     cleaning_results:         Sparkles,
     recalculate_results:      SlidersHorizontal,
     factorial_results:        Table,

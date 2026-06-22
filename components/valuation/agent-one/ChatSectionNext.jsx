@@ -3480,6 +3480,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [costInputsValues, setCostInputsValues] = useState({});
   const [costCalculationData, setCostCalculationData] = useState(null);
   const [isCostCalculating, setIsCostCalculating] = useState(false);
+  // Tracks which comparable IDs have already been fetched (for incremental addition)
+  const [fetchedCompIds, setFetchedCompIds] = useState(new Set());
 
   // Special Factorial Analysis State
   const [showSpecialForm, setShowSpecialForm] = useState(false);
@@ -3688,6 +3690,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     markersRef.current = [];
     onMarkersUpdate?.([]);
     setBackupValuationState(null);
+    setFetchedCompIds(new Set());
   };
 
   // ── Toggle comparable selection ────────────────────────────────
@@ -3774,7 +3777,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setFactorialData(null);
     setFactorialAnalysisData(null);
     setCostCalculationData(null);
-    setSelectedComps(new Set()); // Reset selected comps so markers are stripped automatically
+    // Keep selected comps so they remain selected by default in the selection table/map
 
     // Truncate chat messages after the comparable results message
     setMessages((prev) => {
@@ -3978,6 +3981,106 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     };
   };
 
+  // ── Area/Age-Only Fast Recalculation (skip full pipeline re-run) ──────────
+  // Called from gateSubmitFinal when user edited Stage 1 but only changed area or age.
+  // Performs a client-side value update without any API calls.
+  const AREA_AGE_FIELDS = new Set([
+    "salable_area_sqft", "carpet_area_sqft", "builtup_area_sqft",
+    "plot_area_sqft", "age_years",
+  ]);
+
+  const applyAreaAgeRecalculation = (updatedSubjectData, changedFields) => {
+    // Persist updated subject data
+    setSubjectData(updatedSubjectData);
+    subjectDataRef.current = updatedSubjectData;
+
+    const approach = updatedSubjectData.recommended_approach || "market";
+    const sym = getCurrencySymbol(updatedSubjectData.currency);
+
+    let newFactorialAnalysis = factorialAnalysisData ? { ...factorialAnalysisData } : null;
+    let newCostCalc = costCalculationData;
+
+    if (approach === "cost" && factorialAnalysisData && costInputsValues) {
+      // Recalculate cost approach: land value + depreciated building
+      const derivedRate = factorialAnalysisData.subject_final_rate || 0;
+      newCostCalc = recalculateCostValue(derivedRate, updatedSubjectData, costInputsValues);
+      setCostCalculationData(newCostCalc);
+
+      // Stamp updated cost result into the relevant chat message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.cost_calculation_data ? { ...msg, cost_calculation_data: newCostCalc } : msg
+        )
+      );
+    } else if (approach !== "cost" && factorialAnalysisData) {
+      // Market approach: new market value = final_rate × new_area
+      const finalRate = Number(factorialAnalysisData.subject_final_rate || 0);
+      const newArea = Number(
+        updatedSubjectData.salable_area_sqft ||
+        updatedSubjectData.carpet_area_sqft ||
+        updatedSubjectData.builtup_area_sqft ||
+        0
+      );
+      const newMarketValue = Math.round(finalRate * newArea);
+      newFactorialAnalysis = {
+        ...factorialAnalysisData,
+        market_value: newMarketValue,
+        market_value_computed: true,
+        subject_area_used: newArea,
+      };
+      setFactorialAnalysisData(newFactorialAnalysis);
+
+      // Stamp updated analysis into the relevant chat message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.factorial_analysis_data
+            ? { ...msg, factorial_analysis_data: newFactorialAnalysis }
+            : msg
+        )
+      );
+    }
+
+    // Build a readable change summary
+    const changeLabels = changedFields.map((f) => {
+      const val = updatedSubjectData[f];
+      if (f === "age_years") return `Age: ${val} yrs`;
+      if (f.includes("area")) return `${f.replace(/_/g, " ").replace(/sqft/, "sqft")}: ${val}`;
+      return `${f}: ${val}`;
+    });
+
+    const summaryMsg = `⚡ Quick update applied — ${changeLabels.join(", ")}. Valuation recalculated instantly without re-running the pipeline.`;
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Updated: ${changeLabels.join(", ")}`, meta: "Now" },
+      { role: "assistant", content: summaryMsg, meta: "Instant Update" },
+    ]);
+
+    // Emit a synthetic event to the workflow/execution panel
+    onEvent?.({
+      type: "area_age_recalc",
+      content: {
+        changed_fields: changedFields,
+        updated_subject: updatedSubjectData,
+        approach,
+        new_market_value: approach !== "cost" ? newFactorialAnalysis?.market_value : null,
+        new_cost_value: approach === "cost" ? newCostCalc?.result?.cost_value : null,
+      },
+    });
+
+    // Notify parent with updated valuation result
+    onValuationResult?.({
+      type: approach === "cost" ? "cost" : "market",
+      factorialAnalysis: newFactorialAnalysis,
+      subjectData: updatedSubjectData,
+      factorialData: factorialData,
+      costCalculation: newCostCalc,
+      timestamp: new Date().toISOString(),
+    });
+
+    setRevertNotice(`⚡ Instant recalc — ${changeLabels.join(", ")} updated`);
+  };
+
   // ── Handle Custom Override Factoring Updates ─────────────────
   const handleUpdateFactoringData = (updatedData) => {
     setFactorialAnalysisData(updatedData);
@@ -4015,26 +4118,104 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const submitListingFetch = async () => {
     if (!comparableData || selectedComps.size === 0 || !subjectData || isListingStreaming) return;
 
-    setBackupValuationState(null);
-
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
-    // Split by source
-    const dbComps = selected.filter(c => (c.data_source || "Web") === "Internal DB");
-    const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
+    // ── Incremental Fetch: skip comps already fetched ──────────────────────────
+    // Build a stable ID for each comparable (project_id > id > project_name)
+    const getCompId = (c) => String(c.project_id || c.id || c.project_name || "").trim();
 
-    // If subject project exists in internal DB, also fetch its transactions
+    const newComps   = selected.filter(c => !fetchedCompIds.has(getCompId(c)));
+    const skipComps  = selected.filter(c =>  fetchedCompIds.has(getCompId(c)));
+
+    const isIncremental = skipComps.length > 0;
+
+    console.log("submitListingFetch starts:", {
+      selected: selected.map(c => ({ name: c.project_name, source: c.data_source, id: getCompId(c) })),
+      fetchedCompIds: Array.from(fetchedCompIds),
+      newComps: newComps.map(c => c.project_name),
+      skipComps: skipComps.map(c => c.project_name),
+      isIncremental,
+    });
+
+    // Build stable sets for filtering previously fetched data to carry over
+    const selectedProjectNames = new Set(
+      selected.map(c => String(c.project_name || "").trim().toLowerCase())
+    );
+    const selectedProjectIds = new Set(
+      selected.map(c => String(c.project_id || c.id || "").trim().toLowerCase()).filter(Boolean)
+    );
+    const subjectProjectName = String(subjectData?.project_name || "").trim().toLowerCase();
+
+    // Split new comps by source
+    const dbComps  = newComps.filter(c => (c.data_source || "Web") === "Internal DB");
+    const webComps = newComps.filter(c => (c.data_source || "Web") !== "Internal DB");
+
+    // If subject project exists in internal DB, also fetch its transactions (first time only)
     const subjectDbProject = subjectData?.subject_db_project || null;
+    const shouldFetchSubjectTx = subjectDbProject && !fetchedCompIds.has("__subject__");
+    const shouldFetchWebListings = webComps.length > 0 || !fetchedCompIds.has("__subject_web__");
+
+    // Filter previous records from backup state
+    const isPrevListingToKeep = (lst) => {
+      if (!lst) return false;
+      const lstProj = String(lst.project_name || lst.cleaned_match_project || "").trim().toLowerCase();
+      const lstProjId = String(lst.project_id || lst.cleaned_match_id || "").trim().toLowerCase();
+      if (lst.is_subject || lstProj === subjectProjectName) {
+        return true;
+      }
+      if (selectedProjectNames.has(lstProj)) {
+        return true;
+      }
+      if (lstProjId && selectedProjectIds.has(lstProjId)) {
+        return true;
+      }
+      return false;
+    };
+
+    const isPrevTxToKeep = (tx) => {
+      if (!tx) return false;
+      const txProj = String(tx.project_name || tx.cleaned_match_project || "").trim().toLowerCase();
+      const txProjId = String(tx.project_id || tx.cleaned_match_id || "").trim().toLowerCase();
+      if (tx.is_subject || txProj === subjectProjectName) {
+        return !shouldFetchSubjectTx;
+      }
+      if (selectedProjectNames.has(txProj)) {
+        return true;
+      }
+      if (txProjId && selectedProjectIds.has(txProjId)) {
+        return true;
+      }
+      return false;
+    };
+
+    const activePreviousListings = (backupValuationState?.listingData || []).filter(isPrevListingToKeep);
+    const activePreviousDbTransactions = (backupValuationState?.dbTransactions || []).filter(isPrevTxToKeep);
+
+    setBackupValuationState(null);
+
+    // If nothing new to fetch, nothing to do
+    if (newComps.length === 0 && !shouldFetchSubjectTx && !shouldFetchWebListings) {
+      setRevertNotice("⏩ All selected comparables already fetched — nothing new to process");
+      return;
+    }
 
     setIsListingStreaming(true);
-    setStreamingNote("Starting listing fetch pipeline...");
+    setStreamingNote(isIncremental
+      ? `⏩ Skipping ${skipComps.length} already-fetched comparable(s). Fetching ${newComps.length} new one(s)...`
+      : "Starting listing fetch pipeline...");
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
 
-    const totalDbFetches = dbComps.length + (subjectDbProject ? 1 : 0);
+    const totalDbFetches = dbComps.length + (shouldFetchSubjectTx ? 1 : 0);
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`, meta: "Now" },
-      { role: "assistant", content: "Running listing pipeline...", meta: "Live" },
+      {
+        role: "user",
+        content: isIncremental
+          ? `Adding ${newComps.length} new comparable(s). Skipping ${skipComps.length} already fetched (${skipComps.map(c => c.project_name).join(", ")}).`
+          : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`,
+        meta: "Now",
+      },
+      { role: "assistant", content: isIncremental ? "Fetching listings for new comparables only..." : "Running listing pipeline...", meta: "Live" },
     ]);
 
     try {
@@ -4128,7 +4309,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 const newUsage = event.content?.token_usage || {};
                 const total = newUsage.total_tokens || 0;
                 const model = newUsage.model || "gpt-4o-mini";
-                setListingData(listings);
+                // Filter out subject listings from the fresh stream results only if they are already in the backup listings
+                const hasPreviousSubjectListing = activePreviousListings.some(l => 
+                  l && (l.is_subject || String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase() === subjectProjectName)
+                );
+                const freshListings = hasPreviousSubjectListing
+                  ? listings.filter(l => {
+                      if (!l) return false;
+                      const lProj = String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase();
+                      return !(l.is_subject || lProj === subjectProjectName);
+                    })
+                  : listings;
+                // Merge with existing listingData (incremental addition)
+                const mergedListings = isIncremental
+                  ? [...activePreviousListings, ...freshListings]
+                  : listings;
+                setListingData(mergedListings);
                 setTokenStats((prev) => {
                   const nextModelBreakdown = { ...prev.model_breakdown };
                   const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
@@ -4160,7 +4356,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       role: "assistant",
                       content: summary,
                       meta: "listing results",
-                      listings,
+                      listings: mergedListings,
                       // Preserve any DB transactions stamped in the same message
                       db_transactions: next[lastIndex].db_transactions || [],
                     };
@@ -4192,31 +4388,79 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       for (const comp of dbComps) {
         fetchPromises.push(fetchProjectTransactions(comp, false));
       }
-      if (subjectDbProject) {
+      if (shouldFetchSubjectTx) {
         fetchPromises.push(fetchProjectTransactions(subjectDbProject, true));
       }
 
       // Execute all DB fetches and Web listings fetch concurrently in parallel
-      const [dbResults, _] = await Promise.all([
-        Promise.all(fetchPromises),
-        fetchWebListings()
-      ]);
-
-      const allDbTransactions = dbResults.flat();
-
-      // Store DB transactions and stamp on the message
-      if (allDbTransactions.length > 0) {
-        setDbTransactions(allDbTransactions);
+      let dbResults = [];
+      if (shouldFetchWebListings) {
+        const [dbRes, _] = await Promise.all([
+          Promise.all(fetchPromises),
+          fetchWebListings()
+        ]);
+        dbResults = dbRes;
+      } else {
+        // No web listings to fetch. Use active previous listings as is, and just fetch DB transactions
+        setListingData(activePreviousListings);
         setMessages((prev) => {
           const next = [...prev];
           const lastIndex = next.length - 1;
           if (lastIndex >= 0) {
             next[lastIndex] = {
               ...next[lastIndex],
-              db_transactions: allDbTransactions,
+              role: "assistant",
+              content: "⏩ Listings carried over from previous run.",
+              meta: "listing done",
+              listings: activePreviousListings,
             };
           }
           return next;
+        });
+        dbResults = await Promise.all(fetchPromises);
+      }
+
+      const newDbTransactions = dbResults.flat();
+
+      // Merge new DB transactions with existing ones (incremental case)
+      const mergedDbTransactions = isIncremental
+        ? [...activePreviousDbTransactions, ...newDbTransactions]
+        : newDbTransactions;
+
+      // Store merged DB transactions and stamp on the message
+      if (mergedDbTransactions.length > 0) {
+        setDbTransactions(mergedDbTransactions);
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0) {
+            next[lastIndex] = {
+              ...next[lastIndex],
+              db_transactions: mergedDbTransactions,
+            };
+          }
+          return next;
+        });
+      }
+
+      // Mark newly fetched comp IDs so they won't be re-fetched next time
+      setFetchedCompIds((prev) => {
+        const next = new Set(prev);
+        newComps.forEach(c => next.add(getCompId(c)));
+        if (shouldFetchSubjectTx) next.add("__subject__");
+        if (shouldFetchWebListings) next.add("__subject_web__");
+        return next;
+      });
+
+      // Emit synthetic event to workflow panel for incremental fetch
+      if (isIncremental) {
+        onEvent?.({
+          type: "incremental_listing",
+          content: {
+            new_count: newComps.length,
+            skipped_count: skipComps.length,
+            skipped_names: skipComps.map(c => c.project_name),
+          },
         });
       }
 
@@ -5604,41 +5848,76 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       finalVals.coordinates = `${finalVals.lat}, ${finalVals.lng}`;
     }
 
-    // Truncate messages to keep only the first user query/prompt when re-submitting from profiling wizard
-    setMessages((prev) => {
-      if (prev.length > 0) {
-        return [prev[0]];
-      }
-      return prev;
-    });
-
     if (gateMode === 'verification') {
+      // Compute changed fields vs original extraction
+      const ents = extractionVerification?.entities || subjectData || {};
+      const changedFieldKeys = [];
+
+      const normVal = (val) => {
+        if (val === undefined || val === null) return "";
+        return String(val).trim().toLowerCase();
+      };
+
+      Object.entries(gateValues).forEach(([field, value]) => {
+        // Skip comparing coordinates directly since we verify separate lat/lng fields
+        if (field === "coordinates") return;
+
+        let isChanged = false;
+        if (field === "lat" || field === "lng") {
+          const originalVal = ents[field] || (
+            typeof ents.coordinates === 'object' && ents.coordinates
+              ? ents.coordinates[field]
+              : (typeof ents.coordinates === 'string'
+                  ? ents.coordinates.split(',')[field === "lat" ? 0 : 1]?.trim()
+                  : undefined)
+          );
+          isChanged = normVal(value) !== normVal(originalVal);
+        } else {
+          isChanged = normVal(value) !== normVal(ents[field]);
+        }
+
+        if (isChanged) changedFieldKeys.push(field);
+      });
+
+      // ── Fast path: only area / age changed ─────────────────────────────────
+      // If the valuation pipeline has already completed (factorialAnalysisData present)
+      // and the only edits are to area or age fields, skip the full pipeline re-run
+      // and recalculate the final value client-side.
+      const isAreaAgeOnly =
+        changedFieldKeys.length > 0 &&
+        changedFieldKeys.every((f) => AREA_AGE_FIELDS.has(f)) &&
+        factorialAnalysisData !== null;
+
+      if (isAreaAgeOnly) {
+        // Build an updated copy of subjectData with the new values merged in
+        const updatedSubject = { ...subjectData };
+        changedFieldKeys.forEach((f) => {
+          const rawVal = gateValues[f];
+          updatedSubject[f] = isNaN(Number(rawVal)) ? rawVal : Number(rawVal);
+        });
+        applyAreaAgeRecalculation(updatedSubject, changedFieldKeys);
+        setExtractionVerification(null);
+        setClarificationFields([]);
+        setClarificationPrompt("");
+        return; // skip full pipeline
+      }
+
+      // ── Normal path: full pipeline re-run ────────────────────────────────
       // Clear parent state since this is a re-run of profiling wizard
       onClear?.();
 
-      // Compute changes vs original extraction
-      const ents = extractionVerification?.entities || subjectData || {};
-      const entsCoords = ents.coordinates || {};
-      const changes = [];
-      Object.entries(gateValues).forEach(([field, value]) => {
-        let isChanged = false;
-        if (field === "lat" || field === "lng") {
-          isChanged = String(value).trim() !== String(entsCoords[field]);
-        } else {
-          isChanged = String(value).trim() !== String(ents[field]);
+      const changes = changedFieldKeys.map((field) => {
+        const value = gateValues[field];
+        if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
+          return `Use ${value} approach`;
         }
-        if (isChanged) {
-          if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
-            changes.push(`Use ${value} approach`);
-          } else {
-            changes.push(`${humanizeFieldName(field)}: ${value}`);
-          }
-        }
+        return `${humanizeFieldName(field)}: ${value}`;
       });
+
       let response = "The extracted details are confirmed to be correct. Extraction Verified: true, Coordinates Confirmed: true";
       if (changes.length > 0) {
         response = `The extracted details are confirmed with the following corrections: ${changes.join(", ")}. Please use these values. Extraction Verified: true, Coordinates Confirmed: true`;
-        if (changes.some(c => c.startsWith("Lat") || c.startsWith("Lng"))) {
+        if (changedFieldKeys.some(f => f === "lat" || f === "lng")) {
           response += " Also update the coordinates to the new latitude and longitude.";
         }
       }
@@ -6204,7 +6483,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       )}
                     </div>
                   )}
-                  {/* DB found nothing but web results exist — amber warning */}
+                  {/* DB found nothing but web results exist - amber warning */}
                   {message.db_no_results && message.comparables && (
                     <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
                       <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
@@ -6312,7 +6591,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       </div>
                       <p className="mt-1 text-sm text-text-secondary">
                         {selectedComps.size > 0
-                          ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
+                          ? (() => {
+                              const selected = Array.from(selectedComps).map(i => comparableData[i]);
+                              const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+                              const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
+                              const newCount = selected.length - skipCount;
+                              if (skipCount > 0) {
+                                return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
+                              }
+                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
+                            })()
                           : "Select at least one comparable from the table above to proceed."}
                       </p>
                     </div>
@@ -6321,7 +6609,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 {!ctaListingCollapsed && (
                   <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
                     <p className="text-xs text-text-dim">
-                      The listing pipeline will search for real listings for the subject property + your selected comparables.
+                      {fetchedCompIds.size > 0
+                        ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
+                        : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
                     </p>
                     <div className="flex items-center gap-3 shrink-0">
                       {backupValuationState && (
@@ -6339,7 +6629,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         disabled={selectedComps.size === 0}
                         className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                       >
-                        Proceed to Next Step →
+                        {fetchedCompIds.size > 0 ? "Fetch New Comparables →" : "Proceed to Next Step →"}
                       </button>
                     </div>
                   </div>
@@ -6666,7 +6956,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           </button>
         </div>
 
-        {(messages.length === 0 || (!listingData && !anyStreaming)) && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
+        {messages.length === 0 && (
           <div className="relative mt-2.5">
             <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
             <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
