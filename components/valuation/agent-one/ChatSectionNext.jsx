@@ -6564,7 +6564,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         data={message.factorial_data}
                         onCalculateRate={() => handleCalculateRate(message.factorial_data)}
                         isCalculatingRate={isFactorialAnalysisStreaming}
-                        canCalculateRate={Boolean(subjectData && selectedComparablePayload().length > 0)}
+                        canCalculateRate={Boolean(subjectData && (selectedComparablePayload().length > 0 || (message.factorial_data?.table || []).some(r => r.is_subject && r.avg_rate > 0)))}
                       />
                     </div>
                   )}
