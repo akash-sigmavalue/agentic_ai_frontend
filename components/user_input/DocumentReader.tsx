@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Upload, Send, FileText, Image, Loader2 } from "lucide-react";
+import { Check, Upload, Send, FileText, Image, Loader2, Download } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -22,6 +22,15 @@ const CustomPdfViewer = dynamic(() => import("./CustomPdfViewer"), {
   loading: () => (
     <div className="flex h-full items-center justify-center p-10 text-slate-400">
       Loading PDF viewer...
+    </div>
+  ),
+});
+
+const CustomDocxViewer = dynamic(() => import("./CustomDocxViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center p-10 text-slate-400">
+      Loading DOCX viewer...
     </div>
   ),
 });
@@ -166,6 +175,10 @@ function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
+function isDocxFile(file: File) {
+  return file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.name.toLowerCase().endsWith(".docx");
+}
+
 function StepperPipelineGraph({
   active,
   ready,
@@ -256,6 +269,9 @@ export default function DocumentReader() {
   const highlightRequestIdRef = useRef(0);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const answerContainerRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [initialSuggestions, setInitialSuggestions] = useState<string[]>([]);
 
   const [leftWidth, setLeftWidth] = useState(24);
   const [rightWidth, setRightWidth] = useState(30);
@@ -315,7 +331,9 @@ export default function DocumentReader() {
     () => (activeChunkIndex != null ? askResult?.chunks[activeChunkIndex] ?? null : null),
     [activeChunkIndex, askResult]
   );
+  const activeFileSource = activeChunk ? activeChunk.source : Object.keys(pdfUrlsBySource)[0];
   const activePdfUrl = activeChunk ? pdfUrlsBySource[activeChunk.source] || pdfUrl : pdfUrl;
+  const isActiveDocx = activeFileSource?.toLowerCase().endsWith(".docx");
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -339,11 +357,16 @@ export default function DocumentReader() {
       if (!response.ok) throw new Error(await parseApiError(response));
       const result = await response.json();
       setUploadResult(result);
+      if ((result as any).suggested_questions) {
+        setInitialSuggestions((result as any).suggested_questions);
+      } else {
+        setInitialSuggestions([]);
+      }
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
       Object.values(pdfUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
 
       const nextPdfUrlsBySource: Record<string, string> = {};
-      files.filter(isPdfFile).forEach((file) => {
+      files.filter(f => isPdfFile(f) || isDocxFile(f)).forEach((file) => {
         nextPdfUrlsBySource[file.name] = URL.createObjectURL(file);
       });
       setPdfUrlsBySource(nextPdfUrlsBySource);
@@ -486,6 +509,12 @@ export default function DocumentReader() {
     handleAsk(suggestedQ);
   };
 
+  const onInitialSuggestionClick = (suggestedQ: string) => {
+    setInitialSuggestions([]);
+    setQuestion(suggestedQ);
+    handleAsk(suggestedQ);
+  };
+
   async function handleChunkSelect(chunk: Chunk, idx: number) {
     setActiveChunkIndex(idx);
     setHighlightRects([]);
@@ -500,6 +529,13 @@ export default function DocumentReader() {
 
     if (!chunk.document_id || !chunkText.trim()) {
       setHighlightError("Page opened, but exact text highlight could not be matched.");
+      return;
+    }
+
+    const isDocx = chunk.source?.toLowerCase().endsWith(".docx");
+    if (isDocx) {
+      setHighlightLoading(false);
+      setHighlightError(null);
       return;
     }
 
@@ -528,6 +564,65 @@ export default function DocumentReader() {
       }
     }
   }
+
+  const handleDownloadPdf = async () => {
+    if (!answerContainerRef.current) return;
+    setIsExporting(true);
+    try {
+      const originalTitle = document.title;
+      document.title = `QA-Export-${Date.now()}`;
+      
+      const printWrapper = document.createElement('div');
+      printWrapper.className = 'print-wrapper';
+      const clone = answerContainerRef.current.cloneNode(true) as HTMLElement;
+      
+      clone.style.height = 'auto';
+      clone.style.overflow = 'visible';
+      printWrapper.appendChild(clone);
+      
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @media print {
+          html, body {
+            background-color: white !important;
+          }
+          body > :not(.print-wrapper) {
+            display: none !important;
+          }
+          .print-wrapper {
+            display: block !important;
+            padding: 20px;
+            background-color: white !important;
+            color: black !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        @media screen {
+          .print-wrapper {
+            display: none !important;
+          }
+        }
+      `;
+      
+      document.body.appendChild(printWrapper);
+      document.head.appendChild(style);
+      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      window.print();
+      
+      document.body.removeChild(printWrapper);
+      document.head.removeChild(style);
+      document.title = originalTitle;
+    } catch (err: any) {
+      console.error("PDF generation failed:", err);
+      alert(`Failed to generate PDF: ${err?.message || err}. Please try again.`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <main className="h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 to-white p-5 font-sans antialiased">
@@ -597,7 +692,26 @@ export default function DocumentReader() {
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {messages.length === 0 && (
-                <p className="mt-20 text-center text-sm text-slate-400">Ask a question to start the conversation</p>
+                <div className="mt-12 flex flex-col items-center gap-6">
+                  <p className="text-sm text-slate-400">Ask a question to start the conversation</p>
+                  {initialSuggestions.length > 0 && (
+                    <div className="flex w-full flex-col items-center gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Suggested Questions</p>
+                      <div className="flex w-full max-w-sm flex-col gap-2">
+                        {initialSuggestions.map((q, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => onInitialSuggestionClick(q)}
+                            disabled={busy === "ask"}
+                            className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-left text-sm font-medium text-blue-800 transition-all hover:border-blue-200 hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               {messages.map((m, i) => (
                 <div
@@ -716,11 +830,28 @@ export default function DocumentReader() {
                 {askResult?.verified && (
                   <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Verified</span>
                 )}
+                {askResult && (
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={isExporting}
+                    className="flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 shadow-sm transition-colors hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    <Download className="h-3 w-3" />
+                    {isExporting ? "Exporting..." : "Download"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
               {askResult ? (
-                <div className="space-y-6">
+                <div className="space-y-6" ref={answerContainerRef}>
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Question</h4>
+                    <p className="text-[#1e293b] text-[15px]">{messages.filter(m => m.role === "user").pop()?.content}</p>
+                  </div>
+                  <div className="mb-2 border-t border-slate-100 pt-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Answer</h4>
+                  </div>
                   <MarkdownAnswer content={askResult.answer} />
                   {answerImages.length > 0 && (
                     <div className="space-y-3">
@@ -789,13 +920,20 @@ export default function DocumentReader() {
             )}
             {activePdfUrl ? (
               <div className="min-h-0 flex-1">
-                <CustomPdfViewer
-                  key={`${activeChunkIndex ?? "none"}-${parseChunkPages(activeChunk).join(",")}`}
-                  pdfUrl={activePdfUrl}
-                  pageNumbers={parseChunkPages(activeChunk)}
-                  searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
-                  highlightRects={highlightRects}
-                />
+                {isActiveDocx ? (
+                  <CustomDocxViewer 
+                    url={activePdfUrl} 
+                    searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
+                  />
+                ) : (
+                  <CustomPdfViewer
+                    key={`${activeChunkIndex ?? "none"}-${activeChunk ? parseChunkPages(activeChunk).join(",") : "all"}`}
+                    pdfUrl={activePdfUrl}
+                    pageNumbers={activeChunk ? parseChunkPages(activeChunk) : "all"}
+                    searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
+                    highlightRects={highlightRects}
+                  />
+                )}
               </div>
             ) : activeChunk ? (
               <div className="min-h-0 flex-1 overflow-auto bg-slate-50 p-6">
@@ -815,7 +953,7 @@ export default function DocumentReader() {
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-sm text-slate-400">
                 <Image className="mb-2 h-10 w-10 opacity-40" />
                 {uploadResult
-                  ? "PDF preview is available for PDF uploads. Upload a PDF to jump to chunk pages."
+                  ? "Document preview is available for PDF and DOCX uploads. Upload a supported file to preview."
                   : "Upload a document to preview it here."}
                 <br />
                 Click on any chunk to jump to its page.
