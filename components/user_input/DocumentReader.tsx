@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Upload, Send, FileText, Image, Loader2 } from "lucide-react";
+import { Check, Upload, Send, FileText, Image as ImageIcon, Loader2, CloudUpload, Trash2, X } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -121,7 +121,7 @@ function formatDuration(ms?: number | null) {
 
 function parseChunkPages(chunk: Chunk | null): number[] {
   if (!chunk) return [1];
-  const raw = chunk.page_range || chunk.page || "1";
+  const raw = String(chunk.page_range || chunk.page || "1");
   if (raw === "unknown") return [1];
   
   const parts = raw.split("-").map(s => parseInt(s.trim(), 10));
@@ -133,7 +133,7 @@ function parseChunkPages(chunk: Chunk | null): number[] {
     return pages;
   }
   
-  const page = parseInt(parts[0], 10);
+  const page = parts[0];
   return Number.isFinite(page) && page > 0 ? [page] : [1];
 }
 
@@ -256,6 +256,7 @@ export default function DocumentReader() {
   const highlightRequestIdRef = useRef(0);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [leftWidth, setLeftWidth] = useState(24);
   const [rightWidth, setRightWidth] = useState(30);
@@ -562,26 +563,100 @@ export default function DocumentReader() {
       <div className="flex h-[calc(100%-80px)] w-full gap-2 min-h-0">
         {/* LEFT PANEL: Upload & Chat */}
         <div className="flex flex-col gap-5 min-h-0" style={{ width: `${leftWidth}%` }}>
-          <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
-            <form onSubmit={uploadDocument} className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
-              <div className="relative">
+          <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+            <form onSubmit={uploadDocument} className="space-y-4">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
+
+              <div className="grid min-h-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[0.9fr_1.1fr]">
+                <label
+                  htmlFor="document-upload"
+                  className="flex min-h-32 cursor-pointer flex-col items-center justify-center border-b-2 border-dashed border-blue-200 bg-blue-50/60 px-4 py-5 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 xl:border-b-0 xl:border-r-2"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setFiles(Array.from(event.dataTransfer.files));
+                  }}
+                >
+                  <CloudUpload className="mb-2 h-9 w-9 text-blue-600" strokeWidth={1.8} />
+                  <span className="text-sm font-semibold text-slate-700">Drop files here</span>
+                  <span className="my-0.5 text-xs text-slate-400">or</span>
+                  <span className="text-sm font-semibold text-blue-600">Choose Files</span>
+                </label>
                 <input
+                  ref={fileInputRef}
+                  id="document-upload"
                   type="file"
                   accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
                   multiple
-                  className="w-full cursor-pointer rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-3 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                  className="sr-only"
                   onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
                 />
+
+                <div className="max-h-40 min-h-32 overflow-y-auto p-3">
+                  {files.length === 0 ? (
+                    <div className="flex h-full min-h-24 items-center justify-center px-3 text-center text-xs text-slate-400">
+                      Selected documents will appear here
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {files.map((file, index) => {
+                        const isImage = file.type.startsWith("image/");
+                        return (
+                          <div key={`${file.name}-${file.lastModified}-${index}`} className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                            {isImage ? (
+                              <ImageIcon className="h-4 w-4 shrink-0 text-violet-500" />
+                            ) : (
+                              <FileText className="h-4 w-4 shrink-0 text-rose-500" />
+                            )}
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={file.name}>
+                              {file.name}
+                            </span>
+                            <span className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${busy === "upload" ? "text-blue-600" : "text-emerald-600"}`}>
+                              {busy === "upload" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                              {busy === "upload" ? "Processing..." : "Ready"}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${file.name}`}
+                              disabled={busy === "upload"}
+                              onClick={() => {
+                                setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                              }}
+                              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={busy === "upload" || files.length === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {busy === "upload" ? "Processing..." : "Process Documents"}
-              </button>
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  disabled={files.length === 0 || busy === "upload"}
+                  onClick={() => {
+                    setFiles([]);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear All
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy === "upload" || files.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {busy === "upload" ? "Processing..." : "Process Documents"}
+                </button>
+              </div>
             </form>
             {uploadResult && (
               <div className="mt-4 rounded-lg bg-green-50 p-2 text-center text-xs font-medium text-green-700">
@@ -813,7 +888,7 @@ export default function DocumentReader() {
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-sm text-slate-400">
-                <Image className="mb-2 h-10 w-10 opacity-40" />
+                <ImageIcon className="mb-2 h-10 w-10 opacity-40" />
                 {uploadResult
                   ? "PDF preview is available for PDF uploads. Upload a PDF to jump to chunk pages."
                   : "Upload a document to preview it here."}
