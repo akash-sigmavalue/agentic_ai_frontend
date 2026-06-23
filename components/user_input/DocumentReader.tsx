@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Upload, Send, FileText, Image, Loader2, Download } from "lucide-react";
+import { Check, Upload, Send, FileText, Image, Loader2, Download, CloudUpload, X, Trash2, FileSpreadsheet } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -179,6 +179,10 @@ function isDocxFile(file: File) {
   return file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.name.toLowerCase().endsWith(".docx");
 }
 
+function isImageFile(file: File) {
+  return file.type.startsWith("image/") || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+}
+
 function StepperPipelineGraph({
   active,
   ready,
@@ -261,8 +265,8 @@ export default function DocumentReader() {
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [activeChunkIndex, setActiveChunkIndex] = useState<number | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfUrlsBySource, setPdfUrlsBySource] = useState<Record<string, string>>({});
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileUrlsBySource, setFileUrlsBySource] = useState<Record<string, string>>({});
   const [highlightRects, setHighlightRects] = useState<HighlightRect[]>([]);
   const [highlightLoading, setHighlightLoading] = useState(false);
   const [highlightError, setHighlightError] = useState<string | null>(null);
@@ -331,9 +335,10 @@ export default function DocumentReader() {
     () => (activeChunkIndex != null ? askResult?.chunks[activeChunkIndex] ?? null : null),
     [activeChunkIndex, askResult]
   );
-  const activeFileSource = activeChunk ? activeChunk.source : Object.keys(pdfUrlsBySource)[0];
-  const activePdfUrl = activeChunk ? pdfUrlsBySource[activeChunk.source] || pdfUrl : pdfUrl;
+  const activeFileSource = activeChunk ? activeChunk.source : Object.keys(fileUrlsBySource)[0];
+  const activeFileUrl = activeChunk ? fileUrlsBySource[activeChunk.source] || fileUrl : fileUrl;
   const isActiveDocx = activeFileSource?.toLowerCase().endsWith(".docx");
+  const isActiveImage = activeFileSource && /\.(png|jpe?g|webp|bmp)$/i.test(activeFileSource);
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -362,15 +367,15 @@ export default function DocumentReader() {
       } else {
         setInitialSuggestions([]);
       }
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      Object.values(pdfUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      Object.values(fileUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
 
-      const nextPdfUrlsBySource: Record<string, string> = {};
-      files.filter(f => isPdfFile(f) || isDocxFile(f)).forEach((file) => {
-        nextPdfUrlsBySource[file.name] = URL.createObjectURL(file);
+      const nextFileUrlsBySource: Record<string, string> = {};
+      files.filter(f => isPdfFile(f) || isDocxFile(f) || isImageFile(f)).forEach((file) => {
+        nextFileUrlsBySource[file.name] = URL.createObjectURL(file);
       });
-      setPdfUrlsBySource(nextPdfUrlsBySource);
-      setPdfUrl(Object.values(nextPdfUrlsBySource)[0] || null);
+      setFileUrlsBySource(nextFileUrlsBySource);
+      setFileUrl(Object.values(nextFileUrlsBySource)[0] || null);
       setMessages([]);
       setActiveChunkIndex(null);
       setHighlightRects([]);
@@ -658,25 +663,107 @@ export default function DocumentReader() {
         {/* LEFT PANEL: Upload & Chat */}
         <div className="flex flex-col gap-5 min-h-0" style={{ width: `${leftWidth}%` }}>
           <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
-            <form onSubmit={uploadDocument} className="space-y-3">
+            <form onSubmit={uploadDocument} className="space-y-4">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
-                  multiple
-                  className="w-full cursor-pointer rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-3 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
-                  onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
-                />
+              
+              <div className="flex flex-col xl:flex-row gap-4">
+                {/* Left Drop Zone */}
+                <div className="relative flex-1 min-h-[140px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-4 transition-colors hover:bg-blue-50">
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
+                    multiple
+                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                    onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
+                  />
+                  <CloudUpload className="mb-2 h-8 w-8 text-blue-500" />
+                  <p className="text-sm font-medium text-slate-600">Drop files here</p>
+                  <p className="text-xs text-slate-400 my-1">or</p>
+                  <p className="text-sm font-semibold text-blue-600">Choose Files</p>
+                </div>
+
+                {/* Right Files List */}
+                <div className="flex-1 min-h-[140px] max-h-[140px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
+                  {files.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                      No files selected
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {files.map((file, idx) => {
+                        const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                        const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv');
+                        
+                        return (
+                          <div key={idx} className="flex items-center justify-between rounded-lg p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {isPdf ? (
+                                <FileText className="h-5 w-5 shrink-0 text-red-500" />
+                              ) : isExcel ? (
+                                <FileSpreadsheet className="h-5 w-5 shrink-0 text-green-600" />
+                              ) : (
+                                <Image className="h-5 w-5 shrink-0 text-purple-500" />
+                              )}
+                              <span className="truncate text-sm font-medium text-slate-700" title={file.name}>
+                                {file.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-2">
+                              {busy === "upload" ? (
+                                <div className="flex items-center gap-1.5 text-blue-600">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-xs font-medium">Uploading...</span>
+                                </div>
+                              ) : uploadResult ? (
+                                <div className="flex items-center gap-1.5 text-green-600">
+                                  <div className="flex h-4 w-4 items-center justify-center rounded-full border border-green-600">
+                                    <Check className="h-3 w-3" strokeWidth={3} />
+                                  </div>
+                                  <span className="text-xs font-medium">Uploaded</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-slate-500">
+                                  <span className="text-xs font-medium">Selected</span>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setFiles(files.filter((_, i) => i !== idx));
+                                }}
+                                className="rounded text-slate-400 hover:text-slate-600 focus:outline-none"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={busy === "upload" || files.length === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {busy === "upload" ? "Processing..." : "Process Documents"}
-              </button>
+
+              <div className="flex items-center justify-between mt-2">
+                <button
+                  type="button"
+                  onClick={() => setFiles([])}
+                  disabled={files.length === 0 || busy === "upload"}
+                  className="flex items-center gap-2 px-2 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear All
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy === "upload" || files.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {busy === "upload" ? "Processing..." : "Process Documents"}
+                </button>
+              </div>
             </form>
             {uploadResult && (
               <div className="mt-4 rounded-lg bg-green-50 p-2 text-center text-xs font-medium text-green-700">
@@ -905,7 +992,7 @@ export default function DocumentReader() {
           <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Viewer</h3>
-              {activeChunk && activePdfUrl && (
+              {activeChunk && activeFileUrl && (
                 <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   Page {activeChunk.page_range || activeChunk.page}
                 </span>
@@ -913,22 +1000,30 @@ export default function DocumentReader() {
             </div>
           </div>
           <div className="flex flex-1 flex-col overflow-hidden rounded-b-2xl bg-slate-100">
-            {(highlightLoading || highlightError) && activePdfUrl && (
+            {(highlightLoading || highlightError) && activeFileUrl && !isActiveImage && (
               <div className="border-b border-slate-200 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600">
                 {highlightLoading ? "Finding text highlight..." : highlightError}
               </div>
             )}
-            {activePdfUrl ? (
-              <div className="min-h-0 flex-1">
+            {activeFileUrl ? (
+              <div className="min-h-0 flex-1 flex flex-col">
                 {isActiveDocx ? (
                   <CustomDocxViewer 
-                    url={activePdfUrl} 
+                    url={activeFileUrl} 
                     searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
                   />
+                ) : isActiveImage ? (
+                  <div className="flex-1 overflow-auto bg-slate-50 p-6 flex items-center justify-center">
+                    {activeChunk?.type === "image" && activeChunk?.image_base64 ? (
+                       <img src={chunkImageSrc(activeChunk)} alt="Document chunk visual" className="max-w-full object-contain shadow-sm border border-slate-200 rounded-lg" />
+                    ) : (
+                       <img src={activeFileUrl} alt="Document visual" className="max-w-full object-contain shadow-sm border border-slate-200 rounded-lg" />
+                    )}
+                  </div>
                 ) : (
                   <CustomPdfViewer
                     key={`${activeChunkIndex ?? "none"}-${activeChunk ? parseChunkPages(activeChunk).join(",") : "all"}`}
-                    pdfUrl={activePdfUrl}
+                    pdfUrl={activeFileUrl}
                     pageNumbers={activeChunk ? parseChunkPages(activeChunk) : "all"}
                     searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
                     highlightRects={highlightRects}
