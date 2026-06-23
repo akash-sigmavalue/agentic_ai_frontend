@@ -446,31 +446,31 @@ function SlideCover({ valuationResult }) {
       </div>
 
       {/* Market Value Hero */}
-      <div className="relative overflow-hidden rounded-2xl border border-green-500/30 bg-gradient-to-r from-bg-card to-bg-deep p-5 mb-4 shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.04] to-transparent" />
+      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-bg-card/90 to-emerald-500/5 p-6 mb-4 shrink-0 shadow-[0_0_30px_rgba(16,185,129,0.08)]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_60%)]" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[8px] font-black uppercase tracking-[0.3em] text-green-400/80 mb-1">
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-400/90 mb-1.5">
               {type === "cost" ? "Cost Approach Value" : "Market Valuation"}
             </p>
-            <p className="font-mono text-3xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(34,197,94,0.4)]">
+            <p className="font-mono text-4xl font-black text-white drop-shadow-[0_0_24px_rgba(16,185,129,0.4)] tracking-wide">
               {fmtCurrency(marketValue, formatter)}
             </p>
             {area > 0 && type !== "cost" && (
-              <p className="text-[9px] text-text-dim mt-1 font-semibold uppercase tracking-wider">
+              <p className="text-[10px] text-text-secondary mt-2.5 font-bold uppercase tracking-wider bg-white/5 border border-white/10 rounded-md px-2 py-0.5 w-fit">
                 {fmtCurrency(finalRate, formatter)}/sqft × {area.toLocaleString()} sqft
               </p>
             )}
           </div>
           {factorialAnalysis?.subject_rate_range && (
-            <div className="text-right">
-              <p className="text-[8px] font-bold uppercase tracking-widest text-text-dim mb-1">Rate Range</p>
-              <p className="text-[11px] font-black text-text-primary font-mono">
+            <div className="text-right bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-text-dim mb-1">Rate Range</p>
+              <p className="text-[13px] font-black text-emerald-400 font-mono">
                 {fmtCurrency(factorialAnalysis.subject_rate_range.low, formatter)}
-                <span className="text-text-dim mx-1">—</span>
+                <span className="text-text-dim mx-1.5">—</span>
                 {fmtCurrency(factorialAnalysis.subject_rate_range.high, formatter)}
               </p>
-              <p className="text-[8px] text-text-dim uppercase tracking-wider">per sqft</p>
+              <p className="text-[8px] text-text-dim uppercase tracking-wider font-extrabold mt-0.5">per sqft</p>
             </div>
           )}
         </div>

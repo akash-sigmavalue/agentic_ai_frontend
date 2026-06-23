@@ -591,13 +591,13 @@ function StepCard({ step, accent, index }) {
 }
 
 // ── Stage Accordion ────────────────────────────────────────────────────────────
-function StageAccordion({ meta, steps, defaultOpen }) {
+function StageAccordion({ meta, steps, defaultOpen, isActive }) {
   const [open, setOpen] = useState(defaultOpen);
   const { accent, accentGlow, label, icon: IconComponent, description } = meta;
 
   return (
     <div 
-      className="rounded-2xl border overflow-hidden transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-md" 
+      className="rounded-2xl border overflow-hidden transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-md relative z-10" 
       style={{ 
         borderColor: `${accent}25`, 
         background: open 
@@ -607,11 +607,11 @@ function StageAccordion({ meta, steps, defaultOpen }) {
     >
       <button
         onClick={() => setOpen((p) => !p)}
-        className="w-full flex items-center gap-3 px-4.5 py-4.5 text-left transition-colors duration-300 hover:bg-white/[0.02]"
+        className="w-full flex items-center gap-3 px-4.5 py-4.5 text-left transition-colors duration-300 hover:bg-white/[0.02] cursor-pointer"
         style={{ background: open ? accentGlow : "transparent" }}
       >
         <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg relative transition-transform duration-300 active:scale-95 animate-[pulse_3s_infinite]"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg relative transition-transform duration-300 active:scale-95 ${isActive ? 'animate-[pulse_1.5s_infinite]' : 'animate-[pulse_3s_infinite]'}`}
           style={{ 
             background: `linear-gradient(135deg, ${accent}25 0%, ${accent}08 100%)`, 
             border: `1px solid ${accent}45`,
@@ -622,6 +622,9 @@ function StageAccordion({ meta, steps, defaultOpen }) {
           <IconComponent className="h-5 w-5 relative z-10" />
           {open && (
             <span className="absolute -inset-[3px] rounded-xl border border-dashed border-white/10 animate-spin" style={{ animationDuration: '12s' }} />
+          )}
+          {isActive && (
+            <span className="absolute -inset-[6px] rounded-2xl border border-accent/20 animate-ping opacity-45 pointer-events-none" style={{ borderColor: accent }} />
           )}
         </span>
         
@@ -652,8 +655,10 @@ function StageAccordion({ meta, steps, defaultOpen }) {
         </div>
       </button>
 
-      {open && (
-        <div className="px-4.5 pt-4 pb-2 border-t border-white/[0.03]">
+      <div 
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${open ? 'max-h-[1500px] border-t border-white/[0.03] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}
+      >
+        <div className="px-4.5 pt-4 pb-2">
           <div className="mb-3 flex items-center gap-2">
             <div className="ml-4 h-px w-3" style={{ background: `${accent}40` }} />
             <span className="text-[8px] font-bold uppercase tracking-[0.2em]" style={{ color: accent }}>EXECUTION STEPS</span>
@@ -665,7 +670,7 @@ function StageAccordion({ meta, steps, defaultOpen }) {
             ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -845,13 +850,21 @@ export default function WorkflowSectionNext({ events = [] }) {
             </div>
 
             {/* Stage Accordions Container */}
-            <div className="space-y-3.5">
+            <div className="space-y-3.5 relative">
+              {/* Vertical connector pipeline wire running behind accordion icons */}
+              <div 
+                className="absolute left-[38px] top-6 bottom-6 w-[2px] pointer-events-none z-0 hidden sm:block" 
+                style={{
+                  background: `linear-gradient(180deg, rgba(34,211,238,0.15) 0%, rgba(167,139,250,0.15) 50%, rgba(244,114,182,0.15) 100%)`
+                }}
+              />
               {stages.map((stage) => (
                 <StageAccordion
                   key={stage.key}
                   meta={stage.meta}
                   steps={stage.steps}
                   defaultOpen={stage.key === latestStageKey}
+                  isActive={stage.key === latestStageKey}
                 />
               ))}
             </div>
