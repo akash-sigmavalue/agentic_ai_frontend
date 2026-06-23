@@ -570,9 +570,9 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
                   {output.unit_identification ? (
                     <div className="grid grid-cols-1 gap-2">
                       {Object.entries(output.unit_identification).map(([key, val]) => (
-                        <div key={key} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <span className="text-xs font-extrabold text-slate-700 capitalize">{key.replace(/_/g, ' ')}</span>
-                          <span className={`text-xs font-mono max-w-[50%] text-right truncate ${val !== null && val !== undefined && val !== '' ? 'text-indigo-600 font-bold' : 'text-slate-400'}`} title={typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'N/A')}>
+                        <div key={key} className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <span className="text-xs font-extrabold text-slate-700 capitalize shrink-0 pt-0.5">{key.replace(/_/g, ' ')}</span>
+                          <span className={`text-xs font-mono break-words sm:text-right ${val !== null && val !== undefined && val !== '' ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
                             {typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'N/A')}
                           </span>
                         </div>

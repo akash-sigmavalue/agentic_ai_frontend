@@ -78,6 +78,8 @@ interface ThreeDMapTimelapseViewProps {
     layer?: { id?: string } | null;
     [key: string]: unknown;
   }) => { html?: string; text?: string } | null;
+  /** Resolved metric unit context from Module 2 unit_identification (LLM 2.5a/b) */
+  metricUnitContext?: Record<string, unknown>;
   metricDomainMin?: number;
   metricDomainMax?: number;
 }
@@ -89,6 +91,22 @@ function rateToColor(normalizedValue: number): [number, number, number, number] 
   }
   const green = Math.round(255 * (1 - (normalizedValue - 0.5) * 2));
   return [255, green, 0, 220];
+}
+
+/** Format a metric value using the resolved unit context from Module 2 LLM 2.5a/b. */
+function formatMetricValue(value: number | null | undefined, unitCtx: Record<string, unknown> | undefined): string {
+  if (value == null) return 'N/A';
+  const currencySymbol = typeof unitCtx?.currency_symbol === 'string' ? unitCtx.currency_symbol : '';
+  const areaUnitSymbol = typeof unitCtx?.area_unit_symbol === 'string' ? unitCtx.area_unit_symbol : '';
+  const unitType = typeof unitCtx?.unit_type === 'string' ? unitCtx.unit_type : '';
+  const formatted = value.toLocaleString();
+  if (unitType === 'rate_composite' && currencySymbol && areaUnitSymbol) return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  if (unitType === 'currency' && currencySymbol) return `${currencySymbol}${formatted}`;
+  if (unitType === 'area' && areaUnitSymbol) return `${formatted} ${areaUnitSymbol}`;
+  if (unitType === 'count' || unitType === 'percentage') return formatted;
+  if (currencySymbol && areaUnitSymbol) return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  if (currencySymbol) return `${currencySymbol}${formatted}`;
+  return formatted;
 }
 
 function getDefaultColor(feature: BuildingFeature): [number, number, number, number] {
@@ -134,6 +152,7 @@ export default function ThreeDMapTimelapseView({
   onInsightDataReady,
   extraDeckLayers = [],
   overlayTooltip,
+  metricUnitContext,
   metricDomainMin,
   metricDomainMax,
 }: ThreeDMapTimelapseViewProps) {
@@ -415,7 +434,7 @@ export default function ThreeDMapTimelapseView({
                   name,
                   totalFloors,
                   baseZ,
-                  rateDisplay: effectiveRate == null ? '?' : `₹${effectiveRate.toLocaleString()}/sq.m.`,
+                  rateDisplay: effectiveRate == null ? '?' : formatMetricValue(effectiveRate, metricUnitContext),
                   dateLabel: currentDateLabel,
                   fillColor,
                   confidence,
@@ -472,7 +491,7 @@ export default function ThreeDMapTimelapseView({
                   name,
                   totalFloors: 0,
                   baseZ: 0,
-                  rateDisplay: effectiveRate == null ? '?' : `₹${effectiveRate.toLocaleString()}/sq.m.`,
+                  rateDisplay: effectiveRate == null ? '?' : formatMetricValue(effectiveRate, metricUnitContext),
                   dateLabel: currentDateLabel,
                   fillColor,
                   confidence: effectiveRate == null ? 0 : 1,
@@ -536,7 +555,7 @@ export default function ThreeDMapTimelapseView({
       if (object.properties.is_custom && object.properties.runtime_has_floor_data === false) {
         const metric = object.properties.floor_rates_by_date?.[dateIndex]?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
         return {
-          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : `₹${metric.toLocaleString()}/sq.m.`}</div><div>Date: ${currentDateLabel}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Date: ${currentDateLabel}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
         };
       }
       return {

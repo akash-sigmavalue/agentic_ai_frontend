@@ -23,21 +23,32 @@ const EXPANDED_PANEL_WIDTHS = {
 type PanelKey = keyof typeof EXPANDED_PANEL_WIDTHS;
 
 export default function VisualizationAgentPage() {
-  const [panelWidths, setPanelWidths] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_PANEL_WIDTHS;
-
-    const savedWidths = localStorage.getItem('visualization_panel_widths');
-    if (!savedWidths) return DEFAULT_PANEL_WIDTHS;
-
-    try {
-      return JSON.parse(savedWidths) as typeof DEFAULT_PANEL_WIDTHS;
-    } catch (error) {
-      console.error('Failed to load saved panel widths', error);
-      return DEFAULT_PANEL_WIDTHS;
-    }
-  });
+  const [panelWidths, setPanelWidths] = useState(DEFAULT_PANEL_WIDTHS);
   const [expandedPanel, setExpandedPanel] = useState<PanelKey | null>(null);
   const [isDragging, setIsDragging] = useState<'chat' | 'workflow' | null>(null);
+
+  // Restore saved panel widths AFTER hydration so server & client first-render match
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('visualization_panel_widths');
+      if (saved) {
+        const parsed = JSON.parse(saved) as typeof DEFAULT_PANEL_WIDTHS;
+        if (parsed && typeof parsed.chat === 'number') {
+          setPanelWidths(parsed);
+        }
+      }
+    } catch {
+      // ignore corrupt localStorage
+    }
+  }, []);
+
+  // Persist panel widths whenever they change (but not when a panel is expanded)
+  useEffect(() => {
+    if (!expandedPanel) {
+      localStorage.setItem('visualization_panel_widths', JSON.stringify(panelWidths));
+    }
+  }, [expandedPanel, panelWidths]);
+
   const [moduleOutput, setModuleOutput] = useState<Module1IntentOutput | null>(null);
   const [module2Output, setModule2Output] = useState<Module2Output | null>(null);
   const [retrievalOutput, setRetrievalOutput] = useState<VisualizationRetrievalState | null>(null);
@@ -50,11 +61,7 @@ export default function VisualizationAgentPage() {
   } | null>(null);
   const restoredPanelWidthsRef = useRef(panelWidths);
 
-  useEffect(() => {
-    if (!expandedPanel) {
-      localStorage.setItem('visualization_panel_widths', JSON.stringify(panelWidths));
-    }
-  }, [expandedPanel, panelWidths]);
+
 
   const handleMouseDown = (panel: 'chat' | 'workflow') => (e: React.MouseEvent) => {
     if (expandedPanel) return;

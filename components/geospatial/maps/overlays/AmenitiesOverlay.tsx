@@ -11,6 +11,7 @@ const CITIES: Record<string, string> = {
   Thane: 'Thane',
   Hyderabad: 'Hyderabad',
   Bengaluru: 'Bengaluru',
+  Dubai: 'Dubai',
 };
 
 export interface CategoryConfig {
