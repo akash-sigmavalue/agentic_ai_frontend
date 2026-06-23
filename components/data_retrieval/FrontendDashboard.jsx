@@ -51,6 +51,8 @@ export default function FrontendDashboard() {
   const [pipelineStages, setPipelineStages] = useState([]);
   const [pipelineCatalog, setPipelineCatalog] = useState([]);
   const [stageReport, setStageReport] = useState(null);
+  const [jsxOutput, setJsxOutput] = useState("");
+  const [currentDataset, setCurrentDataset] = useState([]);
   const [clarificationState, setClarificationState] = useState({
     awaiting: false,
     meta: null,
@@ -76,6 +78,8 @@ export default function FrontendDashboard() {
     setPipelineStages([]);
     setPipelineCatalog([]);
     setStageReport(null);
+    setJsxOutput("");
+    setCurrentDataset([]);
     setMetricsText("Streaming from backend...");
     setTotalTokens(0);
     setTokenEvents([]);
@@ -407,6 +411,9 @@ export default function FrontendDashboard() {
           appendStageDetail(`Result: ${data.content}`);
           break;
         case "result_set":
+          if (data.content?.rows) {
+            setCurrentDataset(data.content.rows);
+          }
           setMessages((current) =>
             current.map((item) =>
               item.id === assistantId
@@ -478,6 +485,11 @@ export default function FrontendDashboard() {
             ),
           );
           break;
+        case "final_result":
+          if (data.content?.jsx) {
+            setJsxOutput(data.content.jsx);
+          }
+          break;
         case "report_chunk":
           setMessages((current) =>
             current.map((item) =>
@@ -539,6 +551,8 @@ export default function FrontendDashboard() {
     setPipelineStages([]);
     setPipelineCatalog([]);
     setStageReport(null);
+    setJsxOutput("");
+    setCurrentDataset([]);
     setTotalTokens(0);
     setMetricsText("Latency: --s");
     setClarificationState({
@@ -717,7 +731,7 @@ export default function FrontendDashboard() {
               tokenEvents={tokenEvents}
             />
           }
-          right={<MapSection />}
+          right={<MapSection jsx={jsxOutput} dataset={currentDataset} />}
         />
       </div>
     </main>
