@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Upload, Send, FileText, Image as ImageIcon, Loader2, CloudUpload, Trash2, X } from "lucide-react";
+import { Check, Upload, Send, FileText, Image, Loader2, Download, CloudUpload, X, Trash2, FileSpreadsheet } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -22,6 +22,15 @@ const CustomPdfViewer = dynamic(() => import("./CustomPdfViewer"), {
   loading: () => (
     <div className="flex h-full items-center justify-center p-10 text-slate-400">
       Loading PDF viewer...
+    </div>
+  ),
+});
+
+const CustomDocxViewer = dynamic(() => import("./CustomDocxViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center p-10 text-slate-400">
+      Loading DOCX viewer...
     </div>
   ),
 });
@@ -121,7 +130,7 @@ function formatDuration(ms?: number | null) {
 
 function parseChunkPages(chunk: Chunk | null): number[] {
   if (!chunk) return [1];
-  const raw = String(chunk.page_range || chunk.page || "1");
+  const raw = chunk.page_range || chunk.page || "1";
   if (raw === "unknown") return [1];
   
   const parts = raw.split("-").map(s => parseInt(s.trim(), 10));
@@ -133,7 +142,7 @@ function parseChunkPages(chunk: Chunk | null): number[] {
     return pages;
   }
   
-  const page = parts[0];
+  const page = parseInt(parts[0], 10);
   return Number.isFinite(page) && page > 0 ? [page] : [1];
 }
 
@@ -164,6 +173,14 @@ function highlightChunkText(text: string, searchTerm: string) {
 
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isDocxFile(file: File) {
+  return file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || file.name.toLowerCase().endsWith(".docx");
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith("image/") || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
 }
 
 function StepperPipelineGraph({
@@ -248,15 +265,17 @@ export default function DocumentReader() {
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [activeChunkIndex, setActiveChunkIndex] = useState<number | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfUrlsBySource, setPdfUrlsBySource] = useState<Record<string, string>>({});
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileUrlsBySource, setFileUrlsBySource] = useState<Record<string, string>>({});
   const [highlightRects, setHighlightRects] = useState<HighlightRect[]>([]);
   const [highlightLoading, setHighlightLoading] = useState(false);
   const [highlightError, setHighlightError] = useState<string | null>(null);
   const highlightRequestIdRef = useRef(0);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const answerContainerRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [initialSuggestions, setInitialSuggestions] = useState<string[]>([]);
 
   const [leftWidth, setLeftWidth] = useState(24);
   const [rightWidth, setRightWidth] = useState(30);
@@ -316,7 +335,10 @@ export default function DocumentReader() {
     () => (activeChunkIndex != null ? askResult?.chunks[activeChunkIndex] ?? null : null),
     [activeChunkIndex, askResult]
   );
-  const activePdfUrl = activeChunk ? pdfUrlsBySource[activeChunk.source] || pdfUrl : pdfUrl;
+  const activeFileSource = activeChunk ? activeChunk.source : Object.keys(fileUrlsBySource)[0];
+  const activeFileUrl = activeChunk ? fileUrlsBySource[activeChunk.source] || fileUrl : fileUrl;
+  const isActiveDocx = activeFileSource?.toLowerCase().endsWith(".docx");
+  const isActiveImage = activeFileSource && /\.(png|jpe?g|webp|bmp)$/i.test(activeFileSource);
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -340,15 +362,20 @@ export default function DocumentReader() {
       if (!response.ok) throw new Error(await parseApiError(response));
       const result = await response.json();
       setUploadResult(result);
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      Object.values(pdfUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
+      if ((result as any).suggested_questions) {
+        setInitialSuggestions((result as any).suggested_questions);
+      } else {
+        setInitialSuggestions([]);
+      }
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      Object.values(fileUrlsBySource).forEach((url) => URL.revokeObjectURL(url));
 
-      const nextPdfUrlsBySource: Record<string, string> = {};
-      files.filter(isPdfFile).forEach((file) => {
-        nextPdfUrlsBySource[file.name] = URL.createObjectURL(file);
+      const nextFileUrlsBySource: Record<string, string> = {};
+      files.filter(f => isPdfFile(f) || isDocxFile(f) || isImageFile(f)).forEach((file) => {
+        nextFileUrlsBySource[file.name] = URL.createObjectURL(file);
       });
-      setPdfUrlsBySource(nextPdfUrlsBySource);
-      setPdfUrl(Object.values(nextPdfUrlsBySource)[0] || null);
+      setFileUrlsBySource(nextFileUrlsBySource);
+      setFileUrl(Object.values(nextFileUrlsBySource)[0] || null);
       setMessages([]);
       setActiveChunkIndex(null);
       setHighlightRects([]);
@@ -487,6 +514,12 @@ export default function DocumentReader() {
     handleAsk(suggestedQ);
   };
 
+  const onInitialSuggestionClick = (suggestedQ: string) => {
+    setInitialSuggestions([]);
+    setQuestion(suggestedQ);
+    handleAsk(suggestedQ);
+  };
+
   async function handleChunkSelect(chunk: Chunk, idx: number) {
     setActiveChunkIndex(idx);
     setHighlightRects([]);
@@ -501,6 +534,13 @@ export default function DocumentReader() {
 
     if (!chunk.document_id || !chunkText.trim()) {
       setHighlightError("Page opened, but exact text highlight could not be matched.");
+      return;
+    }
+
+    const isDocx = chunk.source?.toLowerCase().endsWith(".docx");
+    if (isDocx) {
+      setHighlightLoading(false);
+      setHighlightError(null);
       return;
     }
 
@@ -529,6 +569,65 @@ export default function DocumentReader() {
       }
     }
   }
+
+  const handleDownloadPdf = async () => {
+    if (!answerContainerRef.current) return;
+    setIsExporting(true);
+    try {
+      const originalTitle = document.title;
+      document.title = `QA-Export-${Date.now()}`;
+      
+      const printWrapper = document.createElement('div');
+      printWrapper.className = 'print-wrapper';
+      const clone = answerContainerRef.current.cloneNode(true) as HTMLElement;
+      
+      clone.style.height = 'auto';
+      clone.style.overflow = 'visible';
+      printWrapper.appendChild(clone);
+      
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @media print {
+          html, body {
+            background-color: white !important;
+          }
+          body > :not(.print-wrapper) {
+            display: none !important;
+          }
+          .print-wrapper {
+            display: block !important;
+            padding: 20px;
+            background-color: white !important;
+            color: black !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        @media screen {
+          .print-wrapper {
+            display: none !important;
+          }
+        }
+      `;
+      
+      document.body.appendChild(printWrapper);
+      document.head.appendChild(style);
+      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      window.print();
+      
+      document.body.removeChild(printWrapper);
+      document.head.removeChild(style);
+      document.title = originalTitle;
+    } catch (err: any) {
+      console.error("PDF generation failed:", err);
+      alert(`Failed to generate PDF: ${err?.message || err}. Please try again.`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <main className="h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 to-white p-5 font-sans antialiased">
@@ -563,70 +662,81 @@ export default function DocumentReader() {
       <div className="flex h-[calc(100%-80px)] w-full gap-2 min-h-0">
         {/* LEFT PANEL: Upload & Chat */}
         <div className="flex flex-col gap-5 min-h-0" style={{ width: `${leftWidth}%` }}>
-          <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur-sm">
+          <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
             <form onSubmit={uploadDocument} className="space-y-4">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
+              
+              <div className="flex flex-col xl:flex-row gap-4">
+                {/* Left Drop Zone */}
+                <div className="relative flex-1 min-h-[140px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-4 transition-colors hover:bg-blue-50">
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
+                    multiple
+                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                    onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
+                  />
+                  <CloudUpload className="mb-2 h-8 w-8 text-blue-500" />
+                  <p className="text-sm font-medium text-slate-600">Drop files here</p>
+                  <p className="text-xs text-slate-400 my-1">or</p>
+                  <p className="text-sm font-semibold text-blue-600">Choose Files</p>
+                </div>
 
-              <div className="grid min-h-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[0.9fr_1.1fr]">
-                <label
-                  htmlFor="document-upload"
-                  className="flex min-h-32 cursor-pointer flex-col items-center justify-center border-b-2 border-dashed border-blue-200 bg-blue-50/60 px-4 py-5 text-center transition-colors hover:border-blue-400 hover:bg-blue-50 xl:border-b-0 xl:border-r-2"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setFiles(Array.from(event.dataTransfer.files));
-                  }}
-                >
-                  <CloudUpload className="mb-2 h-9 w-9 text-blue-600" strokeWidth={1.8} />
-                  <span className="text-sm font-semibold text-slate-700">Drop files here</span>
-                  <span className="my-0.5 text-xs text-slate-400">or</span>
-                  <span className="text-sm font-semibold text-blue-600">Choose Files</span>
-                </label>
-                <input
-                  ref={fileInputRef}
-                  id="document-upload"
-                  type="file"
-                  accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp"
-                  multiple
-                  className="sr-only"
-                  onChange={(event) => setFiles(event.target.files ? Array.from(event.target.files) : [])}
-                />
-
-                <div className="max-h-40 min-h-32 overflow-y-auto p-3">
+                {/* Right Files List */}
+                <div className="flex-1 min-h-[140px] max-h-[140px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
                   {files.length === 0 ? (
-                    <div className="flex h-full min-h-24 items-center justify-center px-3 text-center text-xs text-slate-400">
-                      Selected documents will appear here
+                    <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                      No files selected
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
-                      {files.map((file, index) => {
-                        const isImage = file.type.startsWith("image/");
+                    <div className="flex flex-col gap-2">
+                      {files.map((file, idx) => {
+                        const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                        const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv');
+                        
                         return (
-                          <div key={`${file.name}-${file.lastModified}-${index}`} className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                            {isImage ? (
-                              <ImageIcon className="h-4 w-4 shrink-0 text-violet-500" />
-                            ) : (
-                              <FileText className="h-4 w-4 shrink-0 text-rose-500" />
-                            )}
-                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={file.name}>
-                              {file.name}
-                            </span>
-                            <span className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${busy === "upload" ? "text-blue-600" : "text-emerald-600"}`}>
-                              {busy === "upload" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                              {busy === "upload" ? "Processing..." : "Ready"}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`Remove ${file.name}`}
-                              disabled={busy === "upload"}
-                              onClick={() => {
-                                setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
-                                if (fileInputRef.current) fileInputRef.current.value = "";
-                              }}
-                              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+                          <div key={idx} className="flex items-center justify-between rounded-lg p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {isPdf ? (
+                                <FileText className="h-5 w-5 shrink-0 text-red-500" />
+                              ) : isExcel ? (
+                                <FileSpreadsheet className="h-5 w-5 shrink-0 text-green-600" />
+                              ) : (
+                                <Image className="h-5 w-5 shrink-0 text-purple-500" />
+                              )}
+                              <span className="truncate text-sm font-medium text-slate-700" title={file.name}>
+                                {file.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-2">
+                              {busy === "upload" ? (
+                                <div className="flex items-center gap-1.5 text-blue-600">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-xs font-medium">Uploading...</span>
+                                </div>
+                              ) : uploadResult ? (
+                                <div className="flex items-center gap-1.5 text-green-600">
+                                  <div className="flex h-4 w-4 items-center justify-center rounded-full border border-green-600">
+                                    <Check className="h-3 w-3" strokeWidth={3} />
+                                  </div>
+                                  <span className="text-xs font-medium">Uploaded</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-slate-500">
+                                  <span className="text-xs font-medium">Selected</span>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setFiles(files.filter((_, i) => i !== idx));
+                                }}
+                                className="rounded text-slate-400 hover:text-slate-600 focus:outline-none"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -635,15 +745,12 @@ export default function DocumentReader() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between mt-2">
                 <button
                   type="button"
+                  onClick={() => setFiles([])}
                   disabled={files.length === 0 || busy === "upload"}
-                  onClick={() => {
-                    setFiles([]);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-2 px-2 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   Clear All
@@ -651,7 +758,7 @@ export default function DocumentReader() {
                 <button
                   type="submit"
                   disabled={busy === "upload" || files.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 >
                   {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {busy === "upload" ? "Processing..." : "Process Documents"}
@@ -672,7 +779,26 @@ export default function DocumentReader() {
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {messages.length === 0 && (
-                <p className="mt-20 text-center text-sm text-slate-400">Ask a question to start the conversation</p>
+                <div className="mt-12 flex flex-col items-center gap-6">
+                  <p className="text-sm text-slate-400">Ask a question to start the conversation</p>
+                  {initialSuggestions.length > 0 && (
+                    <div className="flex w-full flex-col items-center gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Suggested Questions</p>
+                      <div className="flex w-full max-w-sm flex-col gap-2">
+                        {initialSuggestions.map((q, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => onInitialSuggestionClick(q)}
+                            disabled={busy === "ask"}
+                            className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-left text-sm font-medium text-blue-800 transition-all hover:border-blue-200 hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               {messages.map((m, i) => (
                 <div
@@ -791,11 +917,28 @@ export default function DocumentReader() {
                 {askResult?.verified && (
                   <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Verified</span>
                 )}
+                {askResult && (
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={isExporting}
+                    className="flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 shadow-sm transition-colors hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    <Download className="h-3 w-3" />
+                    {isExporting ? "Exporting..." : "Download"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
               {askResult ? (
-                <div className="space-y-6">
+                <div className="space-y-6" ref={answerContainerRef}>
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Question</h4>
+                    <p className="text-[#1e293b] text-[15px]">{messages.filter(m => m.role === "user").pop()?.content}</p>
+                  </div>
+                  <div className="mb-2 border-t border-slate-100 pt-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Answer</h4>
+                  </div>
                   <MarkdownAnswer content={askResult.answer} />
                   {answerImages.length > 0 && (
                     <div className="space-y-3">
@@ -849,7 +992,7 @@ export default function DocumentReader() {
           <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Viewer</h3>
-              {activeChunk && activePdfUrl && (
+              {activeChunk && activeFileUrl && (
                 <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   Page {activeChunk.page_range || activeChunk.page}
                 </span>
@@ -857,20 +1000,35 @@ export default function DocumentReader() {
             </div>
           </div>
           <div className="flex flex-1 flex-col overflow-hidden rounded-b-2xl bg-slate-100">
-            {(highlightLoading || highlightError) && activePdfUrl && (
+            {(highlightLoading || highlightError) && activeFileUrl && !isActiveImage && (
               <div className="border-b border-slate-200 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600">
                 {highlightLoading ? "Finding text highlight..." : highlightError}
               </div>
             )}
-            {activePdfUrl ? (
-              <div className="min-h-0 flex-1">
-                <CustomPdfViewer
-                  key={`${activeChunkIndex ?? "none"}-${parseChunkPages(activeChunk).join(",")}`}
-                  pdfUrl={activePdfUrl}
-                  pageNumbers={parseChunkPages(activeChunk)}
-                  searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
-                  highlightRects={highlightRects}
-                />
+            {activeFileUrl ? (
+              <div className="min-h-0 flex-1 flex flex-col">
+                {isActiveDocx ? (
+                  <CustomDocxViewer 
+                    url={activeFileUrl} 
+                    searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
+                  />
+                ) : isActiveImage ? (
+                  <div className="flex-1 overflow-auto bg-slate-50 p-6 flex items-center justify-center">
+                    {activeChunk?.type === "image" && activeChunk?.image_base64 ? (
+                       <img src={chunkImageSrc(activeChunk)} alt="Document chunk visual" className="max-w-full object-contain shadow-sm border border-slate-200 rounded-lg" />
+                    ) : (
+                       <img src={activeFileUrl} alt="Document visual" className="max-w-full object-contain shadow-sm border border-slate-200 rounded-lg" />
+                    )}
+                  </div>
+                ) : (
+                  <CustomPdfViewer
+                    key={`${activeChunkIndex ?? "none"}-${activeChunk ? parseChunkPages(activeChunk).join(",") : "all"}`}
+                    pdfUrl={activeFileUrl}
+                    pageNumbers={activeChunk ? parseChunkPages(activeChunk) : "all"}
+                    searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
+                    highlightRects={highlightRects}
+                  />
+                )}
               </div>
             ) : activeChunk ? (
               <div className="min-h-0 flex-1 overflow-auto bg-slate-50 p-6">
@@ -888,9 +1046,9 @@ export default function DocumentReader() {
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-sm text-slate-400">
-                <ImageIcon className="mb-2 h-10 w-10 opacity-40" />
+                <Image className="mb-2 h-10 w-10 opacity-40" />
                 {uploadResult
-                  ? "PDF preview is available for PDF uploads. Upload a PDF to jump to chunk pages."
+                  ? "Document preview is available for PDF and DOCX uploads. Upload a supported file to preview."
                   : "Upload a document to preview it here."}
                 <br />
                 Click on any chunk to jump to its page.
