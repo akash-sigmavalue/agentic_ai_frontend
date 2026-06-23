@@ -314,7 +314,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   return (
     <AgentShell>
       <section className="flex h-full min-h-0 flex-col">
-        <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+        {/* <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <div className="rounded-2xl border border-border bg-bg-panel px-4 py-3 backdrop-blur-xl">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -337,7 +337,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
             <RotateCcw className="h-4 w-4" />
             Reset
           </button>
-        </div>
+        </div> */}
 
         <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(360px,0.85fr)_minmax(360px,1fr)_minmax(420px,1.15fr)]">
           <div className="min-h-0">

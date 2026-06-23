@@ -25,7 +25,7 @@ type ProjectDetailsModalProps = {
 };
 
 export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDetailsModalProps) {
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [activeTab, setActiveTab] = useState<string>("all");
   const [copied, setCopied] = useState(false);
 
   if (!isOpen || !data) return null;
@@ -147,6 +147,31 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
     }
   });
 
+  const structuredTableSections = [
+    { title: "Project Overview", value: overview },
+    { title: "Developer Information", value: developer },
+    { title: "Location Information", value: location },
+    { title: "Project Configuration", value: config },
+    { title: "Legal Compliance", value: legal },
+    { title: "Additional Fields", value: additional },
+  ]
+    .filter(({ value }) => value && typeof value === "object" && Object.keys(value).length > 0)
+    .map(({ title, value }) => ({ title, rows: [value] }));
+
+  const documentTableSections = documents.length > 0
+    ? [{ title: "Documents", rows: documents }]
+    : [];
+
+  const scrapedTableSections = Object.entries(rawSections)
+    .filter((entry): entry is [string, Record<string, unknown>[]] => Array.isArray(entry[1]))
+    .map(([title, rows]) => ({ title, rows }));
+
+  const allTableSections = [
+    ...structuredTableSections,
+    ...documentTableSections,
+    ...scrapedTableSections,
+  ];
+
   // Safe formatting function
   const formatVal = (val: any) => {
     if (val === null || val === undefined || val === "") return <span className="text-text-dim/60 italic">Not available</span>;
@@ -180,6 +205,7 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
 
   // Compile Tab List
   const tabsList = [
+    { id: "all", label: "All Tables", icon: Layers, count: allTableSections.length },
     { id: "overview", label: "Overview", icon: Building2 },
     { id: "location", label: "Location", icon: MapPin },
     { id: "developer", label: "Promoter", icon: User },
@@ -205,6 +231,7 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
 
   // Get active sections
   const getActiveTabSections = () => {
+    if (activeTab === "all") return allTableSections;
     if (activeTab === "overview") return mappedSections.overview;
     if (activeTab === "location") return mappedSections.location;
     if (activeTab === "developer") return mappedSections.developer;
@@ -394,12 +421,19 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
               ))}
             </div>
           ) : (
-            activeTab !== "raw" && activeTab !== "overview" && activeTab !== "documents" && (
+            activeTab !== "raw" && activeTab !== "overview" && activeTab !== "documents" && activeTab !== "all" && (
               <div className="flex min-h-60 flex-col items-center justify-center text-center text-text-dim">
                 <HelpCircle className="h-10 w-10 mb-2 opacity-50" />
                 <p className="text-sm">No structured data found for this category.</p>
               </div>
             )
+          )}
+
+          {activeTab === "all" && allTableSections.length === 0 && (
+            <div className="flex min-h-60 flex-col items-center justify-center text-center text-text-dim">
+              <HelpCircle className="mb-2 h-10 w-10 opacity-50" />
+              <p className="text-sm">No table data is available for this record.</p>
+            </div>
           )}
 
           {/* Tab: Raw JSON */}

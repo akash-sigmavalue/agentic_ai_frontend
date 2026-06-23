@@ -109,11 +109,18 @@ export default function ResultsTable({ data, onExportCsv, onExportJson }: Result
               {data.map((row, index) => (
                 <tr
                   key={index}
-                  onClick={() => setSelectedRow(row as Record<string, any>)}
-                  className="group cursor-pointer hover:bg-white/[0.03] transition"
+                  className="group transition hover:bg-white/[0.03]"
                 >
-                  <td className="border-b border-border/60 px-3 py-2 text-text-dim group-hover:text-accent-light">
-                    <Eye className="h-4 w-4" />
+                  <td className="border-b border-border/60 px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRow(row as Record<string, any>)}
+                      aria-label={`View details for ${getCellValue(row, "Project Name") || `record ${index + 1}`}`}
+                      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border bg-bg-card px-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-text-secondary transition hover:border-border-glow hover:text-accent-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      View
+                    </button>
                   </td>
                   {displayColumns.map((column) => (
                     <td
@@ -130,11 +137,13 @@ export default function ResultsTable({ data, onExportCsv, onExportJson }: Result
         )}
       </div>
 
-      <ProjectDetailsModal
-        isOpen={selectedRow !== null}
-        onClose={() => setSelectedRow(null)}
-        data={selectedRow}
-      />
+      {selectedRow && (
+        <ProjectDetailsModal
+          isOpen
+          onClose={() => setSelectedRow(null)}
+          data={selectedRow}
+        />
+      )}
     </AgentCard>
   );
 }
