@@ -168,6 +168,14 @@ const ROW_GAP = 165;
 
 const getStepStatus = (step: Partial<ExecutionPlanStep>) => String(step.status || 'planned').toLowerCase();
 
+// Stable constants — must NOT be defined inline in JSX.
+// React Flow v11 has internal useEffect hooks that depend on these by reference;
+// new objects/functions each render cause those effects to re-fire → infinite setState loop.
+const FIT_VIEW_OPTIONS = { padding: 0.22 } as const;
+const PRO_OPTIONS = { hideAttribution: true } as const;
+const getMiniMapNodeColor = (node: { data: WorkflowNodeData }) =>
+  getStepStatus(node.data.step) === 'skipped' ? '#cbd5e1' : '#8b5cf6';
+
 const WorkflowPlanNode = memo(({ data }: NodeProps<WorkflowNodeData>) => {
   const { step } = data;
   const status = getStepStatus(step);
@@ -528,18 +536,17 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             </div>
 
             <ReactFlow
-              key={nodes.map((node) => node.id).join('-')}
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
               fitView
-              fitViewOptions={{ padding: 0.22 }}
+              fitViewOptions={FIT_VIEW_OPTIONS}
               minZoom={0.18}
               maxZoom={1.25}
               nodesDraggable
               nodesConnectable={false}
               elementsSelectable
-              proOptions={{ hideAttribution: true }}
+              proOptions={PRO_OPTIONS}
               className="bg-slate-50"
             >
               <Background color="#cbd5e1" gap={28} size={1} />
@@ -549,9 +556,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                 zoomable
                 nodeStrokeWidth={2}
                 className="!rounded-xl !border !border-slate-200 !bg-white !shadow-sm"
-                nodeColor={(node) =>
-                  getStepStatus((node.data as WorkflowNodeData).step) === 'skipped' ? '#cbd5e1' : '#8b5cf6'
-                }
+                nodeColor={getMiniMapNodeColor}
               />
             </ReactFlow>
           </div>
