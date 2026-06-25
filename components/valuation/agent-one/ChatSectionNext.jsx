@@ -3217,7 +3217,61 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
 
 // ── Cost Approach Inputs Form ────────────────────────────────────
-function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData }) {
+const REQUIRED_COST_INPUTS = [
+  {
+    field: "construction_rate_per_sqft",
+    label: "Construction Rate per sqft",
+    type: "number",
+    placeholder: "2500",
+  },
+  {
+    field: "total_life_of_building",
+    label: "Economic Life",
+    type: "number",
+    default: 60,
+    placeholder: "60",
+  },
+];
+
+function normalizeCostInputSchema(schema) {
+  const inputs = Array.isArray(schema?.inputs)
+    ? schema.inputs
+    : (Array.isArray(schema?.user_inputs_required) ? schema.user_inputs_required : []);
+  const seen = new Set(inputs.map((inp) => inp.field));
+  const requiredInputs = REQUIRED_COST_INPUTS.filter((inp) => !seen.has(inp.field));
+  return {
+    ...(schema || {}),
+    inputs: [...inputs, ...requiredInputs],
+  };
+}
+
+function buildCostInputDefaults(schema, subjectData, currentValues = {}) {
+  const defaults = {};
+  schema.inputs?.forEach((inp) => {
+    let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
+    if (inp.field === "total_life_of_building") {
+      val = 60;
+    }
+
+    if (subjectData) {
+      if (inp.field === "age_of_property") {
+        const extractedAge = subjectData.age_of_property ?? subjectData.age_years ?? subjectData.age ?? subjectData.age_of_building;
+        if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
+      } else if (inp.field === "construction_rate_per_sqft") {
+        const extractedRate = subjectData.construction_rate_per_sqft ?? subjectData.construction_rate ?? subjectData.build_rate;
+        if (extractedRate != null && extractedRate !== "") val = Number(extractedRate);
+      } else if (inp.field === "total_life_of_building") {
+        const extractedLife = subjectData.total_life_of_building ?? subjectData.economic_life ?? subjectData.building_life;
+        if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
+      }
+    }
+
+    defaults[inp.field] = currentValues[inp.field] !== undefined ? currentValues[inp.field] : val;
+  });
+  return defaults;
+}
+
+function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData, submitLabel }) {
   if (!schema) return null;
 
   return (
@@ -3281,7 +3335,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
         disabled={isCalculating}
         className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
       >
-        {isCalculating ? "Calculating Cost Valuation..." : "Execute Cost Approach Calculation"}
+        {isCalculating ? "Calculating Cost Valuation..." : (submitLabel || "Execute Cost Approach Calculation")}
       </button>
     </div>
   );
@@ -3607,6 +3661,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const handleCostCalculate = async () => {
     if (isCostCalculating || !subjectData || !factorialAnalysisData) return;
 
+    const isRecalculation = Boolean(costCalculationData);
     setIsCostCalculating(true);
     setStreamingNote("Sending inputs to Traditional Cost Approach Engine...");
 
@@ -3625,7 +3680,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       age_of_property: Number(ageYears),
     };
 
-    setMessages((prev) => [
+    if (!isRecalculation) {
+      setMessages((prev) => [
       ...prev,
       {
         role: "user",
@@ -3633,7 +3689,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         meta: "Now"
       },
       { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
-    ]);
+      ]);
+    } else {
+      setMessages((prev) => {
+        const costResultIndex = prev.findIndex((msg) => msg.cost_calculation_data);
+        if (costResultIndex === -1) return prev;
+        return prev.map((msg, idx) =>
+          idx === costResultIndex
+            ? {
+              ...msg,
+              content: "Recalculating Cost Approach with updated parameters...",
+              meta: "Live",
+            }
+            : msg
+        );
+      });
+    }
 
     try {
       const response = await fetch(apiUrl("/cost_calculation_stream"), {
@@ -3683,6 +3754,23 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               timestamp: new Date().toISOString(),
             });
             setMessages((prev) => {
+              if (isRecalculation) {
+                const costResultIndex = prev.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live");
+                if (costResultIndex !== -1) {
+                  return prev.map((msg, idx) =>
+                    idx === costResultIndex
+                      ? {
+                        ...msg,
+                        role: "assistant",
+                        content: summary,
+                        meta: "cost calculation results",
+                        cost_calculation_data: event.content,
+                      }
+                      : msg
+                  );
+                }
+              }
+
               const next = [...prev];
               const lastIndex = next.length - 1;
               if (lastIndex >= 0) {
@@ -3701,10 +3789,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "cost_calculation_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = isRecalculation
+                ? next.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live")
+                : next.length - 1;
+              if (targetIndex >= 0 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "cost calculation done",
@@ -3718,9 +3808,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = isRecalculation
+          ? next.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live")
+          : next.length - 1;
+        if (targetIndex >= 0) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `Cost calculation error: ${error.message}`,
             meta: "Error",
@@ -3789,6 +3882,88 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     onMarkersUpdate?.([]);
     setBackupValuationState(null);
     setFetchedCompIds(new Set());
+  };
+
+  // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
+  const submitSubjectOnlyListingFetch = async () => {
+    if (!subjectData || isListingStreaming) return;
+
+    setIsListingStreaming(true);
+    setStreamingNote("🔍 Searching for listings for the subject property (no comparables)...");
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: "Continue valuation using subject-only data (no comparables).", meta: "Now" },
+      { role: "assistant", content: "Searching for listings for the subject project only...", meta: "Live" },
+    ]);
+
+    try {
+      const response = await fetch(apiUrl("/listing_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: subjectData,
+          selected_comparables: [],          // no comparables — subject only
+          property_type: subjectData.property_type || "apartment",
+          listing_type: "sale",
+        }),
+      });
+
+      if (!response.ok || !response.body)
+        throw new Error(`Listing request failed: ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          if (event.type === "listing_progress") {
+            setStreamingNote(
+              `🔍 ${event.content?.project || "Subject"}: ${event.content?.detail || event.content?.status || ""}`
+            );
+          }
+
+          if (event.type === "listing_results") {
+            const allListings = event.content?.listings || [];
+            setListingData(allListings);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIdx = next.length - 1;
+              if (lastIdx >= 0) {
+                next[lastIdx] = {
+                  ...next[lastIdx],
+                  role: "assistant",
+                  content: `✅ Found ${allListings.length} listing(s) for the subject property.`,
+                  meta: "listing results",
+                  listings: allListings,
+                  db_transactions: [],
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "error") {
+            setStreamingNote(`Error: ${event.content}`);
+          }
+        }
+      }
+    } catch (error) {
+      setStreamingNote(`Subject-only listing search failed: ${error.message}`);
+    } finally {
+      setIsListingStreaming(false);
+      setStreamingNote("");
+    }
   };
 
   // ── Toggle comparable selection ────────────────────────────────
@@ -5382,32 +5557,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           }
 
           if (event.type === "cost_inputs_required") {
-            setCostInputsSchema(event.content);
-            const defaults = {};
-            event.content.inputs?.forEach(inp => {
-              let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
-              if (inp.field === "total_life_of_building") {
-                val = 60;
-              }
-              const sData = subjectDataRef.current;
-              if (sData) {
-                if (inp.field === "age_of_property") {
-                  const extractedAge = sData.age_of_property ?? sData.age_years ?? sData.age ?? sData.age_of_building;
-                  if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
-                } else if (inp.field === "construction_rate_per_sqft") {
-                  const extractedUds = sData.construction_rate_per_sqft ?? sData.construction_rate ?? sData.build_rate;
-                  if (extractedUds != null && extractedUds !== "") val = Number(extractedUds);
-                } else if (inp.field === "age_of_property") {
-                  const extractedPlot = sData.age_of_property ?? sData.age ?? sData.building_age;
-                  if (extractedPlot != null && extractedPlot !== "") val = Number(extractedPlot);
-                } else if (inp.field === "total_life_of_building") {
-                  const extractedLife = sData.total_life_of_building ?? sData.economic_life ?? sData.building_life;
-                  if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
-                }
-              }
-              defaults[inp.field] = val;
-            });
-            setCostInputsValues(defaults);
+            const normalizedSchema = normalizeCostInputSchema(event.content);
+            setCostInputsSchema(normalizedSchema);
+            setCostInputsValues((prev) =>
+              buildCostInputDefaults(normalizedSchema, subjectDataRef.current, prev)
+            );
           }
 
           if (event.type === "clarification_needed") {
@@ -5526,7 +5680,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
-            setComparableData(comps);
+            // Only set comparableData when there are actual results
+            // (empty array means no comparables found — leave it null so the fallback card fires)
+            if (comps.length > 0) {
+              setComparableData(comps);
+            }
             // Store subject's DB entry (if found) for listing fetch
             const subjectDbProject = event.content?.subject_db_project || null;
             if (subjectDbProject) {
@@ -5572,7 +5730,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   role: "assistant",
                   content: summary,
                   meta: event.type.replaceAll("_", " "),
-                  ...(event.type === "comparable_results" ? { comparables: event.content?.comparables || null } : {}),
+                  ...(event.type === "comparable_results"
+                    ? {
+                        // Store null (not []) when no comparables found so the fallback card
+                        // condition `!message.comparables` remains truthy
+                        comparables: (event.content?.comparables?.length > 0)
+                          ? event.content.comparables
+                          : null,
+                      }
+                    : {}),
                   // Preserve db_no_results flag across meta overwrites
                   db_no_results: next[lastIndex]?.db_no_results || false,
                 };
@@ -6595,14 +6761,58 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       </div>
                     </div>
                   )}
-                  {/* DB found nothing AND no web comparables either */}
+                  {/* DB found nothing AND no web comparables either — interactive fallback prompt */}
                   {message.db_no_results && !message.comparables && (
-                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
-                      <Database className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Project Found in DB</p>
-                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type.</p>
+                    <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-300">
+                      {/* Warning header */}
+                      <div className="flex items-start gap-3">
+                        <Database className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Comparable Projects Found</p>
+                          <p className="text-[10px] text-text-dim mt-1 leading-relaxed">
+                            No matching projects were found in the Transaction Database or via web search for this location and property type.
+                          </p>
+                        </div>
                       </div>
+
+                      {/* Offer options only while listing hasn't started */}
+                      {!listingData && !cleanedData && !isListingStreaming && (
+                        <>
+                          <p className="text-sm text-text-secondary leading-relaxed">
+                            Would you like to continue the valuation using only the{" "}
+                            <span className="font-semibold text-accent-light">subject property's own listings</span>?{" "}
+                            The system will derive a market rate from available signals for the subject alone
+                            (Subject-Only Mode).
+                          </p>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={submitSubjectOnlyListingFetch}
+                              disabled={isListingStreaming}
+                              className="rounded-xl bg-accent/10 border border-accent/30 text-accent px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-accent/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Yes, Continue Without Comparables →
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                clearInteractiveState();
+                                setMessages([]);
+                              }}
+                              className="rounded-xl border border-border bg-bg-input text-text-dim px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:text-text-primary hover:border-border/80 transition"
+                            >
+                              No, Start a New Query
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* After the user confirmed, show a soft status note */}
+                      {(listingData || cleanedData || isListingStreaming) && (
+                        <p className="text-[10px] text-text-dim italic pt-1">
+                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property's listings.
+                        </p>
+                      )}
                     </div>
                   )}
                   {(message.listings || message.db_transactions) && (
@@ -6634,27 +6844,27 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
                   {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
                     <>
-                      {costCalculationData ? (
+                      {costCalculationData && (
                         <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
                             <CheckCircle className="h-4.5 w-4.5 text-success" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
-                            <p className="text-[9px] text-text-dim mt-0.5">Please review the complete step-by-step appraisal report card appended below.</p>
+                            <p className="text-[9px] text-text-dim mt-0.5">Update the cost parameters below and recalculate if needed.</p>
                           </div>
                         </div>
-                      ) : (
-                        costInputsSchema && (
-                          <CostInputsForm
-                            schema={costInputsSchema}
-                            values={costInputsValues}
-                            onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
-                            onSubmit={handleCostCalculate}
-                            isCalculating={isCostCalculating}
-                            subjectData={subjectData}
-                          />
-                        )
+                      )}
+                      {costInputsSchema && (
+                        <CostInputsForm
+                          schema={costInputsSchema}
+                          values={costInputsValues}
+                          onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
+                          onSubmit={handleCostCalculate}
+                          isCalculating={isCostCalculating}
+                          subjectData={subjectData}
+                          submitLabel={costCalculationData ? "Recalculate Cost Approach" : "Execute Cost Approach Calculation"}
+                        />
                       )}
                     </>
                   )}
