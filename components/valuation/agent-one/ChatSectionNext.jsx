@@ -268,7 +268,7 @@ const getRowKey = (lst) => {
 const parseNumericValue = (val) => {
   if (val === null || val === undefined || val === "") return -Infinity;
   if (typeof val === "number") return val;
-  
+
   let str = String(val).toLowerCase().trim();
   let multiplier = 1;
   if (str.includes("cr") || str.includes("crore")) {
@@ -278,12 +278,12 @@ const parseNumericValue = (val) => {
   } else if (str.includes("k") && !str.includes("sqft") && !str.includes("km")) {
     multiplier = 1000;
   }
-  
+
   let cleanStr = str
     .replace(/[₹$€£a-z]/gi, "")
     .replace(/,/g, "")
     .trim();
-    
+
   let parsed = parseFloat(cleanStr);
   return isNaN(parsed) ? -Infinity : parsed * multiplier;
 };
@@ -396,7 +396,7 @@ const isNumericColumn = (col) => {
 const filterAndSortList = (rows, sortConfig, filterConfig) => {
   if (!rows || rows.length === 0) return [];
   let result = [...rows];
-  
+
   // 1. Filter
   if (filterConfig) {
     Object.entries(filterConfig).forEach(([col, selectedList]) => {
@@ -409,17 +409,17 @@ const filterAndSortList = (rows, sortConfig, filterConfig) => {
       });
     });
   }
-  
+
   // 2. Sort
   if (sortConfig && sortConfig.column && sortConfig.direction) {
     const col = sortConfig.column;
     const isDesc = sortConfig.direction === "desc";
     const isNumeric = isNumericColumn(col);
-    
+
     result.sort((a, b) => {
       let valA = getRowValue(a, col);
       let valB = getRowValue(b, col);
-      
+
       if (isNumeric) {
         valA = parseNumericValue(valA);
         valB = parseNumericValue(valB);
@@ -427,11 +427,11 @@ const filterAndSortList = (rows, sortConfig, filterConfig) => {
         valA = valA === null || valA === undefined ? "" : String(valA).toLowerCase();
         valB = valB === null || valB === undefined ? "" : String(valB).toLowerCase();
       }
-      
+
       if (valA === valB) return 0;
       if (valA === -Infinity || valA === "") return 1; // blanks to bottom
       if (valB === -Infinity || valB === "") return -1;
-      
+
       if (isDesc) {
         return valA < valB ? 1 : -1;
       } else {
@@ -465,7 +465,7 @@ function SpreadsheetFilterDropdown({
       const rect = triggerRef.current.getBoundingClientRect();
       const dropdownWidth = 240;
       const dropdownHeight = 320;
-      
+
       let left = rect.left + window.scrollX;
       let top = rect.bottom + window.scrollY + 4;
 
@@ -528,7 +528,7 @@ function SpreadsheetFilterDropdown({
         nextSelected = [...currentFilter, val];
       }
     }
-    
+
     if (nextSelected.length === uniqueValues.length) {
       onFilterChange(columnKey, null);
     } else {
@@ -728,7 +728,7 @@ function TableHeaderCell({
     <th className={`px-3 py-2.5 font-semibold group/header relative select-none ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${className}`}>
       <div className={`flex items-center gap-1.5 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
         <span>{label}</span>
-        
+
         <div className="flex items-center gap-0.5">
           {isSorted && (
             sortDir === "asc" ? (
@@ -740,7 +740,7 @@ function TableHeaderCell({
           {hasActiveFilters && (
             <Filter size={10} className="text-[#fb923c] animate-fade-in" />
           )}
-          
+
           <button
             ref={triggerRef}
             onClick={toggleDropdown}
@@ -1022,7 +1022,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   </td>
                   <td className="px-3 py-2.5">
                     {comp.data_source === "Internal DB" ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
                     )}
@@ -1070,6 +1070,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   : opt === "Web"
                     ? comparables.filter(c => (c.data_source || "Web") === "Web").length
                     : comparables.filter(c => c.data_source === "Internal DB").length;
+                const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
                 return (
                   <button
                     key={opt}
@@ -1079,7 +1080,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       : "text-text-dim hover:text-text-primary"
                       }`}
                   >
-                    {opt === "all" ? `All (${count})` : `${opt} (${count})`}
+                    {`${label} (${count})`}
                   </button>
                 );
               })}
@@ -1117,6 +1118,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     : opt === "Web"
                       ? comparables.filter(c => (c.data_source || "Web") === "Web").length
                       : comparables.filter(c => c.data_source === "Internal DB").length;
+                  const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
                   return (
                     <button
                       key={opt}
@@ -1126,7 +1128,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         : "text-text-dim hover:text-text-primary"
                         }`}
                     >
-                      {opt === "all" ? `All (${count})` : `${opt} (${count})`}
+                      {`${label} (${count})`}
                     </button>
                   );
                 })}
@@ -1252,13 +1254,12 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
             {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
-              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                lst.website_authenticity_score >= 90
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${lst.website_authenticity_score >= 90
                   ? "bg-success/20 text-success border border-success/30"
                   : lst.website_authenticity_score >= 70
-                  ? "bg-accent/20 text-accent border border-accent/30"
-                  : "bg-danger/20 text-danger border border-danger/30"
-              }`}>
+                    ? "bg-accent/20 text-accent border border-accent/30"
+                    : "bg-danger/20 text-danger border border-danger/30"
+                }`}>
                 {lst.website_authenticity_score}
               </span>
             ) : "—"}
@@ -1268,7 +1269,7 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
             ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
@@ -1320,7 +1321,7 @@ function ListingTable({ listings, dbTransactions }) {
         <div className="border-b border-border bg-[rgba(34,211,238,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm">📊</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Listing Data Fetched</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Market Signal</span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{(listings || []).length} web + {dbRows.length} db records</span>
               <button
@@ -1343,7 +1344,7 @@ function ListingTable({ listings, dbTransactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Listing Data Detail</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Market Signal</h3>
                   <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
@@ -1418,7 +1419,7 @@ function TransactionTable({ transactions }) {
               <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                  Internal DB
+                  Transaction
                 </span>
               </td>
               <td className="px-3 py-2 text-right font-mono text-text-dim">{t.net_carpet_area_sq_m ?? "—"}</td>
@@ -1436,7 +1437,7 @@ function TransactionTable({ transactions }) {
         <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Internal DB Transactions</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Transactions</span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
               <button
@@ -1457,7 +1458,7 @@ function TransactionTable({ transactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Internal DB Transactions</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Transactions</h3>
                   <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
                 </div>
               </div>
@@ -1661,38 +1662,37 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 {/* Property Category badge */}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {lst.project_category ? (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                      ["plot", "land"].includes((lst.project_category || "").toLowerCase())
+                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${["plot", "land"].includes((lst.project_category || "").toLowerCase())
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                         : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
-                        ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
-                        : "bg-text-dim/10 text-text-dim border-border/40"
-                    }`}>
+                          ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                          : "bg-text-dim/10 text-text-dim border-border/40"
+                      }`}>
                       {lst.project_category}
                     </span>
                   ) : "—"}
                 </td>
                 <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-              
-              {/* Raw Price Column */}
+
+                {/* Raw Price Column */}
                 <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">
-                {lst.original_price_value !== undefined && lst.original_price_value !== null
-                  ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
-                  : formatPrice(lst.price_value, lst.currency)}
-              </td>
-              
-              {/* Standardized Price Column */}
-              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
+                  {lst.original_price_value !== undefined && lst.original_price_value !== null
+                    ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
+                    : formatPrice(lst.price_value, lst.currency)}
+                </td>
+
+                {/* Standardized Price Column */}
+                <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
                   {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
                 </td>
-              
-              {/* Exchange Rate Column */}
-              <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
-                {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
-                  ? lst.exchange_rate_remark
-                  : "1.0"}
-              </td>
+
+                {/* Exchange Rate Column */}
+                <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                  {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
+                    ? lst.exchange_rate_remark
+                    : "1.0"}
+                </td>
 
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">
                   {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
@@ -1764,48 +1764,49 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                    {lst.plot_derived_rate_per_sqft
-                      ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                    {lst.plot_derived_rate_range
-                      ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
-                        ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
-                        : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
-                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
-                      {lst.plot_derived_by || "Agent"}
-                    </span>
-                  </td>
-                </>
-              )}
+                      {lst.plot_derived_rate_per_sqft
+                        ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                      {lst.plot_derived_rate_range
+                        ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
+                          ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
+                          : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
+                        : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                        {lst.plot_derived_by || "Agent"}
+                      </span>
+                    </td>
+                  </>
+                )}
 
-              <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
-              <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
-                {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
-              </td>
-              <td className="px-3 py-2 text-center">
-                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
-                  {lst.source || "Web"}
-                </span>
-              </td>
-              <td className="px-3 py-2">
-                <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
-                  {lst.stat_flag || "ok"}
-                </span>
-              </td>
-              {showReasonColumn && (
-                <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
-                  {getRowReason(lst)}
+                <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
+                <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
+                <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
+                <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+                  {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
                 </td>
-              )}
-            </tr>
-          )})}
+                <td className="px-3 py-2 text-center">
+                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                    {lst.source === 'Internal DB' ? 'Transaction' : (lst.source || "Web")}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
+                    {lst.stat_flag || "ok"}
+                  </span>
+                </td>
+                {showReasonColumn && (
+                  <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
+                    {getRowReason(lst)}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -1870,7 +1871,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             />
             <input
               type="number"
-                        placeholder="Construction Cost (₹/sqft)"
+              placeholder="Construction Cost (₹/sqft)"
               value={ccGlobal}
               onChange={e => setCcGlobal(e.target.value)}
               className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
@@ -2246,7 +2247,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       </span>
                     ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
                       <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
-                        Internal DB
+                        Transaction
                       </span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
@@ -2282,7 +2283,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       <td className="px-4 py-2 text-center">
                         {isSubDb ? (
                           <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
-                            Internal DB
+                            Transaction
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
@@ -2503,7 +2504,7 @@ function CbdCell({ km, name, isSubject }) {
 function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
-  
+
   // Cache original data for Reset functionality when the card is first mounted
   const [originalData] = useState(() => JSON.parse(JSON.stringify(data)));
 
@@ -2579,7 +2580,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const recalculateAndTrigger = (newTable, w1, w2) => {
     const compRowsOnly = newTable.filter((r) => r.role !== "SUBJECT");
     const compCount = compRowsOnly.length;
-    const factoredCompAvg = compCount > 0 
+    const factoredCompAvg = compCount > 0
       ? Math.round(compRowsOnly.reduce((sum, r) => sum + (r.factored_rate ?? 0), 0) / compCount)
       : 0;
 
@@ -2822,7 +2823,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   const amenityVal = row.factor_amenity ?? 0;
                   const densityVal = row.factor_density ?? 0;
                   const cbdVal = row.factor_cbd ?? 0;
-                  
+
                   return (
                     <div key={i} className="rounded-2xl border border-border-soft bg-bg-input/25 p-5 space-y-4 flex flex-col justify-between hover:border-border transition-all">
                       <div>
@@ -2852,15 +2853,29 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                               <span>Road Type Adjustment</span>
                               <span className={`font-mono ${adjColor(roadVal)}`}>{fmtPct(roadVal)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min="-50"
-                              max="50"
-                              step="1"
-                              value={Math.round(roadVal * 1000)}
-                              onChange={(e) => handleFactorChange(row.project_name, "factor_road", Number(e.target.value) / 10)}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
-                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_road", Math.max(-50, Math.round(roadVal * 1000) - 1) / 10)}
+                                disabled={Math.round(roadVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(roadVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_road", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_road", Math.min(50, Math.round(roadVal * 1000) + 1) / 10)}
+                                disabled={Math.round(roadVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
                           </div>
 
                           {/* Amenity Slider */}
@@ -2869,15 +2884,29 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                               <span>Amenity Adjustment</span>
                               <span className={`font-mono ${adjColor(amenityVal)}`}>{fmtPct(amenityVal)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min="-50"
-                              max="50"
-                              step="1"
-                              value={Math.round(amenityVal * 1000)}
-                              onChange={(e) => handleFactorChange(row.project_name, "factor_amenity", Number(e.target.value) / 10)}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
-                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_amenity", Math.max(-50, Math.round(amenityVal * 1000) - 1) / 10)}
+                                disabled={Math.round(amenityVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(amenityVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_amenity", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_amenity", Math.min(50, Math.round(amenityVal * 1000) + 1) / 10)}
+                                disabled={Math.round(amenityVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
                           </div>
 
                           {/* Density Slider */}
@@ -2886,15 +2915,29 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                               <span>Density Score Adjustment</span>
                               <span className={`font-mono ${adjColor(densityVal)}`}>{fmtPct(densityVal)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min="-50"
-                              max="50"
-                              step="1"
-                              value={Math.round(densityVal * 1000)}
-                              onChange={(e) => handleFactorChange(row.project_name, "factor_density", Number(e.target.value) / 10)}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
-                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_density", Math.max(-50, Math.round(densityVal * 1000) - 1) / 10)}
+                                disabled={Math.round(densityVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(densityVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_density", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_density", Math.min(50, Math.round(densityVal * 1000) + 1) / 10)}
+                                disabled={Math.round(densityVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
                           </div>
 
                           {/* CBD Slider */}
@@ -2903,15 +2946,29 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                               <span>CBD Distance Adjustment</span>
                               <span className={`font-mono ${adjColor(cbdVal)}`}>{fmtPct(cbdVal)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min="-50"
-                              max="50"
-                              step="1"
-                              value={Math.round(cbdVal * 1000)}
-                              onChange={(e) => handleFactorChange(row.project_name, "factor_cbd", Number(e.target.value) / 10)}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
-                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_cbd", Math.max(-50, Math.round(cbdVal * 1000) - 1) / 10)}
+                                disabled={Math.round(cbdVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(cbdVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_cbd", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_cbd", Math.min(50, Math.round(cbdVal * 1000) + 1) / 10)}
+                                disabled={Math.round(cbdVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
                           </div>
                         </div>
 
@@ -4165,8 +4222,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     // Build a stable ID for each comparable (project_id > id > project_name)
     const getCompId = (c) => String(c.project_id || c.id || c.project_name || "").trim();
 
-    const newComps   = selected.filter(c => !fetchedCompIds.has(getCompId(c)));
-    const skipComps  = selected.filter(c =>  fetchedCompIds.has(getCompId(c)));
+    const newComps = selected.filter(c => !fetchedCompIds.has(getCompId(c)));
+    const skipComps = selected.filter(c => fetchedCompIds.has(getCompId(c)));
 
     const isIncremental = skipComps.length > 0;
 
@@ -4188,7 +4245,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const subjectProjectName = String(subjectData?.project_name || "").trim().toLowerCase();
 
     // Split new comps by source
-    const dbComps  = newComps.filter(c => (c.data_source || "Web") === "Internal DB");
+    const dbComps = newComps.filter(c => (c.data_source || "Web") === "Internal DB");
     const webComps = newComps.filter(c => (c.data_source || "Web") !== "Internal DB");
 
     // If subject project exists in internal DB, also fetch its transactions (first time only)
@@ -4308,7 +4365,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       };
 
       const fetchWebListings = async () => {
-        const webFetchNote = webComps.length > 0 
+        const webFetchNote = webComps.length > 0
           ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
           : `🌐 Fetching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
@@ -4351,15 +4408,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 const total = newUsage.total_tokens || 0;
                 const model = newUsage.model || "gpt-4o-mini";
                 // Filter out subject listings from the fresh stream results only if they are already in the backup listings
-                const hasPreviousSubjectListing = activePreviousListings.some(l => 
+                const hasPreviousSubjectListing = activePreviousListings.some(l =>
                   l && (l.is_subject || String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase() === subjectProjectName)
                 );
                 const freshListings = hasPreviousSubjectListing
                   ? listings.filter(l => {
-                      if (!l) return false;
-                      const lProj = String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase();
-                      return !(l.is_subject || lProj === subjectProjectName);
-                    })
+                    if (!l) return false;
+                    const lProj = String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase();
+                    return !(l.is_subject || lProj === subjectProjectName);
+                  })
                   : listings;
                 // Merge with existing listingData (incremental addition)
                 const mergedListings = isIncremental
@@ -4369,7 +4426,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 setTokenStats((prev) => {
                   const nextModelBreakdown = { ...prev.model_breakdown };
                   const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                  
+
                   const promptDiff = (newUsage.prompt_tokens || 0);
                   const completionDiff = (newUsage.completion_tokens || 0);
 
@@ -4605,7 +4662,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setTokenStats((prev) => {
               const nextModelBreakdown = { ...prev.model_breakdown };
               const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-              
+
               const promptDiff = (newUsage.prompt_tokens || 0);
               const completionDiff = (newUsage.completion_tokens || 0);
 
@@ -4774,7 +4831,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   // Backend returns the authoritative full set after segregating
                   // negative-rate listings — update both tabs in one shot.
                   dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
-                  review_listings:  event.content.review_listings  ?? next[lastIndex].review_listings  ?? [],
+                  review_listings: event.content.review_listings ?? next[lastIndex].review_listings ?? [],
                 };
               }
               return next;
@@ -5023,7 +5080,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               setTokenStats((prev) => {
                 const nextModelBreakdown = { ...prev.model_breakdown };
                 const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                
+
                 const promptDiff = (usage.prompt_tokens || 0);
                 const completionDiff = (usage.completion_tokens || 0);
 
@@ -5411,7 +5468,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 type: "select",
                 options: [
                   { value: "market", label: "Market Approach" },
-                  { value: "cost",   label: "Cost Approach" }
+                  { value: "cost", label: "Cost Approach" }
                 ],
                 default: event.content.recommended_approach
               }
@@ -5911,8 +5968,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             typeof ents.coordinates === 'object' && ents.coordinates
               ? ents.coordinates[field]
               : (typeof ents.coordinates === 'string'
-                  ? ents.coordinates.split(',')[field === "lat" ? 0 : 1]?.trim()
-                  : undefined)
+                ? ents.coordinates.split(',')[field === "lat" ? 0 : 1]?.trim()
+                : undefined)
           );
           isChanged = normVal(value) !== normVal(originalVal);
         } else {
@@ -6533,7 +6590,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
                       <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Internal DB</p>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Transaction Database</p>
                         <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
                       </div>
                     </div>
@@ -6637,15 +6694,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       <p className="mt-1 text-sm text-text-secondary">
                         {selectedComps.size > 0
                           ? (() => {
-                              const selected = Array.from(selectedComps).map(i => comparableData[i]);
-                              const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
-                              const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
-                              const newCount = selected.length - skipCount;
-                              if (skipCount > 0) {
-                                return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
-                              }
-                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
-                            })()
+                            const selected = Array.from(selectedComps).map(i => comparableData[i]);
+                            const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+                            const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
+                            const newCount = selected.length - skipCount;
+                            if (skipCount > 0) {
+                              return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
+                            }
+                            return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
+                          })()
                           : "Select at least one comparable from the table above to proceed."}
                       </p>
                     </div>
