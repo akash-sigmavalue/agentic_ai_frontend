@@ -5,12 +5,36 @@ import Link from 'next/link';
 import { Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import AgentListDropdown from './AgentListDropdown';
+import { apiFetch } from '@/lib/api-client';
+
+const THEME_STORAGE_KEY = 'sigmavalue_theme';
+const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+
+const getServerThemeSnapshot = () => false;
+
+const getThemeSnapshot = () => localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+
+const subscribeToThemeChanges = (onStoreChange: () => void) => {
+  window.addEventListener('storage', onStoreChange);
+  window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener('storage', onStoreChange);
+    window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+  };
+};
+
+const setStoredTheme = (isDark: boolean) => {
+  localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light');
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+};
 
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sigmavalue_theme') === 'dark';
-  });
+  const isDark = React.useSyncExternalStore(
+    subscribeToThemeChanges,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const pathname = usePathname();
   const shouldSyncLlmSelection = pathname !== '/maharera_agent';
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
@@ -23,7 +47,6 @@ const Header = () => {
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-    localStorage.setItem('sigmavalue_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
   React.useEffect(() => {
@@ -100,7 +123,7 @@ const Header = () => {
   };
 
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    setStoredTheme(!isDark);
   };
 
   const shellClass = isDark
@@ -133,13 +156,12 @@ const Header = () => {
         <div className="hidden lg:flex items-center gap-3">
           <Link
             href="/portfolio-management"
-            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${
-              pathname === '/portfolio-management'
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${pathname === '/portfolio-management'
                 ? isDark
                   ? 'bg-indigo-950 border-indigo-800'
                   : 'bg-indigo-50 border-indigo-200'
                 : pillClass
-            }`}
+              }`}
           >
             <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/portfolio-management' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
             <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
