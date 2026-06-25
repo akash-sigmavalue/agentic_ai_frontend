@@ -5117,7 +5117,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       "lng",
       "coordinates",
       "salable_area_sqft",
-      "carpet_area_sqft",
       "builtup_area_sqft",
       "plot_area_sqft",
       "age_years",
@@ -5199,15 +5198,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
     const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
-    const extractedCarpet = sData.carpet_area_sqft || sData.entities?.carpet_area_sqft || "";
     const extractedPlot = sData.plot_area_sqft || sData.entities?.plot_area_sqft || "";
 
-    const primaryArea = extractedBuiltup || extractedSalable || extractedCarpet || extractedPlot;
+    const primaryArea = extractedBuiltup || extractedSalable || extractedPlot;
 
     if (primaryArea) {
       if (propType === "villa" || propType === "building_land") {
-        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || extractedCarpet || "";
-        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup/carpet for villa plot area
+        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || "";
+        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup for villa plot area
       } else if (propType === "plot") {
         initVals["plot_area_sqft"] = extractedPlot || primaryArea;
       } else {
@@ -5218,7 +5216,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       // Keep other fields filled if extracted specifically
       if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
       if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
-      if (extractedCarpet) initVals["carpet_area_sqft"] = extractedCarpet;
       if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
     }
 

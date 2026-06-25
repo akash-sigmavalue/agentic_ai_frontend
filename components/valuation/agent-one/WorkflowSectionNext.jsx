@@ -187,7 +187,6 @@ function StepDetails({ step }) {
         <DetailRow label="Latitude" value={content.coordinates?.lat !== undefined ? content.coordinates.lat : (content.lat !== undefined ? content.lat : null)} />
         <DetailRow label="Longitude" value={content.coordinates?.lng !== undefined ? content.coordinates.lng : (content.lng !== undefined ? content.lng : null)} />
         <DetailRow label="Salable Area" value={content.salable_area_sqft ? `${content.salable_area_sqft} sqft` : null} />
-        <DetailRow label="Carpet Area" value={content.carpet_area_sqft ? `${content.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={content.builtup_area_sqft ? `${content.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={content.plot_area_sqft ? `${content.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={content.age_years !== undefined ? `${content.age_years} years` : null} />
@@ -239,7 +238,6 @@ function StepDetails({ step }) {
         <DetailRow label="Latitude" value={ent.coordinates?.lat !== undefined ? ent.coordinates.lat : (ent.lat !== undefined ? ent.lat : null)} />
         <DetailRow label="Longitude" value={ent.coordinates?.lng !== undefined ? ent.coordinates.lng : (ent.lng !== undefined ? ent.lng : null)} />
         <DetailRow label="Salable Area" value={ent.salable_area_sqft ? `${ent.salable_area_sqft} sqft` : null} />
-        <DetailRow label="Carpet Area" value={ent.carpet_area_sqft ? `${ent.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={ent.plot_area_sqft ? `${ent.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={ent.age_years !== undefined ? `${ent.age_years} years` : null} />
