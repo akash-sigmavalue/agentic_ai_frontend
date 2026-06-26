@@ -20,6 +20,8 @@ import type {
   ExecutionPlanStep,
   Module1IntentOutput,
   Module7GenerationOutput,
+  Module7PlottableEnrichmentCorridor,
+  Module7PlottableEnrichmentPoint,
   RuntimeGeneratedMapOption,
   VisualizationRetrievalResultSet,
   VisualizationRetrievalState,
@@ -36,6 +38,11 @@ interface ChatSectionProps {
   runtimeGeneratedMaps?: RuntimeGeneratedMapOption[];
   selectedInsightMapId?: string | null;
   onInsightMapSelect?: (mapId: string) => void;
+  onPlottableEnrichment?: (
+    mapId: string,
+    points: Module7PlottableEnrichmentPoint[],
+    corridors: Module7PlottableEnrichmentCorridor[],
+  ) => void;
 }
 
 interface Message {
@@ -95,7 +102,7 @@ const TAB_NAMES = [
   'Token Ledger',
 ];
 
-const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query'];
+const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query', 'Stage 1.5', 'Stage 2'];
 type ChatCategory = 'land-gis' | 'insight-generation' | 'workflow' | 'conversational';
 type RetrievalAgentVersion = 'v1' | 'v2';
 const CHAT_CATEGORIES: Array<{ value: ChatCategory; label: string; disabled?: boolean }> = [
@@ -184,6 +191,8 @@ function Module7ChatInsightPanel({ output, mapLabel }: { output: Module7Generati
   const actions = Array.isArray(insights.recommended_actions) ? insights.recommended_actions : [];
   const caveats = Array.isArray(insights.caveats) ? insights.caveats : [];
   const enrichment = output.spatial_enrichment;
+  const insightFilter = output.insight_data_filter;
+  const filteredTotals = insightFilter?.filtered_totals as Record<string, unknown> | undefined;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -197,6 +206,11 @@ function Module7ChatInsightPanel({ output, mapLabel }: { output: Module7Generati
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {insightFilter?.filter_mode ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-violet-700">
+              Filtered {String(filteredTotals?.amenities_selected ?? 0)} amenities · {String(filteredTotals?.records_selected ?? 0)} records · {String(filteredTotals?.corridors_selected ?? 0)} corridors
+            </span>
+          ) : null}
           {enrichment?.is_enriched ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-sky-700">
               📍 {enrichment.osm_summary?.main_roads ?? 0} roads · {enrichment.osm_summary?.total_places ?? 0} places · {enrichment.point_count ?? 0} points
@@ -572,6 +586,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   runtimeGeneratedMaps = [],
   selectedInsightMapId = null,
   onInsightMapSelect,
+  onPlottableEnrichment,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
@@ -581,6 +596,14 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [tokenLedger, setTokenLedger] = useState<TokenLedgerRow[]>([]);
   const [totalCost, setTotalCost] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  // Per-component session ID mirror — keeps each tab isolated from localStorage race conditions.
+  // Hydrated once on mount; updated whenever the backend emits a new session event.
+  const [retrievalSessionId, setRetrievalSessionId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('visualization-data-retrieval-session-id') || '';
+    }
+    return '';
+  });
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -594,6 +617,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     messageId: string;
     originalQuery: string;
     question: string;
+    clarification: VisualizationRetrievalClarification;
   } | null>(null);
   const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, Record<string, string>>>({});
 
@@ -670,6 +694,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
   const handleClearChat = () => {
     localStorage.removeItem('visualization_agent_chat_saved');
+    // Clear the retrieval session so the next query always starts a clean backend session.
+    localStorage.removeItem('visualization-data-retrieval-session-id');
+    setRetrievalSessionId('');
     setMessages([]);
     setTokenLedger([]);
     setTotalCost(0);
@@ -821,6 +848,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       originalQuery?: string;
       updatedQuery?: string;
       fallbackReason?: string;
+      isNewQuery?: boolean;
     } = {},
   ) => {
     closeRetrievalSource(messageId);
@@ -846,9 +874,10 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       params.set('model', VISUALIZATION_RETRIEVAL_V2_MODEL);
       params.set('called_from_visualization_agent', 'true');
     }
-    const storedSession = window.localStorage.getItem('visualization-data-retrieval-session-id') || '';
-    if (storedSession) {
-      params.set('session_id', storedSession);
+    // Fresh queries always start a new backend session (no session_id sent).
+    // Clarification reruns and fallback retries continue the current session.
+    if (!options.isNewQuery && retrievalSessionId) {
+      params.set('session_id', retrievalSessionId);
     }
 
     const endpointPath = RETRIEVAL_ENDPOINT_MAP[retrievalAgentVersion];
@@ -867,6 +896,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         case 'session': {
           const sessionId = (payload.content as { session_id?: string } | undefined)?.session_id;
           if (sessionId) {
+            // Mirror to React state (per-tab) and persist to localStorage (cross-reload).
+            setRetrievalSessionId(sessionId);
             window.localStorage.setItem('visualization-data-retrieval-session-id', sessionId);
           }
           const sessionRouteLabel = RETRIEVAL_ROUTE_LABEL[retrievalAgentVersion];
@@ -911,7 +942,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
             clarification.questions?.[0] ||
             'Please clarify the requested values.';
           const originalQuery = cleanRetrievalBaseQuery(clarification.original_query || query);
-          setPendingRetrievalClarification({ messageId, originalQuery, question });
+          // Store full clarification schema so both submission paths can access fields[]
+          setPendingRetrievalClarification({ messageId, originalQuery, question, clarification });
           initializeClarificationAnswers(messageId, clarification);
           updateRetrievalForMessage(messageId, {
             status: 'needs_clarification',
@@ -1023,7 +1055,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
     const userId = createMessageId();
     const assistantId = createMessageId();
-    const combinedQuery = buildCompleteRetrievalQuery(originalQuery, clarification, values, answer);
+    // Use the proven backend format: {originalQuery}\nClarification answer: {answer}
+    // This matches what FrontendDashboard sends and what the stage_1 LLM reliably parses.
+    const combinedQuery = `${originalQuery}\nClarification answer: ${answer}`;
     latestRetrievalMessageIdRef.current = assistantId;
     onRetrievalOutput?.(null);
     setMessages((prev) => [
@@ -1073,6 +1107,13 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       setIsLoading(true);
       try {
         const output = await requestInsightGeneration(selectedInsightMap, query);
+        if (selectedInsightMap.insightContext.mapSource === 'interactive') {
+          const enrichmentPoints = output.plottable_enrichment?.points || [];
+          const enrichmentCorridors = output.plottable_enrichment?.corridors || [];
+          if (enrichmentPoints.length > 0 || enrichmentCorridors.length > 0) {
+            onPlottableEnrichment?.(selectedInsightMap.id, enrichmentPoints, enrichmentCorridors);
+          }
+        }
         const usageRow = output.usage.ledger[0];
         const ledgerRow: TokenLedgerRow = {
           request_id: tokenLedger.length + 1,
@@ -1117,20 +1158,22 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     if (!isLandGisChat) return;
 
     if (pendingRetrievalClarification) {
-      const answer = query;
+      const { messageId: clarMsgId, originalQuery, clarification: pendingClarification } = pendingRetrievalClarification;
+      const fieldValues = clarificationAnswers[clarMsgId] || {};
+      // Build structured answer from the inline form fields if the user filled them;
+      // otherwise fall back to the raw text the user typed in the main textarea.
+      const structuredAnswer = buildClarificationAnswer(pendingClarification, fieldValues).trim();
+      const answerText = structuredAnswer || query.trim();
+      // Use the proven backend format: {originalQuery}\nClarification answer: {answer}
+      // Matches what FrontendDashboard sends and what the stage_1 LLM reliably parses.
+      const combinedQuery = `${originalQuery}\nClarification answer: ${answerText}`;
       const userId = createMessageId();
       const assistantId = createMessageId();
-      const combinedQuery = buildCompleteRetrievalQuery(
-        pendingRetrievalClarification.originalQuery,
-        undefined,
-        {},
-        answer,
-      );
       latestRetrievalMessageIdRef.current = assistantId;
       onRetrievalOutput?.(null);
       setMessages((prev) => [
         ...prev,
-        { id: userId, role: 'user', content: answer },
+        { id: userId, role: 'user', content: answerText },
         {
           id: assistantId,
           role: 'assistant',
@@ -1145,6 +1188,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       setInput('');
       chatDraftsRef.current['land-gis'] = '';
       setPendingRetrievalClarification(null);
+      setClarificationAnswers((current) => {
+        const next = { ...current };
+        delete next[clarMsgId];
+        return next;
+      });
       setIsLoading(true);
       startHiddenDataRetrieval(combinedQuery, assistantId);
       setIsLoading(false);
@@ -1165,7 +1213,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     setInput('');
     chatDraftsRef.current['land-gis'] = '';
     setIsLoading(true);
-    startHiddenDataRetrieval(query, assistantId);
+    // isNewQuery: true — fresh question, backend must generate a clean session UUID.
+    startHiddenDataRetrieval(query, assistantId, { isNewQuery: true });
 
     try {
       const res = await fetch(`${API_BASE}/visualization-agent/module1/run-intent`, {
@@ -1789,7 +1838,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                     No map generated yet for Insights
                   </p>
                   <p className="mt-2 text-xs font-medium text-slate-400">
-                    Generate a map in Module 3.1 or Module 3 to continue.
+                    Generate a map in Module 3.1 or Module 3, or start plotting on the Interactive Map to continue.
                   </p>
                 </div>
               ) : (
@@ -1812,11 +1861,15 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                           <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{map.title}</p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
-                          <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest text-indigo-600">
-                            Module {map.sourceModule}
+                          <span className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-widest ${
+                            map.sourceModule === 'interactive'
+                              ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                              : 'border-indigo-100 bg-indigo-50 text-indigo-600'
+                          }`}>
+                            {map.sourceModule === 'interactive' ? 'Interactive' : `Module ${map.sourceModule}`}
                           </span>
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                            {map.family}
+                            {map.stage || map.family}
                           </span>
                         </div>
                       </button>
@@ -2175,6 +2228,38 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   </div>
                   <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
                     {retrievalModalData.updatedQuery || 'No updated query was generated for this run.'}
+                  </pre>
+                </div>
+              )}
+
+              {activeRetrievalTab === 3 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">Stage 1.5 Output</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Intent Mapping
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.retrievalIntent?.stage_1_5 
+                      ? JSON.stringify(retrievalModalData.retrievalIntent.stage_1_5, null, 2)
+                      : 'No Stage 1.5 data available.'}
+                  </pre>
+                </div>
+              )}
+
+              {activeRetrievalTab === 4 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">Stage 2 Output</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Algorithm & Formula
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.retrievalIntent?.stage_2
+                      ? JSON.stringify(retrievalModalData.retrievalIntent.stage_2, null, 2)
+                      : 'No Stage 2 data available.'}
                   </pre>
                 </div>
               )}

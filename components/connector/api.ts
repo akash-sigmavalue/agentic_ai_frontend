@@ -1,6 +1,15 @@
 "use client";
 
 import type { StreamStep, WorkflowResponse } from "./types";
+
+type WorkflowPromptPayload = string | Record<string, unknown>;
+
+function buildWorkflowBody(prompt: WorkflowPromptPayload) {
+  if (prompt && typeof prompt === "object" && !Array.isArray(prompt)) {
+    return { ...prompt, prompt: typeof prompt.prompt === "string" ? prompt.prompt : "" };
+  }
+  return { prompt };
+}
 import { API_BASE_URL, CONNECTOR_API_ROUTES, apiUrl } from "../../lib/api-client";
 
 export interface GoogleOAuthStartResponse {
@@ -36,6 +45,7 @@ export interface GmailAttachmentDownloadResponse {
   attachment?: Record<string, unknown> | null;
   downloaded?: Record<string, unknown> | null;
   processed?: Record<string, unknown> | null;
+  document_analysis?: Record<string, unknown> | null;
   attachment_file?: GmailAttachmentFileResponse | null;
   pdf_attachment?: GmailAttachmentFileResponse | null;
   attachments?: GmailAttachmentFileResponse[];
@@ -339,13 +349,13 @@ export function loginUser(payload: { username: string; password: string }) {
 }
 
 export function processWorkflow(
-  prompt: string,
+  prompt: WorkflowPromptPayload,
 ): Promise<WorkflowResponse> {
   console.log("[Connector Debug] Before processWorkflow():", { prompt });
   console.log("[Connector Debug] Calling processWorkflow with payload:", { prompt });
   return apiFetch<WorkflowResponse>(CONNECTOR_API_ROUTES.processWorkflow, {
     method: "POST",
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(buildWorkflowBody(prompt)),
   }).then((response) => {
     console.log("[Connector Debug] processWorkflow response:", response);
     return response;
@@ -353,7 +363,7 @@ export function processWorkflow(
 }
 
 export async function streamWorkflow(
-  prompt: string,
+  prompt: WorkflowPromptPayload,
   handlers: StreamWorkflowHandlers = {},
 ): Promise<WorkflowResponse> {
   const token = getToken();
@@ -372,7 +382,7 @@ export async function streamWorkflow(
     response = await fetch(apiUrl(path), {
       method: "POST",
       headers,
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(buildWorkflowBody(prompt)),
       signal: handlers.signal,
     });
   } catch (error) {
@@ -480,6 +490,33 @@ export function fetchAttachment(
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiFetch<GmailAttachmentDownloadResponse>(
     `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}${suffix}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function summarizeAttachment(
+  messageId: string,
+  attachmentId: string,
+  filename?: string,
+  mimeType?: string,
+  question?: string,
+): Promise<GmailAttachmentDownloadResponse> {
+  const query = new URLSearchParams();
+  query.set("summarize", "true");
+  if (filename) {
+    query.set("filename", filename);
+  }
+  if (mimeType) {
+    query.set("mime_type", mimeType);
+  }
+  if (question) {
+    query.set("question", question);
+  }
+
+  return apiFetch<GmailAttachmentDownloadResponse>(
+    `/connectors/attachment/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}?${query.toString()}`,
     {
       method: "GET",
     },

@@ -279,3 +279,28 @@ html.dark-mode:not([data-theme="light"]) select.reai-native-select option {
     transform: translate3d(38px, 42px, 0) scale(1.08);
   }
 }
+
+/* Recharts dark mode compatibility */
+[data-theme="dark"] .recharts-text,
+html.dark-mode:not([data-theme="light"]) .recharts-text {
+  fill: var(--text-muted) !important;
+}
+[data-theme="dark"] .recharts-legend-item-text,
+html.dark-mode:not([data-theme="light"]) .recharts-legend-item-text {
+  color: var(--text-muted) !important;
+}
+[data-theme="dark"] .recharts-default-tooltip,
+html.dark-mode:not([data-theme="light"]) .recharts-default-tooltip {
+  background-color: var(--bg-deep) !important;
+  border-color: var(--border-soft) !important;
+}
+[data-theme="dark"] .recharts-tooltip-label,
+html.dark-mode:not([data-theme="light"]) .recharts-tooltip-label {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .recharts-cartesian-grid-vertical line,
+html.dark-mode:not([data-theme="light"]) .recharts-cartesian-grid-horizontal line,
+html.dark-mode:not([data-theme="light"]) .recharts-cartesian-grid-vertical line {
+  stroke: var(--border-dim) !important;
+}

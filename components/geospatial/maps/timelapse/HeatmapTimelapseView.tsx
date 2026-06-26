@@ -556,14 +556,21 @@ export default function HeatmapTimelapseView({
       ) : null}
 
       {/* Map Container */}
-      <div className="relative min-h-[500px] flex-[1.5] shrink-0">
-        {basemapControls}
-        <button
-          onClick={() => setIsFullscreen((prev) => !prev)}
-          className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
-        >
-          {isFullscreen ? <Minimize2 className="h-4 w-4 text-slate-700" /> : <Maximize2 className="h-4 w-4 text-slate-700" />}
-        </button>
+      <div className="relative min-h-[1000px] flex-[1.5] shrink-0 [&_.maplibregl-ctrl-top-right]:mt-14">
+        <div className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-2 max-w-full pointer-events-none">
+          {basemapControls && (
+            <div className="pointer-events-auto h-9">
+              {basemapControls}
+            </div>
+          )}
+          <button
+            onClick={() => setIsFullscreen((prev) => !prev)}
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 border border-slate-200 shadow-lg backdrop-blur hover:bg-white transition-colors"
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4 text-slate-700" /> : <Maximize2 className="h-4 w-4 text-slate-700" />}
+          </button>
+        </div>
 
         {isLoading ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50 text-slate-500">

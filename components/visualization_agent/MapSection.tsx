@@ -43,6 +43,8 @@ import type {
   Module3GenerationOutput,
   Module7GenerationOutput,
   Module7LoadedMapData,
+  Module7PlottableEnrichmentCorridor,
+  Module7PlottableEnrichmentPoint,
   Module1IntentOutput,
   Module2Output,
   RuntimeGeneratedMapOption,
@@ -52,6 +54,18 @@ import {
   buildGeneratedMapConfig,
   getModule31Readiness,
 } from '@/lib/visualization-agent-module31';
+import {
+  buildInteractiveSessionKey,
+  mergeInteractiveMarkersIntoRecords,
+  mergeInteractiveSnapshot,
+  plottableCorridorsToInteractiveCorridors,
+  plottablePointsToInsightLayers,
+  snapshotInteractiveMarkers,
+  softCacheToRuntimeOption,
+  type InteractiveInsightLayerPoint,
+  type InteractivePlottedDelta,
+  type InteractiveMapSoftCache,
+} from '@/lib/visualization-agent-interactive-cache';
 import ThreeDMapView from '@/components/geospatial/maps/ThreeDMapView';
 import ThreeDMapTimelapseView from '@/components/geospatial/maps/ThreeDMapTimelapseView';
 import SpatialAnalysisView from '@/components/geospatial/maps/SpatialAnalysisView';
@@ -266,6 +280,7 @@ const CITY_CENTERS: Record<string, [number, number]> = {
   Thane: [19.2183, 72.9781],
   Hyderabad: [17.385, 78.4867],
   Bengaluru: [12.9716, 77.5946],
+  Dubai: [25.2048, 55.2708],
 };
 
 const CITY_BBOXES: Record<string, [number, number, number, number]> = {
@@ -274,6 +289,7 @@ const CITY_BBOXES: Record<string, [number, number, number, number]> = {
   Thane: [19.1200, 72.9000, 19.3500, 73.1000],
   Hyderabad: [17.2500, 78.3000, 17.6000, 78.6500],
   Bengaluru: [12.8000, 77.4500, 13.1500, 77.8000],
+  Dubai: [24.7500, 55.0000, 25.4500, 55.5500],
 };
 
 const INTERACTIVE_AMENITY_OPTIONS = [
@@ -322,7 +338,7 @@ interface InteractiveCorridorLine {
   latlngs: [number, number][];
   name?: string | null;
   ref?: string | null;
-  layer: 'highways' | 'metro_lines';
+  layer: 'highways' | 'metro_lines' | 'insight_roads';
   highway?: string | null;
   railway?: string | null;
 }
@@ -352,6 +368,18 @@ function createDestinationMarkerIconHtml(color: string): string {
       <div style="position:absolute;left:12px;top:28px;width:10px;height:4px;border-radius:999px;background:rgba(15,23,42,.22);filter:blur(.5px);"></div>
     </div>
   `;
+}
+
+function getDestinationIcon(color: string) {
+  if (typeof window === 'undefined') return undefined;
+  const L = require('leaflet');
+  return L.divIcon({
+    html: createDestinationMarkerIconHtml(color),
+    className: '',
+    iconSize: [34, 42],
+    iconAnchor: [17, 42],
+    popupAnchor: [0, -32],
+  });
 }
 
 function pointInsidePolygon(point: [number, number], polygon: [number, number][]) {
@@ -384,6 +412,311 @@ function polygonLatLngsFromGeoJson(geoJson: any): [number, number][] {
 function isLatLngInsidePolygon(lat: number, lon: number, polygon: [number, number][]) {
   if (!polygon.length) return true;
   return pointInsidePolygon([lat, lon], polygon);
+}
+
+// ── Shared Intelligence Layer Filter ─────────────────────────────────────
+// Shared for both Interactive Map (2D) and Interactive Map 3D.
+// Drives selectedAmenities / selectedCorridors via setters; filters
+// ── buildCatchmentEntityList ────────────────────────────────────────────────
+// Derives a deduplicated list of individual project/location names from the
+// plotted rows. Priority: project_field > geo_field > locality_field >
+// micromarket_field (if geo_level doesn't specify projects, skip project_field).
+function buildCatchmentEntityList(
+  rows: Record<string, unknown>[],
+  module1: Module1IntentOutput | null,
+  module2: Module2Output | null,
+): { id: string; name: string }[] {
+  if (rows.length === 0) return [];
+
+  const geoLevel = String(
+    (module1?.map_output_requirements as Record<string, unknown> | undefined)?.geo_level
+    || (module1 as Record<string, unknown> | null)?.geo_level
+    || ''
+  ).toLowerCase();
+
+  const mapped: Record<string, string | null> = (module2?.mapped_fields as Record<string, string | null>) || {};
+
+  const isProjectLevel =
+    geoLevel.includes('project') ||
+    (!geoLevel && !!(mapped.project_field));
+
+  // Candidate field names in priority order
+  const PROJECT_COLS = [
+    mapped.project_field,
+    'project_name', 'Project Name', 'ProjectName', 'property_name',
+    'project', 'Project',
+  ];
+  const GEO_COLS = [
+    mapped.geo_field, mapped.locality_field, mapped.micromarket_field,
+    'location_name', 'Location Name', 'locality', 'Locality',
+    'village', 'village_name', 'Village Name', 'micromarket',
+    'Micromarket', 'geo_label',
+  ];
+
+  const first = rows[0];
+  const keys = Object.keys(first);
+
+  const resolveCol = (candidates: (string | null | undefined)[]): string | null => {
+    for (const c of candidates) {
+      if (c && keys.some(k => k.toLowerCase() === c.toLowerCase())) {
+        return keys.find(k => k.toLowerCase() === c.toLowerCase())!;
+      }
+    }
+    return null;
+  };
+
+  const nameCol = isProjectLevel
+    ? (resolveCol(PROJECT_COLS) ?? resolveCol(GEO_COLS))
+    : (resolveCol(GEO_COLS) ?? resolveCol(PROJECT_COLS));
+
+  if (!nameCol) return [];
+
+  const seen = new Set<string>();
+  const result: { id: string; name: string }[] = [];
+  rows.forEach((row, i) => {
+    const name = String(row[nameCol] ?? '').trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    result.push({ id: `entity:${i}`, name });
+  });
+  return result;
+}
+
+// catchment insightLayer categories via onCatchmentCategoriesChange.
+function IntelligenceLayerFilter({
+  selectedAmenities,
+  setSelectedAmenities,
+  selectedCorridors,
+  setSelectedCorridors,
+  catchmentCategories = [],
+  catchmentGeoLabel = 'Plotted data',
+  onCatchmentCategoriesChange,
+  onCatchmentActiveChange,
+}: {
+  selectedAmenities: string[];
+  setSelectedAmenities: React.Dispatch<React.SetStateAction<string[]>>;
+  selectedCorridors: string[];
+  setSelectedCorridors: React.Dispatch<React.SetStateAction<string[]>>;
+  catchmentCategories?: string[];
+  catchmentGeoLabel?: string;
+  onCatchmentCategoriesChange?: (cats: string[]) => void;
+  onCatchmentActiveChange?: (active: boolean) => void;
+}) {
+  const [selectedIntelLayers, setSelectedIntelLayers] = useState<string[]>(['development_planning', 'catchment_intelligence']);
+  const [selectedCatchment, setSelectedCatchment] = useState<string[]>(catchmentCategories);
+  const [catchmentSearch, setCatchmentSearch] = useState('');
+  const prevCatsKey = useRef('');
+
+  const isDevelopmentActive = selectedIntelLayers.includes('development_planning');
+  const isCatchmentActive = selectedIntelLayers.includes('catchment_intelligence');
+
+  // When catchment categories arrive / change, select all by default
+  useEffect(() => {
+    const key = catchmentCategories.join('|');
+    if (key !== prevCatsKey.current) {
+      prevCatsKey.current = key;
+      setSelectedCatchment(catchmentCategories);
+      onCatchmentCategoriesChange?.(catchmentCategories);
+    }
+  }, [catchmentCategories, onCatchmentCategoriesChange]);
+
+  const toggleIntelLayer = (value: string) => {
+    setSelectedIntelLayers(prev => {
+      const has = prev.includes(value);
+      if (value === 'development_planning') {
+        if (has) { setSelectedAmenities([]); setSelectedCorridors([]); }
+        else { setSelectedAmenities(DEFAULT_INTERACTIVE_AMENITIES); setSelectedCorridors(DEFAULT_INTERACTIVE_CORRIDORS); }
+      }
+      if (value === 'catchment_intelligence') {
+        const next = has ? [] : catchmentCategories;
+        setSelectedCatchment(next);
+        onCatchmentCategoriesChange?.(next);
+        onCatchmentActiveChange?.(!has);
+      }
+      return has ? prev.filter(v => v !== value) : [...prev, value];
+    });
+  };
+
+  const toggleCatchmentItem = (cat: string, checked: boolean) => {
+    setSelectedCatchment(prev => {
+      const next = checked ? Array.from(new Set([...prev, cat])) : prev.filter(c => c !== cat);
+      onCatchmentCategoriesChange?.(next);
+      return next;
+    });
+  };
+
+  const selectAllCatchment = () => {
+    setSelectedCatchment(catchmentCategories);
+    onCatchmentCategoriesChange?.(catchmentCategories);
+  };
+
+  const clearAllCatchment = () => {
+    setSelectedCatchment([]);
+    onCatchmentCategoriesChange?.([]);
+  };
+
+  // Items visible after search filter
+  const filteredCatchmentItems = useMemo(() => {
+    const q = catchmentSearch.toLowerCase().trim();
+    if (!q) return catchmentCategories;
+    return catchmentCategories.filter(c => c.toLowerCase().includes(q));
+  }, [catchmentCategories, catchmentSearch]);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* 1 — Intelligence Layer master toggle */}
+      <details className="relative rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-700">
+        <summary className="cursor-pointer list-none select-none whitespace-nowrap">
+          Intelligence Layer ({selectedIntelLayers.length})
+        </summary>
+        <div className="absolute left-0 top-8 z-[800] min-w-[220px] rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          <p className="mb-2 text-[9px] font-extrabold uppercase tracking-widest text-slate-400">Active intelligence</p>
+          {(['development_planning', 'catchment_intelligence'] as const).map(val => (
+            <label key={val} className="flex items-center gap-2 py-1 cursor-pointer text-[10px] font-bold normal-case tracking-normal text-slate-700">
+              <input type="checkbox" checked={selectedIntelLayers.includes(val)} onChange={() => toggleIntelLayer(val)} className="h-3 w-3 accent-indigo-600" />
+              {val === 'development_planning' ? 'Development Planning' : 'Catchment Intelligence'}
+            </label>
+          ))}
+        </div>
+      </details>
+
+      {/* 2 — Amenities Overlay (Amenities + Corridors sub-sections) */}
+      <details className={`relative rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-opacity ${
+        isDevelopmentActive ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-400 opacity-50 pointer-events-none'
+      }`}>
+        <summary className="cursor-pointer list-none select-none whitespace-nowrap">
+          Amenities Overlay {isDevelopmentActive ? `(${selectedAmenities.length + selectedCorridors.length})` : ''}
+        </summary>
+        <div className="absolute left-0 top-8 z-[800] min-w-[290px] rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          <p className="mb-2 text-[9px] font-extrabold uppercase tracking-widest text-slate-400">Amenities</p>
+          <div className="grid gap-1.5 mb-3">
+            {INTERACTIVE_AMENITY_OPTIONS.map(opt => (
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer text-[10px] font-bold normal-case tracking-normal text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={selectedAmenities.includes(opt.value)}
+                  onChange={e => setSelectedAmenities(prev => e.target.checked ? Array.from(new Set([...prev, opt.value])) : prev.filter(v => v !== opt.value))}
+                  className="h-3 w-3 accent-emerald-600"
+                />
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: opt.color }} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          <div className="border-t border-slate-100 pt-2">
+            <p className="mb-2 text-[9px] font-extrabold uppercase tracking-widest text-slate-400">Corridors</p>
+            <div className="grid gap-1.5">
+              {INTERACTIVE_CORRIDOR_OPTIONS.map(opt => (
+                <label key={opt.value} className="flex items-center gap-2 cursor-pointer text-[10px] font-bold normal-case tracking-normal text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={selectedCorridors.includes(opt.value)}
+                    onChange={e => setSelectedCorridors(prev => e.target.checked ? Array.from(new Set([...prev, opt.value])) : prev.filter(v => v !== opt.value))}
+                    className="h-3 w-3 accent-emerald-600"
+                  />
+                  <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: opt.color }} />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </details>
+
+      {/* 3 — Catchment Intelligence — individual named entities */}
+      <details className={`relative rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-opacity ${
+        isCatchmentActive ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-slate-100 text-slate-400 opacity-50 pointer-events-none'
+      }`}>
+        <summary className="cursor-pointer list-none select-none whitespace-nowrap">
+          Catchment Intelligence {isCatchmentActive && selectedCatchment.length > 0 ? `(${selectedCatchment.length}/${catchmentCategories.length})` : ''}
+        </summary>
+        <div className="absolute left-0 top-8 z-[800] w-[280px] rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          {/* Header row */}
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400">
+              {catchmentGeoLabel}
+            </p>
+            {catchmentCategories.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllCatchment}
+                  className="text-[9px] font-extrabold uppercase tracking-widest text-violet-600 hover:text-violet-800 transition-colors"
+                >
+                  All
+                </button>
+                <span className="text-slate-300 hidden">·</span>
+                <button
+                  onClick={clearAllCatchment}
+                  className="hidden text-[9px] font-extrabold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  None
+                </button>
+              </div>
+            )}
+          </div>
+
+          {catchmentCategories.length === 0 ? (
+            <p className="text-[10px] text-slate-400 italic normal-case tracking-normal">
+              No entities available yet. Submit a query first.
+            </p>
+          ) : (
+            <>
+              {/* Search box */}
+              <div className="relative mb-2">
+                <input
+                  type="text"
+                  value={catchmentSearch}
+                  onChange={e => setCatchmentSearch(e.target.value)}
+                  placeholder="Search…"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 placeholder-slate-400 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200 normal-case tracking-normal"
+                />
+                {catchmentSearch && (
+                  <button
+                    onClick={() => setCatchmentSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Scrollable entity list — max 10 rows visible */}
+              <div className="max-h-[220px] overflow-y-auto pr-1 grid gap-1">
+                {filteredCatchmentItems.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 italic normal-case tracking-normal py-1">
+                    No matches for &ldquo;{catchmentSearch}&rdquo;
+                  </p>
+                ) : (
+                  filteredCatchmentItems.map(cat => (
+                    <label
+                      key={cat}
+                      className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 py-1 text-[10px] font-semibold normal-case tracking-normal text-slate-700 hover:bg-violet-50 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCatchment.includes(cat)}
+                        onChange={e => toggleCatchmentItem(cat, e.target.checked)}
+                        className="h-3 w-3 flex-shrink-0 accent-violet-600"
+                      />
+                      <span className="truncate" title={cat}>{cat}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              {/* Count summary */}
+              <p className="mt-2 border-t border-slate-100 pt-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                {selectedCatchment.length} of {catchmentCategories.length} selected
+                {catchmentSearch && filteredCatchmentItems.length !== catchmentCategories.length
+                  ? ` · ${filteredCatchmentItems.length} shown`
+                  : ''}
+              </p>
+            </>
+          )}
+        </div>
+      </details>
+    </div>
+  );
 }
 
 function resolveInteractiveSelectedCity({
@@ -1310,6 +1643,12 @@ interface MapSectionProps {
   module2Output?: Module2Output | null;
   retrievalOutput?: VisualizationRetrievalState | null;
   onRuntimeGeneratedMapsChange?: (maps: RuntimeGeneratedMapOption[]) => void;
+  pendingPlottableEnrichment?: {
+    mapId: string;
+    points: Module7PlottableEnrichmentPoint[];
+    corridors: Module7PlottableEnrichmentCorridor[];
+  } | null;
+  onPlottableEnrichmentApplied?: () => void;
 }
 
 function getRecordCenter(records: GeneratedMapRecord[]): [number, number] {
@@ -1445,6 +1784,22 @@ function getCategoryColor(category: string, palette: string[]): string {
   if (!category) return palette[0] || DEFAULT_VISUAL_ENCODING.colorPalette[0];
   const hash = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return palette[hash % palette.length] || DEFAULT_VISUAL_ENCODING.colorPalette[0];
+}
+
+/** Format a metric value using the resolved unit context from Module 2 LLM 2.5a/b. */
+function formatMapMetricValue(value: number | null | undefined, unitCtx: Record<string, unknown> | undefined): string {
+  if (value == null) return 'N/A';
+  const currencySymbol = typeof unitCtx?.currency_symbol === 'string' ? unitCtx.currency_symbol : '';
+  const areaUnitSymbol = typeof unitCtx?.area_unit_symbol === 'string' ? unitCtx.area_unit_symbol : '';
+  const unitType = typeof unitCtx?.unit_type === 'string' ? unitCtx.unit_type : '';
+  const formatted = value.toLocaleString();
+  if (unitType === 'rate_composite' && currencySymbol && areaUnitSymbol) return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  if (unitType === 'currency' && currencySymbol) return `${currencySymbol}${formatted}`;
+  if (unitType === 'area' && areaUnitSymbol) return `${formatted} ${areaUnitSymbol}`;
+  if (unitType === 'count' || unitType === 'percentage') return formatted;
+  if (currencySymbol && areaUnitSymbol) return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  if (currencySymbol) return `${currencySymbol}${formatted}`;
+  return formatted;
 }
 
 function getGeneratedGeometryType(config: GeneratedMapConfig): NonNullable<GeneratedMapVisualEncoding['geometryType']> {
@@ -1791,6 +2146,8 @@ function buildRuntime3DInputs(config: GeneratedMapConfig) {
     };
   });
 
+  const metricStats = getMetricStats(config.records);
+
   return {
     buildings,
     dates: safeDates,
@@ -1800,6 +2157,8 @@ function buildRuntime3DInputs(config: GeneratedMapConfig) {
     hasFloor,
     hasProject: hasRuntimeProjectData(config.records),
     hasTime: hasRuntimeTimeData(config),
+    metricMin: metricStats.min,
+    metricMax: metricStats.max,
   };
 }
 
@@ -1817,10 +2176,12 @@ function buildInteractive3DOverlayLayers({
   amenities,
   corridors,
   markers = [],
+  insightLayers = [],
 }: {
   amenities: InteractiveAmenityPoint[];
   corridors: InteractiveCorridorLine[];
   markers?: InteractiveMapMarker[];
+  insightLayers?: InteractiveInsightLayerPoint[];
 }) {
   const amenityLayer = new ColumnLayer<InteractiveAmenityPoint>({
     id: 'interactive-3d-amenity-columns',
@@ -1843,8 +2204,16 @@ function buildInteractive3DOverlayLayers({
     id: 'interactive-3d-corridors',
     data: corridors,
     getPath: (line) => line.latlngs.map(([lat, lon]) => [lon, lat] as [number, number]),
-    getColor: (line) => line.layer === 'metro_lines' ? [5, 150, 105, 225] : [220, 38, 38, 204],
-    getWidth: (line) => line.layer === 'metro_lines' ? 8 : 7,
+    getColor: (line) => {
+      if (line.layer === 'metro_lines') return [5, 150, 105, 225];
+      if (line.layer === 'insight_roads') return [249, 115, 22, 235];
+      return [220, 38, 38, 204];
+    },
+    getWidth: (line) => {
+      if (line.layer === 'metro_lines') return 8;
+      if (line.layer === 'insight_roads') return 6;
+      return 7;
+    },
     widthMinPixels: 2,
     widthMaxPixels: 8,
     jointRounded: true,
@@ -1892,9 +2261,28 @@ function buildInteractive3DOverlayLayers({
     autoHighlight: true,
   });
 
-  return markers.length > 0
+  const insightLayer = new ScatterplotLayer<InteractiveInsightLayerPoint>({
+    id: 'interactive-3d-insight-enrichment',
+    data: insightLayers.slice(0, 400),
+    getPosition: (point) => [point.lon, point.lat],
+    getFillColor: [124, 58, 237, 235],
+    getLineColor: [255, 255, 255, 255],
+    getRadius: 40,
+    radiusMinPixels: 8,
+    radiusMaxPixels: 16,
+    lineWidthMinPixels: 2,
+    stroked: true,
+    pickable: true,
+    autoHighlight: true,
+  });
+
+  const layers: any[] = markers.length > 0
     ? [corridorLayer, amenityLayer, amenityIconLayer, markerLayer]
     : [corridorLayer, amenityLayer, amenityIconLayer];
+  if (insightLayers.length > 0) {
+    layers.push(insightLayer);
+  }
+  return layers;
 }
 
 type DeckOverlayTooltipHandler = (info: {
@@ -1911,19 +2299,38 @@ const getInteractive3DTooltip: DeckOverlayTooltipHandler = (info) => {
   const corridor = object as InteractiveCorridorLine;
   const marker = object as InteractiveMapMarker;
 
+  if (layerId.includes('insight-enrichment') || (object as InteractiveInsightLayerPoint).source === 'insight_enrichment') {
+    const insightPoint = object as InteractiveInsightLayerPoint;
+    return {
+      html: `<strong>${insightPoint.name || 'Insight place'}</strong><br/>Insight: ${insightPoint.category.replace(/_/g, ' ')}`,
+    };
+  }
   if (layerId.includes('amenity') || (typeof amenity.category === 'string' && amenity.category)) {
     const label = CATEGORY_CONFIG[amenity.category]?.name || amenity.category;
     return { html: `<strong>${amenity.name || 'Amenity'}</strong><br/>${label}` };
   }
   if (layerId.includes('corridor') || Array.isArray(corridor.latlngs)) {
+    const corridorLabel = corridor.layer === 'metro_lines'
+      ? 'Metro line'
+      : corridor.layer === 'insight_roads'
+        ? 'Insight OSM road'
+        : 'Highway corridor';
+    const widthLabel = corridor.width_m ? `<br/>Width: ${corridor.width_m}` : '';
+    const distanceLabel = corridor.distance_m != null ? `<br/>Distance: ${corridor.distance_m} m` : '';
     return {
-      html: `<strong>${corridor.name || corridor.ref || 'Corridor'}</strong><br/>${
-        corridor.layer === 'metro_lines' ? 'Metro line' : 'Highway corridor'
-      }`,
+      html: `<strong>${corridor.name || corridor.ref || 'Corridor'}</strong><br/>${corridorLabel}${widthLabel}${distanceLabel}`,
     };
   }
   if (marker.entity_type && marker.name) {
-    return { html: `<strong>${marker.name}</strong><br/>${marker.entity_type}` };
+    return {
+      html: `
+        <div style="padding: 2px; font-family: ui-sans-serif, system-ui, sans-serif;">
+          <div style="font-weight: 700; font-size: 13px; color: white;">${marker.name}</div>
+          <div style="margin-top: 4px; font-size: 11px; color: #cbd5e1;">Coordinates: ${marker.lat.toFixed(5)}, ${marker.lon.toFixed(5)}</div>
+          <div style="margin-top: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Type: ${marker.entity_type}</div>
+        </div>
+      `
+    };
   }
   return null;
 };
@@ -2010,6 +2417,28 @@ function Module31TokenLedger({ config }: { config: GeneratedMapConfig }) {
   );
 }
 
+function getFilteredModule31Config(
+  module31Config: GeneratedMapConfig | null,
+  catchmentActive: boolean,
+  selectedCatchmentCategories: string[],
+  totalCatchmentCount: number,
+  markers: InteractiveMapMarker[]
+): GeneratedMapConfig | null {
+  if (!module31Config) return null;
+  if (!catchmentActive || selectedCatchmentCategories.length === 0 || selectedCatchmentCategories.length === totalCatchmentCount) {
+    return module31Config;
+  }
+  const nameSet = new Set(selectedCatchmentCategories);
+  return {
+    ...module31Config,
+    records: module31Config.records.filter((record) => {
+      // Find matching marker by lat/lon since raw references might be lost across serialization
+      const m = markers.find((m) => m.lat === record.lat && m.lon === record.lng);
+      return m ? nameSet.has(m.name) : true; // keep if no marker found to avoid accidentally hiding data
+    }),
+  };
+}
+
 function GeneratedBasemapOverlay({
   value,
   onChange,
@@ -2019,7 +2448,7 @@ function GeneratedBasemapOverlay({
 }) {
   return (
     <div
-      className="absolute right-4 top-4 z-[700] flex flex-wrap items-center rounded-full border border-slate-200 bg-white/95 p-1 shadow-xl backdrop-blur"
+      className="flex flex-wrap items-center rounded-full border border-slate-200 bg-white/95 p-1 shadow-lg backdrop-blur"
       role="group"
       aria-label="Generated map base view"
     >
@@ -2042,7 +2471,7 @@ function GeneratedBasemapOverlay({
   );
 }
 
-function GeneratedRecordPopup({ record }: { record: GeneratedMapRecord }) {
+function GeneratedRecordPopup({ record, unitCtx }: { record: GeneratedMapRecord; unitCtx?: Record<string, unknown> }) {
   const tooltipFields =
     typeof record.raw.tooltip_data === 'object' && record.raw.tooltip_data !== null
       ? (record.raw.tooltip_data as Record<string, unknown>).fields
@@ -2065,7 +2494,7 @@ function GeneratedRecordPopup({ record }: { record: GeneratedMapRecord }) {
         {record.geoLabel}
       </p>
       <p className="text-[11px] font-semibold text-slate-600">
-        {record.metricLabel}: {record.metricValue == null ? 'N/A' : record.metricValue.toLocaleString()}
+        {record.metricLabel}: {formatMapMetricValue(record.metricValue, unitCtx)}
       </p>
       {record.timeFrame ? (
         <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
@@ -2141,7 +2570,7 @@ function GeneratedRuntimeHeatmapPanel({
         </div>
         <Module31TokenLedger config={config} />
       </div>
-      <div className="min-h-[520px] flex-1 overflow-hidden">
+      <div className="min-h-[800px] flex-1 overflow-hidden">
         <HeatmapTimelapseView
           key={config.id}
           initialPlaceName={runtimeHeatmap.placeName}
@@ -2210,6 +2639,9 @@ function GeneratedRuntimeThreeDPanel({
     onInsightDataReady: handleRuntimeDataReady,
     extraDeckLayers,
     overlayTooltip,
+    metricUnitContext: (config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined) ?? undefined,
+    metricDomainMin: runtime3D.metricMin,
+    metricDomainMax: runtime3D.metricMax,
   };
 
   return (
@@ -2247,12 +2679,14 @@ function GeneratedRuntimeThreeDPanel({
             </span>
           ) : null}
         </div>
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold leading-5 text-emerald-800">
-          {description}
-        </div>
+        {description ? (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold leading-5 text-emerald-800">
+            {description}
+          </div>
+        ) : null}
         <Module31TokenLedger config={config} />
       </div>
-      <div className="min-h-[560px] flex-1 overflow-hidden">
+      <div className="min-h-[800px] flex-1 overflow-hidden">
         {mode === '3d-timelapse' ? (
           <ThreeDMapTimelapseView key={`${config.id}:3d-timelapse`} {...commonProps} />
         ) : (
@@ -2282,7 +2716,7 @@ function getModule31ThreeDPanelSpec(
   kind: 'heatmap' | 'three-d';
   mode: '3d' | '3d-timelapse';
   title: string;
-  description: string;
+  description?: string;
 } {
   if (config.family === 'heatmap-timelapse') {
     return {
@@ -2311,7 +2745,6 @@ function getModule31ThreeDPanelSpec(
       kind: 'three-d',
       mode: '3d',
       title: 'Module 3.1 Generated 3D Map',
-      description: 'Module 3.1 detected project/building records without meaningful time or floor fields, so this is rendered as a simple 3D map with runtime metrics and coordinate correction enabled.',
     };
   }
 
@@ -2673,7 +3106,10 @@ function GeneratedSpatialAnalysisView({
                           const color = getMetricColor(Number(project.rate), stats, config.visualEncoding);
                           return (
                             <React.Fragment key={`runtime-project-${index}`}>
-                              <CircleMarker center={[Number(project.lat), Number(project.long)]} radius={7} pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 2 }}>
+                              <Marker 
+                                position={[Number(project.lat), Number(project.long)]} 
+                                icon={getDestinationIcon(color)}
+                              >
                                 <Tooltip>{project.project_name}</Tooltip>
                                 <Popup>
                                   <div className="text-xs">
@@ -2684,7 +3120,7 @@ function GeneratedSpatialAnalysisView({
                                     <b>Zone:</b> {project.zone ?? 'N/A'}
                                   </div>
                                 </Popup>
-                              </CircleMarker>
+                              </Marker>
                               {project.nearest_main_road_point_lat != null && project.nearest_main_road_point_lon != null ? (
                                 <Polyline
                                   positions={[[Number(project.lat), Number(project.long)], [Number(project.nearest_main_road_point_lat), Number(project.nearest_main_road_point_lon)]]}
@@ -2699,7 +3135,10 @@ function GeneratedSpatialAnalysisView({
                             <Circle center={[Number(spatialData.subject_info.lat), Number(spatialData.subject_info.lon)]} radius={radiusM} pathOptions={{ color: '#2563eb', fillColor: '#60a5fa', fillOpacity: 0.08, weight: 2, dashArray: '6' }}>
                               <Tooltip>1 km subject data radius</Tooltip>
                             </Circle>
-                            <Marker position={[Number(spatialData.subject_info.lat), Number(spatialData.subject_info.lon)]}>
+                            <Marker 
+                              position={[Number(spatialData.subject_info.lat), Number(spatialData.subject_info.lon)]}
+                              icon={getDestinationIcon('#2563eb')}
+                            >
                               <Popup>
                                 <div className="text-xs">
                                   <b>{spatialData.subject_info.name}</b><br />
@@ -2722,16 +3161,15 @@ function GeneratedSpatialAnalysisView({
                         {previewRecords.map((record, index) => {
                           const color = getMetricColor(record.metricValue, stats, config.visualEncoding);
                           return (
-                            <CircleMarker
+                            <Marker
                               key={record.id}
-                              center={[record.lat, record.lng]}
-                              radius={index === 0 ? 12 : getMetricRadius(record.metricValue, stats, config.visualEncoding)}
-                              pathOptions={{ color, fillColor: color, fillOpacity: index === 0 ? 0.9 : 0.68, weight: index === 0 ? 3 : 2 }}
+                              position={[record.lat, record.lng]}
+                              icon={getDestinationIcon(color)}
                             >
                               <Popup>
-                                <GeneratedRecordPopup record={record} />
+                                <GeneratedRecordPopup record={record} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                               </Popup>
-                            </CircleMarker>
+                            </Marker>
                           );
                         })}
                       </>
@@ -2869,9 +3307,11 @@ function GeneratedSpatialAnalysisView({
 function GeneratedMapOsmOverlayLayers({
   amenities,
   corridors,
+  insightLayers = [],
 }: {
   amenities: InteractiveAmenityPoint[];
   corridors: InteractiveCorridorLine[];
+  insightLayers?: InteractiveInsightLayerPoint[];
 }) {
   const [leaflet, setLeaflet] = useState<any>(null);
 
@@ -2905,23 +3345,26 @@ function GeneratedMapOsmOverlayLayers({
     <>
       {corridors.map((line, index) => {
         const isMetro = line.layer === 'metro_lines';
+        const isInsightRoad = line.layer === 'insight_roads';
         return (
           <Polyline
             key={`generated-osm-corridor-${line.layer}-${line.name || line.ref || index}-${index}`}
             positions={line.latlngs}
             pathOptions={{
-              color: isMetro ? '#059669' : '#dc2626',
-              weight: isMetro ? 5 : 4,
-              opacity: isMetro ? 0.88 : 0.8,
-              dashArray: isMetro ? '8, 6' : undefined,
+              color: isInsightRoad ? '#f97316' : isMetro ? '#059669' : '#dc2626',
+              weight: isInsightRoad ? 5 : isMetro ? 5 : 4,
+              opacity: isInsightRoad ? 0.92 : isMetro ? 0.88 : 0.8,
+              dashArray: isInsightRoad ? '4, 4' : isMetro ? '8, 6' : undefined,
             }}
           >
             <Popup>
               <div className="text-xs">
-                <strong>{line.name || (isMetro ? 'Metro line' : 'Highway corridor')}</strong>
-                <div>{isMetro ? 'Metro Line' : 'Highway Corridor'}</div>
+                <strong>{line.name || (isInsightRoad ? 'Insight road' : isMetro ? 'Metro line' : 'Highway corridor')}</strong>
+                <div>{isInsightRoad ? 'Insight OSM Road' : isMetro ? 'Metro Line' : 'Highway Corridor'}</div>
                 {line.ref ? <div>Ref: {line.ref}</div> : null}
                 {line.highway ? <div>Type: {line.highway}</div> : null}
+                {line.width_m ? <div>Width: {line.width_m}</div> : null}
+                {line.distance_m != null ? <div>Distance: {line.distance_m} m</div> : null}
               </div>
             </Popup>
           </Polyline>
@@ -2945,6 +3388,37 @@ function GeneratedMapOsmOverlayLayers({
           </Marker>
         );
       })}
+      {insightLayers.map((point, index) => (
+        <CircleMarker
+          key={`generated-insight-layer-${point.id || point.category}-${point.lat}-${point.lon}-${index}`}
+          center={[point.lat, point.lon]}
+          radius={8}
+          pathOptions={{
+            color: '#7c3aed',
+            fillColor: '#8b5cf6',
+            fillOpacity: 0.92,
+            weight: 2,
+          }}
+        >
+          <Tooltip direction="top" offset={[0, -8]} opacity={1}>
+            <span className="text-xs font-semibold text-slate-800">
+              {point.name}
+              <br />
+              <span className="font-bold uppercase tracking-wider text-[9px] text-violet-600">
+                Insight · {point.category.replace(/_/g, ' ')}
+              </span>
+            </span>
+          </Tooltip>
+          <Popup>
+            <div className="text-xs">
+              <strong>{point.name}</strong>
+              <div className="mt-1 font-semibold uppercase tracking-wider text-violet-600">
+                Insight enrichment · {point.category.replace(/_/g, ' ')}
+              </div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      ))}
     </>
   );
 }
@@ -2958,6 +3432,9 @@ function GeneratedMapView({
   overlayTooltip,
   osmAmenities = [],
   osmCorridors = [],
+  osmInsightLayers = [],
+  onPolygonCreated,
+  onPolygonDeleted,
 }: {
   config: GeneratedMapConfig;
   basemapMode: GeneratedBasemapMode;
@@ -2967,6 +3444,9 @@ function GeneratedMapView({
   overlayTooltip?: DeckOverlayTooltipHandler;
   osmAmenities?: InteractiveAmenityPoint[];
   osmCorridors?: InteractiveCorridorLine[];
+  osmInsightLayers?: InteractiveInsightLayerPoint[];
+  onPolygonCreated?: (geoJson: any) => void;
+  onPolygonDeleted?: () => void;
 }) {
   const [selectedFrame, setSelectedFrame] = useState<string>('all');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -3166,6 +3646,10 @@ function GeneratedMapView({
           className="h-full w-full"
         >
           <MapResizeInvalidator />
+          <InteractiveDrawControl
+            onPolygonCreated={onPolygonCreated || (() => {})}
+            onPolygonDeleted={onPolygonDeleted || (() => {})}
+          />
           <TileLayer
             attribution={LEAFLET_BASEMAP_OPTIONS[basemapMode].attribution}
             url={LEAFLET_BASEMAP_OPTIONS[basemapMode].url}
@@ -3191,10 +3675,10 @@ function GeneratedMapView({
                         <p className="text-slate-600">Records: {cluster.count}</p>
                         {hasMetrics ? (
                           <p className="text-slate-600">
-                            {config.metricLabel}: {Math.round(cluster.metricValue).toLocaleString()}
+                            {config.metricLabel}: {formatMapMetricValue(cluster.metricValue, config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined)}
                           </p>
                         ) : null}
-                        <GeneratedRecordPopup record={cluster.sample} />
+                        <GeneratedRecordPopup record={cluster.sample} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                       </div>
                     </Popup>
                   </CircleMarker>
@@ -3230,7 +3714,7 @@ function GeneratedMapView({
                         <p className="text-slate-600">Segments: {records.length}</p>
                         {metricValue !== null ? (
                           <p className="text-slate-600">
-                            {config.metricLabel}: {Math.round(metricValue).toLocaleString()}
+                            {config.metricLabel}: {formatMapMetricValue(metricValue, config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined)}
                           </p>
                         ) : null}
                       </div>
@@ -3251,7 +3735,7 @@ function GeneratedMapView({
                     pathOptions={{ color, fillColor: color, fillOpacity: 1, opacity: 1, weight: 2 }}
                   >
                     <Popup>
-                      <GeneratedRecordPopup record={record} />
+                      <GeneratedRecordPopup record={record} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                     </Popup>
                   </Circle>
                 );
@@ -3270,7 +3754,7 @@ function GeneratedMapView({
                     pathOptions={{ color, fillColor: color, fillOpacity: 1, opacity: 1, weight: 2 }}
                   >
                     <Popup>
-                      <GeneratedRecordPopup record={record} />
+                      <GeneratedRecordPopup record={record} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                     </Popup>
                   </Circle>
                 );
@@ -3285,7 +3769,7 @@ function GeneratedMapView({
                   return (
                     <Marker key={record.id} position={[record.lat, record.lng]}>
                       <Popup>
-                        <GeneratedRecordPopup record={record} />
+                        <GeneratedRecordPopup record={record} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                       </Popup>
                     </Marker>
                   );
@@ -3305,14 +3789,18 @@ function GeneratedMapView({
                     }}
                   >
                     <Popup>
-                      <GeneratedRecordPopup record={record} />
+                      <GeneratedRecordPopup record={record} unitCtx={config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined} />
                     </Popup>
                   </CircleMarker>
                 );
               })
             : null}
           {(osmAmenities.length > 0 || osmCorridors.length > 0) ? (
-            <GeneratedMapOsmOverlayLayers amenities={osmAmenities} corridors={osmCorridors} />
+            <GeneratedMapOsmOverlayLayers
+              amenities={osmAmenities}
+              corridors={osmCorridors}
+              insightLayers={osmInsightLayers}
+            />
           ) : null}
         </MapContainer>
 
@@ -3570,7 +4058,7 @@ function Module7InsightsPanel({
 
 function InteractiveMapPendingState() {
   return (
-    <section className="flex h-full min-h-[680px] flex-col items-center justify-center bg-white px-6 text-center">
+    <section className="flex h-full min-h-[800px] flex-col items-center justify-center bg-white px-6 text-center">
       <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">Interactive MapView</p>
       <h3 className="mt-2 text-base font-extrabold text-slate-950">Waiting for resolved intent</h3>
       <p className="mt-3 max-w-md text-xs font-semibold leading-5 text-slate-500">
@@ -3584,27 +4072,66 @@ function Interactive2DPreviewMap({
   center,
   amenities,
   corridors,
+  markers = [],
   basemapMode,
+  insightLayers = [],
+  onPolygonCreated,
+  onPolygonDeleted,
 }: {
   center: [number, number];
   amenities: InteractiveAmenityPoint[];
   corridors: InteractiveCorridorLine[];
+  markers?: InteractiveMapMarker[];
   basemapMode: GeneratedBasemapMode;
+  insightLayers?: InteractiveInsightLayerPoint[];
+  onPolygonCreated?: (geoJson: any) => void;
+  onPolygonDeleted?: () => void;
 }) {
   return (
     <MapContainer
       center={center}
       zoom={12}
       preferCanvas
-      className="h-full min-h-[560px] w-full"
+      className="h-full min-h-[800px] w-full"
       scrollWheelZoom
     >
       <TileLayer
         url={LEAFLET_BASEMAP_OPTIONS[basemapMode].url}
         attribution={LEAFLET_BASEMAP_OPTIONS[basemapMode].attribution}
       />
+      <InteractiveDrawControl
+        onPolygonCreated={onPolygonCreated || (() => {})}
+        onPolygonDeleted={onPolygonDeleted || (() => {})}
+      />
       <MapResizeInvalidator />
-      <GeneratedMapOsmOverlayLayers amenities={amenities} corridors={corridors} />
+      <GeneratedMapOsmOverlayLayers
+        amenities={amenities}
+        corridors={corridors}
+        insightLayers={insightLayers}
+      />
+      {markers.map((marker) => {
+        const color = marker.entity_type === 'project' ? '#059669' : '#3b82f6';
+        return (
+          <Marker
+            key={marker.id}
+            position={[marker.lat, marker.lon]}
+            icon={getDestinationIcon(color)}
+          >
+            <Tooltip>{marker.name}</Tooltip>
+            <Popup>
+              <div className="p-2 text-xs">
+                <p className="font-bold text-slate-800">{marker.name}</p>
+                <p className="mt-1 text-slate-500">
+                  Coordinates: {marker.lat.toFixed(5)}, {marker.lon.toFixed(5)}
+                </p>
+                <p className="mt-1 text-slate-500 uppercase tracking-wider font-semibold text-[9px]">
+                  Type: {marker.entity_type}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }
@@ -3615,24 +4142,31 @@ function InteractiveRuntimeMapView({
   retrievalOutput,
   module31Config = null,
   isLoadingModule31 = false,
+  m31Error = null,
   readiness,
   basemapMode,
   onBasemapModeChange,
   onMapLoaded,
+  insightLayers = [],
+  onPlottedSnapshotChange,
 }: {
   moduleOutput: Module1IntentOutput | null;
   module2Output: Module2Output | null;
   retrievalOutput: VisualizationRetrievalState | null;
   module31Config?: GeneratedMapConfig | null;
   isLoadingModule31?: boolean;
+  m31Error?: string | null;
   readiness: ReturnType<typeof getModule31Readiness>;
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
   onMapLoaded?: (config: GeneratedMapConfig) => void;
+  insightLayers?: InteractiveInsightLayerPoint[];
+  onPlottedSnapshotChange?: (delta: InteractivePlottedDelta) => void;
 }) {
   const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
   const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
   const rows = useMemo(() => getInteractiveRows(module2Output, retrievalOutput), [module2Output, retrievalOutput]);
+  const markers = useMemo(() => buildFallbackInteractiveMarkers(rows), [rows]);
   const [selectedLocation, setSelectedLocation] = useState(resolvedCity);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(DEFAULT_INTERACTIVE_AMENITIES);
   const [selectedCorridors, setSelectedCorridors] = useState<string[]>(DEFAULT_INTERACTIVE_CORRIDORS);
@@ -3642,10 +4176,84 @@ function InteractiveRuntimeMapView({
   const [corridorLines, setCorridorLines] = useState<InteractiveCorridorLine[]>([]);
   const [corridorsLoading, setCorridorsLoading] = useState(false);
   const [corridorsStatus, setCorridorsStatus] = useState('Metro lines and highway corridors selected by default');
+  const [polygonGeoJson, setPolygonGeoJson] = useState<any>(null);
+  const [selectedCatchmentCategories, setSelectedCatchmentCategories] = useState<string[]>([]);
+  const [catchmentActive, setCatchmentActive] = useState(true);
+
+  const pointInPolygon = useCallback((pt: [number, number], vs: [number, number][]) => {
+    const [x, y] = pt; let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+      const [xi, yi] = vs[i]; const [xj, yj] = vs[j];
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }, []);
+
+  const isInside = useCallback((lat: number, lon: number): boolean => {
+    if (polygonGeoJson) {
+      try { 
+        const coords = polygonGeoJson.geometry.coordinates[0]; 
+        return pointInPolygon([lat, lon], coords.map((c: number[]) => [c[1], c[0]])); 
+      } catch { 
+        return false; 
+      }
+    }
+    return true;
+  }, [polygonGeoJson, pointInPolygon]);
+
+  const catchmentEntityList = useMemo(
+    () => buildCatchmentEntityList(rows, moduleOutput, module2Output),
+    [rows, moduleOutput, module2Output],
+  );
+
+  const catchmentGeoLabel = useMemo(() => {
+    const gl = String(
+      (moduleOutput?.map_output_requirements as Record<string, unknown> | undefined)?.geo_level
+      || (moduleOutput as Record<string, unknown> | null)?.geo_level
+      || ''
+    ).toLowerCase();
+    if (gl.includes('project')) return `Project-level · ${catchmentEntityList.length} entities`;
+    if (gl.includes('locality') || gl.includes('micro') || gl.includes('location')) return `Locality-level · ${catchmentEntityList.length} entities`;
+    return `${catchmentEntityList.length} entities`;
+  }, [moduleOutput, catchmentEntityList]);
+
+  const catchmentCategoriesForFilter = useMemo(
+    () => catchmentEntityList.map(e => e.name),
+    [catchmentEntityList],
+  );
+
+  const filteredAmenities = useMemo(() => amenities.filter(a => isInside(a.lat, a.lon)), [amenities, isInside]);
+  const filteredCorridors = useMemo(() => corridorLines.filter(c => c.latlngs.some(([lat, lon]) => isInside(lat, lon))), [corridorLines, isInside]);
+  const filteredMarkers = useMemo(() => {
+    if (!catchmentActive) return [];
+    const inside = markers.filter(m => isInside(m.lat, m.lon));
+    if (selectedCatchmentCategories.length > 0 && selectedCatchmentCategories.length < catchmentEntityList.length) {
+      const nameSet = new Set(selectedCatchmentCategories);
+      return inside.filter(m => nameSet.has(m.name));
+    }
+    return inside;
+  }, [markers, isInside, catchmentActive, selectedCatchmentCategories, catchmentEntityList]);
+
+  const filteredInsightLayers = useMemo(
+    () => {
+      if (!catchmentActive) return [];
+      return selectedCatchmentCategories.length > 0
+        ? insightLayers.filter(l => selectedCatchmentCategories.includes(l.category))
+        : insightLayers;
+    },
+    [insightLayers, selectedCatchmentCategories, catchmentActive],
+  );
+
+
 
   const selectedCity = useMemo(
     () => resolveInteractiveSelectedCity({ selectedLocation, resolvedCity, rows, moduleOutput }),
     [moduleOutput, resolvedCity, rows, selectedLocation],
+  );
+
+  const filteredModule31Config = useMemo(
+    () => getFilteredModule31Config(module31Config, catchmentActive, selectedCatchmentCategories, catchmentEntityList.length, markers),
+    [module31Config, catchmentActive, selectedCatchmentCategories, catchmentEntityList.length, markers]
   );
 
   useEffect(() => {
@@ -3753,6 +4361,39 @@ function InteractiveRuntimeMapView({
     };
   }, [selectedCorridors, selectedCity, selectedLocation]);
 
+  useEffect(() => {
+    if (!onPlottedSnapshotChange || !moduleOutput) return;
+    onPlottedSnapshotChange({
+      module31Config: filteredModule31Config || undefined,
+      records: mergeInteractiveMarkersIntoRecords(filteredModule31Config?.records, snapshotInteractiveMarkers(filteredMarkers)),
+      projectMarkers: snapshotInteractiveMarkers(filteredMarkers),
+      amenities: filteredAmenities,
+      corridors: filteredCorridors,
+      runtimeContext: {
+        city: selectedCity || undefined,
+        location: selectedLocation || undefined,
+        basemap: basemapMode,
+        selectedAmenities,
+        selectedCorridors,
+      },
+    });
+  }, [
+    amenities,
+    basemapMode,
+    corridorLines,
+    markers,
+    filteredModule31Config,
+    moduleOutput,
+    onPlottedSnapshotChange,
+    selectedAmenities,
+    selectedCity,
+    selectedCorridors,
+    selectedLocation,
+    filteredMarkers,
+    filteredAmenities,
+    filteredCorridors,
+  ]);
+
   const locationOptions = useMemo(
     () => Array.from(new Set([resolvedCity, ...intentLocations].filter(Boolean))),
     [intentLocations, resolvedCity],
@@ -3781,6 +4422,11 @@ function InteractiveRuntimeMapView({
           <TrendingUp className="h-3 w-3" />
           OSM overlays active
         </span>
+      ) : m31Error ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-red-700 max-w-[250px] truncate" title={m31Error}>
+          <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+          <span className="truncate">{m31Error}</span>
+        </span>
       ) : null}
 
       <label className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -3800,89 +4446,52 @@ function InteractiveRuntimeMapView({
         </select>
       </label>
 
-      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-        <summary className="cursor-pointer list-none select-none">
-          Amenities {selectedAmenities.length ? `(${selectedAmenities.length})` : ''}
-        </summary>
-        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
-          {INTERACTIVE_AMENITY_OPTIONS.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
-              <input
-                type="checkbox"
-                checked={selectedAmenities.includes(option.value)}
-                onChange={(event) => {
-                  setSelectedAmenities((previous) =>
-                    event.target.checked
-                      ? Array.from(new Set([...previous, option.value]))
-                      : previous.filter((value) => value !== option.value),
-                  );
-                }}
-                className="h-3 w-3 accent-emerald-600"
-              />
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </details>
-
-      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-        <summary className="cursor-pointer list-none select-none">
-          Corridors {selectedCorridors.length ? `(${selectedCorridors.length})` : ''}
-        </summary>
-        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
-          {INTERACTIVE_CORRIDOR_OPTIONS.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
-              <input
-                type="checkbox"
-                checked={selectedCorridors.includes(option.value)}
-                onChange={(event) => {
-                  setSelectedCorridors((previous) =>
-                    event.target.checked
-                      ? Array.from(new Set([...previous, option.value]))
-                      : previous.filter((value) => value !== option.value),
-                  );
-                }}
-                className="h-3 w-3 accent-emerald-600"
-              />
-              <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: option.color }} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </details>
+      <IntelligenceLayerFilter
+        selectedAmenities={selectedAmenities}
+        setSelectedAmenities={setSelectedAmenities}
+        selectedCorridors={selectedCorridors}
+        setSelectedCorridors={setSelectedCorridors}
+        catchmentCategories={catchmentCategoriesForFilter}
+        catchmentGeoLabel={catchmentGeoLabel}
+        onCatchmentCategoriesChange={setSelectedCatchmentCategories}
+        onCatchmentActiveChange={setCatchmentActive}
+      />
     </div>
   );
 
   const statusFooter = (
     <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
       <span>
-        {module31Config
-          ? `${module31Config.records.length} records · same 2D map family renderer`
+        {filteredModule31Config
+          ? `${filteredModule31Config.records.length} records · same 2D map family renderer`
           : isLoadingModule31
             ? 'Module 3.1 processing finalized data'
             : waitingStatus}
       </span>
-      <span>{module31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+      <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
       <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
       <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
     </div>
   );
 
-  if (module31Config) {
+  if (filteredModule31Config) {
     return (
-      <section className="flex h-full min-h-[680px] flex-col bg-white">
+      <section className="flex h-full min-h-[800px] flex-col bg-white">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
         {overlayToolbar}
         <div className="min-h-0 flex-1">
           <GeneratedMapView
-            key={module31Config.id}
-            config={module31Config}
+            key={filteredModule31Config.id}
+            config={filteredModule31Config}
             basemapMode={basemapMode}
             onBasemapModeChange={onBasemapModeChange}
             onLoaded={onMapLoaded}
-            osmAmenities={amenities}
-            osmCorridors={corridorLines}
+            osmAmenities={filteredAmenities}
+            osmCorridors={filteredCorridors}
+            osmInsightLayers={filteredInsightLayers}
+            onPolygonCreated={(geoJson) => setPolygonGeoJson(geoJson)}
+            onPolygonDeleted={() => setPolygonGeoJson(null)}
           />
         </div>
         {statusFooter}
@@ -3891,12 +4500,13 @@ function InteractiveRuntimeMapView({
   }
 
   return (
-    <section className="flex h-full min-h-[680px] flex-col bg-white">
+    <section className="flex h-full min-h-[800px] flex-col bg-white">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
       {overlayToolbar}
-      <div className="relative min-h-[560px] flex-1">
+      <div className="relative min-h-[800px] flex-1">
         {readiness.isReady && isLoadingModule31 ? (
-          <div className="flex h-full min-h-[560px] flex-col items-center justify-center bg-slate-50 px-6 text-center">
+          <div className="flex h-full min-h-[800px] flex-col items-center justify-center bg-slate-50 px-6 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
             <p className="mt-4 text-sm font-extrabold text-slate-900">Building Interactive Map</p>
             <p className="mt-2 max-w-md text-xs font-semibold leading-5 text-slate-500">
@@ -3907,9 +4517,13 @@ function InteractiveRuntimeMapView({
           <>
             <Interactive2DPreviewMap
               center={mapCenter}
-              amenities={amenities}
-              corridors={corridorLines}
+              amenities={filteredAmenities}
+              corridors={filteredCorridors}
+              markers={filteredMarkers}
               basemapMode={basemapMode}
+              insightLayers={filteredInsightLayers}
+              onPolygonCreated={(geoJson) => setPolygonGeoJson(geoJson)}
+              onPolygonDeleted={() => setPolygonGeoJson(null)}
             />
             <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Resolved Location</p>
@@ -3933,6 +4547,7 @@ function Interactive3DPreviewMap({
   markers,
   basemapMode,
   onBasemapModeChange,
+  insightLayers = [],
 }: {
   center: [number, number];
   amenities: InteractiveAmenityPoint[];
@@ -3940,6 +4555,7 @@ function Interactive3DPreviewMap({
   markers: InteractiveMapMarker[];
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
+  insightLayers?: InteractiveInsightLayerPoint[];
 }) {
   const [viewState, setViewState] = useState({
     longitude: center[1],
@@ -3959,8 +4575,8 @@ function Interactive3DPreviewMap({
   }, [center, markers.length]);
 
   const layers = useMemo(
-    () => buildInteractive3DOverlayLayers({ amenities, corridors, markers }),
-    [amenities, corridors, markers],
+    () => buildInteractive3DOverlayLayers({ amenities, corridors, markers, insightLayers }),
+    [amenities, corridors, markers, insightLayers],
   );
 
   return (
@@ -3997,6 +4613,8 @@ function InteractiveRuntime3DMapView({
   basemapMode,
   onBasemapModeChange,
   onMapLoaded,
+  insightLayers = [],
+  onPlottedSnapshotChange,
 }: {
   moduleOutput: Module1IntentOutput | null;
   module2Output: Module2Output | null;
@@ -4007,10 +4625,13 @@ function InteractiveRuntime3DMapView({
   basemapMode: GeneratedBasemapMode;
   onBasemapModeChange: (mode: GeneratedBasemapMode) => void;
   onMapLoaded?: (config: GeneratedMapConfig) => void;
+  insightLayers?: InteractiveInsightLayerPoint[];
+  onPlottedSnapshotChange?: (delta: InteractivePlottedDelta) => void;
 }) {
   const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
   const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
   const rows = useMemo(() => getInteractiveRows(module2Output, retrievalOutput), [module2Output, retrievalOutput]);
+  const markers = useMemo(() => buildFallbackInteractiveMarkers(rows), [rows]);
   const [selectedLocation, setSelectedLocation] = useState(resolvedCity);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(DEFAULT_INTERACTIVE_AMENITIES);
   const [selectedCorridors, setSelectedCorridors] = useState<string[]>(DEFAULT_INTERACTIVE_CORRIDORS);
@@ -4020,6 +4641,8 @@ function InteractiveRuntime3DMapView({
   const [corridorLines, setCorridorLines] = useState<InteractiveCorridorLine[]>([]);
   const [corridorsLoading, setCorridorsLoading] = useState(false);
   const [corridorsStatus, setCorridorsStatus] = useState('Metro lines and highway corridors selected by default');
+  const [selectedCatchmentCategories, setSelectedCatchmentCategories] = useState<string[]>([]);
+  const [catchmentActive, setCatchmentActive] = useState(true);
 
   const selectedCity = useMemo(
     () => resolveInteractiveSelectedCity({ selectedLocation, resolvedCity, rows, moduleOutput }),
@@ -4131,9 +4754,85 @@ function InteractiveRuntime3DMapView({
     };
   }, [selectedCorridors, selectedCity, selectedLocation]);
 
+  useEffect(() => {
+    if (!onPlottedSnapshotChange || !moduleOutput) return;
+    onPlottedSnapshotChange({
+      module31Config: module31Config || undefined,
+      records: mergeInteractiveMarkersIntoRecords(module31Config?.records, snapshotInteractiveMarkers(markers)),
+      projectMarkers: snapshotInteractiveMarkers(markers),
+      amenities,
+      corridors: corridorLines,
+      runtimeContext: {
+        city: selectedCity || undefined,
+        location: selectedLocation || undefined,
+        basemap: basemapMode,
+        selectedAmenities,
+        selectedCorridors,
+      },
+    });
+  }, [
+    amenities,
+    basemapMode,
+    corridorLines,
+    markers,
+    module31Config,
+    moduleOutput,
+    onPlottedSnapshotChange,
+    selectedAmenities,
+    selectedCity,
+    selectedCorridors,
+    selectedLocation,
+  ]);
+
+
+  const catchmentEntityList = useMemo(
+    () => buildCatchmentEntityList(rows, moduleOutput, module2Output),
+    [rows, moduleOutput, module2Output],
+  );
+
+  const catchmentGeoLabel = useMemo(() => {
+    const gl = String(
+      (moduleOutput?.map_output_requirements as Record<string, unknown> | undefined)?.geo_level
+      || (moduleOutput as Record<string, unknown> | null)?.geo_level
+      || ''
+    ).toLowerCase();
+    if (gl.includes('project')) return `Project-level · ${catchmentEntityList.length} entities`;
+    if (gl.includes('locality') || gl.includes('micro') || gl.includes('location')) return `Locality-level · ${catchmentEntityList.length} entities`;
+    return `${catchmentEntityList.length} entities`;
+  }, [moduleOutput, catchmentEntityList]);
+
+  const catchmentCategoriesForFilter = useMemo(
+    () => catchmentEntityList.map(e => e.name),
+    [catchmentEntityList],
+  );
+
+  const filteredInsightLayers = useMemo(
+    () => {
+      if (!catchmentActive) return [];
+      return selectedCatchmentCategories.length > 0
+        ? insightLayers.filter(l => selectedCatchmentCategories.includes(l.category))
+        : insightLayers;
+    },
+    [insightLayers, selectedCatchmentCategories, catchmentActive],
+  );
+
+  const filteredModule31Config = useMemo(
+    () => getFilteredModule31Config(module31Config, catchmentActive, selectedCatchmentCategories, catchmentEntityList.length, markers),
+    [module31Config, catchmentActive, selectedCatchmentCategories, catchmentEntityList.length, markers]
+  );
+
   const extraDeckLayers = useMemo(
-    () => buildInteractive3DOverlayLayers({ amenities, corridors: corridorLines }),
-    [amenities, corridorLines],
+    () => buildInteractive3DOverlayLayers({
+      amenities,
+      corridors: corridorLines,
+      markers: catchmentActive
+        ? (selectedCatchmentCategories.length > 0 && selectedCatchmentCategories.length < catchmentEntityList.length
+            ? markers.filter(m => new Set(selectedCatchmentCategories).has(m.name))
+            : markers)
+        : [],
+      insightLayers: filteredInsightLayers,
+    }),
+    [amenities, corridorLines, markers, filteredInsightLayers, catchmentActive, selectedCatchmentCategories, catchmentEntityList],
   );
   const locationOptions = useMemo(
     () => Array.from(new Set([resolvedCity, ...intentLocations].filter(Boolean))),
@@ -4182,84 +4881,43 @@ function InteractiveRuntime3DMapView({
         </select>
       </label>
 
-      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-        <summary className="cursor-pointer list-none select-none">
-          Amenities {selectedAmenities.length ? `(${selectedAmenities.length})` : ''}
-        </summary>
-        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
-          {INTERACTIVE_AMENITY_OPTIONS.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
-              <input
-                type="checkbox"
-                checked={selectedAmenities.includes(option.value)}
-                onChange={(event) => {
-                  setSelectedAmenities((previous) =>
-                    event.target.checked
-                      ? Array.from(new Set([...previous, option.value]))
-                      : previous.filter((value) => value !== option.value),
-                  );
-                }}
-                className="h-3 w-3 accent-emerald-600"
-              />
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </details>
-
-      <details className="relative rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-        <summary className="cursor-pointer list-none select-none">
-          Corridors {selectedCorridors.length ? `(${selectedCorridors.length})` : ''}
-        </summary>
-        <div className="absolute right-0 top-8 z-[700] grid min-w-[260px] gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
-          {INTERACTIVE_CORRIDOR_OPTIONS.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-[10px] font-bold normal-case tracking-normal text-slate-600">
-              <input
-                type="checkbox"
-                checked={selectedCorridors.includes(option.value)}
-                onChange={(event) => {
-                  setSelectedCorridors((previous) =>
-                    event.target.checked
-                      ? Array.from(new Set([...previous, option.value]))
-                      : previous.filter((value) => value !== option.value),
-                  );
-                }}
-                className="h-3 w-3 accent-emerald-600"
-              />
-              <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: option.color }} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </details>
+      <IntelligenceLayerFilter
+        selectedAmenities={selectedAmenities}
+        setSelectedAmenities={setSelectedAmenities}
+        selectedCorridors={selectedCorridors}
+        setSelectedCorridors={setSelectedCorridors}
+        catchmentCategories={catchmentCategoriesForFilter}
+        catchmentGeoLabel={catchmentGeoLabel}
+        onCatchmentCategoriesChange={setSelectedCatchmentCategories}
+        onCatchmentActiveChange={setCatchmentActive}
+      />
     </div>
   );
 
   const statusFooter = (
     <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
       <span>
-        {module31Config
-          ? `${module31Config.records.length} records · same 3D map family renderer`
+        {filteredModule31Config
+          ? `${filteredModule31Config.records.length} records · same 3D map family renderer`
           : isLoadingModule31
             ? 'Module 3.1 processing finalized data'
             : waitingStatus}
       </span>
-      <span>{module31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+      <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
       <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
       <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
     </div>
   );
 
-  if (module31Config) {
+  if (filteredModule31Config) {
     return (
       <section className="flex h-full min-h-[680px] flex-col bg-white">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
         {overlayToolbar}
         <div className="min-h-0 flex-1">
           <GeneratedMapView
-            key={module31Config.id}
-            config={module31Config}
+            key={filteredModule31Config.id}
+            config={filteredModule31Config}
             basemapMode={basemapMode}
             onBasemapModeChange={onBasemapModeChange}
             onLoaded={onMapLoaded}
@@ -4291,9 +4949,10 @@ function InteractiveRuntime3DMapView({
               center={mapCenter}
               amenities={amenities}
               corridors={corridorLines}
-              markers={[]}
+              markers={markers}
               basemapMode={basemapMode}
               onBasemapModeChange={onBasemapModeChange}
+              insightLayers={insightLayers}
             />
             <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Resolved Location</p>
@@ -4356,12 +5015,14 @@ const MapSection: React.FC<MapSectionProps> = ({
   module2Output = null,
   retrievalOutput = null,
   onRuntimeGeneratedMapsChange,
+  pendingPlottableEnrichment = null,
+  onPlottableEnrichmentApplied,
 }) => {
   const [leafletReady, setLeafletReady] = useState(false);
   const [activeViewerModule, setActiveViewerModule] = useState<'3.1' | '3'>('3.1');
   const [generatedBasemapMode, setGeneratedBasemapMode] = useState<GeneratedBasemapMode>('satellite');
-  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('interactive-map-3d');
-  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('3d');
+  const [activeFamily, setActiveFamily] = useState<ViewerMapCategory>('interactive-map');
+  const [activeSampleFamily, setActiveSampleFamily] = useState<GeneratedMapFamily>('interactive-map');
   const [generatedMaps, setGeneratedMaps] = useState<GeneratedMapConfig[]>([]);
   const [activeGeneratedId, setActiveGeneratedId] = useState<string>(SAMPLE_OPTION_VALUE);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -4390,11 +5051,14 @@ const MapSection: React.FC<MapSectionProps> = ({
 
   // ── Auto-trigger Module 3.1 for Interactive Map ─────────────────────────────
   const [interactiveModule31Config, setInteractiveModule31Config] = useState<GeneratedMapConfig | null>(null);
+  const [interactiveM31Error, setInteractiveM31Error] = useState<string | null>(null);
   const [isGeneratingInteractiveM31, setIsGeneratingInteractiveM31] = useState(false);
   const prevModule2IdRef = useRef<string | null>(null);
   const [interactive3DModule31Config, setInteractive3DModule31Config] = useState<GeneratedMapConfig | null>(null);
   const [isGeneratingInteractive3DM31, setIsGeneratingInteractive3DM31] = useState(false);
   const prevModule23DIdRef = useRef<string | null>(null);
+  const [interactive2DSoftCache, setInteractive2DSoftCache] = useState<InteractiveMapSoftCache | null>(null);
+  const [interactive3DSoftCache, setInteractive3DSoftCache] = useState<InteractiveMapSoftCache | null>(null);
 
   const readiness = useMemo(
     () => getModule31Readiness(moduleOutput, module2Output),
@@ -4487,8 +5151,37 @@ const MapSection: React.FC<MapSectionProps> = ({
           module2Output: map.module2,
         },
       })),
+      ...(interactive2DSoftCache
+        ? [
+            softCacheToRuntimeOption(
+              interactive2DSoftCache,
+              moduleOutput,
+              module2Output,
+              interactiveModule31Config?.module31,
+            ),
+          ]
+        : []),
+      ...(interactive3DSoftCache
+        ? [
+            softCacheToRuntimeOption(
+              interactive3DSoftCache,
+              moduleOutput,
+              module2Output,
+              interactive3DModule31Config?.module31,
+            ),
+          ]
+        : []),
     ],
-    [fullMaps, generatedMaps],
+    [
+      fullMaps,
+      generatedMaps,
+      interactive2DSoftCache,
+      interactive3DSoftCache,
+      interactiveModule31Config?.module31,
+      interactive3DModule31Config?.module31,
+      module2Output,
+      moduleOutput,
+    ],
   );
   const module31CacheItems = useMemo(
     () =>
@@ -4528,6 +5221,112 @@ const MapSection: React.FC<MapSectionProps> = ({
   const handleFullMapLoaded = React.useCallback((payload: Module7LoadedMapData) => {
     setLoadedFullMap(payload);
   }, []);
+
+  const handleInteractive2DPlottedChange = React.useCallback(
+    (delta: InteractivePlottedDelta) => {
+      const sessionKey = buildInteractiveSessionKey(moduleOutput, module2Output);
+      if (!sessionKey) return;
+      const city = resolveInteractiveCity(moduleOutput) || delta.runtimeContext?.city || undefined;
+      setInteractive2DSoftCache((previous) =>
+        mergeInteractiveSnapshot(previous, delta, {
+          viewer: 'interactive-map',
+          sessionKey,
+          city,
+        }),
+      );
+    },
+    [module2Output, moduleOutput],
+  );
+
+  const handleInteractive3DPlottedChange = React.useCallback(
+    (delta: InteractivePlottedDelta) => {
+      const sessionKey = buildInteractiveSessionKey(moduleOutput, module2Output);
+      if (!sessionKey) return;
+      const city = resolveInteractiveCity(moduleOutput) || delta.runtimeContext?.city || undefined;
+      setInteractive3DSoftCache((previous) =>
+        mergeInteractiveSnapshot(previous, delta, {
+          viewer: 'interactive-map-3d',
+          sessionKey,
+          city,
+        }),
+      );
+    },
+    [module2Output, moduleOutput],
+  );
+
+  const applyPlottableEnrichmentToCache = React.useCallback(
+    (
+      cache: InteractiveMapSoftCache | null,
+      setCache: React.Dispatch<React.SetStateAction<InteractiveMapSoftCache | null>>,
+      mapId: string,
+      points: Module7PlottableEnrichmentPoint[],
+      corridors: Module7PlottableEnrichmentCorridor[],
+    ) => {
+      if (!cache || cache.id !== mapId) return false;
+      if (points.length === 0 && corridors.length === 0) return false;
+
+      const nextLayers = plottablePointsToInsightLayers(
+        points,
+        cache.plottedSnapshot.amenities,
+        cache.plottedSnapshot.insightLayers,
+      );
+      const nextCorridors = plottableCorridorsToInteractiveCorridors(
+        corridors,
+        cache.plottedSnapshot.corridors,
+      );
+      if (nextLayers.length === 0 && nextCorridors.length === 0) return true;
+
+      const delta: InteractivePlottedDelta = {};
+      if (nextLayers.length > 0) delta.insightLayers = nextLayers;
+      if (nextCorridors.length > 0) {
+        delta.corridors = [...cache.plottedSnapshot.corridors, ...nextCorridors];
+      }
+
+      setCache((previous) =>
+        previous
+          ? mergeInteractiveSnapshot(
+              previous,
+              delta,
+              {
+                viewer: previous.viewer,
+                sessionKey: previous.sessionKey,
+                city: previous.plottedSnapshot.runtimeContext.city,
+              },
+            )
+          : previous,
+      );
+      return true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!pendingPlottableEnrichment) return;
+    const { mapId, points, corridors } = pendingPlottableEnrichment;
+    const handled2D = applyPlottableEnrichmentToCache(
+      interactive2DSoftCache,
+      setInteractive2DSoftCache,
+      mapId,
+      points,
+      corridors,
+    );
+    const handled3D = applyPlottableEnrichmentToCache(
+      interactive3DSoftCache,
+      setInteractive3DSoftCache,
+      mapId,
+      points,
+      corridors,
+    );
+    if (handled2D || handled3D) {
+      onPlottableEnrichmentApplied?.();
+    }
+  }, [
+    applyPlottableEnrichmentToCache,
+    interactive2DSoftCache,
+    interactive3DSoftCache,
+    onPlottableEnrichmentApplied,
+    pendingPlottableEnrichment,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -4605,6 +5404,8 @@ const MapSection: React.FC<MapSectionProps> = ({
     prevModule2IdRef.current = m2Id;
 
     setInteractiveModule31Config(null);
+    setInteractiveM31Error(null);
+    setInteractive2DSoftCache(null);
     setIsGeneratingInteractiveM31(true);
 
     requestModule31Generation(moduleOutput, module2Output, {
@@ -4618,6 +5419,7 @@ const MapSection: React.FC<MapSectionProps> = ({
       })
       .catch((err: unknown) => {
         console.warn('[InteractiveMap] Auto Module 3.1 failed, falling back to Kimi K2 validation:', err);
+        setInteractiveM31Error(String(err));
       })
       .finally(() => {
         setIsGeneratingInteractiveM31(false);
@@ -4634,6 +5436,7 @@ const MapSection: React.FC<MapSectionProps> = ({
     prevModule23DIdRef.current = m2Id;
 
     setInteractive3DModule31Config(null);
+    setInteractive3DSoftCache(null);
     setIsGeneratingInteractive3DM31(true);
 
     requestModule31Generation(moduleOutput, module2Output, {
@@ -5269,7 +6072,7 @@ const MapSection: React.FC<MapSectionProps> = ({
         </div>
       ) : null}
 
-      <div className="relative z-10 min-h-0 flex-1 bg-slate-50">
+      <div className="relative min-h-0 flex-1 bg-slate-50">
         <div
           className={`h-full overflow-y-auto bg-slate-50 custom-scrollbar ${
             activeViewerModule === '3.1' ? '' : 'invisible pointer-events-none'
@@ -5302,10 +6105,13 @@ const MapSection: React.FC<MapSectionProps> = ({
                 retrievalOutput={retrievalOutput}
                 module31Config={interactiveModule31Config}
                 isLoadingModule31={isGeneratingInteractiveM31}
+                m31Error={interactiveM31Error}
                 readiness={readiness}
                 basemapMode={generatedBasemapMode}
                 onBasemapModeChange={setGeneratedBasemapMode}
                 onMapLoaded={handleGeneratedMapLoaded}
+                insightLayers={interactive2DSoftCache?.plottedSnapshot.insightLayers || []}
+                onPlottedSnapshotChange={handleInteractive2DPlottedChange}
               />
             ) : activeFamily === 'interactive-map-3d' ? (
               <InteractiveRuntime3DMapView
@@ -5319,6 +6125,8 @@ const MapSection: React.FC<MapSectionProps> = ({
                 basemapMode={generatedBasemapMode}
                 onBasemapModeChange={setGeneratedBasemapMode}
                 onMapLoaded={handleGeneratedMapLoaded}
+                insightLayers={interactive3DSoftCache?.plottedSnapshot.insightLayers || []}
+                onPlottedSnapshotChange={handleInteractive3DPlottedChange}
               />
             ) : (
               <GeneratedMapEmptyState
