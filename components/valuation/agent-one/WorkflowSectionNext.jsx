@@ -155,6 +155,12 @@ function getSubjectFloor(content) {
   return content?.subject_floor ?? content?.floor ?? null;
 }
 
+function showFloorFields(propertyType) {
+  if (!propertyType) return true;
+  const t = String(propertyType).toLowerCase().replace(/[_\s]+/g, ' ');
+  return !['villa', 'plot', 'building land', 'building+land', 'land building'].some(x => t.includes(x));
+}
+
 // ── Detail row component ───────────────────────────────────────────────────────
 function DetailRow({ label, value }) {
   if (value === null || value === undefined || value === "") return null;
@@ -194,8 +200,8 @@ function StepDetails({ step }) {
         <DetailRow label="Built-up Area" value={content.builtup_area_sqft ? `${content.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={content.plot_area_sqft ? `${content.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={content.age_years !== undefined ? `${content.age_years} years` : null} />
-        <DetailRow label="Floor" value={getSubjectFloor(content)} />
-        <DetailRow label="Total Floors" value={content.total_floors} />
+        {showFloorFields(content.property_type) && <DetailRow label="Floor" value={getSubjectFloor(content)} />}
+        {showFloorFields(content.property_type) && <DetailRow label="Total Floors" value={content.total_floors} />}
         <DetailRow label="Facing" value={content.facing} />
         <DetailRow label="Approach" value={content.recommended_approach} />
         {content._token_usage && <DetailRow label="Tokens Used" value={`${content._token_usage.total_tokens || 0} total`} />}
@@ -247,8 +253,8 @@ function StepDetails({ step }) {
         <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={ent.plot_area_sqft ? `${ent.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={ent.age_years !== undefined ? `${ent.age_years} years` : null} />
-        <DetailRow label="Floor" value={getSubjectFloor(ent)} />
-        <DetailRow label="Total Floors" value={ent.total_floors} />
+        {showFloorFields(ent.property_type) && <DetailRow label="Floor" value={getSubjectFloor(ent)} />}
+        {showFloorFields(ent.property_type) && <DetailRow label="Total Floors" value={ent.total_floors} />}
         <DetailRow label="Facing" value={ent.facing} />
         <DetailRow label="Approach" value={ent.recommended_approach} />
       </div>
@@ -447,6 +453,8 @@ function StepDetails({ step }) {
       ? (content.subject_final_plot_rate || content.subject_final_rate)
       : content.subject_final_rate;
     const mktValue = content.subject_market_value;
+    const rateRange = content.subject_rate_range;
+    const valueRange = content.subject_value_range;
     const subjectRow = content.comparable_factoring_table?.find(r => r.role === "SUBJECT");
     
     return (

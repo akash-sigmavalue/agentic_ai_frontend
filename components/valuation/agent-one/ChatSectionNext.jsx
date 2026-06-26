@@ -2575,6 +2575,34 @@ function CbdCell({ km, name, isSubject }) {
   );
 }
 
+const CONFIDENCE_RANGE_PCT = {
+  high: 0.03,
+  medium: 0.06,
+  low: 0.10,
+};
+
+const getConfidenceRangePct = (confidence) => {
+  const key = String(confidence || "Medium").trim().toLowerCase();
+  return CONFIDENCE_RANGE_PCT[key] || CONFIDENCE_RANGE_PCT.medium;
+};
+
+const buildNumberRange = (exactValue, confidence) => {
+  const value = Number(exactValue || 0);
+  if (!value) return null;
+  const pct = getConfidenceRangePct(confidence);
+  return {
+    low: Math.round(value * (1 - pct)),
+    high: Math.round(value * (1 + pct)),
+  };
+};
+
+const coerceRange = (range, exactValue, confidence) => {
+  const low = Number(range?.low || 0);
+  const high = Number(range?.high || 0);
+  if (low > 0 && high > 0) return { low, high };
+  return buildNumberRange(exactValue, confidence);
+};
+
 function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
@@ -2683,6 +2711,17 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
     }
 
     const isWeightsMod = (w1 !== originalData.blending?.w1 || w2 !== originalData.blending?.w2);
+    const updatedRateRange = buildNumberRange(finalRate, confidence);
+    const valuationArea = Number(
+      subjectData?.salable_area_sqft ||
+      subjectData?.builtup_area_sqft ||
+      subjectData?.carpet_area_sqft ||
+      subjectData?.plot_area_sqft ||
+      0
+    );
+    const updatedMarketValue = valuationArea > 0 ? Math.round(finalRate * valuationArea) : null;
+    const updatedValueRange = updatedMarketValue ? buildNumberRange(updatedMarketValue, confidence) : null;
+
     const updatedData = {
       ...data,
       comparable_factoring_table: newTable,
@@ -2695,10 +2734,10 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
         weight_reasoning: isWeightsMod ? null : (originalData.blending?.weight_reasoning || blending.weight_reasoning),
       },
       subject_final_rate: finalRate,
-      subject_rate_range: {
-        low: Math.round(finalRate * 0.95),
-        high: Math.round(finalRate * 1.05),
-      },
+      confidence_range_pct: getConfidenceRangePct(confidence) * 100,
+      subject_rate_range: updatedRateRange,
+      subject_market_value: updatedMarketValue,
+      subject_value_range: updatedValueRange,
       reconciliation_note: note,
     };
 
@@ -3192,6 +3231,16 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
             else if (subjectData?.carpet_area_sqft) areaLabel = "Carpet Area";
           }
 
+          const rangePct = Number(data.confidence_range_pct || (getConfidenceRangePct(confidence) * 100));
+          const exactValue = selectedArea > 0
+            ? Number(data.subject_market_value || Math.round(finalRate * selectedArea))
+            : null;
+          const rateRange = coerceRange(subject_rate_range, finalRate, confidence);
+          const valueRange = exactValue
+            ? coerceRange(data.subject_value_range, exactValue, confidence)
+            : null;
+          const rangeLabel = `±${rangePct.toFixed(rangePct % 1 === 0 ? 0 : 1)}% ${confidence || "Medium"} confidence band`;
+
           return (
             <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
@@ -3204,6 +3253,15 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   </h2>
                   <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
                 </div>
+                {rateRange && (
+                  <div className="inline-flex flex-col rounded-2xl border border-green-500/20 bg-green-500/[0.06] px-4 py-2">
+                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/80">Indicative Rate Range</span>
+                    <span className="font-mono text-sm font-black text-green-300">
+                      {fmtRate(rateRange.low)} - {fmtRate(rateRange.high)}/{area_unit || "sqft"}
+                    </span>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                  </div>
+                )}
                 {selectedArea > 0 ? (
                   <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider font-semibold">
                     Calculated on <span className="text-accent-light">{selectedArea.toLocaleString()} {area_unit || "sqft"}</span> of {areaLabel}
@@ -3219,8 +3277,17 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
-                    {formatter.format(finalRate * selectedArea)}
+                    {formatter.format(exactValue)}
                   </h2>
+                  {valueRange && (
+                    <div className="ml-auto inline-flex flex-col rounded-2xl border border-accent/20 bg-accent/[0.06] px-4 py-2 text-left md:text-right">
+                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/80">Indicative Value Range</span>
+                      <span className="font-mono text-sm font-black text-accent-light">
+                        {formatter.format(valueRange.low)} - {formatter.format(valueRange.high)}
+                      </span>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                    </div>
+                  )}
                   <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest font-semibold">
                     {fmtRate(finalRate)}/{area_unit || "sqft"} × {selectedArea.toLocaleString()} {area_unit || "sqft"} ({areaLabel})
                   </p>
@@ -6462,8 +6529,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
-        { field: "subject_floor", label: "Floor", type: "number", required: false },
-        { field: "total_floors", label: "Total Floors", type: "number", required: false },
         { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "plot") {
