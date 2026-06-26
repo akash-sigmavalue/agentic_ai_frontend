@@ -3694,6 +3694,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [isFactorialStreaming, setIsFactorialStreaming] = useState(false);
   const [factorialAnalysisData, setFactorialAnalysisData] = useState(null);
   const [isFactorialAnalysisStreaming, setIsFactorialAnalysisStreaming] = useState(false);
+  const [needsFactorialRegeneration, setNeedsFactorialRegeneration] = useState(false);
   const [pipelineDone, setPipelineDone] = useState(false);
   const [currentStage, setCurrentStage] = useState("Stage 0: Initialization");
   const [originalQuestion, setOriginalQuestion] = useState("");
@@ -4990,11 +4991,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setIsCleaningStreaming(true);
     setStreamingNote("Recalculating plot rates with overrides...");
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: `Recalculate plot rates with manual adjustments.`, meta: "Now" },
-      { role: "assistant", content: "Applying user overrides and recalculating...", meta: "Live" },
-    ]);
+    const getCleanedListingsMessageIndex = (messages) => {
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i]?.cleaned_listings) return i;
+      }
+      return messages.length - 1;
+    };
 
     try {
       const parsedFsiGlobal = parseFloat(fsiGlobal);
@@ -5099,18 +5101,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setCleanedData(updatedListings);
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = getCleanedListingsMessageIndex(next);
+              if (targetIndex >= 0) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: "cleaning results",
                   cleaned_listings: updatedListings,
                   // Backend returns the authoritative full set after segregating
                   // negative-rate listings — update both tabs in one shot.
-                  dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
-                  review_listings: event.content.review_listings ?? next[lastIndex].review_listings ?? [],
+                  dropped_listings: event.content.dropped_listings ?? next[targetIndex].dropped_listings ?? [],
+                  review_listings: event.content.review_listings ?? next[targetIndex].review_listings ?? [],
                 };
               }
               return next;
@@ -5120,10 +5122,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "recalculate_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = getCleanedListingsMessageIndex(next);
+              if (targetIndex >= 0 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "recalculation done",
@@ -5138,14 +5140,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       if (newCleanedListings) {
         setFactorialData(null);
         setFactorialAnalysisData(null);
+        setCostCalculationData(null);
+        setNeedsFactorialRegeneration(true);
+        setCtaFactorialCollapsed(false);
+        onValuationResult?.(null);
+        setMessages((prev) =>
+          prev.filter((msg) =>
+            !msg.factorial_data &&
+            !msg.factorial_analysis_data &&
+            !msg.cost_calculation_data
+          )
+        );
       }
 
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = getCleanedListingsMessageIndex(next);
+        if (targetIndex >= 0) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `Recalculate error: ${error.message}`,
             meta: "Error",
@@ -5221,6 +5235,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
+            setNeedsFactorialRegeneration(false);
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -7095,7 +7110,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             )}
 
             {/* ── Proceed to Factorial Table CTA ────────────────── */}
-            {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
+            {cleanedData && cleanedData.length > 0 && (!factorialData || needsFactorialRegeneration) && !isFactorialStreaming && (
               <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
                 <div
                   onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
@@ -7113,7 +7128,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
                       </div>
                       <p className="mt-1 text-sm text-text-secondary">
-                        {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
+                        {needsFactorialRegeneration
+                          ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
+                          : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
                       </p>
                     </div>
                   </div>
