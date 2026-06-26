@@ -283,6 +283,40 @@ const getPlotOverrideAvailability = (lst) => {
   };
 };
 
+const getListingCategory = (lst) => (lst?.project_category || lst?.property_type || "").toLowerCase().trim();
+
+const isPlotListingRow = (lst) => {
+  const category = getListingCategory(lst);
+  return ["plot", "land"].includes(category)
+    || (!category && lst?.plot_area_sqft != null && Number(lst.plot_area_sqft) > 0);
+};
+
+const isBuiltFormListingRow = (lst) => {
+  const category = getListingCategory(lst);
+  return ["villa", "building_land", "house", "bungalow"].includes(category);
+};
+
+const needsPlotConversionInputs = (lst, subjectPropertyType, valuationApproach) => {
+  const subjectType = (subjectPropertyType || "").toLowerCase().trim();
+  const approach = (valuationApproach || "").toLowerCase().trim();
+  const category = getListingCategory(lst);
+  const isRowPlot = isPlotListingRow(lst);
+  const isRowBuiltForm = isBuiltFormListingRow(lst);
+
+  if (subjectType === "plot") {
+    return isRowBuiltForm || (!category && !isRowPlot && (getPlotOverrideAvailability(lst).fsi || getPlotOverrideAvailability(lst).cc));
+  }
+
+  if (["villa", "building_land"].includes(subjectType)) {
+    if (approach === "cost") {
+      return isRowBuiltForm || (!category && !isRowPlot && (getPlotOverrideAvailability(lst).fsi || getPlotOverrideAvailability(lst).cc));
+    }
+    return isRowPlot;
+  }
+
+  return false;
+};
+
 const parseNumericValue = (val) => {
   if (val === null || val === undefined || val === "") return -Infinity;
   if (typeof val === "number") return val;
@@ -1658,15 +1692,17 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               </td>
             </tr>
           ) : processedListings.map((lst, idx) => {
-            const overrideAvailability = getPlotOverrideAvailability(lst);
+            const rowNeedsPlotConversion = needsPlotConversionInputs(lst, subjectPropertyType, valuationApproach);
+            const overrideAvailability = {
+              fsi: rowNeedsPlotConversion,
+              cc: rowNeedsPlotConversion,
+            };
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
             const sourceIndex = displayedListings.indexOf(lst);
             const rKey = getRowKey(lst, sourceIndex !== -1 ? sourceIndex : idx);
             // project_category is "plot" / "land" / "villa" — use it as the primary signal.
             // Fall back to plot_area_sqft presence if project_category is absent.
-            const rowCategory = (lst.project_category || "").toLowerCase().trim();
-            const isRowPlot = ["plot", "land"].includes(rowCategory)
-              || (!rowCategory && lst.plot_area_sqft != null && lst.plot_area_sqft > 0);
+            const isRowPlot = isPlotListingRow(lst);
             // For plot rows: use plot_area_sqft first, then cleaned_area_sqft as fallback
             const plotAreaValue = lst.plot_area_sqft || (isRowPlot ? lst.cleaned_area_sqft : null);
             // Rate/sqft divisor: plot rows use plotAreaValue, others use final_super_builtup_area
@@ -4968,7 +5004,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       const shouldUseGlobalOverrides = mode === "global";
       const mappedOverrides = {};
       cleanedData.forEach((lst, origIdx) => {
-        const overrideAvailability = getPlotOverrideAvailability(lst);
+        const rowNeedsPlotConversion = needsPlotConversionInputs(
+          lst,
+          subjectData.property_type || "plot",
+          subjectData.recommended_approach
+        );
+        const overrideAvailability = {
+          fsi: rowNeedsPlotConversion,
+          cc: rowNeedsPlotConversion,
+        };
         if (!overrideAvailability.fsi && !overrideAvailability.cc) return;
 
         const uniqueKey = getRowKey(lst, origIdx);
