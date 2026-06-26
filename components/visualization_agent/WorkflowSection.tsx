@@ -87,7 +87,7 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-blue-600 border-blue-100 bg-blue-50',
     soft: 'from-blue-500/10 to-cyan-500/10',
     agents: [
-      { name: 'Land/GIS', icon: MapPinned , href: '/?tab=2d_map'},
+      { name: 'Land/GIS', icon: MapPinned , href: '/visualization_agent'},
       { name: "Visualization Agent", icon: MapPinned, href: '/visualization_agent' },      
       { name: 'Valuation', icon: BarChart3, href: '/valuation' },
       { name: 'Market Research', icon: Search },

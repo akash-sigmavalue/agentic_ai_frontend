@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import ClarificationFields from "./ClarificationFields";
+import ClarificationFields from "../shared/ClarificationFields";
 import MarkdownRenderer from "./MarkdownRenderer";
 
 function SendIcon() {

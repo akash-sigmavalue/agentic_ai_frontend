@@ -18,7 +18,13 @@ import {
   Save,
   Trash2,
   Satellite,
+  FileText,
+  ChevronRight,
+  PlayCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import ClarificationFields from '../shared/ClarificationFields';
 import SpatialInsightsModal from '@/components/visualization_agent/spatial_insight/SpatialInsightsModal';
 import SpatialInsightV2ChatPanel from '@/components/visualization_agent/spatial_insight/SpatialInsightV2ChatPanel';
 import type { SpatialInsightV2State } from '@/lib/visualization-agent-spatial-insight-v2';
@@ -448,6 +454,19 @@ function RetrievedDataTable({ resultSet, maxRows = 100 }: { resultSet?: Visualiz
   );
 }
 
+function missingRequiredClarificationFields(
+  clarification: VisualizationRetrievalClarification | undefined,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
+) {
+  if (clarification?.clarification_type === 'space_filter') {
+    if (state.selectedOptions.length === 0 && !state.otherText.trim()) {
+      return [{ field: 'space_filter', label: 'Space Filter', type: 'select' } as VisualizationRetrievalClarificationField];
+    }
+    return [];
+  }
+  return (clarification?.fields || []).filter((field) => field.required !== false && !(state.fieldValues[field.field] || '').trim());
+}
+
 function defaultClarificationValue(field: VisualizationRetrievalClarificationField) {
   if (field.type === 'select') {
     return field.options?.[0]?.value || '';
@@ -461,15 +480,34 @@ function clarificationFieldLabel(field: VisualizationRetrievalClarificationField
 
 function buildClarificationAnswer(
   clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
 ) {
+  if (clarification?.clarification_type === 'space_filter') {
+    const selected = state.selectedOptions || [];
+    const parts: string[] = [];
+    if (selected.length > 0) {
+      // visualization_agent/types.ts might not have options typed fully for space_filter but we assume standard structure
+      const options = (clarification as any).options || [];
+      const labels = options
+        .filter((opt: any) => selected.includes(opt.id))
+        .map((opt: any) => opt.label);
+      if (labels.length > 0) {
+        parts.push(`Selected space filters: ${labels.join(', ')}`);
+      }
+    }
+    if (state.otherText.trim()) {
+      parts.push(`Other details: ${state.otherText.trim()}`);
+    }
+    return parts.join('\n');
+  }
+
   const fields = clarification?.fields || [];
   if (!fields.length) {
-    return Object.values(values).join('\n').trim();
+    return Object.values(state.fieldValues).join('\n').trim();
   }
   return fields
     .map((field) => {
-      const value = (values[field.field] || '').trim();
+      const value = (state.fieldValues[field.field] || '').trim();
       if (!value) return '';
       return `${clarificationFieldLabel(field)}: ${value}`;
     })
@@ -487,29 +525,20 @@ function cleanRetrievalBaseQuery(query: string) {
 function buildCompleteRetrievalQuery(
   originalQuery: string,
   clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
   fallbackAnswer = '',
 ) {
   const baseQuery = cleanRetrievalBaseQuery(originalQuery);
-  const fields = clarification?.fields || [];
-  const additions = fields
-    .map((field) => {
-      const value = (values[field.field] || '').trim();
-      if (!value) return '';
-      return `${clarificationFieldLabel(field).toLowerCase()} ${value}`;
-    })
-    .filter(Boolean);
-
+  const answer = buildClarificationAnswer(clarification, state);
   const fallback = fallbackAnswer.trim();
-  if (!additions.length && fallback) {
-    additions.push(fallback);
+  
+  if (answer) {
+    return `${baseQuery}. Additional required filters: ${answer.replace(/\n/g, '; ')}.`;
   }
-
-  if (!additions.length) {
-    return baseQuery;
+  if (fallback) {
+    return `${baseQuery}. Additional required filters: ${fallback}.`;
   }
-
-  return `${baseQuery}. Additional required filters: ${additions.join('; ')}.`;
+  return baseQuery;
 }
 
 interface DataVisRewriteResponse {
@@ -595,12 +624,6 @@ function buildDataVisFailureReason(retrieval: VisualizationRetrievalState) {
   return evidence || 'Data retrieval ended without result rows after SQL review/probe.';
 }
 
-function missingRequiredClarificationFields(
-  clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
-) {
-  return (clarification?.fields || []).filter((field) => field.required !== false && !(values[field.field] || '').trim());
-}
 
 const ChatSection: React.FC<ChatSectionProps> = ({
   onToggleExpand,
@@ -649,7 +672,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     question: string;
     clarification: VisualizationRetrievalClarification;
   } | null>(null);
-  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, Record<string, string>>>({});
+  interface ClarificationState {
+    fieldValues: Record<string, string>;
+    selectedOptions: string[];
+    otherText: string;
+  }
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, ClarificationState>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -851,18 +879,51 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     }, {});
     setClarificationAnswers((current) => ({
       ...current,
-      [messageId]: values,
+      [messageId]: {
+        fieldValues: values,
+        selectedOptions: [],
+        otherText: '',
+      },
     }));
   };
 
   const updateClarificationAnswer = (messageId: string, field: string, value: string) => {
-    setClarificationAnswers((current) => ({
-      ...current,
-      [messageId]: {
-        ...(current[messageId] || {}),
-        [field]: value,
-      },
-    }));
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      return {
+        ...current,
+        [messageId]: {
+          ...state,
+          fieldValues: {
+            ...state.fieldValues,
+            [field]: value,
+          },
+        },
+      };
+    });
+  };
+
+  const toggleClarificationOption = (messageId: string, optionId: string) => {
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      const selected = state.selectedOptions.includes(optionId)
+        ? state.selectedOptions.filter((id) => id !== optionId)
+        : [...state.selectedOptions, optionId];
+      return {
+        ...current,
+        [messageId]: { ...state, selectedOptions: selected },
+      };
+    });
+  };
+
+  const updateClarificationOtherText = (messageId: string, text: string) => {
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      return {
+        ...current,
+        [messageId]: { ...state, otherText: text },
+      };
+    });
   };
 
   const runDataVisFallback = async (
@@ -1669,89 +1730,21 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                           )}
 
                           {m.retrieval?.status === 'needs_clarification' && (
-                            <div className="w-full max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900 shadow-sm">
-                              <div className="flex items-start gap-2">
-                                <span className="text-base font-black leading-none text-red-500">?</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-extrabold uppercase tracking-widest text-[10px] text-amber-700">
-                                    {m.retrieval.clarification?.stopped_at_stage?.replace(/_/g, ' ') || 'Data Retrieval V2'} Clarification
-                                  </p>
-                                  <p className="mt-1 font-semibold leading-5">
-                                    {m.retrieval.clarification?.clarification_question ||
-                                      m.retrieval.clarification?.message ||
-                                      'Please clarify the requested values.'}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {m.retrieval.clarification?.next_action ? (
-                                <p className="mt-2 text-[11px] font-medium leading-4 text-amber-800">
-                                  {m.retrieval.clarification.next_action}
-                                </p>
-                              ) : null}
-
-                              {Array.isArray(m.retrieval.clarification?.fields) && m.retrieval.clarification.fields.length > 0 ? (
-                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                  {m.retrieval.clarification.fields.map((field) => {
-                                    const label = clarificationFieldLabel(field);
-                                    const value = clarificationAnswers[m.id]?.[field.field] ?? defaultClarificationValue(field);
-                                    return (
-                                      <label key={field.field} className="block min-w-0">
-                                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
-                                          {label}
-                                        </span>
-                                        {field.help_text ? (
-                                          <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700">
-                                            {field.help_text}
-                                          </span>
-                                        ) : null}
-                                        {field.type === 'select' ? (
-                                          <select
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          >
-                                            {(field.options || []).map((option) => (
-                                              <option key={option.value} value={option.value}>
-                                                {option.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        ) : field.type === 'textarea' ? (
-                                          <textarea
-                                            rows={3}
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
-                                            className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          />
-                                        ) : (
-                                          <input
-                                            type="text"
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
-                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          />
-                                        )}
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <label className="mt-4 block">
-                                  <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
-                                    Answer
-                                  </span>
-                                  <textarea
-                                    rows={3}
-                                    value={clarificationAnswers[m.id]?.clarification_answer || ''}
-                                    onChange={(event) => updateClarificationAnswer(m.id, 'clarification_answer', event.target.value)}
-                                    placeholder="Provide the missing detail"
-                                    className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                  />
-                                </label>
-                              )}
+                            <div className="w-full max-w-xl rounded-lg border px-3 py-3 shadow-sm" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-card)' }}>
+                              <ClarificationFields
+                                clarification={{
+                                  ...m.retrieval.clarification,
+                                  clarification_type: m.retrieval.clarification?.clarification_type || 'v2_pipeline',
+                                  meta: { ...m.retrieval.clarification, clarification_type: m.retrieval.clarification?.clarification_type || 'v2_pipeline' }
+                                }}
+                                fieldValues={clarificationAnswers[m.id]?.fieldValues || {}}
+                                onFieldChange={(field: string, value: string) => updateClarificationAnswer(m.id, field, value)}
+                                selectedOptions={clarificationAnswers[m.id]?.selectedOptions || []}
+                                onToggleOption={(optionId: string) => toggleClarificationOption(m.id, optionId)}
+                                otherText={clarificationAnswers[m.id]?.otherText || ''}
+                                onOtherTextChange={(text: string) => updateClarificationOtherText(m.id, text)}
+                                interactive={true}
+                              />
 
                               {m.retrieval.error ? (
                                 <p className="mt-2 text-[11px] font-bold text-red-600">{m.retrieval.error}</p>
@@ -1761,7 +1754,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => submitRetrievalClarification(m.id, m.retrieval as VisualizationRetrievalState)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-700"
+                                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-sm transition-colors hover:opacity-90"
+                                  style={{ background: 'var(--accent)' }}
                                 >
                                   <Send className="h-3 w-3" />
                                   Submit Answer

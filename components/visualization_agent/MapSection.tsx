@@ -2736,6 +2736,7 @@ function GeneratedRuntimeThreeDPanel({
     metricUnitContext: (config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined) ?? undefined,
     metricDomainMin: runtime3D.metricMin,
     metricDomainMax: runtime3D.metricMax,
+    metricLabel: config.metricLabel,
   };
 
   return (
