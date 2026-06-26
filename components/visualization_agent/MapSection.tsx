@@ -4928,7 +4928,6 @@ function InteractiveRuntime3DMapView({
       projectMarkers: snapshotInteractiveMarkers(markers),
       amenities,
       corridors: corridorLines,
-      insightLayers: filteredInsightLayers,
       runtimeContext: {
         city: selectedCity || undefined,
         location: selectedLocation || undefined,
@@ -4941,7 +4940,6 @@ function InteractiveRuntime3DMapView({
     amenities,
     basemapMode,
     corridorLines,
-    filteredInsightLayers,
     filteredModule31Config,
     markers,
     moduleOutput,
