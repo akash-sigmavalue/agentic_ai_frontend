@@ -256,13 +256,31 @@ function humanizeFieldName(field) {
   return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-const getRowKey = (lst) => {
+const getRowKey = (lst, rowIndex = "") => {
   if (!lst) return "";
+  const explicitId = lst.id || lst.listing_id || lst.transaction_id || lst.source_id || lst.url || lst.listing_url || "";
   const project = lst.cleaned_match_project || lst.project_name || "";
   const date = lst.transaction_date || lst.posted_date_raw || "";
   const area = lst.final_super_builtup_area || lst.cleaned_area_sqft || lst.area_sqft || "";
   const price = lst.cleaned_price_value || lst.price_value || "";
-  return `${project}_${date}_${area}_${price}`;
+  return `${explicitId}_${project}_${date}_${area}_${price}_${rowIndex}`;
+};
+
+const hasPlotOverrideValue = (value) => {
+  if (value === null || value === undefined || value === "") return false;
+  if (typeof value === "object") {
+    return ["best", "low", "high"].some((key) => value[key] !== null && value[key] !== undefined && value[key] !== "");
+  }
+  return true;
+};
+
+const getPlotOverrideAvailability = (lst) => {
+  const derivedBy = (lst?.plot_derived_by || "").toLowerCase().trim();
+  const wasDerivedFromFsiCc = derivedBy === "llm" || derivedBy === "user";
+  return {
+    fsi: wasDerivedFromFsiCc || hasPlotOverrideValue(lst?.plot_fsi_range),
+    cc: wasDerivedFromFsiCc || hasPlotOverrideValue(lst?.plot_construction_cost_range),
+  };
 };
 
 const parseNumericValue = (val) => {
@@ -1640,9 +1658,10 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               </td>
             </tr>
           ) : processedListings.map((lst, idx) => {
-            const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
+            const overrideAvailability = getPlotOverrideAvailability(lst);
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
-            const rKey = getRowKey(lst);
+            const sourceIndex = displayedListings.indexOf(lst);
+            const rKey = getRowKey(lst, sourceIndex !== -1 ? sourceIndex : idx);
             // project_category is "plot" / "land" / "villa" — use it as the primary signal.
             // Fall back to plot_area_sqft presence if project_category is absent.
             const rowCategory = (lst.project_category || "").toLowerCase().trim();
@@ -1721,7 +1740,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 {showPlotControls && (
                   <>
                     <td className="px-3 py-2 text-center">
-                      {isFsiCcRequired ? (
+                      {overrideAvailability.fsi ? (
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
@@ -1743,7 +1762,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      {isFsiCcRequired ? (
+                      {overrideAvailability.cc ? (
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
@@ -1878,18 +1897,26 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             />
             <div className="h-4 w-px bg-border mx-2" />
             <button
-              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
               className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
             >
               Apply All & Recalculate
             </button>
             {Object.keys(rowOverrides).length > 0 && (
-              <button
-                onClick={() => setRowOverrides({})}
-                className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
-              >
-                Reset Edits
-              </button>
+              <>
+                <button
+                  onClick={() => onRecalculate("", "", rowOverrides, "edited")}
+                  className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                >
+                  Recalculate Edits
+                </button>
+                <button
+                  onClick={() => setRowOverrides({})}
+                  className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+                >
+                  Reset Edits
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1927,11 +1954,19 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       />
                       <div className="h-4 w-px bg-border mx-2" />
                       <button
-                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
                         className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
                       >
                         Apply All & Recalculate
                       </button>
+                      {Object.keys(rowOverrides).length > 0 && (
+                        <button
+                          onClick={() => onRecalculate("", "", rowOverrides, "edited")}
+                          className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                        >
+                          Recalculate Edits
+                        </button>
+                      )}
                     </div>
                   )}
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
@@ -4913,7 +4948,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
 
   // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
-  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
+  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}, mode = "global") => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
 
     setIsCleaningStreaming(true);
@@ -4926,22 +4961,44 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     ]);
 
     try {
+      const parsedFsiGlobal = parseFloat(fsiGlobal);
+      const parsedCcGlobal = parseFloat(ccGlobal);
+      const hasFsiGlobal = fsiGlobal !== "" && !isNaN(parsedFsiGlobal);
+      const hasCcGlobal = ccGlobal !== "" && !isNaN(parsedCcGlobal);
+      const shouldUseGlobalOverrides = mode === "global";
       const mappedOverrides = {};
       cleanedData.forEach((lst, origIdx) => {
-        const uniqueKey = getRowKey(lst);
+        const overrideAvailability = getPlotOverrideAvailability(lst);
+        if (!overrideAvailability.fsi && !overrideAvailability.cc) return;
+
+        const uniqueKey = getRowKey(lst, origIdx);
         const ov = rowOverrides[uniqueKey];
-        if (ov) {
+        const hasRowFsiOverride = overrideAvailability.fsi && ov?.fsi_best !== undefined && ov.fsi_best !== "";
+        const hasRowCcOverride = overrideAvailability.cc && ov?.const_cost_best !== undefined && ov.const_cost_best !== "";
+        const shouldApplyFsiGlobal = shouldUseGlobalOverrides && overrideAvailability.fsi && hasFsiGlobal;
+        const shouldApplyCcGlobal = shouldUseGlobalOverrides && overrideAvailability.cc && hasCcGlobal;
+
+        if (hasRowFsiOverride || hasRowCcOverride || shouldApplyFsiGlobal || shouldApplyCcGlobal) {
           mappedOverrides[origIdx] = {};
-          if (ov.fsi_best !== undefined && ov.fsi_best !== "") {
+          if (shouldApplyFsiGlobal) {
+            mappedOverrides[origIdx].fsi_low = parsedFsiGlobal;
+            mappedOverrides[origIdx].fsi_high = parsedFsiGlobal;
+          }
+          if (shouldApplyCcGlobal) {
+            mappedOverrides[origIdx].cc_low = parsedCcGlobal;
+            mappedOverrides[origIdx].cc_high = parsedCcGlobal;
+          }
+          if (hasRowFsiOverride) {
             mappedOverrides[origIdx].fsi_low = ov.fsi_best;
             mappedOverrides[origIdx].fsi_high = ov.fsi_best;
           }
-          if (ov.const_cost_best !== undefined && ov.const_cost_best !== "") {
+          if (hasRowCcOverride) {
             mappedOverrides[origIdx].cc_low = ov.const_cost_best;
             mappedOverrides[origIdx].cc_high = ov.const_cost_best;
           }
         }
       });
+      const overriddenIndices = new Set(Object.keys(mappedOverrides).map((idx) => Number(idx)));
 
       const payload = {
         cleaned_listings: cleanedData,
@@ -4949,8 +5006,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         property_type: subjectData.property_type || "plot",
         overrides: mappedOverrides,
       };
-      if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
-      if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
 
       const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
         method: "POST",
@@ -4992,7 +5047,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           setStreamingNote(summary);
 
           if (event.type === "recalculate_results" && event.content?.listings) {
-            setCleanedData(event.content.listings);
+            const updatedListings = cleanedData.map((listing, idx) =>
+              overriddenIndices.has(idx)
+                ? (event.content.listings[idx] || listing)
+                : listing
+            );
+            setCleanedData(updatedListings);
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -5002,7 +5062,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   role: "assistant",
                   content: summary,
                   meta: "cleaning results",
-                  cleaned_listings: event.content.listings,
+                  cleaned_listings: updatedListings,
                   // Backend returns the authoritative full set after segregating
                   // negative-rate listings — update both tabs in one shot.
                   dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
