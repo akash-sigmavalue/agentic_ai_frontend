@@ -5860,6 +5860,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     : {}),
                   // Preserve db_no_results flag across meta overwrites
                   db_no_results: next[lastIndex]?.db_no_results || false,
+                  web_comparable_search_done: next[lastIndex]?.web_comparable_search_done || event.type === "done",
                 };
               }
               return next;
@@ -6881,7 +6882,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   )}
                   {/* DB found nothing AND no web comparables either — interactive fallback prompt */}
-                  {message.db_no_results && !message.comparables && (
+                  {message.db_no_results && message.web_comparable_search_done && !message.comparables && (
                     <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-300">
                       {/* Warning header */}
                       <div className="flex items-start gap-3">
