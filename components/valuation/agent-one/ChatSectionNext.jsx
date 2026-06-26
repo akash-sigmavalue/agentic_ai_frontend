@@ -48,6 +48,9 @@ const PLACEHOLDER_MAP = {
   occupancy_status: "vacant / leased / self_use",
   water_availability: "good / moderate / poor",
   clear_height: "e.g. 20 ft",
+  subject_floor: "e.g. 15",
+  total_floors: "e.g. 25",
+  facing: "e.g. East, West, North-East",
 };
 
 const getCurrencySymbol = (currencyCode) => {
@@ -5471,6 +5474,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       "builtup_area_sqft",
       "plot_area_sqft",
       "age_years",
+      "subject_floor",
+      "total_floors",
+      "facing",
       "land_type",
       "frontage",
       "occupancy_status"
@@ -6447,12 +6453,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "plot") {
       detailFields = [
@@ -6470,6 +6482,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "frontage", label: "Road Frontage (ft)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "commercial_office") {
       detailFields = [
@@ -6481,11 +6495,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             { value: "self_use", label: "Self Use" }
           ]
         },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     }
 
@@ -6504,7 +6524,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         : gateStep === 3
           ? gateValues["recommended_approach"]
           : gateStep === 4
-            ? detailFields.every(f => {
+            ? detailFields.filter(f => f.required !== false).every(f => {
               const val = gateValues[f.field];
               return val !== undefined && val !== null && String(val).trim() !== "";
             })
