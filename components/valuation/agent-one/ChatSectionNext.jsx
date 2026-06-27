@@ -22,7 +22,8 @@ import {
   ArrowDown,
   Filter,
   Search,
-  X
+  X,
+  Zap
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -38,7 +39,8 @@ const PLACEHOLDER_MAP = {
   builtup_area_sqft: "e.g. 1050 sqft",
   plot_area_sqft: "e.g. 1200 sqft",
   age_years: "e.g. 5, or '0' for Under Construction",
-  location_name: "City / Locality / Area (e.g. Baner, Pune)",
+  location_name: "Locality / Micro-market (e.g. Baner, Kalyani Nagar)",
+  city_name: "Broader city (e.g. Pune, Mumbai, Dubai)",
   country: "e.g. India, USA, UK",
   coordinates: "lat, lng - e.g. 18.559, 73.789",
   land_type: "agricultural / non_agricultural / residential / commercial",
@@ -46,6 +48,9 @@ const PLACEHOLDER_MAP = {
   occupancy_status: "vacant / leased / self_use",
   water_availability: "good / moderate / poor",
   clear_height: "e.g. 20 ft",
+  subject_floor: "e.g. 15",
+  total_floors: "e.g. 25",
+  facing: "e.g. East, West, North-East",
 };
 
 const getCurrencySymbol = (currencyCode) => {
@@ -254,19 +259,71 @@ function humanizeFieldName(field) {
   return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-const getRowKey = (lst) => {
+const getRowKey = (lst, rowIndex = "") => {
   if (!lst) return "";
+  const explicitId = lst.id || lst.listing_id || lst.transaction_id || lst.source_id || lst.url || lst.listing_url || "";
   const project = lst.cleaned_match_project || lst.project_name || "";
   const date = lst.transaction_date || lst.posted_date_raw || "";
   const area = lst.final_super_builtup_area || lst.cleaned_area_sqft || lst.area_sqft || "";
   const price = lst.cleaned_price_value || lst.price_value || "";
-  return `${project}_${date}_${area}_${price}`;
+  return `${explicitId}_${project}_${date}_${area}_${price}_${rowIndex}`;
+};
+
+const hasPlotOverrideValue = (value) => {
+  if (value === null || value === undefined || value === "") return false;
+  if (typeof value === "object") {
+    return ["best", "low", "high"].some((key) => value[key] !== null && value[key] !== undefined && value[key] !== "");
+  }
+  return true;
+};
+
+const getPlotOverrideAvailability = (lst) => {
+  const derivedBy = (lst?.plot_derived_by || "").toLowerCase().trim();
+  const wasDerivedFromFsiCc = derivedBy === "llm" || derivedBy === "user";
+  return {
+    fsi: wasDerivedFromFsiCc || hasPlotOverrideValue(lst?.plot_fsi_range),
+    cc: wasDerivedFromFsiCc || hasPlotOverrideValue(lst?.plot_construction_cost_range),
+  };
+};
+
+const getListingCategory = (lst) => (lst?.project_category || lst?.property_type || "").toLowerCase().trim();
+
+const isPlotListingRow = (lst) => {
+  const category = getListingCategory(lst);
+  return ["plot", "land"].includes(category)
+    || (!category && lst?.plot_area_sqft != null && Number(lst.plot_area_sqft) > 0);
+};
+
+const isBuiltFormListingRow = (lst) => {
+  const category = getListingCategory(lst);
+  return ["villa", "building_land", "house", "bungalow"].includes(category);
+};
+
+const needsPlotConversionInputs = (lst, subjectPropertyType, valuationApproach) => {
+  const subjectType = (subjectPropertyType || "").toLowerCase().trim();
+  const approach = (valuationApproach || "").toLowerCase().trim();
+  const category = getListingCategory(lst);
+  const isRowPlot = isPlotListingRow(lst);
+  const isRowBuiltForm = isBuiltFormListingRow(lst);
+
+  if (subjectType === "plot") {
+    return isRowBuiltForm || (!category && !isRowPlot && (getPlotOverrideAvailability(lst).fsi || getPlotOverrideAvailability(lst).cc));
+  }
+
+  if (["villa", "building_land"].includes(subjectType)) {
+    if (approach === "cost") {
+      return isRowBuiltForm || (!category && !isRowPlot && (getPlotOverrideAvailability(lst).fsi || getPlotOverrideAvailability(lst).cc));
+    }
+    return isRowPlot;
+  }
+
+  return false;
 };
 
 const parseNumericValue = (val) => {
   if (val === null || val === undefined || val === "") return -Infinity;
   if (typeof val === "number") return val;
-  
+
   let str = String(val).toLowerCase().trim();
   let multiplier = 1;
   if (str.includes("cr") || str.includes("crore")) {
@@ -276,12 +333,12 @@ const parseNumericValue = (val) => {
   } else if (str.includes("k") && !str.includes("sqft") && !str.includes("km")) {
     multiplier = 1000;
   }
-  
+
   let cleanStr = str
     .replace(/[₹$€£a-z]/gi, "")
     .replace(/,/g, "")
     .trim();
-    
+
   let parsed = parseFloat(cleanStr);
   return isNaN(parsed) ? -Infinity : parsed * multiplier;
 };
@@ -394,7 +451,7 @@ const isNumericColumn = (col) => {
 const filterAndSortList = (rows, sortConfig, filterConfig) => {
   if (!rows || rows.length === 0) return [];
   let result = [...rows];
-  
+
   // 1. Filter
   if (filterConfig) {
     Object.entries(filterConfig).forEach(([col, selectedList]) => {
@@ -407,17 +464,17 @@ const filterAndSortList = (rows, sortConfig, filterConfig) => {
       });
     });
   }
-  
+
   // 2. Sort
   if (sortConfig && sortConfig.column && sortConfig.direction) {
     const col = sortConfig.column;
     const isDesc = sortConfig.direction === "desc";
     const isNumeric = isNumericColumn(col);
-    
+
     result.sort((a, b) => {
       let valA = getRowValue(a, col);
       let valB = getRowValue(b, col);
-      
+
       if (isNumeric) {
         valA = parseNumericValue(valA);
         valB = parseNumericValue(valB);
@@ -425,11 +482,11 @@ const filterAndSortList = (rows, sortConfig, filterConfig) => {
         valA = valA === null || valA === undefined ? "" : String(valA).toLowerCase();
         valB = valB === null || valB === undefined ? "" : String(valB).toLowerCase();
       }
-      
+
       if (valA === valB) return 0;
       if (valA === -Infinity || valA === "") return 1; // blanks to bottom
       if (valB === -Infinity || valB === "") return -1;
-      
+
       if (isDesc) {
         return valA < valB ? 1 : -1;
       } else {
@@ -463,7 +520,7 @@ function SpreadsheetFilterDropdown({
       const rect = triggerRef.current.getBoundingClientRect();
       const dropdownWidth = 240;
       const dropdownHeight = 320;
-      
+
       let left = rect.left + window.scrollX;
       let top = rect.bottom + window.scrollY + 4;
 
@@ -526,7 +583,7 @@ function SpreadsheetFilterDropdown({
         nextSelected = [...currentFilter, val];
       }
     }
-    
+
     if (nextSelected.length === uniqueValues.length) {
       onFilterChange(columnKey, null);
     } else {
@@ -726,7 +783,7 @@ function TableHeaderCell({
     <th className={`px-3 py-2.5 font-semibold group/header relative select-none ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${className}`}>
       <div className={`flex items-center gap-1.5 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"}`}>
         <span>{label}</span>
-        
+
         <div className="flex items-center gap-0.5">
           {isSorted && (
             sortDir === "asc" ? (
@@ -738,7 +795,7 @@ function TableHeaderCell({
           {hasActiveFilters && (
             <Filter size={10} className="text-[#fb923c] animate-fade-in" />
           )}
-          
+
           <button
             ref={triggerRef}
             onClick={toggleDropdown}
@@ -1020,7 +1077,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   </td>
                   <td className="px-3 py-2.5">
                     {comp.data_source === "Internal DB" ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
                     )}
@@ -1068,6 +1125,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                   : opt === "Web"
                     ? comparables.filter(c => (c.data_source || "Web") === "Web").length
                     : comparables.filter(c => c.data_source === "Internal DB").length;
+                const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
                 return (
                   <button
                     key={opt}
@@ -1077,7 +1135,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                       : "text-text-dim hover:text-text-primary"
                       }`}
                   >
-                    {opt === "all" ? `All (${count})` : `${opt} (${count})`}
+                    {`${label} (${count})`}
                   </button>
                 );
               })}
@@ -1115,6 +1173,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     : opt === "Web"
                       ? comparables.filter(c => (c.data_source || "Web") === "Web").length
                       : comparables.filter(c => c.data_source === "Internal DB").length;
+                  const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
                   return (
                     <button
                       key={opt}
@@ -1124,7 +1183,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                         : "text-text-dim hover:text-text-primary"
                         }`}
                     >
-                      {opt === "all" ? `All (${count})` : `${opt} (${count})`}
+                      {`${label} (${count})`}
                     </button>
                   );
                 })}
@@ -1250,13 +1309,12 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
             {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
-              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                lst.website_authenticity_score >= 90
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${lst.website_authenticity_score >= 90
                   ? "bg-success/20 text-success border border-success/30"
                   : lst.website_authenticity_score >= 70
-                  ? "bg-accent/20 text-accent border border-accent/30"
-                  : "bg-danger/20 text-danger border border-danger/30"
-              }`}>
+                    ? "bg-accent/20 text-accent border border-accent/30"
+                    : "bg-danger/20 text-danger border border-danger/30"
+                }`}>
                 {lst.website_authenticity_score}
               </span>
             ) : "—"}
@@ -1266,7 +1324,7 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Internal DB</span>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
             ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
@@ -1318,7 +1376,7 @@ function ListingTable({ listings, dbTransactions }) {
         <div className="border-b border-border bg-[rgba(34,211,238,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm">📊</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Listing Data Fetched</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400">Market Signal</span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{(listings || []).length} web + {dbRows.length} db records</span>
               <button
@@ -1341,7 +1399,7 @@ function ListingTable({ listings, dbTransactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Listing Data Detail</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Market Signal</h3>
                   <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
@@ -1416,7 +1474,7 @@ function TransactionTable({ transactions }) {
               <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                  Internal DB
+                  Transaction
                 </span>
               </td>
               <td className="px-3 py-2 text-right font-mono text-text-dim">{t.net_carpet_area_sq_m ?? "—"}</td>
@@ -1434,7 +1492,7 @@ function TransactionTable({ transactions }) {
         <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Internal DB Transactions</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Transactions</span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
               <button
@@ -1455,7 +1513,7 @@ function TransactionTable({ transactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Internal DB Transactions</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Transactions</h3>
                   <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
                 </div>
               </div>
@@ -1583,6 +1641,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         <thead className="sticky top-0 z-[11] bg-bg-input shadow-sm">
           <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
             <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_config" label="Config" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="raw_price" label="Raw Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -1590,6 +1649,9 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <TableHeaderCell columnKey="exchange_rate_remark" label="Exchange Rate" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_area_sqft" label="Raw Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="final_super_builtup_area" label="Normalized Area (SBUA)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            {isPlotSubject && (
+              <TableHeaderCell columnKey="plot_area_sqft" label="Plot Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            )}
             <TableHeaderCell columnKey="rate_per_sqft" label="Rate / Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
 
             {showPlotControls && (
@@ -1607,13 +1669,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </th>
                 <th className="px-3 py-2.5 font-semibold text-center whitespace-nowrap">
                   <div className="flex items-center justify-center gap-1">
-                    CC (₹/sqft)
-                    <div className="group relative inline-flex items-center cursor-pointer text-text-dim hover:text-accent-light">
-                      <Info size={11} className="inline-block" />
-                      <span className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-32 -translate-x-1/2 rounded bg-bg-deep border border-border px-2.5 py-1 text-[10px] normal-case tracking-normal text-text-secondary opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 whitespace-normal text-center leading-normal">
-                        Construction Cost
-                      </span>
-                    </div>
+                    Construction Cost (₹/sqft)
                   </div>
                 </th>
                 <TableHeaderCell columnKey="plot_derived_rate_per_sqft" label={`${derivedRateLabel} Derived Rate / Sqft`} align="right" className="text-accent-light font-bold" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -1639,52 +1695,91 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               </td>
             </tr>
           ) : processedListings.map((lst, idx) => {
-            const isFsiCcRequired = lst.plot_derived_by === 'llm' || lst.plot_derived_by === 'user';
+            const rowNeedsPlotConversion = needsPlotConversionInputs(lst, subjectPropertyType, valuationApproach);
+            const overrideAvailability = {
+              fsi: rowNeedsPlotConversion,
+              cc: rowNeedsPlotConversion,
+            };
             const rowCurrency = lst.cleaned_currency || lst.currency || "₹";
-            const rKey = getRowKey(lst);
+            const sourceIndex = displayedListings.indexOf(lst);
+            const rKey = getRowKey(lst, sourceIndex !== -1 ? sourceIndex : idx);
+            // project_category is "plot" / "land" / "villa" — use it as the primary signal.
+            // Fall back to plot_area_sqft presence if project_category is absent.
+            const isRowPlot = isPlotListingRow(lst);
+            // For plot rows: use plot_area_sqft first, then cleaned_area_sqft as fallback
+            const plotAreaValue = lst.plot_area_sqft || (isRowPlot ? lst.cleaned_area_sqft : null);
+            // Rate/sqft divisor: plot rows use plotAreaValue, others use final_super_builtup_area
+            const rowAreaForRate = isRowPlot
+              ? plotAreaValue
+              : (lst.final_super_builtup_area || lst.cleaned_area_sqft);
             return (
               <tr key={`${activeTab}_${idx}_${rKey}`} className={`border-b border-border/50 transition hover:bg-[rgba(251,146,60,0.04)] ${activeTab === 'dropped' ? 'opacity-60' : activeTab === 'outliers' ? 'bg-[rgba(239,68,68,0.03)]' : ''}`}>
                 <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                   {lst.cleaned_match_project || lst.project_name || "—"}
                 </td>
+                {/* Property Category badge */}
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {lst.project_category ? (
+                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${["plot", "land"].includes((lst.project_category || "").toLowerCase())
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
+                          ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                          : "bg-text-dim/10 text-text-dim border-border/40"
+                      }`}>
+                      {lst.project_category}
+                    </span>
+                  ) : "—"}
+                </td>
                 <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.cleaned_currency || lst.currency || "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{lst.cleaned_config || lst.bhk || "—"}</td>
-              
-              {/* Raw Price Column */}
+
+                {/* Raw Price Column */}
                 <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">
-                {lst.original_price_value !== undefined && lst.original_price_value !== null
-                  ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
-                  : formatPrice(lst.price_value, lst.currency)}
-              </td>
-              
-              {/* Standardized Price Column */}
-              <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
+                  {lst.original_price_value !== undefined && lst.original_price_value !== null
+                    ? formatPrice(lst.original_price_value, lst.original_currency || lst.currency)
+                    : formatPrice(lst.price_value, lst.currency)}
+                </td>
+
+                {/* Standardized Price Column */}
+                <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap font-semibold">
                   {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
                 </td>
-              
-              {/* Exchange Rate Column */}
-              <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
-                {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
-                  ? lst.exchange_rate_remark
-                  : "1.0"}
-              </td>
+
+                {/* Exchange Rate Column */}
+                <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                  {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
+                    ? lst.exchange_rate_remark
+                    : "1.0"}
+                </td>
 
                 <td className="px-3 py-2 text-right font-mono text-text-secondary">
                   {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
                 </td>
+                {/* Normalized Area (SBUA) — only filled for villa / non-plot rows */}
                 <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                  {lst.final_super_builtup_area ? `${Math.round(lst.final_super_builtup_area)} sqft` : "—"}
+                  {!isRowPlot && lst.final_super_builtup_area
+                    ? `${Math.round(lst.final_super_builtup_area)} sqft`
+                    : "—"}
                 </td>
+                {/* Plot Area — only filled for plot rows; falls back to cleaned_area_sqft */}
+                {isPlotSubject && (
+                  <td className="px-3 py-2 text-right font-mono text-emerald-400 font-bold whitespace-nowrap">
+                    {isRowPlot && plotAreaValue
+                      ? `${Math.round(plotAreaValue).toLocaleString()} sqft`
+                      : "—"}
+                  </td>
+                )}
+                {/* Rate / Sqft — uses the relevant area field per row type */}
                 <td className="px-3 py-2 text-right font-mono text-text-primary">
-                  {lst.cleaned_price_value && lst.final_super_builtup_area
-                    ? Math.round(lst.cleaned_price_value / lst.final_super_builtup_area).toLocaleString()
+                  {lst.cleaned_price_value && rowAreaForRate
+                    ? Math.round(lst.cleaned_price_value / rowAreaForRate).toLocaleString()
                     : "—"}
                 </td>
 
                 {showPlotControls && (
                   <>
                     <td className="px-3 py-2 text-center">
-                      {isFsiCcRequired ? (
+                      {overrideAvailability.fsi ? (
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
@@ -1706,11 +1801,11 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      {isFsiCcRequired ? (
+                      {overrideAvailability.cc ? (
                         <div className="flex items-center justify-center">
                           <input
                             type="number"
-                            placeholder="CC"
+                            placeholder="Construction Cost (₹/sqft)"
                             className="w-24 bg-bg-deep/50 border border-border/50 rounded px-1.5 py-1 text-center text-[11px] text-accent focus:border-accent outline-none font-medium transition hover:border-accent/40"
                             value={rowOverrides[rKey]?.const_cost_best ?? (lst.plot_construction_cost_range?.best || "")}
                             onChange={(e) => {
@@ -1727,48 +1822,49 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
-                    {lst.plot_derived_rate_per_sqft
-                      ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                    {lst.plot_derived_rate_range
-                      ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
-                        ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
-                        : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
-                      : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
-                      {lst.plot_derived_by || "Agent"}
-                    </span>
-                  </td>
-                </>
-              )}
+                      {lst.plot_derived_rate_per_sqft
+                        ? `${rowCurrency} ${Math.round(lst.plot_derived_rate_per_sqft).toLocaleString()}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-text-secondary">
+                      {lst.plot_derived_rate_range
+                        ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
+                          ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
+                          : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
+                        : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                        {lst.plot_derived_by || "Agent"}
+                      </span>
+                    </td>
+                  </>
+                )}
 
-              <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
-              <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
-              <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
-                {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
-              </td>
-              <td className="px-3 py-2 text-center">
-                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
-                  {lst.source || "Web"}
-                </span>
-              </td>
-              <td className="px-3 py-2">
-                <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
-                  {lst.stat_flag || "ok"}
-                </span>
-              </td>
-              {showReasonColumn && (
-                <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
-                  {getRowReason(lst)}
+                <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_floor || lst.floor || "—"}</td>
+                <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.cleaned_total_floors || lst.total_floors || "—"}</td>
+                <td className="px-3 py-2 text-text-secondary">{lst.cleaned_possession_status || "—"}</td>
+                <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
+                  {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
                 </td>
-              )}
-            </tr>
-          )})}
+                <td className="px-3 py-2 text-center">
+                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                    {lst.source === 'Internal DB' ? 'Transaction' : (lst.source || "Web")}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
+                    {lst.stat_flag || "ok"}
+                  </span>
+                </td>
+                {showReasonColumn && (
+                  <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
+                    {getRowReason(lst)}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -1833,25 +1929,33 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             />
             <input
               type="number"
-              placeholder="CC (₹/sqft)"
+              placeholder="Construction Cost (₹/sqft)"
               value={ccGlobal}
               onChange={e => setCcGlobal(e.target.value)}
               className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
             />
             <div className="h-4 w-px bg-border mx-2" />
             <button
-              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
               className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
             >
               Apply All & Recalculate
             </button>
             {Object.keys(rowOverrides).length > 0 && (
-              <button
-                onClick={() => setRowOverrides({})}
-                className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
-              >
-                Reset Edits
-              </button>
+              <>
+                <button
+                  onClick={() => onRecalculate("", "", rowOverrides, "edited")}
+                  className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                >
+                  Recalculate Edits
+                </button>
+                <button
+                  onClick={() => setRowOverrides({})}
+                  className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+                >
+                  Reset Edits
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1882,18 +1986,26 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                       />
                       <input
                         type="number"
-                        placeholder="CC (₹/sqft)"
+                        placeholder="Construction Cost (₹/sqft)"
                         value={ccGlobal}
                         onChange={e => setCcGlobal(e.target.value)}
                         className="w-32 rounded-lg border border-border bg-bg-input px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
                       />
                       <div className="h-4 w-px bg-border mx-2" />
                       <button
-                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides)}
+                        onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
                         className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
                       >
                         Apply All & Recalculate
                       </button>
+                      {Object.keys(rowOverrides).length > 0 && (
+                        <button
+                          onClick={() => onRecalculate("", "", rowOverrides, "edited")}
+                          className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                        >
+                          Recalculate Edits
+                        </button>
+                      )}
                     </div>
                   )}
                   <p className="text-[10px] text-text-dim">{listings.length} cleaned records</p>
@@ -2197,7 +2309,9 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
                   <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
                   <td className="px-4 py-3 text-center">
-                    {row.rate_derived_from === "micromarket" ? (
+                    {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
+                      <span className="text-text-dim text-[9px]">—</span>
+                    ) : row.rate_derived_from === "micromarket" ? (
                       <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
                         Micromarket
                       </span>
@@ -2207,7 +2321,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       </span>
                     ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
                       <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
-                        Internal DB
+                        Transaction
                       </span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
@@ -2243,7 +2357,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       <td className="px-4 py-2 text-center">
                         {isSubDb ? (
                           <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
-                            Internal DB
+                            Transaction
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
@@ -2461,9 +2575,41 @@ function CbdCell({ km, name, isSubject }) {
   );
 }
 
-function FactoringResultCard({ data, area_unit, subjectData }) {
+const CONFIDENCE_RANGE_PCT = {
+  high: 0.03,
+  medium: 0.06,
+  low: 0.10,
+};
+
+const getConfidenceRangePct = (confidence) => {
+  const key = String(confidence || "Medium").trim().toLowerCase();
+  return CONFIDENCE_RANGE_PCT[key] || CONFIDENCE_RANGE_PCT.medium;
+};
+
+const buildNumberRange = (exactValue, confidence) => {
+  const value = Number(exactValue || 0);
+  if (!value) return null;
+  const pct = getConfidenceRangePct(confidence);
+  return {
+    low: Math.round(value * (1 - pct)),
+    high: Math.round(value * (1 + pct)),
+  };
+};
+
+const coerceRange = (range, exactValue, confidence) => {
+  const low = Number(range?.low || 0);
+  const high = Number(range?.high || 0);
+  if (low > 0 && high > 0) return { low, high };
+  return buildNumberRange(exactValue, confidence);
+};
+
+function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const [showReport, setShowReport] = useState(false);
   const [isSectionMaximized, setIsSectionMaximized] = useState(false);
+
+  // Cache original data for Reset functionality when the card is first mounted
+  const [originalData] = useState(() => JSON.parse(JSON.stringify(data)));
+
   if (!data) return null;
 
   const {
@@ -2474,6 +2620,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
     confidence,
     raw_markdown_report,
     reconciliation_note,
+    limited_evidence_note,
+    subject_only_mode,
   } = data;
 
   const currencyCode = subjectData?.currency || "INR";
@@ -2497,6 +2645,153 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
   const compRows = comparable_factoring_table.filter(r => r.role !== "SUBJECT");
   const finalRate = Number(subject_final_rate || 0);
   const area = Number(subjectData?.salable_area_sqft || subjectData?.carpet_area_sqft || subjectData?.builtup_area_sqft || 0);
+
+  const subjectListings = Number(subjectData?.listing_count || blending.subject_listing_count || 0);
+  const capLimit = subjectListings >= 10 ? 0.10 : 0.20;
+
+  // Custom helper function to check if a project has custom factor overrides
+  const isProjectModified = (projectName) => {
+    const origRow = originalData.comparable_factoring_table?.find(r => r.project_name === projectName);
+    const currRow = comparable_factoring_table.find(r => r.project_name === projectName);
+    if (!origRow || !currRow) return false;
+    return (
+      origRow.factor_road !== currRow.factor_road ||
+      origRow.factor_amenity !== currRow.factor_amenity ||
+      origRow.factor_density !== currRow.factor_density ||
+      origRow.factor_cbd !== currRow.factor_cbd
+    );
+  };
+
+  // Custom helper to check if weights have been modified from original
+  const isWeightsModified = () => {
+    return (
+      originalData.blending?.w1 !== blending.w1 ||
+      originalData.blending?.w2 !== blending.w2
+    );
+  };
+
+  // Helper to check if a comparable hit the cap
+  const isCapped = (projectName) => {
+    const currRow = comparable_factoring_table.find(r => r.project_name === projectName);
+    if (!currRow) return false;
+    const sum = (currRow.factor_road ?? 0) + (currRow.factor_amenity ?? 0) + (currRow.factor_density ?? 0) + (currRow.factor_cbd ?? 0);
+    return Math.abs(sum) > capLimit;
+  };
+
+  // Recalculates other dependent fields and triggers parent update handler
+  const recalculateAndTrigger = (newTable, w1, w2) => {
+    const compRowsOnly = newTable.filter((r) => r.role !== "SUBJECT");
+    const compCount = compRowsOnly.length;
+    const factoredCompAvg = compCount > 0
+      ? Math.round(compRowsOnly.reduce((sum, r) => sum + (r.factored_rate ?? 0), 0) / compCount)
+      : 0;
+
+    const sRate = subjectRow ? Number(subjectRow.avg_rate ?? 0) : 0;
+
+    let finalRate = 0;
+    if (subjectListings > 0 && sRate > 0) {
+      finalRate = Math.round(w1 * sRate + w2 * factoredCompAvg);
+    } else {
+      finalRate = Math.round(factoredCompAvg);
+    }
+
+    // Dynamic reconciliation note updates if edits are capped
+    let note = reconciliation_note || "";
+    note = note.replace(/\[Client-Side Adjustment Capped\].*?\./g, "").trim();
+    const cappedProjects = newTable
+      .filter(r => r.role !== "SUBJECT")
+      .filter(r => {
+        const sum = (r.factor_road ?? 0) + (r.factor_amenity ?? 0) + (r.factor_density ?? 0) + (r.factor_cbd ?? 0);
+        return Math.abs(sum) > capLimit;
+      })
+      .map(r => r.project_name);
+
+    if (cappedProjects.length > 0) {
+      note = `[Client-Side Adjustment Capped] Total adjustments capped at ${(capLimit * 100).toFixed(0)}% for projects: ${cappedProjects.join(", ")}. ${note}`;
+    }
+
+    const isWeightsMod = (w1 !== originalData.blending?.w1 || w2 !== originalData.blending?.w2);
+    const updatedRateRange = buildNumberRange(finalRate, confidence);
+    const valuationArea = Number(
+      subjectData?.salable_area_sqft ||
+      subjectData?.builtup_area_sqft ||
+      subjectData?.carpet_area_sqft ||
+      subjectData?.plot_area_sqft ||
+      0
+    );
+    const updatedMarketValue = valuationArea > 0 ? Math.round(finalRate * valuationArea) : null;
+    const updatedValueRange = updatedMarketValue ? buildNumberRange(updatedMarketValue, confidence) : null;
+
+    const updatedData = {
+      ...data,
+      comparable_factoring_table: newTable,
+      blending: {
+        ...blending,
+        factored_comp_avg: factoredCompAvg,
+        w1,
+        w2,
+        final_rate: finalRate,
+        weight_reasoning: isWeightsMod ? null : (originalData.blending?.weight_reasoning || blending.weight_reasoning),
+      },
+      subject_final_rate: finalRate,
+      confidence_range_pct: getConfidenceRangePct(confidence) * 100,
+      subject_rate_range: updatedRateRange,
+      subject_market_value: updatedMarketValue,
+      subject_value_range: updatedValueRange,
+      reconciliation_note: note,
+    };
+
+    onUpdateData?.(updatedData);
+  };
+
+  const handleFactorChange = (projectName, factorKey, valPct) => {
+    const decimalVal = Number((valPct / 100).toFixed(4));
+    const updatedTable = comparable_factoring_table.map((row) => {
+      if (row.project_name !== projectName) return row;
+
+      const updatedRow = { ...row, [factorKey]: decimalVal };
+      const road = updatedRow.factor_road ?? 0;
+      const amenity = updatedRow.factor_amenity ?? 0;
+      const density = updatedRow.factor_density ?? 0;
+      const cbd = updatedRow.factor_cbd ?? 0;
+
+      const rawSum = road + amenity + density + cbd;
+      const totalFactor = Math.max(-capLimit, Math.min(capLimit, rawSum));
+      const factoredRate = Math.round((updatedRow.avg_rate ?? 0) * (1 + totalFactor));
+
+      return {
+        ...updatedRow,
+        total_factor: totalFactor,
+        factored_rate: factoredRate,
+      };
+    });
+
+    recalculateAndTrigger(updatedTable, blending.w1, blending.w2);
+  };
+
+  const handleResetProject = (projectName) => {
+    const origRow = originalData.comparable_factoring_table?.find(r => r.project_name === projectName);
+    if (!origRow) return;
+
+    const updatedTable = comparable_factoring_table.map((row) => {
+      if (row.project_name !== projectName) return row;
+      return JSON.parse(JSON.stringify(origRow));
+    });
+
+    recalculateAndTrigger(updatedTable, blending.w1, blending.w2);
+  };
+
+  const handleWeightChange = (newW1) => {
+    const roundedW1 = Math.round(newW1 * 100) / 100;
+    const roundedW2 = Math.round((1.0 - roundedW1) * 100) / 100;
+    recalculateAndTrigger(comparable_factoring_table, roundedW1, roundedW2);
+  };
+
+  const handleResetWeights = () => {
+    const origW1 = originalData.blending?.w1 ?? 0.5;
+    const origW2 = originalData.blending?.w2 ?? 0.5;
+    recalculateAndTrigger(comparable_factoring_table, origW1, origW2);
+  };
 
   const MainContent = (
     <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
@@ -2523,13 +2818,34 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
       <div className="p-8 space-y-10">
 
+        {/* ── Subject-Only Evidence Warning ─────────────────────────── */}
+        {subject_only_mode && (
+          <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-bg-card to-amber-600/5 p-5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.12),transparent_60%)]" />
+            <div className="relative z-10 flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[18px] font-black">
+                ⚠
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-amber-400 mb-1.5">
+                  Limited Comparable Market Evidence — Subject-Only Valuation
+                </p>
+                <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                  {limited_evidence_note ||
+                    "Due to limited comparable market evidence, the valuation has been derived using the best available data for the subject property. For a detailed expert review and enhanced valuation assessment, please contact our team."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── COMPARABLE FACTORING TABLE ─────────────────────────────── */}
         <section>
           <div className="flex items-center gap-3 mb-4">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
             <div>
               <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">Per-Comparable Factor Adjustment Table</h3>
-              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
+              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±{(capLimit * 100).toFixed(0)}% per comparable (subject listings: {subjectListings})</p>
             </div>
           </div>
 
@@ -2575,10 +2891,16 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
                 {compRows.map((row, i) => {
                   const totalF = row.total_factor != null ? Number(row.total_factor) : null;
                   const factoredRate = row.factored_rate;
+                  const isModified = isProjectModified(row.project_name);
                   return (
                     <tr key={i} className="border-b border-border-dim hover:bg-bg-input/50 transition-colors">
                       <td className="px-5 py-4">
-                        <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-text-secondary text-[10px]">{row.project_name}</span>
+                          {isModified && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-warning" title="Modified by appraiser"></span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-center font-mono text-text-dim">{row.road_type || "—"}</td>
                       <td className="px-4 py-4 text-center">
@@ -2602,36 +2924,285 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
             </table>
           </div>
 
-          {/* Factor breakdown legend */}
+          {/* Factor breakdown and adjustment sliders */}
           {compRows.some(r => r.factor_reasoning) && (
-            <div className="mt-4 space-y-2">
-              {compRows.filter(r => r.factor_reasoning).map((row, i) => (
-                <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-4 py-3">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-text-dim mb-2">{row.project_name} — Factor Reasoning</p>
+            <div className="mt-6 space-y-4">
+              <h4 className="text-[9px] font-black uppercase tracking-[0.25em] text-text-primary">Factor Adjustment Controls</h4>
+              <div className="grid gap-4 md:grid-cols-2">
+                {compRows.map((row, i) => {
+                  const isModified = isProjectModified(row.project_name);
+                  const isRowCapped = isCapped(row.project_name);
+                  const roadVal = row.factor_road ?? 0;
+                  const amenityVal = row.factor_amenity ?? 0;
+                  const densityVal = row.factor_density ?? 0;
+                  const cbdVal = row.factor_cbd ?? 0;
 
-                  {/* Attribute percentage chips */}
-                  <div className="flex flex-wrap items-center gap-2 mb-2 border-b border-white/5 pb-2">
-                    <span className="text-[8px] font-bold text-text-dim uppercase tracking-wider">Factors:</span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_road > 0 ? "text-green-400" : row.factor_road < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Road: {row.factor_road != null ? (row.factor_road >= 0 ? "+" : "") + (row.factor_road * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_amenity > 0 ? "text-green-400" : row.factor_amenity < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Amenity: {row.factor_amenity != null ? (row.factor_amenity >= 0 ? "+" : "") + (row.factor_amenity * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_density > 0 ? "text-green-400" : row.factor_density < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Density: {row.factor_density != null ? (row.factor_density >= 0 ? "+" : "") + (row.factor_density * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-white/5 border border-border-soft font-mono text-[9px] ${row.factor_cbd > 0 ? "text-green-400" : row.factor_cbd < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      CBD: {row.factor_cbd != null ? (row.factor_cbd >= 0 ? "+" : "") + (row.factor_cbd * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-lg bg-accent/15 border border-accent/25 font-mono text-[9px] font-black ${row.total_factor > 0 ? "text-green-400" : row.total_factor < 0 ? "text-red-400" : "text-text-dim"}`}>
-                      Total: {row.total_factor != null ? (row.total_factor >= 0 ? "+" : "") + (row.total_factor * 100).toFixed(2) + "%" : "0.00%"}
-                    </span>
-                  </div>
+                  return (
+                    <div key={i} className="rounded-2xl border border-border-soft bg-bg-input/25 p-5 space-y-4 flex flex-col justify-between hover:border-border transition-all">
+                      <div>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-text-secondary text-[11px]">{row.project_name}</span>
+                            {isModified && (
+                              <span className="px-2 py-0.5 rounded bg-warning/20 border border-warning/30 text-[8px] text-warning font-black uppercase tracking-wider">Edited</span>
+                            )}
+                          </div>
+                          {isModified && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetProject(row.project_name)}
+                              className="text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
 
-                  <p className="text-[10px] text-text-secondary leading-relaxed">{row.factor_reasoning}</p>
+                        {/* Interactive Sliders for 4 Geospatial factors */}
+                        <div className="space-y-3.5">
+                          {/* Road Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Road Type Adjustment</span>
+                              <span className={`font-mono ${adjColor(roadVal)}`}>{fmtPct(roadVal)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_road", Math.max(-50, Math.round(roadVal * 1000) - 1) / 10)}
+                                disabled={Math.round(roadVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(roadVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_road", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_road", Math.min(50, Math.round(roadVal * 1000) + 1) / 10)}
+                                disabled={Math.round(roadVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
+                          </div>
+
+                          {/* Amenity Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Amenity Adjustment</span>
+                              <span className={`font-mono ${adjColor(amenityVal)}`}>{fmtPct(amenityVal)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_amenity", Math.max(-50, Math.round(amenityVal * 1000) - 1) / 10)}
+                                disabled={Math.round(amenityVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(amenityVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_amenity", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_amenity", Math.min(50, Math.round(amenityVal * 1000) + 1) / 10)}
+                                disabled={Math.round(amenityVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
+                          </div>
+
+                          {/* Density Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>Density Score Adjustment</span>
+                              <span className={`font-mono ${adjColor(densityVal)}`}>{fmtPct(densityVal)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_density", Math.max(-50, Math.round(densityVal * 1000) - 1) / 10)}
+                                disabled={Math.round(densityVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(densityVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_density", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_density", Math.min(50, Math.round(densityVal * 1000) + 1) / 10)}
+                                disabled={Math.round(densityVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
+                          </div>
+
+                          {/* CBD Slider */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
+                              <span>CBD Distance Adjustment</span>
+                              <span className={`font-mono ${adjColor(cbdVal)}`}>{fmtPct(cbdVal)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_cbd", Math.max(-50, Math.round(cbdVal * 1000) - 1) / 10)}
+                                disabled={Math.round(cbdVal * 1000) <= -50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >−</button>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={Math.round(cbdVal * 1000)}
+                                onChange={(e) => handleFactorChange(row.project_name, "factor_cbd", Number(e.target.value) / 10)}
+                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleFactorChange(row.project_name, "factor_cbd", Math.min(50, Math.round(cbdVal * 1000) + 1) / 10)}
+                                disabled={Math.round(cbdVal * 1000) >= 50}
+                                className="w-6 h-6 rounded-full border border-border bg-bg-input flex items-center justify-center text-[11px] font-bold text-text-dim hover:border-accent hover:text-accent transition select-none disabled:opacity-40 disabled:cursor-not-allowed"
+                              >+</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Net Adjustments capped info */}
+                        <div className="mt-4 flex items-center justify-between text-[10px] bg-black/30 px-3.5 py-2.5 rounded-xl border border-white/5 font-mono">
+                          <span className="text-text-dim uppercase tracking-wider text-[8px] font-bold">Net Correction:</span>
+                          <div className="flex items-center gap-2">
+                            {isRowCapped && (
+                              <span className="text-[8px] bg-warning/20 border border-warning/30 text-warning px-1.5 py-0.5 rounded font-black uppercase tracking-widest animate-pulse">Capped at ±{(capLimit * 100).toFixed(0)}%</span>
+                            )}
+                            <span className={`font-black ${adjColor(row.total_factor)}`}>{fmtPct(row.total_factor)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3.5 mt-2">
+                        <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
+                        <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── VALUATION BLENDING & WEIGHTS CONFIGURATION ─────────────────── */}
+        <section className="rounded-[2rem] border border-border-soft bg-bg-card/75 p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-purple/20 border border-accent-purple/30 text-sm">🧪</span>
+              <div>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-text-primary">Appraisal Blending & Weights</h3>
+                <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Adjust confidence weight balance for final valuation</p>
+              </div>
+            </div>
+            {isWeightsModified() && (
+              <button
+                type="button"
+                onClick={handleResetWeights}
+                className="text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer"
+              >
+                Reset Weights
+              </button>
+            )}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Blending stats */}
+            <div className="space-y-4">
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-4 space-y-2">
+                <p className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Formula:</p>
+                <p className="font-mono text-[10px] text-white/90 font-bold leading-relaxed font-semibold">
+                  Blended Rate = (w₁ × Subject Rate) + (w₂ × Comparables Avg)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-[10px] font-mono">
+                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
+                  <span className="text-text-dim block mb-1">Subject Rate:</span>
+                  <span className="font-bold text-green-400">{fmtRate(blending.subject_own_rate)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">({blending.subject_listing_count || 0} listings)</span>
                 </div>
-              ))}
+                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
+                  <span className="text-text-dim block mb-1">Comparables Avg:</span>
+                  <span className="font-bold text-blue-400">{fmtRate(blending.factored_comp_avg)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">(from {compRows.length} comparables)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Weight Sliders */}
+            <div className="space-y-4 flex flex-col justify-center">
+              {subjectListings > 0 ? (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
+                      <span>Subject Weight (w₁)</span>
+                      <span className="text-accent font-mono font-bold">{((blending.w1 ?? 0.5) * 100).toFixed(0)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round((blending.w1 ?? 0.5) * 100)}
+                      onChange={(e) => handleWeightChange(Number(e.target.value) / 100)}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
+                      <span>Comparable Weight (w₂)</span>
+                      <span className="text-accent-purple font-mono font-bold">{((blending.w2 ?? 0.5) * 100).toFixed(0)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={Math.round((blending.w2 ?? 0.5) * 100)}
+                      onChange={(e) => handleWeightChange(1 - Number(e.target.value) / 100)}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-purple"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                  <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">Weights Locked</p>
+                  <p className="text-[10px] text-text-dim leading-relaxed font-semibold">
+                    Subject property has 0 listings. Valuation is weighted 100% (w₂ = 1.0) on the average of the selected market comparables.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {blending.weight_reasoning && (
+            <div className="text-[9px] text-text-dim italic leading-relaxed border-t border-white/5 pt-3 font-semibold font-semibold">
+              Note: {blending.weight_reasoning}
             </div>
           )}
         </section>
@@ -2660,24 +3231,43 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
             else if (subjectData?.carpet_area_sqft) areaLabel = "Carpet Area";
           }
 
+          const rangePct = Number(data.confidence_range_pct || (getConfidenceRangePct(confidence) * 100));
+          const exactValue = selectedArea > 0
+            ? Number(data.subject_market_value || Math.round(finalRate * selectedArea))
+            : null;
+          const rateRange = coerceRange(subject_rate_range, finalRate, confidence);
+          const valueRange = exactValue
+            ? coerceRange(data.subject_value_range, exactValue, confidence)
+            : null;
+          const rangeLabel = `±${rangePct.toFixed(rangePct % 1 === 0 ? 0 : 1)}% ${confidence || "Medium"} confidence band`;
+
           return (
             <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
 
               <div className="flex-1 space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80">Derived Rate</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80 font-black">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)]">
                     {fmtRate(finalRate)}
                   </h2>
-                  <span className="text-xs text-text-dim font-bold">/ {area_unit || "sqft"}</span>
+                  <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
                 </div>
+                {rateRange && (
+                  <div className="inline-flex flex-col rounded-2xl border border-green-500/20 bg-green-500/[0.06] px-4 py-2">
+                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/80">Indicative Rate Range</span>
+                    <span className="font-mono text-sm font-black text-green-300">
+                      {fmtRate(rateRange.low)} - {fmtRate(rateRange.high)}/{area_unit || "sqft"}
+                    </span>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                  </div>
+                )}
                 {selectedArea > 0 ? (
-                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider">
+                  <p className="text-[10px] text-text-dim font-semibold uppercase tracking-wider font-semibold">
                     Calculated on <span className="text-accent-light">{selectedArea.toLocaleString()} {area_unit || "sqft"}</span> of {areaLabel}
                   </p>
                 ) : (
-                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse">
+                  <p className="text-[9px] text-warning/80 font-bold uppercase tracking-wider animate-pulse font-semibold">
                     Please enter the {areaLabel} in subject details to view final valuation
                   </p>
                 )}
@@ -2685,11 +3275,20 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
               {selectedArea > 0 && (
                 <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80">Valuation Value</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
-                    {formatter.format(finalRate * selectedArea)}
+                    {formatter.format(exactValue)}
                   </h2>
-                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest">
+                  {valueRange && (
+                    <div className="ml-auto inline-flex flex-col rounded-2xl border border-accent/20 bg-accent/[0.06] px-4 py-2 text-left md:text-right">
+                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/80">Indicative Value Range</span>
+                      <span className="font-mono text-sm font-black text-accent-light">
+                        {formatter.format(valueRange.low)} - {formatter.format(valueRange.high)}
+                      </span>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                    </div>
+                  )}
+                  <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest font-semibold">
                     {fmtRate(finalRate)}/{area_unit || "sqft"} × {selectedArea.toLocaleString()} {area_unit || "sqft"} ({areaLabel})
                   </p>
                 </div>
@@ -2702,7 +3301,7 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
         {/* ── REASONING REPORT ──────────────────────────────────────── */}
         {raw_markdown_report && (
           <section>
-            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all">
+            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all font-semibold">
               <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
               <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
@@ -2716,8 +3315,8 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
         {reconciliation_note && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
-            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
-            <p className="text-[10px] text-text-secondary leading-relaxed">{reconciliation_note}</p>
+            <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1 font-semibold">Reconciliation Note</p>
+            <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{reconciliation_note}</p>
           </div>
         )}
 
@@ -2733,13 +3332,13 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
           <div className="flex items-center gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</p>
-              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary font-black">Comparable Factoring Analysis</p>
+              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50 font-semibold">Per-comparable adjustment → Confidence-weighted blend</p>
             </div>
           </div>
           <button
             onClick={() => setIsSectionMaximized(false)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim font-semibold"
           >
             ✕ Collapse
           </button>
@@ -2759,7 +3358,61 @@ function FactoringResultCard({ data, area_unit, subjectData }) {
 
 
 // ── Cost Approach Inputs Form ────────────────────────────────────
-function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData }) {
+const REQUIRED_COST_INPUTS = [
+  {
+    field: "construction_rate_per_sqft",
+    label: "Construction Rate per sqft",
+    type: "number",
+    placeholder: "2500",
+  },
+  {
+    field: "total_life_of_building",
+    label: "Economic Life",
+    type: "number",
+    default: 60,
+    placeholder: "60",
+  },
+];
+
+function normalizeCostInputSchema(schema) {
+  const inputs = Array.isArray(schema?.inputs)
+    ? schema.inputs
+    : (Array.isArray(schema?.user_inputs_required) ? schema.user_inputs_required : []);
+  const seen = new Set(inputs.map((inp) => inp.field));
+  const requiredInputs = REQUIRED_COST_INPUTS.filter((inp) => !seen.has(inp.field));
+  return {
+    ...(schema || {}),
+    inputs: [...inputs, ...requiredInputs],
+  };
+}
+
+function buildCostInputDefaults(schema, subjectData, currentValues = {}) {
+  const defaults = {};
+  schema.inputs?.forEach((inp) => {
+    let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
+    if (inp.field === "total_life_of_building") {
+      val = 60;
+    }
+
+    if (subjectData) {
+      if (inp.field === "age_of_property") {
+        const extractedAge = subjectData.age_of_property ?? subjectData.age_years ?? subjectData.age ?? subjectData.age_of_building;
+        if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
+      } else if (inp.field === "construction_rate_per_sqft") {
+        const extractedRate = subjectData.construction_rate_per_sqft ?? subjectData.construction_rate ?? subjectData.build_rate;
+        if (extractedRate != null && extractedRate !== "") val = Number(extractedRate);
+      } else if (inp.field === "total_life_of_building") {
+        const extractedLife = subjectData.total_life_of_building ?? subjectData.economic_life ?? subjectData.building_life;
+        if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
+      }
+    }
+
+    defaults[inp.field] = currentValues[inp.field] !== undefined ? currentValues[inp.field] : val;
+  });
+  return defaults;
+}
+
+function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, subjectData, submitLabel }) {
   if (!schema) return null;
 
   return (
@@ -2823,7 +3476,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
         disabled={isCalculating}
         className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
       >
-        {isCalculating ? "Calculating Cost Valuation..." : "Execute Cost Approach Calculation"}
+        {isCalculating ? "Calculating Cost Valuation..." : (submitLabel || "Execute Cost Approach Calculation")}
       </button>
     </div>
   );
@@ -3016,9 +3669,21 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult }) {
+export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [revertNotice, setRevertNotice] = useState("");
+  const [backupValuationState, setBackupValuationState] = useState(null);
+
+  // Clear revert notice after 3 seconds
+  useEffect(() => {
+    if (revertNotice) {
+      const timer = setTimeout(() => {
+        setRevertNotice("");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [revertNotice]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
   const [tokenStats, setTokenStats] = useState({
@@ -3099,14 +3764,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const [isFactorialStreaming, setIsFactorialStreaming] = useState(false);
   const [factorialAnalysisData, setFactorialAnalysisData] = useState(null);
   const [isFactorialAnalysisStreaming, setIsFactorialAnalysisStreaming] = useState(false);
+  const [needsFactorialRegeneration, setNeedsFactorialRegeneration] = useState(false);
   const [pipelineDone, setPipelineDone] = useState(false);
   const [currentStage, setCurrentStage] = useState("Stage 0: Initialization");
+  const [originalQuestion, setOriginalQuestion] = useState("");
 
   // Cost Approach States
   const [costInputsSchema, setCostInputsSchema] = useState(null);
   const [costInputsValues, setCostInputsValues] = useState({});
   const [costCalculationData, setCostCalculationData] = useState(null);
   const [isCostCalculating, setIsCostCalculating] = useState(false);
+  // Tracks which comparable IDs have already been fetched (for incremental addition)
+  const [fetchedCompIds, setFetchedCompIds] = useState(new Set());
 
   // Special Factorial Analysis State
   const [showSpecialForm, setShowSpecialForm] = useState(false);
@@ -3134,6 +3803,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const handleCostCalculate = async () => {
     if (isCostCalculating || !subjectData || !factorialAnalysisData) return;
 
+    const isRecalculation = Boolean(costCalculationData);
     setIsCostCalculating(true);
     setStreamingNote("Sending inputs to Traditional Cost Approach Engine...");
 
@@ -3152,7 +3822,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       age_of_property: Number(ageYears),
     };
 
-    setMessages((prev) => [
+    if (!isRecalculation) {
+      setMessages((prev) => [
       ...prev,
       {
         role: "user",
@@ -3160,7 +3831,22 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         meta: "Now"
       },
       { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
-    ]);
+      ]);
+    } else {
+      setMessages((prev) => {
+        const costResultIndex = prev.findIndex((msg) => msg.cost_calculation_data);
+        if (costResultIndex === -1) return prev;
+        return prev.map((msg, idx) =>
+          idx === costResultIndex
+            ? {
+              ...msg,
+              content: "Recalculating Cost Approach with updated parameters...",
+              meta: "Live",
+            }
+            : msg
+        );
+      });
+    }
 
     try {
       const response = await fetch(apiUrl("/cost_calculation_stream"), {
@@ -3210,6 +3896,23 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               timestamp: new Date().toISOString(),
             });
             setMessages((prev) => {
+              if (isRecalculation) {
+                const costResultIndex = prev.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live");
+                if (costResultIndex !== -1) {
+                  return prev.map((msg, idx) =>
+                    idx === costResultIndex
+                      ? {
+                        ...msg,
+                        role: "assistant",
+                        content: summary,
+                        meta: "cost calculation results",
+                        cost_calculation_data: event.content,
+                      }
+                      : msg
+                  );
+                }
+              }
+
               const next = [...prev];
               const lastIndex = next.length - 1;
               if (lastIndex >= 0) {
@@ -3228,10 +3931,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "cost_calculation_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = isRecalculation
+                ? next.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live")
+                : next.length - 1;
+              if (targetIndex >= 0 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "cost calculation done",
@@ -3245,9 +3950,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = isRecalculation
+          ? next.findIndex((msg) => msg.cost_calculation_data || msg.meta === "Live")
+          : next.length - 1;
+        if (targetIndex >= 0) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `Cost calculation error: ${error.message}`,
             meta: "Error",
@@ -3314,6 +4022,90 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     setCtaFactorialCollapsed(false);
     markersRef.current = [];
     onMarkersUpdate?.([]);
+    setBackupValuationState(null);
+    setFetchedCompIds(new Set());
+  };
+
+  // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
+  const submitSubjectOnlyListingFetch = async () => {
+    if (!subjectData || isListingStreaming) return;
+
+    setIsListingStreaming(true);
+    setStreamingNote("🔍 Searching for listings for the subject property (no comparables)...");
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: "Continue valuation using subject-only data (no comparables).", meta: "Now" },
+      { role: "assistant", content: "Searching for listings for the subject project only...", meta: "Live" },
+    ]);
+
+    try {
+      const response = await fetch(apiUrl("/listing_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: subjectData,
+          selected_comparables: [],          // no comparables — subject only
+          property_type: subjectData.property_type || "apartment",
+          listing_type: "sale",
+        }),
+      });
+
+      if (!response.ok || !response.body)
+        throw new Error(`Listing request failed: ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          if (event.type === "listing_progress") {
+            setStreamingNote(
+              `🔍 ${event.content?.project || "Subject"}: ${event.content?.detail || event.content?.status || ""}`
+            );
+          }
+
+          if (event.type === "listing_results") {
+            const allListings = event.content?.listings || [];
+            setListingData(allListings);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIdx = next.length - 1;
+              if (lastIdx >= 0) {
+                next[lastIdx] = {
+                  ...next[lastIdx],
+                  role: "assistant",
+                  content: `✅ Found ${allListings.length} listing(s) for the subject property.`,
+                  meta: "listing results",
+                  listings: allListings,
+                  db_transactions: [],
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "error") {
+            setStreamingNote(`Error: ${event.content}`);
+          }
+        }
+      }
+    } catch (error) {
+      setStreamingNote(`Subject-only listing search failed: ${error.message}`);
+    } finally {
+      setIsListingStreaming(false);
+      setStreamingNote("");
+    }
   };
 
   // ── Toggle comparable selection ────────────────────────────────
@@ -3379,28 +4171,466 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     onMarkersUpdate?.(allMarkers);
   }, [subjectData, comparableData, selectedComps, factorialData]);
 
+  // ── Go Back to Comparable Selection (Step 2) ──────────────────
+  const handleBackToComparables = () => {
+    // Save current state as backup so user can revert/cancel this action
+    setBackupValuationState({
+      messages: [...messages],
+      listingData,
+      dbTransactions,
+      cleanedData,
+      factorialData,
+      factorialAnalysisData,
+      costCalculationData,
+      selectedComps: new Set(selectedComps),
+      events: events ? [...events] : [],
+    });
+
+    setListingData(null);
+    setDbTransactions([]);
+    setCleanedData(null);
+    setFactorialData(null);
+    setFactorialAnalysisData(null);
+    setCostCalculationData(null);
+    // Keep selected comps so they remain selected by default in the selection table/map
+
+    // Truncate chat messages after the comparable results message
+    setMessages((prev) => {
+      const compResultsIdx = prev.findIndex((m) => m.meta === "comparable results" || m.comparables);
+      if (compResultsIdx !== -1) {
+        return prev.slice(0, compResultsIdx + 1);
+      }
+      return prev;
+    });
+
+    // Pipeline sync and visual feedback
+    onEventsReset?.("comparable_results");
+    onValuationResult?.(null);
+    setRevertNotice("⏪ Pipeline rewound to comparable selection");
+  };
+
+  const handleCancelModification = () => {
+    if (!backupValuationState) return;
+
+    const {
+      messages: backupMessages,
+      listingData: backupListingData,
+      dbTransactions: backupDbTransactions,
+      cleanedData: backupCleanedData,
+      factorialData: backupFactorialData,
+      factorialAnalysisData: backupFactorialAnalysisData,
+      costCalculationData: backupCostCalculationData,
+      selectedComps: backupSelectedComps,
+      events: backupEvents,
+    } = backupValuationState;
+
+    setMessages(backupMessages);
+    setListingData(backupListingData);
+    setDbTransactions(backupDbTransactions);
+    setCleanedData(backupCleanedData);
+    setFactorialData(backupFactorialData);
+    setFactorialAnalysisData(backupFactorialAnalysisData);
+    setCostCalculationData(backupCostCalculationData);
+    setSelectedComps(backupSelectedComps);
+
+    if (setEvents && backupEvents) {
+      setEvents(backupEvents);
+    }
+
+    // Reconstruct and restore valuationResult
+    if (backupFactorialAnalysisData) {
+      onValuationResult?.({
+        type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
+        factorialAnalysis: backupFactorialAnalysisData,
+        subjectData: subjectDataRef.current || subjectData,
+        factorialData: backupFactorialData,
+        costCalculation: backupCostCalculationData,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    setBackupValuationState(null);
+    setRevertNotice("🔄 Modification cancelled, previous valuation restored");
+  };
+
+  // ── Edit Past Profiling Inputs (Stage 1 / 2) ───────────────────
+  const handleEditPropertyDetails = () => {
+    const activeType = (subjectData?.property_type || "").toLowerCase().trim();
+
+    // Construct identity, type, approach, and detail fields matching current property type
+    const identityFields = [
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "city_name", label: "City Name", type: "text" },
+      { field: "country", label: "Country", type: "text" },
+    ];
+    const typeFields = [
+      {
+        field: "property_type", label: "Property Type", type: "select", options: [
+          { value: "apartment", label: "Apartment / Flat" },
+          { value: "villa", label: "Villa" },
+          { value: "plot", label: "Plot / Land" },
+          { value: "retail", label: "Retail / Shop" },
+          { value: "commercial_office", label: "Commercial Office" },
+          { value: "building_land", label: "Building + Land" },
+        ]
+      },
+      ...(activeType === "building_land" ? [
+        {
+          field: "building_type", label: "Building Type", type: "select", options: [
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" },
+            { value: "industrial", label: "Industrial" }
+          ]
+        }
+      ] : [])
+    ];
+    const approachFields = activeType === "villa" ? [
+      {
+        field: "recommended_approach", label: "Valuation Approach", type: "select", options: [
+          { value: "market", label: "Market Approach" },
+          { value: "cost", label: "Cost Approach" },
+        ]
+      }
+    ] : [];
+
+    let detailFields = [];
+    if (activeType === "apartment") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "villa" || activeType === "building_land") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    } else if (activeType === "plot") {
+      detailFields = [
+        { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        {
+          field: "land_type", label: "Land Type", type: "select", options: [
+            { value: "agricultural", label: "Agricultural" },
+            { value: "non_agricultural", label: "Non Agricultural" },
+            { value: "residential", label: "Residential" },
+            { value: "commercial", label: "Commercial" }
+          ]
+        },
+      ];
+    } else if (activeType === "retail") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "frontage", label: "Road Frontage (ft)", type: "number" },
+      ];
+    } else if (activeType === "commercial_office") {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        {
+          field: "occupancy_status", label: "Occupancy Status", type: "select", options: [
+            { value: "vacant", label: "Vacant" },
+            { value: "leased", label: "Leased" },
+            { value: "self_use", label: "Self Use" }
+          ]
+        },
+      ];
+    } else {
+      detailFields = [
+        { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
+        { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+      ];
+    }
+
+    const allFields = [...identityFields, ...typeFields, ...approachFields, ...detailFields];
+    const initialVals = buildGateInitialValues(allFields, subjectData, mapConfirmation);
+
+    setGateAllFields(allFields);
+    setGateValues(initialVals);
+    setGateMode('verification'); // lets user edit and verify
+    setGateStep(5); // start directly at Gate 5 Review step for convenience
+    setGateActive(true);
+  };
+
+  // ── Recalculate Cost Value (Client-side Math for Realtime Updates) ──
+  const recalculateCostValue = (derivedRate, subject, costInputs) => {
+    const plotArea = Number(subject?.plot_area_sqft || 0);
+    const builtupArea = Number(subject?.builtup_area_sqft || 0);
+    const age = Number(subject?.age_years || 0);
+    const constRate = Number(costInputs.construction_rate_per_sqft || 0);
+    const totalLife = Number(costInputs.total_life_of_building || 60);
+    const sym = getCurrencySymbol(subject?.currency);
+
+    const landValue = derivedRate * plotArea;
+    const constructionCost = constRate * builtupArea;
+    const depreciationRate = Math.min(age / totalLife, 1.0);
+    const depreciatedBuilding = constructionCost * (1.0 - depreciationRate);
+    const costValue = landValue + depreciatedBuilding;
+
+    return {
+      success: true,
+      property_type: subject?.property_type || "villa",
+      inputs: {
+        derived_plot_rate_per_sqft: derivedRate,
+        plot_area_sqft: plotArea,
+        builtup_area_sqft: builtupArea,
+        construction_rate_per_sqft: constRate,
+        age_of_property: age,
+        total_life_of_building: totalLife,
+      },
+      calculations: {
+        land_value: landValue,
+        construction_cost: constructionCost,
+        depreciation_rate_pct: depreciationRate * 100,
+        depreciated_building_value: depreciatedBuilding,
+      },
+      result: {
+        cost_value: costValue,
+      },
+      formula_audit: {
+        step_1: `Land Value = ${derivedRate} ${sym}/sqft × ${plotArea} sqft (Plot Area) = ${sym}${Math.round(landValue).toLocaleString()}`,
+        step_2: `Replacement Construction Cost = ${constRate} ${sym}/sqft × ${builtupArea} sqft (Built-up Area) = ${sym}${Math.round(constructionCost).toLocaleString()}`,
+        step_3: `Depreciation = ${age} yrs / ${totalLife} yrs = ${(depreciationRate * 100).toFixed(2)}%`,
+        step_4: `Depreciated Building Value = ${sym}${Math.round(constructionCost).toLocaleString()} × (100% − ${(depreciationRate * 100).toFixed(2)}%) = ${sym}${Math.round(depreciatedBuilding).toLocaleString()}`,
+        step_5: `Cost Value = ${sym}${Math.round(landValue).toLocaleString()} (Land) + ${sym}${Math.round(depreciatedBuilding).toLocaleString()} (Building) = ${sym}${Math.round(costValue).toLocaleString()}`,
+      }
+    };
+  };
+
+  // ── Area/Age-Only Fast Recalculation (skip full pipeline re-run) ──────────
+  // Called from gateSubmitFinal when user edited Stage 1 but only changed area or age.
+  // Performs a client-side value update without any API calls.
+  const AREA_AGE_FIELDS = new Set([
+    "salable_area_sqft", "carpet_area_sqft", "builtup_area_sqft",
+    "plot_area_sqft", "age_years",
+  ]);
+
+  const applyAreaAgeRecalculation = (updatedSubjectData, changedFields) => {
+    // Persist updated subject data
+    setSubjectData(updatedSubjectData);
+    subjectDataRef.current = updatedSubjectData;
+
+    const approach = updatedSubjectData.recommended_approach || "market";
+    const sym = getCurrencySymbol(updatedSubjectData.currency);
+
+    let newFactorialAnalysis = factorialAnalysisData ? { ...factorialAnalysisData } : null;
+    let newCostCalc = costCalculationData;
+
+    if (approach === "cost" && factorialAnalysisData && costInputsValues) {
+      // Recalculate cost approach: land value + depreciated building
+      const derivedRate = factorialAnalysisData.subject_final_rate || 0;
+      newCostCalc = recalculateCostValue(derivedRate, updatedSubjectData, costInputsValues);
+      setCostCalculationData(newCostCalc);
+
+      // Stamp updated cost result into the relevant chat message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.cost_calculation_data ? { ...msg, cost_calculation_data: newCostCalc } : msg
+        )
+      );
+    } else if (approach !== "cost" && factorialAnalysisData) {
+      // Market approach: new market value = final_rate × new_area
+      const finalRate = Number(factorialAnalysisData.subject_final_rate || 0);
+      const newArea = Number(
+        updatedSubjectData.salable_area_sqft ||
+        updatedSubjectData.carpet_area_sqft ||
+        updatedSubjectData.builtup_area_sqft ||
+        0
+      );
+      const newMarketValue = Math.round(finalRate * newArea);
+      newFactorialAnalysis = {
+        ...factorialAnalysisData,
+        market_value: newMarketValue,
+        market_value_computed: true,
+        subject_area_used: newArea,
+      };
+      setFactorialAnalysisData(newFactorialAnalysis);
+
+      // Stamp updated analysis into the relevant chat message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.factorial_analysis_data
+            ? { ...msg, factorial_analysis_data: newFactorialAnalysis }
+            : msg
+        )
+      );
+    }
+
+    // Build a readable change summary
+    const changeLabels = changedFields.map((f) => {
+      const val = updatedSubjectData[f];
+      if (f === "age_years") return `Age: ${val} yrs`;
+      if (f.includes("area")) return `${f.replace(/_/g, " ").replace(/sqft/, "sqft")}: ${val}`;
+      return `${f}: ${val}`;
+    });
+
+    const summaryMsg = `⚡ Quick update applied — ${changeLabels.join(", ")}. Valuation recalculated instantly without re-running the pipeline.`;
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: `Updated: ${changeLabels.join(", ")}`, meta: "Now" },
+      { role: "assistant", content: summaryMsg, meta: "Instant Update" },
+    ]);
+
+    // Emit a synthetic event to the workflow/execution panel
+    onEvent?.({
+      type: "area_age_recalc",
+      content: {
+        changed_fields: changedFields,
+        updated_subject: updatedSubjectData,
+        approach,
+        new_market_value: approach !== "cost" ? newFactorialAnalysis?.market_value : null,
+        new_cost_value: approach === "cost" ? newCostCalc?.result?.cost_value : null,
+      },
+    });
+
+    // Notify parent with updated valuation result
+    onValuationResult?.({
+      type: approach === "cost" ? "cost" : "market",
+      factorialAnalysis: newFactorialAnalysis,
+      subjectData: updatedSubjectData,
+      factorialData: factorialData,
+      costCalculation: newCostCalc,
+      timestamp: new Date().toISOString(),
+    });
+
+    setRevertNotice(`⚡ Instant recalc — ${changeLabels.join(", ")} updated`);
+  };
+
+  // ── Handle Custom Override Factoring Updates ─────────────────
+  const handleUpdateFactoringData = (updatedData) => {
+    setFactorialAnalysisData(updatedData);
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.factorial_analysis_data) {
+          return { ...msg, factorial_analysis_data: updatedData };
+        }
+        return msg;
+      })
+    );
+
+    // If Cost Approach has already been executed, also recalculate cost approach details locally
+    let updatedCost = costCalculationData;
+    if (costCalculationData && subjectData?.recommended_approach === "cost") {
+      updatedCost = recalculateCostValue(
+        updatedData.subject_final_rate,
+        subjectData,
+        costInputsValues
+      );
+      setCostCalculationData(updatedCost);
+    }
+
+    onValuationResult?.({
+      type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
+      factorialAnalysis: updatedData,
+      subjectData: subjectDataRef.current || subjectData,
+      factorialData: factorialData,
+      costCalculation: updatedCost,
+      timestamp: new Date().toISOString(),
+    });
+  };
+
   // ── Proceed to Listing Fetch (Step 2) ──────────────────────────
   const submitListingFetch = async () => {
     if (!comparableData || selectedComps.size === 0 || !subjectData || isListingStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
-    // Split by source
-    const dbComps = selected.filter(c => (c.data_source || "Web") === "Internal DB");
-    const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
+    // ── Incremental Fetch: skip comps already fetched ──────────────────────────
+    // Build a stable ID for each comparable (project_id > id > project_name)
+    const getCompId = (c) => String(c.project_id || c.id || c.project_name || "").trim();
 
-    // If subject project exists in internal DB, also fetch its transactions
+    const newComps = selected.filter(c => !fetchedCompIds.has(getCompId(c)));
+    const skipComps = selected.filter(c => fetchedCompIds.has(getCompId(c)));
+
+    const isIncremental = skipComps.length > 0;
+
+    console.log("submitListingFetch starts:", {
+      selected: selected.map(c => ({ name: c.project_name, source: c.data_source, id: getCompId(c) })),
+      fetchedCompIds: Array.from(fetchedCompIds),
+      newComps: newComps.map(c => c.project_name),
+      skipComps: skipComps.map(c => c.project_name),
+      isIncremental,
+    });
+
+    // Build stable sets for filtering previously fetched data to carry over
+    const selectedProjectNames = new Set(
+      selected.map(c => String(c.project_name || "").trim().toLowerCase())
+    );
+    const selectedProjectIds = new Set(
+      selected.map(c => String(c.project_id || c.id || "").trim().toLowerCase()).filter(Boolean)
+    );
+    const subjectProjectName = String(subjectData?.project_name || "").trim().toLowerCase();
+
+    // Split new comps by source
+    const dbComps = newComps.filter(c => (c.data_source || "Web") === "Internal DB");
+    const webComps = newComps.filter(c => (c.data_source || "Web") !== "Internal DB");
+
+    // If subject project exists in internal DB, also fetch its transactions (first time only)
     const subjectDbProject = subjectData?.subject_db_project || null;
+    const shouldFetchSubjectTx = subjectDbProject && !fetchedCompIds.has("__subject__");
+    const shouldFetchWebListings = webComps.length > 0 || !fetchedCompIds.has("__subject_web__");
+
+    // Filter previous records from backup state
+    const isPrevListingToKeep = (lst) => {
+      if (!lst) return false;
+      const lstProj = String(lst.project_name || lst.cleaned_match_project || "").trim().toLowerCase();
+      const lstProjId = String(lst.project_id || lst.cleaned_match_id || "").trim().toLowerCase();
+      if (lst.is_subject || lstProj === subjectProjectName) {
+        return true;
+      }
+      if (selectedProjectNames.has(lstProj)) {
+        return true;
+      }
+      if (lstProjId && selectedProjectIds.has(lstProjId)) {
+        return true;
+      }
+      return false;
+    };
+
+    const isPrevTxToKeep = (tx) => {
+      if (!tx) return false;
+      const txProj = String(tx.project_name || tx.cleaned_match_project || "").trim().toLowerCase();
+      const txProjId = String(tx.project_id || tx.cleaned_match_id || "").trim().toLowerCase();
+      if (tx.is_subject || txProj === subjectProjectName) {
+        return !shouldFetchSubjectTx;
+      }
+      if (selectedProjectNames.has(txProj)) {
+        return true;
+      }
+      if (txProjId && selectedProjectIds.has(txProjId)) {
+        return true;
+      }
+      return false;
+    };
+
+    const activePreviousListings = (backupValuationState?.listingData || []).filter(isPrevListingToKeep);
+    const activePreviousDbTransactions = (backupValuationState?.dbTransactions || []).filter(isPrevTxToKeep);
+
+    setBackupValuationState(null);
+
+    // If nothing new to fetch, nothing to do
+    if (newComps.length === 0 && !shouldFetchSubjectTx && !shouldFetchWebListings) {
+      setRevertNotice("⏩ All selected comparables already fetched — nothing new to process");
+      return;
+    }
 
     setIsListingStreaming(true);
-    setStreamingNote("Starting listing fetch pipeline...");
+    setStreamingNote(isIncremental
+      ? `⏩ Skipping ${skipComps.length} already-fetched comparable(s). Fetching ${newComps.length} new one(s)...`
+      : "Starting listing fetch pipeline...");
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
 
-    const totalDbFetches = dbComps.length + (subjectDbProject ? 1 : 0);
+    const totalDbFetches = dbComps.length + (shouldFetchSubjectTx ? 1 : 0);
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`, meta: "Now" },
-      { role: "assistant", content: "Running listing pipeline...", meta: "Live" },
+      {
+        role: "user",
+        content: isIncremental
+          ? `Adding ${newComps.length} new comparable(s). Skipping ${skipComps.length} already fetched (${skipComps.map(c => c.project_name).join(", ")}).`
+          : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`,
+        meta: "Now",
+      },
+      { role: "assistant", content: isIncremental ? "Fetching listings for new comparables only..." : "Running listing pipeline...", meta: "Live" },
     ]);
 
     try {
@@ -3452,7 +4682,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       };
 
       const fetchWebListings = async () => {
-        const webFetchNote = webComps.length > 0 
+        const webFetchNote = webComps.length > 0
           ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
           : `🌐 Fetching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
@@ -3494,11 +4724,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 const newUsage = event.content?.token_usage || {};
                 const total = newUsage.total_tokens || 0;
                 const model = newUsage.model || "gpt-4o-mini";
-                setListingData(listings);
+                // Filter out subject listings from the fresh stream results only if they are already in the backup listings
+                const hasPreviousSubjectListing = activePreviousListings.some(l =>
+                  l && (l.is_subject || String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase() === subjectProjectName)
+                );
+                const freshListings = hasPreviousSubjectListing
+                  ? listings.filter(l => {
+                    if (!l) return false;
+                    const lProj = String(l.project_name || l.cleaned_match_project || "").trim().toLowerCase();
+                    return !(l.is_subject || lProj === subjectProjectName);
+                  })
+                  : listings;
+                // Merge with existing listingData (incremental addition)
+                const mergedListings = isIncremental
+                  ? [...activePreviousListings, ...freshListings]
+                  : listings;
+                setListingData(mergedListings);
                 setTokenStats((prev) => {
                   const nextModelBreakdown = { ...prev.model_breakdown };
                   const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                  
+
                   const promptDiff = (newUsage.prompt_tokens || 0);
                   const completionDiff = (newUsage.completion_tokens || 0);
 
@@ -3526,7 +4771,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       role: "assistant",
                       content: summary,
                       meta: "listing results",
-                      listings,
+                      listings: mergedListings,
                       // Preserve any DB transactions stamped in the same message
                       db_transactions: next[lastIndex].db_transactions || [],
                     };
@@ -3558,31 +4803,79 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       for (const comp of dbComps) {
         fetchPromises.push(fetchProjectTransactions(comp, false));
       }
-      if (subjectDbProject) {
+      if (shouldFetchSubjectTx) {
         fetchPromises.push(fetchProjectTransactions(subjectDbProject, true));
       }
 
       // Execute all DB fetches and Web listings fetch concurrently in parallel
-      const [dbResults, _] = await Promise.all([
-        Promise.all(fetchPromises),
-        fetchWebListings()
-      ]);
-
-      const allDbTransactions = dbResults.flat();
-
-      // Store DB transactions and stamp on the message
-      if (allDbTransactions.length > 0) {
-        setDbTransactions(allDbTransactions);
+      let dbResults = [];
+      if (shouldFetchWebListings) {
+        const [dbRes, _] = await Promise.all([
+          Promise.all(fetchPromises),
+          fetchWebListings()
+        ]);
+        dbResults = dbRes;
+      } else {
+        // No web listings to fetch. Use active previous listings as is, and just fetch DB transactions
+        setListingData(activePreviousListings);
         setMessages((prev) => {
           const next = [...prev];
           const lastIndex = next.length - 1;
           if (lastIndex >= 0) {
             next[lastIndex] = {
               ...next[lastIndex],
-              db_transactions: allDbTransactions,
+              role: "assistant",
+              content: "⏩ Listings carried over from previous run.",
+              meta: "listing done",
+              listings: activePreviousListings,
             };
           }
           return next;
+        });
+        dbResults = await Promise.all(fetchPromises);
+      }
+
+      const newDbTransactions = dbResults.flat();
+
+      // Merge new DB transactions with existing ones (incremental case)
+      const mergedDbTransactions = isIncremental
+        ? [...activePreviousDbTransactions, ...newDbTransactions]
+        : newDbTransactions;
+
+      // Store merged DB transactions and stamp on the message
+      if (mergedDbTransactions.length > 0) {
+        setDbTransactions(mergedDbTransactions);
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIndex = next.length - 1;
+          if (lastIndex >= 0) {
+            next[lastIndex] = {
+              ...next[lastIndex],
+              db_transactions: mergedDbTransactions,
+            };
+          }
+          return next;
+        });
+      }
+
+      // Mark newly fetched comp IDs so they won't be re-fetched next time
+      setFetchedCompIds((prev) => {
+        const next = new Set(prev);
+        newComps.forEach(c => next.add(getCompId(c)));
+        if (shouldFetchSubjectTx) next.add("__subject__");
+        if (shouldFetchWebListings) next.add("__subject_web__");
+        return next;
+      });
+
+      // Emit synthetic event to workflow panel for incremental fetch
+      if (isIncremental) {
+        onEvent?.({
+          type: "incremental_listing",
+          content: {
+            new_count: newComps.length,
+            skipped_count: skipComps.length,
+            skipped_names: skipComps.map(c => c.project_name),
+          },
         });
       }
 
@@ -3686,7 +4979,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             setTokenStats((prev) => {
               const nextModelBreakdown = { ...prev.model_breakdown };
               const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-              
+
               const promptDiff = (newUsage.prompt_tokens || 0);
               const completionDiff = (newUsage.completion_tokens || 0);
 
@@ -3762,35 +5055,66 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
 
   // ── Handle Plot Rate Recalculation (Overrides) ─────────────────
-  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}) => {
+  const handleRecalculatePlotRates = async (fsiGlobal, ccGlobal, rowOverrides = {}, mode = "global") => {
     if (!cleanedData || cleanedData.length === 0 || !subjectData || isCleaningStreaming) return;
 
     setIsCleaningStreaming(true);
     setStreamingNote("Recalculating plot rates with overrides...");
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: `Recalculate plot rates with manual adjustments.`, meta: "Now" },
-      { role: "assistant", content: "Applying user overrides and recalculating...", meta: "Live" },
-    ]);
+    const getCleanedListingsMessageIndex = (messages) => {
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i]?.cleaned_listings) return i;
+      }
+      return messages.length - 1;
+    };
 
     try {
+      const parsedFsiGlobal = parseFloat(fsiGlobal);
+      const parsedCcGlobal = parseFloat(ccGlobal);
+      const hasFsiGlobal = fsiGlobal !== "" && !isNaN(parsedFsiGlobal);
+      const hasCcGlobal = ccGlobal !== "" && !isNaN(parsedCcGlobal);
+      const shouldUseGlobalOverrides = mode === "global";
       const mappedOverrides = {};
       cleanedData.forEach((lst, origIdx) => {
-        const uniqueKey = getRowKey(lst);
+        const rowNeedsPlotConversion = needsPlotConversionInputs(
+          lst,
+          subjectData.property_type || "plot",
+          subjectData.recommended_approach
+        );
+        const overrideAvailability = {
+          fsi: rowNeedsPlotConversion,
+          cc: rowNeedsPlotConversion,
+        };
+        if (!overrideAvailability.fsi && !overrideAvailability.cc) return;
+
+        const uniqueKey = getRowKey(lst, origIdx);
         const ov = rowOverrides[uniqueKey];
-        if (ov) {
+        const hasRowFsiOverride = overrideAvailability.fsi && ov?.fsi_best !== undefined && ov.fsi_best !== "";
+        const hasRowCcOverride = overrideAvailability.cc && ov?.const_cost_best !== undefined && ov.const_cost_best !== "";
+        const shouldApplyFsiGlobal = shouldUseGlobalOverrides && overrideAvailability.fsi && hasFsiGlobal;
+        const shouldApplyCcGlobal = shouldUseGlobalOverrides && overrideAvailability.cc && hasCcGlobal;
+
+        if (hasRowFsiOverride || hasRowCcOverride || shouldApplyFsiGlobal || shouldApplyCcGlobal) {
           mappedOverrides[origIdx] = {};
-          if (ov.fsi_best !== undefined && ov.fsi_best !== "") {
+          if (shouldApplyFsiGlobal) {
+            mappedOverrides[origIdx].fsi_low = parsedFsiGlobal;
+            mappedOverrides[origIdx].fsi_high = parsedFsiGlobal;
+          }
+          if (shouldApplyCcGlobal) {
+            mappedOverrides[origIdx].cc_low = parsedCcGlobal;
+            mappedOverrides[origIdx].cc_high = parsedCcGlobal;
+          }
+          if (hasRowFsiOverride) {
             mappedOverrides[origIdx].fsi_low = ov.fsi_best;
             mappedOverrides[origIdx].fsi_high = ov.fsi_best;
           }
-          if (ov.const_cost_best !== undefined && ov.const_cost_best !== "") {
+          if (hasRowCcOverride) {
             mappedOverrides[origIdx].cc_low = ov.const_cost_best;
             mappedOverrides[origIdx].cc_high = ov.const_cost_best;
           }
         }
       });
+      const overriddenIndices = new Set(Object.keys(mappedOverrides).map((idx) => Number(idx)));
 
       const payload = {
         cleaned_listings: cleanedData,
@@ -3798,8 +5122,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         property_type: subjectData.property_type || "plot",
         overrides: mappedOverrides,
       };
-      if (fsiGlobal && !isNaN(parseFloat(fsiGlobal))) payload.fsi_override = parseFloat(fsiGlobal);
-      if (ccGlobal && !isNaN(parseFloat(ccGlobal))) payload.cc_override = parseFloat(ccGlobal);
 
       const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
         method: "POST",
@@ -3841,21 +5163,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           setStreamingNote(summary);
 
           if (event.type === "recalculate_results" && event.content?.listings) {
-            setCleanedData(event.content.listings);
+            const updatedListings = cleanedData.map((listing, idx) =>
+              overriddenIndices.has(idx)
+                ? (event.content.listings[idx] || listing)
+                : listing
+            );
+            setCleanedData(updatedListings);
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = getCleanedListingsMessageIndex(next);
+              if (targetIndex >= 0) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: "cleaning results",
-                  cleaned_listings: event.content.listings,
+                  cleaned_listings: updatedListings,
                   // Backend returns the authoritative full set after segregating
                   // negative-rate listings — update both tabs in one shot.
-                  dropped_listings: event.content.dropped_listings ?? next[lastIndex].dropped_listings ?? [],
-                  review_listings:  event.content.review_listings  ?? next[lastIndex].review_listings  ?? [],
+                  dropped_listings: event.content.dropped_listings ?? next[targetIndex].dropped_listings ?? [],
+                  review_listings: event.content.review_listings ?? next[targetIndex].review_listings ?? [],
                 };
               }
               return next;
@@ -3865,10 +5192,10 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           if (event.type === "recalculate_done" || event.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
+              const targetIndex = getCleanedListingsMessageIndex(next);
+              if (targetIndex >= 0 && !next[targetIndex].meta?.includes("results")) {
+                next[targetIndex] = {
+                  ...next[targetIndex],
                   role: "assistant",
                   content: summary,
                   meta: event.type === "error" ? "error" : "recalculation done",
@@ -3883,14 +5210,26 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       if (newCleanedListings) {
         setFactorialData(null);
         setFactorialAnalysisData(null);
+        setCostCalculationData(null);
+        setNeedsFactorialRegeneration(true);
+        setCtaFactorialCollapsed(false);
+        onValuationResult?.(null);
+        setMessages((prev) =>
+          prev.filter((msg) =>
+            !msg.factorial_data &&
+            !msg.factorial_analysis_data &&
+            !msg.cost_calculation_data
+          )
+        );
       }
 
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
+        const targetIndex = getCleanedListingsMessageIndex(next);
+        if (targetIndex >= 0) {
+          next[targetIndex] = {
+            ...next[targetIndex],
             role: "assistant",
             content: `Recalculate error: ${error.message}`,
             meta: "Error",
@@ -3966,6 +5305,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
+            setNeedsFactorialRegeneration(false);
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -4104,7 +5444,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               setTokenStats((prev) => {
                 const nextModelBreakdown = { ...prev.model_breakdown };
                 const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-                
+
                 const promptDiff = (usage.prompt_tokens || 0);
                 const completionDiff = (usage.completion_tokens || 0);
 
@@ -4189,6 +5529,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       ...schemas.map(s => s.field),
       "project_name",
       "location_name",
+      "city_name",
       "country",
       "city",
       "property_type",
@@ -4197,10 +5538,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       "lng",
       "coordinates",
       "salable_area_sqft",
-      "carpet_area_sqft",
       "builtup_area_sqft",
       "plot_area_sqft",
       "age_years",
+      "subject_floor",
+      "total_floors",
+      "facing",
       "land_type",
       "frontage",
       "occupancy_status"
@@ -4223,7 +5566,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     // Autofill from sData (extracted from query)
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
-        const valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        // Handle city_name: also check legacy 'city' key from backend
+        let valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
+        if (field === "city_name" && (valFromData === undefined || valFromData === null || valFromData === "")) {
+          valFromData = sData["city"] || (sData.entities ? sData.entities["city"] : undefined);
+        }
         if (valFromData !== undefined && valFromData !== null && valFromData !== "") {
           if (!(field === "project_name" && valFromData === "Subject Property")) {
             if (field === "coordinates" && typeof valFromData === 'object') {
@@ -4275,15 +5622,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
     const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
     const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
-    const extractedCarpet = sData.carpet_area_sqft || sData.entities?.carpet_area_sqft || "";
     const extractedPlot = sData.plot_area_sqft || sData.entities?.plot_area_sqft || "";
 
-    const primaryArea = extractedBuiltup || extractedSalable || extractedCarpet || extractedPlot;
+    const primaryArea = extractedBuiltup || extractedSalable || extractedPlot;
 
     if (primaryArea) {
       if (propType === "villa" || propType === "building_land") {
-        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || extractedCarpet || "";
-        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup/carpet for villa plot area
+        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || "";
+        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup for villa plot area
       } else if (propType === "plot") {
         initVals["plot_area_sqft"] = extractedPlot || primaryArea;
       } else {
@@ -4294,7 +5640,6 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       // Keep other fields filled if extracted specifically
       if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
       if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
-      if (extractedCarpet) initVals["carpet_area_sqft"] = extractedCarpet;
       if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
     }
 
@@ -4321,6 +5666,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     if (!isContinuation) {
       onClear?.();
       setMessages([]);
+      setOriginalQuestion(trimmed);
     }
 
     setMessages((prev) => [
@@ -4403,32 +5749,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           }
 
           if (event.type === "cost_inputs_required") {
-            setCostInputsSchema(event.content);
-            const defaults = {};
-            event.content.inputs?.forEach(inp => {
-              let val = inp.default !== undefined && inp.default !== null ? inp.default : "";
-              if (inp.field === "total_life_of_building") {
-                val = 60;
-              }
-              const sData = subjectDataRef.current;
-              if (sData) {
-                if (inp.field === "age_of_property") {
-                  const extractedAge = sData.age_of_property ?? sData.age_years ?? sData.age ?? sData.age_of_building;
-                  if (extractedAge != null && extractedAge !== "") val = Number(extractedAge);
-                } else if (inp.field === "construction_rate_per_sqft") {
-                  const extractedUds = sData.construction_rate_per_sqft ?? sData.construction_rate ?? sData.build_rate;
-                  if (extractedUds != null && extractedUds !== "") val = Number(extractedUds);
-                } else if (inp.field === "age_of_property") {
-                  const extractedPlot = sData.age_of_property ?? sData.age ?? sData.building_age;
-                  if (extractedPlot != null && extractedPlot !== "") val = Number(extractedPlot);
-                } else if (inp.field === "total_life_of_building") {
-                  const extractedLife = sData.total_life_of_building ?? sData.economic_life ?? sData.building_life;
-                  if (extractedLife != null && extractedLife !== "") val = Number(extractedLife);
-                }
-              }
-              defaults[inp.field] = val;
-            });
-            setCostInputsValues(defaults);
+            const normalizedSchema = normalizeCostInputSchema(event.content);
+            setCostInputsSchema(normalizedSchema);
+            setCostInputsValues((prev) =>
+              buildCostInputDefaults(normalizedSchema, subjectDataRef.current, prev)
+            );
           }
 
           if (event.type === "clarification_needed") {
@@ -4489,7 +5814,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 type: "select",
                 options: [
                   { value: "market", label: "Market Approach" },
-                  { value: "cost",   label: "Cost Approach" }
+                  { value: "cost", label: "Cost Approach" }
                 ],
                 default: event.content.recommended_approach
               }
@@ -4520,7 +5845,12 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               .filter(([k, v]) => {
                 if (ignoreKeys.includes(k) || k.startsWith("_")) return false;
                 if (v === null || v === "" || typeof v === 'object') return false;
-                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) return false;
+                if (k === "project_name" && propType && !projectNameTypes.includes(propType)) {
+                  const valStr = String(v).trim().toLowerCase();
+                  if (!valStr || ["subject property", "unknown", "unnamed_project", "unnamed project"].includes(valStr)) {
+                    return false;
+                  }
+                }
                 return true;
               })
               .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
@@ -4542,7 +5872,11 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
-            setComparableData(comps);
+            // Only set comparableData when there are actual results
+            // (empty array means no comparables found — leave it null so the fallback card fires)
+            if (comps.length > 0) {
+              setComparableData(comps);
+            }
             // Store subject's DB entry (if found) for listing fetch
             const subjectDbProject = event.content?.subject_db_project || null;
             if (subjectDbProject) {
@@ -4588,9 +5922,18 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                   role: "assistant",
                   content: summary,
                   meta: event.type.replaceAll("_", " "),
-                  ...(event.type === "comparable_results" ? { comparables: event.content?.comparables || null } : {}),
+                  ...(event.type === "comparable_results"
+                    ? {
+                        // Store null (not []) when no comparables found so the fallback card
+                        // condition `!message.comparables` remains truthy
+                        comparables: (event.content?.comparables?.length > 0)
+                          ? event.content.comparables
+                          : null,
+                      }
+                    : {}),
                   // Preserve db_no_results flag across meta overwrites
                   db_no_results: next[lastIndex]?.db_no_results || false,
+                  web_comparable_search_done: next[lastIndex]?.web_comparable_search_done || event.type === "done",
                 };
               }
               return next;
@@ -4912,7 +6255,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   };
 
   // ── Gate Wizard Helpers ───────────────────────────────────────────
-  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city", "country"];
+  const IDENTITY_FIELDS = ["project_name", "coordinates", "lat", "lng", "location_name", "city_name", "city", "country"];
   const PROP_TYPE_FIELDS = ["property_type"];
   const APPROACH_FIELDS = ["approach", "recommended_approach", "valuation_approach"];
 
@@ -4965,29 +6308,75 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     }
 
     if (gateMode === 'verification') {
-      // Compute changes vs original extraction
-      const ents = extractionVerification?.entities || {};
-      const entsCoords = ents.coordinates || {};
-      const changes = [];
+      // Compute changed fields vs original extraction
+      const ents = extractionVerification?.entities || subjectData || {};
+      const changedFieldKeys = [];
+
+      const normVal = (val) => {
+        if (val === undefined || val === null) return "";
+        return String(val).trim().toLowerCase();
+      };
+
       Object.entries(gateValues).forEach(([field, value]) => {
+        // Skip comparing coordinates directly since we verify separate lat/lng fields
+        if (field === "coordinates") return;
+
         let isChanged = false;
         if (field === "lat" || field === "lng") {
-          isChanged = String(value).trim() !== String(entsCoords[field]);
+          const originalVal = ents[field] || (
+            typeof ents.coordinates === 'object' && ents.coordinates
+              ? ents.coordinates[field]
+              : (typeof ents.coordinates === 'string'
+                ? ents.coordinates.split(',')[field === "lat" ? 0 : 1]?.trim()
+                : undefined)
+          );
+          isChanged = normVal(value) !== normVal(originalVal);
         } else {
-          isChanged = String(value).trim() !== String(ents[field]);
+          isChanged = normVal(value) !== normVal(ents[field]);
         }
-        if (isChanged) {
-          if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
-            changes.push(`Use ${value} approach`);
-          } else {
-            changes.push(`${humanizeFieldName(field)}: ${value}`);
-          }
-        }
+
+        if (isChanged) changedFieldKeys.push(field);
       });
+
+      // ── Fast path: only area / age changed ─────────────────────────────────
+      // If the valuation pipeline has already completed (factorialAnalysisData present)
+      // and the only edits are to area or age fields, skip the full pipeline re-run
+      // and recalculate the final value client-side.
+      const isAreaAgeOnly =
+        changedFieldKeys.length > 0 &&
+        changedFieldKeys.every((f) => AREA_AGE_FIELDS.has(f)) &&
+        factorialAnalysisData !== null;
+
+      if (isAreaAgeOnly) {
+        // Build an updated copy of subjectData with the new values merged in
+        const updatedSubject = { ...subjectData };
+        changedFieldKeys.forEach((f) => {
+          const rawVal = gateValues[f];
+          updatedSubject[f] = isNaN(Number(rawVal)) ? rawVal : Number(rawVal);
+        });
+        applyAreaAgeRecalculation(updatedSubject, changedFieldKeys);
+        setExtractionVerification(null);
+        setClarificationFields([]);
+        setClarificationPrompt("");
+        return; // skip full pipeline
+      }
+
+      // ── Normal path: full pipeline re-run ────────────────────────────────
+      // Clear parent state since this is a re-run of profiling wizard
+      onClear?.();
+
+      const changes = changedFieldKeys.map((field) => {
+        const value = gateValues[field];
+        if (field === "recommended_approach" || field === "valuation_approach" || field === "approach") {
+          return `Use ${value} approach`;
+        }
+        return `${humanizeFieldName(field)}: ${value}`;
+      });
+
       let response = "The extracted details are confirmed to be correct. Extraction Verified: true, Coordinates Confirmed: true";
       if (changes.length > 0) {
         response = `The extracted details are confirmed with the following corrections: ${changes.join(", ")}. Please use these values. Extraction Verified: true, Coordinates Confirmed: true`;
-        if (changes.some(c => c.startsWith("Lat") || c.startsWith("Lng"))) {
+        if (changedFieldKeys.some(f => f === "lat" || f === "lng")) {
           response += " Also update the coordinates to the new latitude and longitude.";
         }
       }
@@ -5019,7 +6408,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
     const update = (v) => {
       setGateValues(prev => {
         const next = { ...prev, [schema.field]: v };
-        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "country") {
+        if (schema.field === "project_name" || schema.field === "location_name" || schema.field === "city_name" || schema.field === "country") {
           next.lat = "";
           next.lng = "";
           next.coordinates = "";
@@ -5084,11 +6473,14 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
   const Stage1GateWizard = gateActive ? (() => {
     const currentMeta = GATE_META.find(g => g.step === gateStep) || GATE_META[0];
     const activeType = wizardPropType;
+    const currentProjName = gateValues["project_name"] || subjectData?.project_name || "";
+    const isProjectNamePresent = currentProjName && !["subject property", "unknown", "unnamed_project", "unnamed project"].includes(currentProjName.toLowerCase().trim());
 
     // Dynamically build all fields for the active property type
     const identityFields = [
-      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
+      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
       { field: "location_name", label: "Location / Locality", type: "text" },
+      { field: "city_name", label: "City Name", type: "text" },
       { field: "country", label: "Country", type: "text" },
     ];
 
@@ -5128,12 +6520,16 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "plot") {
       detailFields = [
@@ -5151,6 +6547,8 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "frontage", label: "Road Frontage (ft)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else if (activeType === "commercial_office") {
       detailFields = [
@@ -5162,11 +6560,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             { value: "self_use", label: "Self Use" }
           ]
         },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     } else {
       detailFields = [
         { field: "salable_area_sqft", label: "Salable Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
+        { field: "subject_floor", label: "Floor", type: "number", required: false },
+        { field: "total_floors", label: "Total Floors", type: "number", required: false },
+        { field: "facing", label: "Facing", type: "text", required: false },
       ];
     }
 
@@ -5185,7 +6589,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
         : gateStep === 3
           ? gateValues["recommended_approach"]
           : gateStep === 4
-            ? detailFields.every(f => {
+            ? detailFields.filter(f => f.required !== false).every(f => {
               const val = gateValues[f.field];
               return val !== undefined && val !== null && String(val).trim() !== "";
             })
@@ -5216,6 +6620,17 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 <p className="mt-0.5 text-[10px] text-text-secondary">{currentMeta.desc}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeGate();
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-warning/30 bg-warning/10 text-warning hover:bg-warning/20 transition cursor-pointer"
+              title="Close Wizard"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Step progress pills */}
@@ -5382,51 +6797,60 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
 
             {/* Sticky footer buttons */}
             <div className="border-t border-border/40 bg-bg-card/90 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
-              {gateStep === 5 ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setGateStep(4)}
-                    className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
-                  >← Back</button>
-                  <button
-                    type="button"
-                    onClick={gateSubmitFinal}
-                    className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
-                  >Confirm & Proceed →</button>
-                </>
-              ) : (
-                <>
-                  {gateStep > 1 ? (
+              <button
+                type="button"
+                onClick={closeGate}
+                className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/20"
+              >
+                Cancel
+              </button>
+              <div className="flex items-center gap-3">
+                {gateStep === 5 ? (
+                  <>
                     <button
                       type="button"
-                      onClick={() => setGateStep(prev => {
-                        let back = prev - 1;
-                        if (back === 3 && !isVilla) back = 2;
-                        return back;
-                      })}
+                      onClick={() => setGateStep(4)}
                       className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
                     >← Back</button>
-                  ) : <span />}
+                    <button
+                      type="button"
+                      onClick={gateSubmitFinal}
+                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                    >Confirm & Proceed →</button>
+                  </>
+                ) : (
+                  <>
+                    {gateStep > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setGateStep(prev => {
+                          let back = prev - 1;
+                          if (back === 3 && !isVilla) back = 2;
+                          return back;
+                        })}
+                        className="rounded-xl border border-border bg-bg-input px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-warning hover:text-warning"
+                      >← Back</button>
+                    ) : null}
 
-                  {gateStep < (isVilla ? 4 : 4) ? (
-                    <button
-                      type="button"
-                      disabled={!canAdvance}
-                      onClick={advanceGate}
-                      className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Next →</button>
-                  ) : (
-                    // Last data-entry gate → go to review (gate 5)
-                    <button
-                      type="button"
-                      disabled={!canAdvance}
-                      onClick={() => setGateStep(5)}
-                      className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Review & Confirm →</button>
-                  )}
-                </>
-              )}
+                    {gateStep < (isVilla ? 4 : 4) ? (
+                      <button
+                        type="button"
+                        disabled={!canAdvance}
+                        onClick={advanceGate}
+                        className="rounded-xl bg-warning px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >Next →</button>
+                    ) : (
+                      // Last data-entry gate → go to review (gate 5)
+                      <button
+                        type="button"
+                        disabled={!canAdvance}
+                        onClick={() => setGateStep(5)}
+                        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >Review & Confirm →</button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -5445,7 +6869,19 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
-        <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
+        <div className="flex items-center gap-2">
+          {subjectData && !anyStreaming && (
+            <button
+              type="button"
+              onClick={handleEditPropertyDetails}
+              className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+              Edit Details
+            </button>
+          )}
+          <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
@@ -5473,43 +6909,15 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
               ))}
             </div>
 
-            <div className="mt-8 border-t border-border/50 pt-6 w-full max-w-lg text-left animate-in fade-in duration-500">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-accent uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-accent animate-pulse" /> Special Factorial Analysis
-                </h4>
-                <button onClick={() => setShowSpecialForm(!showSpecialForm)} className="text-[10px] font-bold uppercase tracking-wider text-text-dim hover:text-white transition">
-                  {showSpecialForm ? "Close" : "Setup Coordinates"}
-                </button>
-              </div>
 
-              {showSpecialForm && (
-                <div className="space-y-4 rounded-2xl border border-border bg-bg-input/50 p-5 shadow-inner">
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Subject Project</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Name" value={specialSubjectName} onChange={e => setSpecialSubjectName(e.target.value)} className="flex-1 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lat" value={specialSubjectLat} onChange={e => setSpecialSubjectLat(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lng" value={specialSubjectLng} onChange={e => setSpecialSubjectLng(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Comparable Project</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Name" value={specialCompName} onChange={e => setSpecialCompName(e.target.value)} className="flex-1 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lat" value={specialCompLat} onChange={e => setSpecialCompLat(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                      <input type="text" placeholder="Lng" value={specialCompLng} onChange={e => setSpecialCompLng(e.target.value)} className="w-24 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs text-white outline-none focus:border-accent" />
-                    </div>
-                  </div>
-                  <button onClick={runSpecialAnalysis} className="w-full rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg transition hover:scale-[1.02] active:scale-[0.98]">
-                    Run Direct Factorial Analysis
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         ) : (
           <div className="space-y-4">
+            {revertNotice && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-warning/25 bg-warning/10 px-4 py-3 text-xs font-semibold text-warning shadow-md backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                <span>{revertNotice}</span>
+              </div>
+            )}
             {messages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}
@@ -5527,31 +6935,89 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 >
                   {message.content}
                   {message.comparables && (
-                    <ComparableTable
-                      comparables={message.comparables}
-                      selectedComps={selectedComps}
-                      onToggle={handleCompToggle}
-                      selectable={pipelineDone && !isListingStreaming && !listingData}
-                    />
+                    <div className="space-y-3">
+                      <ComparableTable
+                        comparables={message.comparables}
+                        selectedComps={selectedComps}
+                        onToggle={handleCompToggle}
+                        selectable={pipelineDone && !isListingStreaming && !listingData}
+                      />
+                      {listingData && (
+                        <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                          <span className="text-[10px] text-text-dim font-medium">Comparable selection is locked.</span>
+                          <button
+                            type="button"
+                            onClick={handleBackToComparables}
+                            className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+                          >
+                            Modify Selection
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  {/* DB found nothing but web results exist — amber warning */}
+                  {/* DB found nothing but web results exist - amber warning */}
                   {message.db_no_results && message.comparables && (
                     <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
                       <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Internal DB</p>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Transaction Database</p>
                         <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
                       </div>
                     </div>
                   )}
-                  {/* DB found nothing AND no web comparables either */}
-                  {message.db_no_results && !message.comparables && (
-                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
-                      <Database className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Project Found in DB</p>
-                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type.</p>
+                  {/* DB found nothing AND no web comparables either — interactive fallback prompt */}
+                  {message.db_no_results && message.web_comparable_search_done && !message.comparables && (
+                    <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-300">
+                      {/* Warning header */}
+                      <div className="flex items-start gap-3">
+                        <Database className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Comparable Projects Found</p>
+                          <p className="text-[10px] text-text-dim mt-1 leading-relaxed">
+                            No matching projects were found in the Transaction Database or via web search for this location and property type.
+                          </p>
+                        </div>
                       </div>
+
+                      {/* Offer options only while listing hasn't started */}
+                      {!listingData && !cleanedData && !isListingStreaming && (
+                        <>
+                          <p className="text-sm text-text-secondary leading-relaxed">
+                            Would you like to continue the valuation using only the{" "}
+                            <span className="font-semibold text-accent-light">subject property's own listings</span>?{" "}
+                            The system will derive a market rate from available signals for the subject alone
+                            (Subject-Only Mode).
+                          </p>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={submitSubjectOnlyListingFetch}
+                              disabled={isListingStreaming}
+                              className="rounded-xl bg-accent/10 border border-accent/30 text-accent px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-accent/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Yes, Continue Without Comparables →
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                clearInteractiveState();
+                                setMessages([]);
+                              }}
+                              className="rounded-xl border border-border bg-bg-input text-text-dim px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:text-text-primary hover:border-border/80 transition"
+                            >
+                              No, Start a New Query
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* After the user confirmed, show a soft status note */}
+                      {(listingData || cleanedData || isListingStreaming) && (
+                        <p className="text-[10px] text-text-dim italic pt-1">
+                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property's listings.
+                        </p>
+                      )}
                     </div>
                   )}
                   {(message.listings || message.db_transactions) && (
@@ -5567,36 +7033,43 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                         data={message.factorial_data}
                         onCalculateRate={() => handleCalculateRate(message.factorial_data)}
                         isCalculatingRate={isFactorialAnalysisStreaming}
-                        canCalculateRate={Boolean(subjectData && selectedComparablePayload().length > 0)}
+                        canCalculateRate={Boolean(subjectData && (selectedComparablePayload().length > 0 || (message.factorial_data?.table || []).some(r => r.is_subject && r.avg_rate > 0)))}
                       />
                     </div>
                   )}
-                  {message.factorial_analysis_data && <FactoringResultCard data={message.factorial_analysis_data} area_unit={subjectData?.area_unit || "sqft"} subjectData={subjectData} />}
+                  {message.factorial_analysis_data && (
+                    <FactoringResultCard
+                      data={message.factorial_analysis_data}
+                      area_unit={subjectData?.area_unit || "sqft"}
+                      subjectData={subjectData}
+                      onUpdateData={handleUpdateFactoringData}
+                    />
+                  )}
                   {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
 
                   {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
                     <>
-                      {costCalculationData ? (
+                      {costCalculationData && (
                         <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
                             <CheckCircle className="h-4.5 w-4.5 text-success" />
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
-                            <p className="text-[9px] text-text-dim mt-0.5">Please review the complete step-by-step appraisal report card appended below.</p>
+                            <p className="text-[9px] text-text-dim mt-0.5">Update the cost parameters below and recalculate if needed.</p>
                           </div>
                         </div>
-                      ) : (
-                        costInputsSchema && (
-                          <CostInputsForm
-                            schema={costInputsSchema}
-                            values={costInputsValues}
-                            onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
-                            onSubmit={handleCostCalculate}
-                            isCalculating={isCostCalculating}
-                            subjectData={subjectData}
-                          />
-                        )
+                      )}
+                      {costInputsSchema && (
+                        <CostInputsForm
+                          schema={costInputsSchema}
+                          values={costInputsValues}
+                          onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
+                          onSubmit={handleCostCalculate}
+                          isCalculating={isCostCalculating}
+                          subjectData={subjectData}
+                          submitLabel={costCalculationData ? "Recalculate Cost Approach" : "Execute Cost Approach Calculation"}
+                        />
                       )}
                     </>
                   )}
@@ -5635,7 +7108,16 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                       </div>
                       <p className="mt-1 text-sm text-text-secondary">
                         {selectedComps.size > 0
-                          ? `${selectedComps.size} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`
+                          ? (() => {
+                            const selected = Array.from(selectedComps).map(i => comparableData[i]);
+                            const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+                            const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
+                            const newCount = selected.length - skipCount;
+                            if (skipCount > 0) {
+                              return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
+                            }
+                            return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
+                          })()
                           : "Select at least one comparable from the table above to proceed."}
                       </p>
                     </div>
@@ -5644,16 +7126,29 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                 {!ctaListingCollapsed && (
                   <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
                     <p className="text-xs text-text-dim">
-                      The listing pipeline will search for real listings for the subject property + your selected comparables.
+                      {fetchedCompIds.size > 0
+                        ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
+                        : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
                     </p>
-                    <button
-                      type="button"
-                      onClick={submitListingFetch}
-                      disabled={selectedComps.size === 0}
-                      className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-                    >
-                      Proceed to Next Step →
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {backupValuationState && (
+                        <button
+                          type="button"
+                          onClick={handleCancelModification}
+                          className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 cursor-pointer animate-in fade-in duration-300"
+                        >
+                          Cancel Modification
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={submitListingFetch}
+                        disabled={selectedComps.size === 0}
+                        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                      >
+                        {fetchedCompIds.size > 0 ? "Fetch New Comparables →" : "Proceed to Next Step →"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5701,7 +7196,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
             )}
 
             {/* ── Proceed to Factorial Table CTA ────────────────── */}
-            {cleanedData && cleanedData.length > 0 && !factorialData && !isFactorialStreaming && (
+            {cleanedData && cleanedData.length > 0 && (!factorialData || needsFactorialRegeneration) && !isFactorialStreaming && (
               <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
                 <div
                   onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
@@ -5719,7 +7214,9 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
                         {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
                       </div>
                       <p className="mt-1 text-sm text-text-secondary">
-                        {cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.
+                        {needsFactorialRegeneration
+                          ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
+                          : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
                       </p>
                     </div>
                   </div>
@@ -5978,7 +7475,7 @@ export default function ChatSectionNext({ onEvent, onClear, onMarkersUpdate, fac
           </button>
         </div>
 
-        {messages.length === 0 && !(extractionVerification || mapConfirmation || approachChoiceNeeded || (clarificationFields.length > 0)) && (
+        {messages.length === 0 && (
           <div className="relative mt-2.5">
             <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
             <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
