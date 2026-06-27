@@ -41,9 +41,9 @@ import { apiUrl } from '@/lib/api-client';
 // ── Configuration ──────────────────────────────────────────
 const CITY_CENTERS: Record<string, [number, number]> = {
   Pune: [18.52, 73.85], Mumbai: [19.07, 72.87], Thane: [19.2, 72.97],
-  Hyderabad: [17.38, 78.48], Bengaluru: [12.97, 77.59],
+  Hyderabad: [17.38, 78.48], Bengaluru: [12.97, 77.59], Dubai: [25.20, 55.27],
 };
-const CITY_IDS: Record<string, number> = { Pune: 1, Mumbai: 2, Thane: 3, Hyderabad: 4, Bengaluru: 5 };
+const CITY_IDS: Record<string, number> = { Pune: 1, Mumbai: 2, Thane: 3, Hyderabad: 4, Bengaluru: 5, Dubai: 6 };
 
 const SECTIONS: Record<string, string[]> = {
   'Development Planning': ['Amenities Overlay', 'Metro Lines and Highway Corridors', 'Road Width Analysis'],

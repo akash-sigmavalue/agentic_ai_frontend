@@ -546,22 +546,42 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
             {/* Tab 2: Mapped Fields */}
             {activeTab === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-900">Mapped Fields</h3>
-                {output.mapped_fields ? (
-                  <div className="grid grid-cols-1 gap-2">
-                    {Object.entries(output.mapped_fields).map(([field, col]) => (
-                      <div key={field} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <span className="text-xs font-extrabold text-slate-700">{field}</span>
-                        <span className={`text-xs font-mono ${col ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
-                          {col ?? 'unmapped'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400">No mapped fields available.</p>
-                )}
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-extrabold text-slate-900">Mapped Fields</h3>
+                  {output.mapped_fields ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {Object.entries(output.mapped_fields).map(([field, col]) => (
+                        <div key={field} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <span className="text-xs font-extrabold text-slate-700">{field}</span>
+                          <span className={`text-xs font-mono ${col ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
+                            {col ?? 'unmapped'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No mapped fields available.</p>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-extrabold text-slate-900">Unit Identification</h3>
+                  {output.unit_identification ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {Object.entries(output.unit_identification).map(([key, val]) => (
+                        <div key={key} className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <span className="text-xs font-extrabold text-slate-700 capitalize shrink-0 pt-0.5">{key.replace(/_/g, ' ')}</span>
+                          <span className={`text-xs font-mono break-words sm:text-right ${val !== null && val !== undefined && val !== '' ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
+                            {typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'N/A')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No unit identification data available.</p>
+                  )}
+                </div>
               </div>
             )}
 

@@ -125,6 +125,7 @@ export interface Module2Output {
   processing_time_seconds?: number;
   input_summary?: Record<string, unknown>;
   mapped_fields?: Record<string, string | null>;
+  unit_identification?: Record<string, unknown>;
   filter_validation?: Record<string, unknown>;
   aggregation_summary?: Record<string, unknown>;
   analysis_ready_dataset?: Record<string, unknown>[];

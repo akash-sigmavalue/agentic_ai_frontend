@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
 import type { HighlightRect } from "../../types/api";
 import React from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
@@ -10,14 +8,14 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { Document, Page, pdfjs } from "react-pdf";
 interface CustomPdfViewerProps {
   pdfUrl: string;
-  pageNumbers: number[];
+  pageNumbers?: number[] | "all";
   searchText: string;
   highlightRects?: HighlightRect[];
 }
 
 export default function CustomPdfViewer({
   pdfUrl,
-  pageNumbers,
+  pageNumbers = "all",
   searchText,
   highlightRects = [],
 }: CustomPdfViewerProps) {
@@ -35,7 +33,13 @@ export default function CustomPdfViewer({
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [pdfModuleError, setPdfModuleError] = useState<string | null>(null);
 
-  const safePages = pageNumbers.map(p => Math.min(Math.max(1, p), numPages ?? p));
+  const safePages = useMemo(() => {
+    if (pageNumbers === "all") {
+      return numPages ? Array.from({ length: numPages }, (_, i) => i + 1) : [1];
+    }
+    return pageNumbers.map(p => Math.min(Math.max(1, p), numPages ?? p));
+  }, [pageNumbers, numPages]);
+
   const safePage = safePages[0] || 1;
   const renderedPageWidth = containerWidth ? Math.max(containerWidth - 32, 0) : 0;
   const firstRect = highlightRects[0];

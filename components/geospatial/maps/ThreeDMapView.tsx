@@ -81,6 +81,8 @@ interface ThreeDMapViewProps {
     layer?: { id?: string } | null;
     [key: string]: unknown;
   }) => { html?: string; text?: string } | null;
+  /** Resolved metric unit context from Module 2 unit_identification (LLM 2.5a/b) */
+  metricUnitContext?: Record<string, unknown>;
   /** Module 2 / dataset-wide metric bounds for floor-wise color normalization */
   metricDomainMin?: number;
   metricDomainMax?: number;
@@ -94,6 +96,31 @@ function rateToColor(normalizedValue: number) {
 
   const green = 255 * (1 - (normalizedValue - 0.5) * 2);
   return [255, green, 0, 220] as RGBA;
+}
+
+/** Format a metric value using the resolved unit context from Module 2 LLM 2.5a/b. */
+function formatMetricValue(value: number | null | undefined, unitCtx: Record<string, unknown> | undefined): string {
+  if (value == null) return 'N/A';
+  const currencySymbol = typeof unitCtx?.currency_symbol === 'string' ? unitCtx.currency_symbol : '';
+  const areaUnitSymbol = typeof unitCtx?.area_unit_symbol === 'string' ? unitCtx.area_unit_symbol : '';
+  const unitType = typeof unitCtx?.unit_type === 'string' ? unitCtx.unit_type : '';
+  const formatted = value.toLocaleString();
+  if (unitType === 'rate_composite' && currencySymbol && areaUnitSymbol) {
+    return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  }
+  if (unitType === 'currency' && currencySymbol) {
+    return `${currencySymbol}${formatted}`;
+  }
+  if (unitType === 'area' && areaUnitSymbol) {
+    return `${formatted} ${areaUnitSymbol}`;
+  }
+  if (unitType === 'count' || unitType === 'percentage') {
+    return formatted;
+  }
+  // Fallback: use whatever symbols we have
+  if (currencySymbol && areaUnitSymbol) return `${currencySymbol}${formatted}/${areaUnitSymbol}`;
+  if (currencySymbol) return `${currencySymbol}${formatted}`;
+  return formatted;
 }
 
 function getDefaultColor(feature: BuildingFeature) {
@@ -148,6 +175,7 @@ export default function ThreeDMapView({
   mapLabel = 'Default 3D Building Map',
   onInsightDataReady,
   overlayTooltip,
+  metricUnitContext,
   metricDomainMin,
   metricDomainMax,
 }: ThreeDMapViewProps) {
@@ -402,7 +430,7 @@ export default function ThreeDMapView({
                   name,
                   totalFloors,
                   baseZ,
-                  rateDisplay: rate == null ? 'N/A' : `Rs.${rate.toLocaleString()}/sq.m.`,
+                  rateDisplay: rate == null ? 'N/A' : formatMetricValue(rate, metricUnitContext),
                 },
               ]
             : [],
@@ -454,7 +482,7 @@ export default function ThreeDMapView({
 
     if ('kind' in object && object.kind === 'floor') {
       return {
-        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>Rate: ${object.rateDisplay}/sq.m.</div><div>Height: ${object.baseZ.toFixed(1)}m - ${(object.baseZ + FLOOR_HEIGHT).toFixed(1)}m</div>`,
+        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>Rate: ${object.rateDisplay}</div><div>Height: ${object.baseZ.toFixed(1)}m - ${(object.baseZ + FLOOR_HEIGHT).toFixed(1)}m</div>`,
       };
     }
 
@@ -465,7 +493,7 @@ export default function ThreeDMapView({
           ? match.metric_value 
           : object.properties.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
         return {
-          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : `Rs.${metric.toLocaleString()}/sq.m.`}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
         };
       }
       return {

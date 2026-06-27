@@ -102,7 +102,7 @@ const TAB_NAMES = [
   'Token Ledger',
 ];
 
-const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query'];
+const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query', 'Stage 1.5', 'Stage 2'];
 type ChatCategory = 'land-gis' | 'insight-generation' | 'workflow' | 'conversational';
 type RetrievalAgentVersion = 'v1' | 'v2';
 const CHAT_CATEGORIES: Array<{ value: ChatCategory; label: string; disabled?: boolean }> = [
@@ -2228,6 +2228,38 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   </div>
                   <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
                     {retrievalModalData.updatedQuery || 'No updated query was generated for this run.'}
+                  </pre>
+                </div>
+              )}
+
+              {activeRetrievalTab === 3 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">Stage 1.5 Output</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Intent Mapping
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.retrievalIntent?.stage_1_5 
+                      ? JSON.stringify(retrievalModalData.retrievalIntent.stage_1_5, null, 2)
+                      : 'No Stage 1.5 data available.'}
+                  </pre>
+                </div>
+              )}
+
+              {activeRetrievalTab === 4 && (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-extrabold text-slate-900">Stage 2 Output</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Algorithm & Formula
+                    </p>
+                  </div>
+                  <pre className="max-h-[58vh] overflow-auto p-5 text-xs font-mono leading-relaxed text-slate-700 whitespace-pre-wrap custom-scrollbar">
+                    {retrievalModalData.retrievalIntent?.stage_2
+                      ? JSON.stringify(retrievalModalData.retrievalIntent.stage_2, null, 2)
+                      : 'No Stage 2 data available.'}
                   </pre>
                 </div>
               )}
