@@ -23,7 +23,8 @@ import {
   Filter,
   Search,
   X,
-  Zap
+  Zap,
+  Loader2,
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -3807,6 +3808,197 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
+const QUICK_ESTIMATE_PIPELINE_STAGES = [
+  { id: "geocoding", label: "Location", desc: "Resolve coordinates for the subject property", icon: MapPin, events: ["geocoding", "geocoding_done"] },
+  { id: "comparables", label: "Comparables", desc: "Search internal database and the web", icon: Search, events: ["comparables", "comparables_web", "comparables_done"] },
+  { id: "listings", label: "Listings", desc: "Fetch live sale and rent listings", icon: FileSearch, events: ["listings"] },
+  { id: "transactions", label: "Transactions", desc: "Pull internal transaction evidence", icon: Database, events: ["transactions"] },
+  { id: "cleaning", label: "Cleaning", desc: "Normalize prices, areas, and duplicates", icon: Sparkles, events: ["cleaning"] },
+  { id: "factorial", label: "Rate Table", desc: "Build statistical rate baseline", icon: TrendingUp, events: ["factorial"] },
+  { id: "factoring", label: "Valuation", desc: "Reconcile final subject rate", icon: ShieldCheck, events: ["factoring"] },
+  { id: "cost", label: "Cost Approach", desc: "Apply depreciated replacement cost", icon: SlidersHorizontal, events: ["cost"], optional: true },
+  { id: "complete", label: "Complete", desc: "Prepare valuation report", icon: CheckCircle, events: ["complete"] },
+];
+
+const QUICK_ESTIMATE_STAGE_EVENT_MAP = QUICK_ESTIMATE_PIPELINE_STAGES.reduce((acc, stage, index) => {
+  stage.events.forEach((eventName) => {
+    acc[eventName] = index;
+  });
+  return acc;
+}, {});
+
+function getQuickEstimateStages(includeCost) {
+  return QUICK_ESTIMATE_PIPELINE_STAGES.filter((stage) => !stage.optional || includeCost);
+}
+
+function resolveQuickEstimateStageIndex(stageName, includeCost) {
+  const stages = getQuickEstimateStages(includeCost);
+  const globalIndex = QUICK_ESTIMATE_STAGE_EVENT_MAP[stageName];
+  if (globalIndex === undefined) return 0;
+  const stageId = QUICK_ESTIMATE_PIPELINE_STAGES[globalIndex]?.id;
+  const localIndex = stages.findIndex((stage) => stage.id === stageId);
+  return localIndex >= 0 ? localIndex : 0;
+}
+
+function formatElapsedTime(startedAt) {
+  if (!startedAt) return "0s";
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
+}
+
+function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, locationLabel }) {
+  const stages = getQuickEstimateStages(includeCost);
+  const activeIndex = Math.min(progress.activeIndex ?? 0, stages.length - 1);
+  const progressPct = stages.length > 1
+    ? Math.round((Math.max(0, activeIndex) / (stages.length - 1)) * 100)
+    : 0;
+  const [elapsed, setElapsed] = useState(() => formatElapsedTime(progress.startedAt));
+
+  useEffect(() => {
+    if (!progress.startedAt) return undefined;
+    setElapsed(formatElapsedTime(progress.startedAt));
+    const timer = setInterval(() => {
+      setElapsed(formatElapsedTime(progress.startedAt));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [progress.startedAt]);
+
+  const detailChips = [];
+  if (progress.detail?.lat && progress.detail?.lng) {
+    detailChips.push(`Coords ${Number(progress.detail.lat).toFixed(4)}, ${Number(progress.detail.lng).toFixed(4)}`);
+  }
+  if (progress.detail?.count) {
+    detailChips.push(`${progress.detail.count} comparables selected`);
+  }
+
+  return (
+    <div className="mr-8 overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+      <div className="border-b border-accent/15 bg-[linear-gradient(135deg,rgba(56,189,248,0.12),rgba(168,85,247,0.08))] px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10">
+              <Zap className="h-5 w-5 text-accent" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-40" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
+              </span>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+                Quick Estimate Running
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {propertyLabel} · {locationLabel}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-full border border-accent/20 bg-bg-input/80 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent">
+            {elapsed}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-text-dim">
+            <span>Pipeline progress</span>
+            <span className="text-accent">{progressPct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-border/30">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-purple))] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+              style={{ width: `${Math.max(8, progressPct)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <div className="grid gap-2">
+          {stages.map((stage, index) => {
+            const Icon = stage.icon;
+            const isComplete = index < activeIndex || (stage.id === "complete" && progress.done);
+            const isActive = index === activeIndex && !progress.done;
+
+            return (
+              <div
+                key={stage.id}
+                className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300 ${
+                  isActive
+                    ? "border-accent/35 bg-accent/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]"
+                    : isComplete
+                      ? "border-success/20 bg-success/5"
+                      : "border-border/40 bg-bg-input/40 opacity-70"
+                }`}
+              >
+                <div
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                    isActive
+                      ? "border-accent/30 bg-accent/15 text-accent"
+                      : isComplete
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-border/50 bg-bg-card text-text-dim"
+                  }`}
+                >
+                  {isComplete ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : isActive ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Icon className="h-4 w-4" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
+                      isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                    }`}>
+                      {stage.label}
+                    </p>
+                    {isActive && (
+                      <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent animate-pulse">
+                        Live
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">
+                    {isActive && progress.message ? progress.message : stage.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {(progress.message || detailChips.length > 0) && (
+          <div className="rounded-xl border border-border/50 bg-bg-input/60 px-3.5 py-3">
+            {progress.message && (
+              <p className="text-xs leading-relaxed text-text-primary">{progress.message}</p>
+            )}
+            {detailChips.length > 0 && (
+              <div className={`flex flex-wrap gap-2 ${progress.message ? "mt-2.5" : ""}`}>
+                {detailChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="text-[10px] leading-relaxed text-text-dim">
+          This usually takes 1–3 minutes depending on listing availability and comparable coverage.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
   const propertyType = values.property_type || "apartment";
   const requiredFields = QUICK_REQUIRED_FIELDS[propertyType] || QUICK_REQUIRED_FIELDS.apartment;
@@ -3955,6 +4147,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [isStreaming, setIsStreaming] = useState(false);
   const [isQuickEstimateStreaming, setIsQuickEstimateStreaming] = useState(false);
   const [quickEstimateValues, setQuickEstimateValues] = useState(QUICK_ESTIMATE_DEFAULTS);
+  const [quickEstimateProgress, setQuickEstimateProgress] = useState({
+    activeIndex: 0,
+    message: "Connecting to quick estimate stream...",
+    detail: {},
+    done: false,
+    startedAt: null,
+  });
   const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
   const [tokenStats, setTokenStats] = useState({
@@ -4344,19 +4543,44 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     abortRef.current = new AbortController();
     const payload = buildQuickEstimatePayload();
     const propertyLabel = String(payload.property_type || "property").replaceAll("_", " ");
-    const summary = `Research quick estimate for ${propertyLabel} in ${payload.location_name || "selected location"}`;
+    const locationLabel = payload.location_name || payload.city_name || "selected location";
+    const summary = `Research quick estimate for ${propertyLabel} in ${locationLabel}`;
+    const includeCost = payload.recommended_approach === "cost"
+      && ["villa", "building_land"].includes(String(payload.property_type || "").toLowerCase());
+    const startedAt = Date.now();
 
     onClear?.();
     clearInteractiveState();
     setMessages([
       { role: "user", content: summary, meta: "Now" },
-      { role: "assistant", content: "Running quick estimate...", meta: "Live" },
     ]);
     setCurrentQuestion(summary);
     setOriginalQuestion(summary);
     setCurrentStage("Quick Estimate: Starting");
-    setStreamingNote("Connecting to quick estimate stream...");
+    setStreamingNote("");
+    setQuickEstimateProgress({
+      activeIndex: 0,
+      message: "Starting quick estimate...",
+      detail: {},
+      done: false,
+      startedAt,
+    });
     setIsQuickEstimateStreaming(true);
+
+    const updateQuickEstimateProgress = (stageName, message, detail = {}) => {
+      const stages = getQuickEstimateStages(includeCost);
+      let activeIndex = resolveQuickEstimateStageIndex(stageName, includeCost);
+      if (stageName.endsWith("_done")) {
+        activeIndex = Math.min(activeIndex + 1, stages.length - 1);
+      }
+      setQuickEstimateProgress((prev) => ({
+        ...prev,
+        activeIndex,
+        message: message || prev.message,
+        detail: { ...prev.detail, ...detail },
+        done: stageName === "complete",
+      }));
+    };
 
     try {
       const response = await fetch(apiUrl("/quick_estimate_stream"), {
@@ -4390,26 +4614,39 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "quick_estimate_start") {
             setCurrentStage("Quick Estimate: Running");
-            setStreamingNote(event.content?.message || "Starting quick estimate...");
+            updateQuickEstimateProgress("geocoding", event.content?.message || "Starting quick estimate...");
           } else if (event.type === "quick_estimate_progress") {
             const stage = event.stage || "quick_estimate";
             const message = event.content?.message || "Quick estimate update received.";
+            const detail = {};
             if (event.content?.lat && event.content?.lng) {
               resolvedCoords = {
                 lat: Number(event.content.lat),
                 lng: Number(event.content.lng),
               };
+              detail.lat = event.content.lat;
+              detail.lng = event.content.lng;
             }
+            if (event.content?.count) {
+              detail.count = event.content.count;
+            }
+            if (Array.isArray(event.content?.comparables) && event.content.comparables.length > 0) {
+              detail.count = event.content.comparables.length;
+            }
+            updateQuickEstimateProgress(stage, message, detail);
             setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
-            setStreamingNote(message);
           } else if (event.type === "quick_estimate_validation_error") {
             const missing = event.content?.missing_fields?.join(", ") || "required fields";
-            setStreamingNote(`Missing required fields: ${missing}`);
-            setMessages((prev) => prev.map((msg) =>
-              msg.meta === "Live"
-                ? { ...msg, content: event.content?.message || `Missing required fields: ${missing}`, meta: "error" }
-                : msg
-            ));
+            updateQuickEstimateProgress("geocoding", event.content?.message || `Missing required fields: ${missing}`);
+            setIsQuickEstimateStreaming(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: event.content?.message || `Missing required fields: ${missing}`,
+                meta: "error",
+              },
+            ]);
           } else if (event.type === "quick_estimate_result") {
             const result = event.content || {};
             const analysis = {
@@ -4447,37 +4684,47 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setCostCalculationData(result.cost_calculation_data || null);
             setPipelineDone(true);
             onValuationResult?.(valuationPayload);
-            setStreamingNote("Quick estimate valuation complete.");
-            setMessages((prev) => prev.map((msg) =>
-              msg.meta === "Live"
-                ? {
-                  ...msg,
-                  content: "Quick estimate valuation is ready.",
-                  meta: "quick estimate result",
-                  factorial_analysis_data: analysis,
-                  cost_calculation_data: result.cost_calculation_data || null,
-                }
-                : msg
-            ));
+            updateQuickEstimateProgress("complete", "Quick estimate valuation complete.");
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: "Quick estimate valuation is ready.",
+                meta: "quick estimate result",
+                factorial_analysis_data: analysis,
+                cost_calculation_data: result.cost_calculation_data || null,
+              },
+            ]);
           } else if (event.type === "error") {
-            setStreamingNote(`Error: ${event.content}`);
-            setMessages((prev) => prev.map((msg) =>
-              msg.meta === "Live" ? { ...msg, content: `Quick Estimate failed: ${event.content}`, meta: "error" } : msg
-            ));
+            setIsQuickEstimateStreaming(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Quick Estimate failed: ${event.content}`,
+                meta: "error",
+              },
+            ]);
           } else if (event.type === "quick_estimate_done") {
             setCurrentStage("Quick Estimate: Complete");
+            setQuickEstimateProgress((prev) => ({ ...prev, done: true }));
+            window.setTimeout(() => setIsQuickEstimateStreaming(false), 900);
           }
         }
       }
     } catch (error) {
       if (error.name !== "AbortError") {
-        setMessages((prev) => prev.map((msg) =>
-          msg.meta === "Live" ? { ...msg, content: `Quick Estimate failed: ${error.message}`, meta: "error" } : msg
-        ));
-        setStreamingNote(`Quick Estimate failed: ${error.message}`);
+        setIsQuickEstimateStreaming(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Quick Estimate failed: ${error.message}`,
+            meta: "error",
+          },
+        ]);
       }
     } finally {
-      setIsQuickEstimateStreaming(false);
       setStreamingNote("");
     }
   };
@@ -7579,7 +7826,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             ))}
 
-            {streamingNote ? (
+            {streamingNote && !isQuickEstimateStreaming ? (
               <div className="mr-8 animate-slide-in">
                 <p className="mb-1 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
                   Assistant · Streaming
@@ -7589,6 +7836,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 </div>
               </div>
             ) : null}
+
+            {isQuickEstimateStreaming && (
+              <QuickEstimateProgressPanel
+                progress={quickEstimateProgress}
+                includeCost={
+                  quickEstimateValues.recommended_approach === "cost"
+                  && ["villa", "building_land"].includes(String(quickEstimateValues.property_type || "").toLowerCase())
+                }
+                propertyLabel={String(quickEstimateValues.property_type || "property").replaceAll("_", " ")}
+                locationLabel={quickEstimateValues.location_name || quickEstimateValues.city_name || "selected location"}
+              />
+            )}
 
             {/* ── Proceed to Listing Fetch CTA ────────────────── */}
             {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
