@@ -12,6 +12,7 @@ const Header = () => {
 
   React.useEffect(() => {
     const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDark(theme);
   }, []);
 

@@ -26,6 +26,8 @@ import {
   Settings,
   Users,
   X,
+  MapPin,
+  
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,6 +62,7 @@ const agentLayers: AgentLayer[] = [
       { name: "Market Research", icon: Search },
       { name: "Physical AI", icon: Bot },
       { name: "Feasibility", icon: ClipboardCheck },
+      { name: "Map Agent", icon: MapPin, href: "/mapAgent" }
     ],
   },
   {
