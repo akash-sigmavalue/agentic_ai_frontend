@@ -32,6 +32,80 @@ const QUICK_PROMPTS = [
   "What is the market value of a 3BHK flat in Godrej Infinity, Keshav Nagar, Pune, 1100 sqft, floor 12/20, East facing",
 ];
 
+const QUICK_ESTIMATE_DEFAULTS = {
+  mode: "research",
+  property_type: "apartment",
+  recommended_approach: "market",
+  project_name: "",
+  location_name: "",
+  city_name: "",
+  country: "India",
+  salable_area_sqft: "",
+  builtup_area_sqft: "",
+  plot_area_sqft: "",
+  age_of_property: "",
+  configuration: "",
+  floor: "",
+  total_floors: "",
+  facing: "",
+  quality: "",
+  building_type: "residential",
+  land_type: "residential",
+  frontage: "",
+  occupancy_status: "vacant",
+  clear_height: "",
+  water_availability: "good",
+  construction_rate_per_sqft: "",
+  total_life_of_building: "",
+  currency: "INR",
+};
+
+const QUICK_FIELD_CONFIG = {
+  project_name: { label: "Project", type: "text", placeholder: "Project or society name" },
+  location_name: { label: "Location", type: "text", placeholder: "Locality or micro-market" },
+  city_name: { label: "City", type: "text", placeholder: "City" },
+  country: { label: "Country", type: "text", placeholder: "Country" },
+  salable_area_sqft: { label: "Saleable Area", type: "number", placeholder: "sqft" },
+  builtup_area_sqft: { label: "Built-up Area", type: "number", placeholder: "sqft" },
+  plot_area_sqft: { label: "Plot Area", type: "number", placeholder: "sqft" },
+  age_of_property: { label: "Age", type: "number", placeholder: "years" },
+  configuration: { label: "Config", type: "text", placeholder: "2BHK, 3BHK, etc." },
+  floor: { label: "Floor", type: "number", placeholder: "Floor" },
+  total_floors: { label: "Total Floors", type: "number", placeholder: "Total" },
+  facing: { label: "Facing", type: "text", placeholder: "East, West..." },
+  quality: { label: "Quality", type: "select", options: ["standard", "premium", "luxury"] },
+  building_type: { label: "Building Type", type: "select", options: ["residential", "commercial", "industrial"] },
+  land_type: { label: "Land Type", type: "select", options: ["agricultural", "non_agricultural", "residential", "commercial"] },
+  frontage: { label: "Frontage", type: "number", placeholder: "ft" },
+  occupancy_status: { label: "Occupancy", type: "select", options: ["vacant", "leased", "self_use"] },
+  clear_height: { label: "Clear Height", type: "number", placeholder: "ft" },
+  water_availability: { label: "Water", type: "select", options: ["good", "moderate", "poor"] },
+  construction_rate_per_sqft: { label: "Construction Rate", type: "number", placeholder: "per sqft" },
+  total_life_of_building: { label: "Building Life", type: "number", placeholder: "years" },
+};
+
+const QUICK_REQUIRED_FIELDS = {
+  apartment: ["location_name", "country", "salable_area_sqft", "age_of_property"],
+  villa: ["location_name", "country", "plot_area_sqft", "builtup_area_sqft", "age_of_property"],
+  plot: ["location_name", "country", "plot_area_sqft", "land_type"],
+  retail: ["location_name", "country", "salable_area_sqft", "frontage"],
+  commercial_office: ["location_name", "country", "salable_area_sqft", "occupancy_status"],
+  industrial: ["location_name", "country", "plot_area_sqft", "builtup_area_sqft", "clear_height"],
+  agricultural: ["location_name", "country", "plot_area_sqft", "water_availability"],
+  building_land: ["location_name", "country", "building_type", "plot_area_sqft", "builtup_area_sqft", "age_of_property"],
+};
+
+const QUICK_OPTIONAL_FIELDS = {
+  apartment: ["project_name", "city_name", "configuration", "floor", "total_floors", "facing", "quality"],
+  villa: ["project_name", "city_name", "configuration", "quality", "construction_rate_per_sqft", "total_life_of_building"],
+  plot: ["project_name", "city_name", "frontage"],
+  retail: ["project_name", "city_name", "floor", "total_floors", "occupancy_status"],
+  commercial_office: ["project_name", "city_name", "floor", "total_floors", "frontage"],
+  industrial: ["project_name", "city_name", "occupancy_status", "frontage"],
+  agricultural: ["project_name", "city_name"],
+  building_land: ["project_name", "city_name", "quality", "construction_rate_per_sqft", "total_life_of_building"],
+};
+
 const PLACEHOLDER_MAP = {
   project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
   carpet_area_sqft: "e.g. 850 sqft",
@@ -3733,6 +3807,136 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
+function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
+  const propertyType = values.property_type || "apartment";
+  const requiredFields = QUICK_REQUIRED_FIELDS[propertyType] || QUICK_REQUIRED_FIELDS.apartment;
+  const optionalFields = QUICK_OPTIONAL_FIELDS[propertyType] || [];
+  const fields = [...requiredFields, ...optionalFields].filter((field, index, arr) => arr.indexOf(field) === index);
+  const isCostCapable = propertyType === "villa" || propertyType === "building_land";
+
+  const updateField = (field, value) => {
+    const next = { ...values, [field]: value };
+    if (field === "property_type") {
+      next.recommended_approach = value === "building_land" ? "cost" : "market";
+    }
+    onChange(next);
+  };
+
+  const missingRequired = requiredFields.filter((field) => {
+    const value = values[field];
+    return value === undefined || value === null || String(value).trim() === "";
+  });
+
+  const renderField = (field) => {
+    const config = QUICK_FIELD_CONFIG[field];
+    if (!config) return null;
+    const isRequired = requiredFields.includes(field);
+
+    return (
+      <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
+        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">
+          {config.label}{isRequired ? " *" : ""}
+        </span>
+        {config.type === "select" ? (
+          <select
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+          >
+            {(config.options || []).map((option) => (
+              <option key={option} value={option} style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>
+                {option.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={config.type}
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            placeholder={config.placeholder}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
+          />
+        )}
+      </label>
+    );
+  };
+
+  return (
+    <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel">
+      <div className="border-b border-accent/15 bg-accent/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+              <Zap className="h-5 w-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Quick Estimate</p>
+              <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+                Enter the subject details once and get a direct valuation result.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+            Research Mode
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Property Type</span>
+            <select
+              value={propertyType}
+              onChange={(event) => updateField("property_type", event.target.value)}
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+            >
+              <option value="apartment" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Apartment</option>
+              <option value="villa" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Villa</option>
+              <option value="plot" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Plot</option>
+              <option value="retail" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Retail</option>
+              <option value="commercial_office" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Commercial Office</option>
+              <option value="building_land" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Building + Land</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Approach</span>
+            <select
+              value={values.recommended_approach}
+              onChange={(event) => updateField("recommended_approach", event.target.value)}
+              disabled={!isCostCapable && values.recommended_approach === "market"}
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
+            >
+              <option value="market" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Market Approach</option>
+              {isCostCapable && <option value="cost" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Cost Approach</option>}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {fields.map(renderField)}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-3">
+          <p className="text-[10px] leading-relaxed text-text-dim">
+            Uses comparables, listings, transactions, cleaning, and factoring.
+          </p>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={disabled || missingRequired.length > 0}
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Zap className="h-4 w-4" />
+            Get Valuation
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -3749,6 +3953,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     }
   }, [revertNotice]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isQuickEstimateStreaming, setIsQuickEstimateStreaming] = useState(false);
+  const [quickEstimateValues, setQuickEstimateValues] = useState(QUICK_ESTIMATE_DEFAULTS);
+  const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
   const [tokenStats, setTokenStats] = useState({
     total_tokens: 0,
@@ -4088,6 +4295,191 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     onMarkersUpdate?.([]);
     setBackupValuationState(null);
     setFetchedCompIds(new Set());
+  };
+
+  const buildQuickEstimatePayload = () => {
+    const numericFields = [
+      "salable_area_sqft",
+      "builtup_area_sqft",
+      "plot_area_sqft",
+      "age_of_property",
+      "floor",
+      "total_floors",
+      "frontage",
+      "clear_height",
+      "construction_rate_per_sqft",
+      "total_life_of_building",
+    ];
+
+    const payload = {
+      ...quickEstimateValues,
+      age_years: quickEstimateValues.age_of_property,
+      construction_quality: quickEstimateValues.quality,
+      listing_type: "sale",
+      area_unit: "sqft",
+    };
+
+    numericFields.forEach((field) => {
+      if (payload[field] === "" || payload[field] === null || payload[field] === undefined) {
+        delete payload[field];
+      } else {
+        payload[field] = Number(payload[field]);
+      }
+    });
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === "" || payload[key] === null || payload[key] === undefined) {
+        delete payload[key];
+      }
+    });
+
+    return payload;
+  };
+
+  const submitQuickEstimate = async () => {
+    if (isQuickEstimateStreaming) return;
+
+    setShowQuickEstimateModal(false);
+    abortRef.current?.abort?.();
+    abortRef.current = new AbortController();
+    const payload = buildQuickEstimatePayload();
+    const propertyLabel = String(payload.property_type || "property").replaceAll("_", " ");
+    const summary = `Research quick estimate for ${propertyLabel} in ${payload.location_name || "selected location"}`;
+
+    onClear?.();
+    clearInteractiveState();
+    setMessages([
+      { role: "user", content: summary, meta: "Now" },
+      { role: "assistant", content: "Running quick estimate...", meta: "Live" },
+    ]);
+    setCurrentQuestion(summary);
+    setOriginalQuestion(summary);
+    setCurrentStage("Quick Estimate: Starting");
+    setStreamingNote("Connecting to quick estimate stream...");
+    setIsQuickEstimateStreaming(true);
+
+    try {
+      const response = await fetch(apiUrl("/quick_estimate_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: abortRef.current.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Quick Estimate request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let resolvedCoords = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+          onEvent?.(event);
+
+          if (event.type === "quick_estimate_start") {
+            setCurrentStage("Quick Estimate: Running");
+            setStreamingNote(event.content?.message || "Starting quick estimate...");
+          } else if (event.type === "quick_estimate_progress") {
+            const stage = event.stage || "quick_estimate";
+            const message = event.content?.message || "Quick estimate update received.";
+            if (event.content?.lat && event.content?.lng) {
+              resolvedCoords = {
+                lat: Number(event.content.lat),
+                lng: Number(event.content.lng),
+              };
+            }
+            setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
+            setStreamingNote(message);
+          } else if (event.type === "quick_estimate_validation_error") {
+            const missing = event.content?.missing_fields?.join(", ") || "required fields";
+            setStreamingNote(`Missing required fields: ${missing}`);
+            setMessages((prev) => prev.map((msg) =>
+              msg.meta === "Live"
+                ? { ...msg, content: event.content?.message || `Missing required fields: ${missing}`, meta: "error" }
+                : msg
+            ));
+          } else if (event.type === "quick_estimate_result") {
+            const result = event.content || {};
+            const analysis = {
+              ...result,
+              subject_final_rate: result.subject_final_rate ?? result.subject_final_plot_rate,
+            };
+            const subjectObj = {
+              ...payload,
+              project_name: payload.project_name || "Subject Property",
+              location_name: payload.location_name || "",
+              country: payload.country || "India",
+              currency: payload.currency || "INR",
+              property_type: payload.property_type || "apartment",
+              recommended_approach: payload.recommended_approach || "market",
+              age_years: payload.age_of_property,
+              lat: result.lat || payload.lat || resolvedCoords?.lat || 0,
+              lng: result.lng || payload.lng || resolvedCoords?.lng || 0,
+            };
+            const comparables = Array.isArray(result.comparables) ? result.comparables : [];
+            const selected = new Set(comparables.map((_, index) => index));
+            const valuationPayload = {
+              type: subjectObj.recommended_approach || "market",
+              subjectData: subjectObj,
+              factorialAnalysis: analysis,
+              costCalculation: result.cost_calculation_data || null,
+              factorialData: null,
+              timestamp: new Date().toISOString(),
+            };
+
+            setSubjectData(subjectObj);
+            subjectDataRef.current = subjectObj;
+            setComparableData(comparables.length > 0 ? comparables : null);
+            setSelectedComps(selected);
+            setFactorialAnalysisData(analysis);
+            setCostCalculationData(result.cost_calculation_data || null);
+            setPipelineDone(true);
+            onValuationResult?.(valuationPayload);
+            setStreamingNote("Quick estimate valuation complete.");
+            setMessages((prev) => prev.map((msg) =>
+              msg.meta === "Live"
+                ? {
+                  ...msg,
+                  content: "Quick estimate valuation is ready.",
+                  meta: "quick estimate result",
+                  factorial_analysis_data: analysis,
+                  cost_calculation_data: result.cost_calculation_data || null,
+                }
+                : msg
+            ));
+          } else if (event.type === "error") {
+            setStreamingNote(`Error: ${event.content}`);
+            setMessages((prev) => prev.map((msg) =>
+              msg.meta === "Live" ? { ...msg, content: `Quick Estimate failed: ${event.content}`, meta: "error" } : msg
+            ));
+          } else if (event.type === "quick_estimate_done") {
+            setCurrentStage("Quick Estimate: Complete");
+          }
+        }
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setMessages((prev) => prev.map((msg) =>
+          msg.meta === "Live" ? { ...msg, content: `Quick Estimate failed: ${error.message}`, meta: "error" } : msg
+        ));
+        setStreamingNote(`Quick Estimate failed: ${error.message}`);
+      }
+    } finally {
+      setIsQuickEstimateStreaming(false);
+      setStreamingNote("");
+    }
   };
 
   // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
@@ -6922,10 +7314,38 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     );
   })() : null;
 
-  const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
+  const anyStreaming = isStreaming || isQuickEstimateStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
+
+  const quickEstimateModal = showQuickEstimateModal && typeof document !== "undefined" ? createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
+      onClick={() => setShowQuickEstimateModal(false)}
+    >
+      <div 
+        className="relative w-full max-w-2xl animate-in zoom-in-95 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setShowQuickEstimateModal(false)}
+          className="absolute right-4 top-3 z-10 rounded-xl border border-border bg-bg-input p-2 text-text-secondary transition hover:bg-accent/10 hover:text-accent cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <QuickEstimatePanel
+          values={quickEstimateValues}
+          onChange={setQuickEstimateValues}
+          onSubmit={submitQuickEstimate}
+          disabled={anyStreaming}
+        />
+      </div>
+    </div>,
+    document.body
+  ) : null;
 
   return (
-    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+    <>
+      <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
       <div className="panel-header-shell border-b border-border/60">
         <div className="panel-title-shell">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
@@ -6934,6 +7354,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
         <div className="flex items-center gap-2">
+          {!anyStreaming && (
+            <button
+              type="button"
+              onClick={() => setShowQuickEstimateModal(true)}
+              className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 transition cursor-pointer"
+            >
+              <Zap className="h-3 w-3" />
+              Quick Estimate
+            </button>
+          )}
           {subjectData && !anyStreaming && (
             <button
               type="button"
@@ -6960,6 +7390,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
               Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
             </p>
+            <button
+              type="button"
+              onClick={() => setShowQuickEstimateModal(true)}
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+            >
+              <Zap className="h-4 w-4" />
+              Quick Estimate Valuation
+            </button>
             <div className="mt-6 grid gap-3 w-full max-w-lg">
               {QUICK_PROMPTS.map((prompt) => (
                 <button
@@ -7049,7 +7487,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <>
                           <p className="text-sm text-text-secondary leading-relaxed">
                             Would you like to continue the valuation using only the{" "}
-                            <span className="font-semibold text-accent-light">subject property's own listings</span>?{" "}
+                            <span className="font-semibold text-accent-light">subject property&apos;s own listings</span>?{" "}
                             The system will derive a market rate from available signals for the subject alone
                             (Subject-Only Mode).
                           </p>
@@ -7079,7 +7517,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       {/* After the user confirmed, show a soft status note */}
                       {(listingData || cleanedData || isListingStreaming) && (
                         <p className="text-[10px] text-text-dim italic pt-1">
-                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property's listings.
+                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property&apos;s listings.
                         </p>
                       )}
                     </div>
@@ -7153,7 +7591,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             ) : null}
 
             {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
+            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
               <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
                 <div
                   onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
@@ -7570,5 +8008,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         )}
       </div>
     </section>
+    {quickEstimateModal}
+    </>
   );
 }
