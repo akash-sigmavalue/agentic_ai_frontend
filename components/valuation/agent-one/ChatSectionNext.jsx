@@ -3254,12 +3254,45 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
                 </div>
                 {rateRange && (
-                  <div className="inline-flex flex-col rounded-2xl border border-green-500/20 bg-green-500/[0.06] px-4 py-2">
-                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/80">Indicative Rate Range</span>
-                    <span className="font-mono text-sm font-black text-green-300">
-                      {fmtRate(rateRange.low)} - {fmtRate(rateRange.high)}/{area_unit || "sqft"}
-                    </span>
-                    <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                  <div className="w-full max-w-xs mt-1 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/70">Indicative Rate Band</span>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
+                    </div>
+                    {/* Track */}
+                    <div className="relative h-2 rounded-full overflow-visible" style={{ background: "rgba(255,255,255,0.06)" }}>
+                      {/* Gradient fill between low–high */}
+                      <div
+                        className="absolute inset-y-0 rounded-full"
+                        style={{
+                          left: "0%",
+                          right: "0%",
+                          background: "linear-gradient(90deg, rgba(34,197,94,0.18) 0%, rgba(34,197,94,0.55) 50%, rgba(34,197,94,0.18) 100%)",
+                        }}
+                      />
+                      {/* Center needle pin (point estimate) */}
+                      <div
+                        className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                        style={{ left: "50%" }}
+                      >
+                        <div className="w-1 h-5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.9)]" />
+                      </div>
+                    </div>
+                    {/* Labels row */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col items-start">
+                        <span className="font-mono text-[10px] font-black text-green-300/80">{fmtRate(rateRange.low)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">Low</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="font-mono text-[10px] font-black text-green-400">{fmtRate(finalRate)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-green-400/60">Point Est.</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono text-[10px] font-black text-green-300/80">{fmtRate(rateRange.high)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">High</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {selectedArea > 0 ? (
@@ -3280,12 +3313,43 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                     {formatter.format(exactValue)}
                   </h2>
                   {valueRange && (
-                    <div className="ml-auto inline-flex flex-col rounded-2xl border border-accent/20 bg-accent/[0.06] px-4 py-2 text-left md:text-right">
-                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/80">Indicative Value Range</span>
-                      <span className="font-mono text-sm font-black text-accent-light">
-                        {formatter.format(valueRange.low)} - {formatter.format(valueRange.high)}
-                      </span>
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                    <div className="w-full space-y-1.5 mt-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/70">Indicative Value Band</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
+                      </div>
+                      {/* Track */}
+                      <div className="relative h-2 rounded-full overflow-visible" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div
+                          className="absolute inset-y-0 rounded-full"
+                          style={{
+                            left: "0%",
+                            right: "0%",
+                            background: "linear-gradient(90deg, rgba(167,139,250,0.18) 0%, rgba(167,139,250,0.55) 50%, rgba(167,139,250,0.18) 100%)",
+                          }}
+                        />
+                        <div
+                          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                          style={{ left: "50%" }}
+                        >
+                          <div className="w-1 h-5 rounded-full bg-accent shadow-[0_0_8px_rgba(167,139,250,0.9)]" />
+                        </div>
+                      </div>
+                      {/* Labels row */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex flex-col items-start">
+                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.low)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">Low</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="font-mono text-[10px] font-black text-accent">{formatter.format(exactValue)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-accent/60">Point Est.</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.high)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">High</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest font-semibold">
