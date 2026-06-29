@@ -88,7 +88,7 @@ const agentLayers: AgentLayer[] = [
     soft: 'from-blue-500/10 to-cyan-500/10',
     agents: [
       { name: 'Land/GIS', icon: MapPinned , href: '/visualization_agent'},
-      { name: "Visualization Agent", icon: MapPinned, href: '/visualization_agent' },      
+      { name: "Elevation Agent", icon: MapPinned, href: '/elevation' },       
       { name: 'Valuation', icon: BarChart3, href: '/valuation' },
       { name: 'Market Research', icon: Search },
       { name: 'Physical AI', icon: Bot },

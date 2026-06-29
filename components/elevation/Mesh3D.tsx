@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useCallback } from "react";
+import React, { useMemo, useRef, useState, useCallback, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -749,37 +749,39 @@ export default function Mesh3D({
         {/* Subtle fog to soften far edges */}
         <fog attach="fog" args={["#0b0e17", 25, 60]} />
 
-        {data ? (
-          <>
-            {/* Terrain and Base scene */}
-            <TerrainScene
-              data={data}
-              showWireframe={showWireframe}
-              exaggeration={exaggeration}
-              compassDialRef={compassDialRef}
-              setTooltip={setTooltip}
-              colorMode={colorMode}
-            />
+        <Suspense fallback={null}>
+          {data ? (
+            <>
+              {/* Terrain and Base scene */}
+              <TerrainScene
+                data={data}
+                showWireframe={showWireframe}
+                exaggeration={exaggeration}
+                compassDialRef={compassDialRef}
+                setTooltip={setTooltip}
+                colorMode={colorMode}
+              />
 
-            {/* Camera controls */}
-            <OrbitControls
-              enableDamping
-              dampingFactor={0.08}
-              rotateSpeed={0.5}
-              zoomSpeed={0.8}
-              minDistance={4}
-              maxDistance={30}
-              maxPolarAngle={Math.PI / 2.05}
-              target={[0, 1.5, 0]}
-            />
-          </>
-        ) : (
-          /* Empty scene placeholder — just an invisible mesh so the canvas renders */
-          <mesh visible={false}>
-            <boxGeometry args={[0.01, 0.01, 0.01]} />
-            <meshBasicMaterial />
-          </mesh>
-        )}
+              {/* Camera controls */}
+              <OrbitControls
+                enableDamping
+                dampingFactor={0.08}
+                rotateSpeed={0.5}
+                zoomSpeed={0.8}
+                minDistance={4}
+                maxDistance={30}
+                maxPolarAngle={Math.PI / 2.05}
+                target={[0, 1.5, 0]}
+              />
+            </>
+          ) : (
+            /* Empty scene placeholder — just an invisible mesh so the canvas renders */
+            <mesh visible={false}>
+              <boxGeometry args={[0.01, 0.01, 0.01]} />
+              <meshBasicMaterial />
+            </mesh>
+          )}
+        </Suspense>
       </Canvas>
 
       {/* HTML placeholder overlay — shown on top of the dark canvas when no data */}

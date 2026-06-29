@@ -28,7 +28,12 @@ const Map2D = dynamic(() => import("@/components/elevation/Map2D"), { ssr: false
 const Mesh3D = dynamic(() => import("@/components/elevation/Mesh3D"), { ssr: false });
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_ELEVATION || "";
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000"
+).replace(/\/$/, "");
 
 export default function HomePage() {
   // ── State ──────────────────────────────────────────────────────────────
