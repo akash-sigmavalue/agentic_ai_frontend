@@ -10,6 +10,7 @@ export type MapAgentSelection = {
   lookupStatus: LocationLookupStatus;
   projectName: string;
   location: string;
+  city?: string;
   propertyType: string;
   placeId?: string;
   formattedAddress?: string;

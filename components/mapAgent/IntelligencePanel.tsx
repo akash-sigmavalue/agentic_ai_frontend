@@ -1,13 +1,24 @@
-"use client";
+﻿"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Activity, AlertCircle, ArrowUpRight, Clock3, Loader2, MapPin, Search, X } from "lucide-react";
+import { Activity, AlertCircle, ArrowUpRight, Loader2, MapPin, Search, X } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import type { MapAgentAnalyzeResponse, MapAgentSelection } from "./data";
+import ValuationTab from "./ValuationTab";
 
 type ReportType = "valuation" | "market";
 type Tab = "market" | "valuation";
+
+type Comparable = Record<string, any>;
+
+type ValuationMapState = {
+  subject: (Comparable & { lat: number; lng: number }) | null;
+  comparables: Comparable[];
+  radiusKm: number | null;
+  focusNonce: number;
+};
 
 type IntelligencePanelProps = {
   selection: MapAgentSelection;
@@ -16,6 +27,15 @@ type IntelligencePanelProps = {
   onAnalysisComplete: (result: MapAgentAnalyzeResponse | null) => void;
   onClose: () => void;
   onOpenReport: (tab: ReportType) => void;
+  valuationMapState: ValuationMapState;
+  onValuationMapStateChange: (state: ValuationMapState | ((current: ValuationMapState) => ValuationMapState)) => void;
+  onOpenComparable: (comp: Comparable) => void;
+  // Comparable panel — lifted to FullScreenMap so it renders beside this panel
+  selectedComparables: Set<number>;
+  onSelectedComparablesChange: Dispatch<SetStateAction<Set<number>>>;
+  showComparablesPanel: boolean;
+  onShowComparablesPanel: Dispatch<SetStateAction<boolean>>;
+  onSetConfirmCallback: (cb: (() => void) | null) => void;
 };
 
 const PROPERTY_TYPES = ["plot", "villa", "shop", "office", "flate"];
@@ -27,10 +47,21 @@ export default function IntelligencePanel({
   onAnalysisComplete,
   onClose,
   onOpenReport,
+  valuationMapState,
+  onValuationMapStateChange,
+  onOpenComparable,
+  selectedComparables,
+  onSelectedComparablesChange,
+  showComparablesPanel,
+  onShowComparablesPanel,
+  onSetConfirmCallback,
 }: IntelligencePanelProps) {
   const [tab, setTab] = useState<Tab>("market");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [triggerValuation, setTriggerValuation] = useState(0);
+  const [triggerFetchListings, setTriggerFetchListings] = useState(0);
   const [error, setError] = useState("");
+
   const canSubmit = Boolean(
     selection.projectName.trim() &&
       selection.location.trim() &&
@@ -67,12 +98,19 @@ export default function IntelligencePanel({
         }),
       });
       onAnalysisComplete(result);
+      setTriggerValuation(prev => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    onSetConfirmCallback(() => {
+      setTriggerFetchListings(prev => prev + 1);
+    });
+  }, [onSetConfirmCallback]);
 
   return (
     <aside className="map-agent-panel" aria-label="Location intelligence report">
@@ -87,30 +125,32 @@ export default function IntelligencePanel({
         <button type="button" aria-label="Close location report" title="Close report" onClick={onClose} className="map-agent-icon-button"><X /></button>
       </div>
 
-      <div className="map-agent-activity-banner">
-        <span className="map-agent-activity-icon">
-          {selection.lookupStatus === "resolving" ? <Loader2 className="map-agent-spin-icon" /> : <Activity />}
-        </span>
-        <div>
-          <strong>{selection.lookupStatus === "resolving" ? "Resolving location" : "Market intelligence ready"}</strong>
-          <p>
-            {selection.lookupStatus === "failed"
-              ? "Google lookup unavailable. Enter details manually."
-              : selection.lookupStatus === "resolving"
-              ? "Finding nearby project and locality"
-              : "Confirm details before analysis"}
-          </p>
+      {tab === "market" && (
+        <div className="map-agent-activity-banner">
+          <span className="map-agent-activity-icon">
+            {selection.lookupStatus === "resolving" ? <Loader2 className="map-agent-spin-icon" /> : <Activity />}
+          </span>
+          <div>
+            <strong>{selection.lookupStatus === "resolving" ? "Resolving location" : "Market intelligence ready"}</strong>
+            <p>
+              {selection.lookupStatus === "failed"
+                ? "Google lookup unavailable. Enter details manually."
+                : selection.lookupStatus === "resolving"
+                ? "Finding nearby project and locality"
+                : "Confirm details before analysis"}
+            </p>
+          </div>
+          <span className="map-agent-live-badge"><i /> LIVE AREA</span>
         </div>
-        <span className="map-agent-live-badge"><i /> LIVE AREA</span>
-      </div>
+      )}
 
       <div className="map-agent-tabs" role="tablist" aria-label="Intelligence report type">
         <button type="button" role="tab" aria-selected={tab === "market"} onClick={() => setTab("market")} className={tab === "market" ? "active market" : ""}>Market Research</button>
         <button type="button" role="tab" aria-selected={tab === "valuation"} onClick={() => setTab("valuation")} className={tab === "valuation" ? "active valuation" : ""}>Valuation</button>
       </div>
 
-      <div className="map-agent-panel-content">
-        {tab === "market" ? (
+      <div className={`map-agent-panel-content ${tab === "valuation" ? "valuation-tab-active" : ""}`}>
+        <div style={{ display: tab === "market" ? "block" : "none" }}>
           <div className="map-agent-form" role="tabpanel">
             <label>
               <span>Project name</span>
@@ -159,15 +199,31 @@ export default function IntelligencePanel({
                 </button>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="map-agent-coming-soon" role="tabpanel">
-            <span><Clock3 /></span>
-            <strong>Valuation</strong>
-            <p>Coming soon. Property valuation workflow will be available here.</p>
-          </div>
-        )}
+          </div >
+        </div>
+        
+        <div 
+          className="map-agent-valuation-tab-shell w-full min-w-0 overflow-hidden px-2 pb-0"
+          style={{ display: tab === "valuation" ? "block" : "none" }}
+        >
+          <ValuationTab
+            key={`${selection.placeId || "map"}-${selection.coordinates.lat}-${selection.coordinates.lng}-${selection.projectName}-${selection.location}`}
+            selection={selection}
+            valuationMapState={valuationMapState}
+            onValuationMapStateChange={onValuationMapStateChange}
+            onOpenComparable={onOpenComparable}
+            triggerRun={triggerValuation}
+            autoOpen={true}
+            selectedComparables={selectedComparables}
+            onSelectedComparablesChange={onSelectedComparablesChange}
+            showComparablesModal={showComparablesPanel}
+            onShowComparablesModalChange={onShowComparablesPanel}
+            triggerFetchListings={triggerFetchListings}
+          />
+        </div>
       </div>
+      {/* ComparableModal is now rendered in FullScreenMap as a side panel */}
     </aside>
   );
 }
+

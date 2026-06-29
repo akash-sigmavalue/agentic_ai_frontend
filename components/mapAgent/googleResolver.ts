@@ -6,9 +6,17 @@ import type { Coordinates } from "./data";
 export type ResolvedMapSelection = {
   projectName: string;
   location: string;
+  city?: string;
   placeId?: string;
   formattedAddress?: string;
   error?: string;
+};
+
+export type MapPlaceSearchResult = {
+  name: string;
+  address: string;
+  placeId?: string;
+  coordinates: Coordinates;
 };
 
 let optionsSet = false;
@@ -50,6 +58,21 @@ function pickLocationName(result: google.maps.GeocoderResult | undefined): strin
   return [locality, city, state].filter(Boolean).join(", ") || result.formatted_address || "";
 }
 
+function pickCityName(result: google.maps.GeocoderResult | undefined): string {
+  if (!result) return "";
+
+  const components = result.address_components || [];
+  const byType = (type: string) => components.find((component) => component.types.includes(type))?.long_name || "";
+
+  return (
+    byType("locality") ||
+    byType("postal_town") ||
+    byType("administrative_area_level_3") ||
+    byType("administrative_area_level_2") ||
+    ""
+  );
+}
+
 function getNearbyPlace(
   places: google.maps.PlacesLibrary,
   coordinates: Coordinates,
@@ -85,6 +108,53 @@ function getNearbyPlace(
   });
 }
 
+export async function searchMapPlaces(
+  query: string,
+  center?: Coordinates,
+): Promise<MapPlaceSearchResult[]> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return [];
+
+  const { places } = await getGoogleLibraries();
+  const container = document.createElement("div");
+  const service = new places.PlacesService(container);
+
+  return new Promise((resolve, reject) => {
+    service.textSearch(
+      {
+        query: trimmedQuery,
+        location: center ? { lat: center.lat, lng: center.lng } : undefined,
+        radius: center ? 50000 : undefined,
+      },
+      (results, status) => {
+        if (status !== places.PlacesServiceStatus.OK) {
+          if (status === places.PlacesServiceStatus.ZERO_RESULTS) {
+            resolve([]);
+            return;
+          }
+          reject(new Error(`Google place search failed: ${status}`));
+          return;
+        }
+
+        resolve(
+          (results || [])
+            .filter((place) => place.geometry?.location)
+            .slice(0, 6)
+            .map((place) => ({
+              name: place.name || "Unnamed place",
+              address: place.formatted_address || place.vicinity || "",
+              placeId: place.place_id,
+              coordinates: {
+                lat: place.geometry!.location!.lat(),
+                lng: place.geometry!.location!.lng(),
+              },
+            })),
+        );
+      },
+    );
+  });
+}
+
 export async function resolveClickedLocation(coordinates: Coordinates): Promise<ResolvedMapSelection> {
   try {
     const { geocoding, places } = await getGoogleLibraries();
@@ -98,6 +168,7 @@ export async function resolveClickedLocation(coordinates: Coordinates): Promise<
     return {
       projectName: nearbyPlace?.name || "",
       location: pickLocationName(primaryResult),
+      city: pickCityName(primaryResult),
       placeId: nearbyPlace?.place_id,
       formattedAddress: primaryResult?.formatted_address,
     };
