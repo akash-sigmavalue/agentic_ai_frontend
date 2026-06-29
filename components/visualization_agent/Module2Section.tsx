@@ -432,12 +432,19 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
       {/* ---- Token Ledger Metrics (if output exists) ---- */}
       {ledger && (
-        <div className="shrink-0 grid grid-cols-4 gap-3 p-5 border-b border-slate-100">
-          <MetricCard label="LLM Calls" value={ledger.total_llm_calls} accent />
-          <MetricCard label="Input Tokens" value={ledger.total_input_tokens.toLocaleString()} />
-          <MetricCard label="Output Tokens" value={ledger.total_output_tokens.toLocaleString()} />
-          <MetricCard label="Cost USD" value={`$${ledger.total_cost_usd.toFixed(6)}`} accent />
-        </div>
+        <details className="shrink-0 border-b border-slate-100 group">
+          <summary className="flex cursor-pointer select-none items-center gap-2 px-5 py-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors list-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-open:rotate-90" />
+            <Coins className="h-3.5 w-3.5 shrink-0" />
+            Token Ledger · {ledger.total_llm_calls} LLM calls · ${ledger.total_cost_usd.toFixed(6)}
+          </summary>
+          <div className="grid grid-cols-4 gap-3 px-5 pb-5 pt-2">
+            <MetricCard label="LLM Calls" value={ledger.total_llm_calls} accent />
+            <MetricCard label="Input Tokens" value={ledger.total_input_tokens.toLocaleString()} />
+            <MetricCard label="Output Tokens" value={ledger.total_output_tokens.toLocaleString()} />
+            <MetricCard label="Cost USD" value={`$${ledger.total_cost_usd.toFixed(6)}`} accent />
+          </div>
+        </details>
       )}
 
       {/* ---- Tab bar ---- */}

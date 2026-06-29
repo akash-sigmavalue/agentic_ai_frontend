@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Bot,
   Send,
@@ -15,7 +17,17 @@ import {
   Map as MapIcon,
   Save,
   Trash2,
+  Satellite,
+  FileText,
+  ChevronRight,
+  PlayCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import ClarificationFields from '../shared/ClarificationFields';
+import SpatialInsightsModal from '@/components/visualization_agent/spatial_insight/SpatialInsightsModal';
+import SpatialInsightV2ChatPanel from '@/components/visualization_agent/spatial_insight/SpatialInsightV2ChatPanel';
+import type { SpatialInsightV2State } from '@/lib/visualization-agent-spatial-insight-v2';
 import type {
   ExecutionPlanStep,
   Module1IntentOutput,
@@ -43,6 +55,11 @@ interface ChatSectionProps {
     points: Module7PlottableEnrichmentPoint[],
     corridors: Module7PlottableEnrichmentCorridor[],
   ) => void;
+  spatialV2?: SpatialInsightV2State;
+  onSpatialV2PreviewKeyChange?: (previewKey: string) => void;
+  onSpatialV2Query?: (query: string) => Promise<void>;
+  requestedChatCategory?: 'spatial-insights-v2' | null;
+  onRequestedChatCategoryHandled?: () => void;
 }
 
 interface Message {
@@ -88,9 +105,7 @@ const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'http://localhost:8000'
-).replace(/\/$/, '');
+  'http://localhost:8000')
 
 const TAB_NAMES = [
   'Structured Output',
@@ -103,11 +118,23 @@ const TAB_NAMES = [
 ];
 
 const RETRIEVAL_TABS = ['Data', 'SQL Query', 'Updated Query', 'Stage 1.5', 'Stage 2'];
-type ChatCategory = 'land-gis' | 'insight-generation' | 'workflow' | 'conversational';
+type ChatCategory = 'land-gis' | 'insight-generation' | 'spatial-insights-v2' | 'workflow' | 'conversational';
+type IsolatedChatCategory = 'land-gis' | 'insight-generation' | 'spatial-insights-v2';
+
+const ISOLATED_CHAT_CATEGORIES = new Set<ChatCategory>([
+  'land-gis',
+  'insight-generation',
+  'spatial-insights-v2',
+]);
+
+function isIsolatedChatCategory(category: ChatCategory): category is IsolatedChatCategory {
+  return ISOLATED_CHAT_CATEGORIES.has(category);
+}
 type RetrievalAgentVersion = 'v1' | 'v2';
 const CHAT_CATEGORIES: Array<{ value: ChatCategory; label: string; disabled?: boolean }> = [
   { value: 'land-gis', label: 'Land / GIS' },
   { value: 'insight-generation', label: 'Insight Generation' },
+  { value: 'spatial-insights-v2', label: 'Spatial Insights v2' },
   { value: 'workflow', label: 'Workflow (Coming Soon)', disabled: true },
   { value: 'conversational', label: 'Conversational (Coming Soon)', disabled: true },
 ];
@@ -128,6 +155,7 @@ const RETRIEVAL_ROUTE_LABEL: Record<RetrievalAgentVersion, string> = {
 };
 const VISUALIZATION_RETRIEVAL_V2_MODEL = 'moonshotai.kimi-k2.5';
 const DEFAULT_INSIGHT_QUERY = 'Generate insights for map';
+const DEFAULT_SPATIAL_V2_QUERY = 'What infrastructure and amenities are near the plotted projects?';
 
 let fallbackMessageIdCounter = 0;
 
@@ -424,6 +452,19 @@ function RetrievedDataTable({ resultSet, maxRows = 100 }: { resultSet?: Visualiz
   );
 }
 
+function missingRequiredClarificationFields(
+  clarification: VisualizationRetrievalClarification | undefined,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
+) {
+  if (clarification?.clarification_type === 'space_filter') {
+    if (state.selectedOptions.length === 0 && !state.otherText.trim()) {
+      return [{ field: 'space_filter', label: 'Space Filter', type: 'select' } as VisualizationRetrievalClarificationField];
+    }
+    return [];
+  }
+  return (clarification?.fields || []).filter((field) => field.required !== false && !(state.fieldValues[field.field] || '').trim());
+}
+
 function defaultClarificationValue(field: VisualizationRetrievalClarificationField) {
   if (field.type === 'select') {
     return field.options?.[0]?.value || '';
@@ -437,15 +478,34 @@ function clarificationFieldLabel(field: VisualizationRetrievalClarificationField
 
 function buildClarificationAnswer(
   clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
 ) {
+  if (clarification?.clarification_type === 'space_filter') {
+    const selected = state.selectedOptions || [];
+    const parts: string[] = [];
+    if (selected.length > 0) {
+      // visualization_agent/types.ts might not have options typed fully for space_filter but we assume standard structure
+      const options = (clarification as any).options || [];
+      const labels = options
+        .filter((opt: any) => selected.includes(opt.id))
+        .map((opt: any) => opt.label);
+      if (labels.length > 0) {
+        parts.push(`Selected space filters: ${labels.join(', ')}`);
+      }
+    }
+    if (state.otherText.trim()) {
+      parts.push(`Other details: ${state.otherText.trim()}`);
+    }
+    return parts.join('\n');
+  }
+
   const fields = clarification?.fields || [];
   if (!fields.length) {
-    return Object.values(values).join('\n').trim();
+    return Object.values(state.fieldValues).join('\n').trim();
   }
   return fields
     .map((field) => {
-      const value = (values[field.field] || '').trim();
+      const value = (state.fieldValues[field.field] || '').trim();
       if (!value) return '';
       return `${clarificationFieldLabel(field)}: ${value}`;
     })
@@ -463,29 +523,20 @@ function cleanRetrievalBaseQuery(query: string) {
 function buildCompleteRetrievalQuery(
   originalQuery: string,
   clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
+  state: { fieldValues: Record<string, string>; selectedOptions: string[]; otherText: string; },
   fallbackAnswer = '',
 ) {
   const baseQuery = cleanRetrievalBaseQuery(originalQuery);
-  const fields = clarification?.fields || [];
-  const additions = fields
-    .map((field) => {
-      const value = (values[field.field] || '').trim();
-      if (!value) return '';
-      return `${clarificationFieldLabel(field).toLowerCase()} ${value}`;
-    })
-    .filter(Boolean);
-
+  const answer = buildClarificationAnswer(clarification, state);
   const fallback = fallbackAnswer.trim();
-  if (!additions.length && fallback) {
-    additions.push(fallback);
+  
+  if (answer) {
+    return `${baseQuery}. Additional required filters: ${answer.replace(/\n/g, '; ')}.`;
   }
-
-  if (!additions.length) {
-    return baseQuery;
+  if (fallback) {
+    return `${baseQuery}. Additional required filters: ${fallback}.`;
   }
-
-  return `${baseQuery}. Additional required filters: ${additions.join('; ')}.`;
+  return baseQuery;
 }
 
 interface DataVisRewriteResponse {
@@ -571,12 +622,6 @@ function buildDataVisFailureReason(retrieval: VisualizationRetrievalState) {
   return evidence || 'Data retrieval ended without result rows after SQL review/probe.';
 }
 
-function missingRequiredClarificationFields(
-  clarification: VisualizationRetrievalClarification | undefined,
-  values: Record<string, string>,
-) {
-  return (clarification?.fields || []).filter((field) => field.required !== false && !(values[field.field] || '').trim());
-}
 
 const ChatSection: React.FC<ChatSectionProps> = ({
   onToggleExpand,
@@ -587,6 +632,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   selectedInsightMapId = null,
   onInsightMapSelect,
   onPlottableEnrichment,
+  spatialV2,
+  onSpatialV2PreviewKeyChange,
+  onSpatialV2Query,
+  requestedChatCategory = null,
+  onRequestedChatCategoryHandled,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(EXAMPLE_QUERY);
@@ -613,13 +663,19 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const [retrievalModalData, setRetrievalModalData] = useState<VisualizationRetrievalState | null>(null);
   const [activeRetrievalTab, setActiveRetrievalTab] = useState(0);
   const [insightMapModalOpen, setInsightMapModalOpen] = useState(false);
+  const [spatialInsightModalOpen, setSpatialInsightModalOpen] = useState(false);
   const [pendingRetrievalClarification, setPendingRetrievalClarification] = useState<{
     messageId: string;
     originalQuery: string;
     question: string;
     clarification: VisualizationRetrievalClarification;
   } | null>(null);
-  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, Record<string, string>>>({});
+  interface ClarificationState {
+    fieldValues: Record<string, string>;
+    selectedOptions: string[];
+    otherText: string;
+  }
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, ClarificationState>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -629,11 +685,38 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   const chatDraftsRef = useRef<Record<ChatCategory, string>>({
     'land-gis': EXAMPLE_QUERY,
     'insight-generation': DEFAULT_INSIGHT_QUERY,
+    'spatial-insights-v2': DEFAULT_SPATIAL_V2_QUERY,
     workflow: '',
     conversational: '',
   });
+  const messagesByCategoryRef = useRef<Record<IsolatedChatCategory, Message[]>>({
+    'land-gis': [],
+    'insight-generation': [],
+    'spatial-insights-v2': [],
+  });
+
+  useEffect(() => {
+    if (isIsolatedChatCategory(chatCategory)) {
+      messagesByCategoryRef.current[chatCategory] = messages;
+    }
+  }, [messages, chatCategory]);
+
+  const activateChatCategory = useCallback((nextCategory: ChatCategory) => {
+    chatDraftsRef.current[chatCategory] = input;
+    setChatCategory(nextCategory);
+    setMessages(
+      isIsolatedChatCategory(nextCategory)
+        ? [...messagesByCategoryRef.current[nextCategory]]
+        : [],
+    );
+    setInput(chatDraftsRef.current[nextCategory] ?? '');
+    if (nextCategory === 'insight-generation') {
+      setInsightMapModalOpen(true);
+    }
+  }, [chatCategory, input]);
   const isLandGisChat = chatCategory === 'land-gis';
   const isInsightChat = chatCategory === 'insight-generation';
+  const isSpatialV2Chat = chatCategory === 'spatial-insights-v2';
   const selectedInsightMap = runtimeGeneratedMaps.find((map) => map.id === selectedInsightMapId) || null;
 
   // Restore saved session on mount
@@ -646,6 +729,12 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   });
 
   useEffect(() => {
+    if (!requestedChatCategory) return;
+    activateChatCategory(requestedChatCategory);
+    onRequestedChatCategoryHandled?.();
+  }, [activateChatCategory, onRequestedChatCategoryHandled, requestedChatCategory]);
+
+  useEffect(() => {
     // Runs once on mount only – localStorage restore should not re-trigger on every render
     const saved = localStorage.getItem('visualization_agent_chat_saved');
     if (saved) {
@@ -653,6 +742,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
           const restoredMessages = normalizeSavedMessages(parsed.messages);
+          messagesByCategoryRef.current['land-gis'] = restoredMessages;
           setMessages(restoredMessages);
           // Find the last message that has intentOutput or retrieval and notify the parent component
           const lastMsgWithIntent = [...restoredMessages].reverse().find((m) => m.intentOutput);
@@ -693,10 +783,22 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   };
 
   const handleClearChat = () => {
+    if (isSpatialV2Chat) {
+      messagesByCategoryRef.current['spatial-insights-v2'] = [];
+      setMessages([]);
+      return;
+    }
+    if (isInsightChat) {
+      messagesByCategoryRef.current['insight-generation'] = [];
+      setMessages([]);
+      return;
+    }
+
     localStorage.removeItem('visualization_agent_chat_saved');
     // Clear the retrieval session so the next query always starts a clean backend session.
     localStorage.removeItem('visualization-data-retrieval-session-id');
     setRetrievalSessionId('');
+    messagesByCategoryRef.current['land-gis'] = [];
     setMessages([]);
     setTokenLedger([]);
     setTotalCost(0);
@@ -775,18 +877,51 @@ const ChatSection: React.FC<ChatSectionProps> = ({
     }, {});
     setClarificationAnswers((current) => ({
       ...current,
-      [messageId]: values,
+      [messageId]: {
+        fieldValues: values,
+        selectedOptions: [],
+        otherText: '',
+      },
     }));
   };
 
   const updateClarificationAnswer = (messageId: string, field: string, value: string) => {
-    setClarificationAnswers((current) => ({
-      ...current,
-      [messageId]: {
-        ...(current[messageId] || {}),
-        [field]: value,
-      },
-    }));
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      return {
+        ...current,
+        [messageId]: {
+          ...state,
+          fieldValues: {
+            ...state.fieldValues,
+            [field]: value,
+          },
+        },
+      };
+    });
+  };
+
+  const toggleClarificationOption = (messageId: string, optionId: string) => {
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      const selected = state.selectedOptions.includes(optionId)
+        ? state.selectedOptions.filter((id) => id !== optionId)
+        : [...state.selectedOptions, optionId];
+      return {
+        ...current,
+        [messageId]: { ...state, selectedOptions: selected },
+      };
+    });
+  };
+
+  const updateClarificationOtherText = (messageId: string, text: string) => {
+    setClarificationAnswers((current) => {
+      const state = current[messageId] || { fieldValues: {}, selectedOptions: [], otherText: '' };
+      return {
+        ...current,
+        [messageId]: { ...state, otherText: text },
+      };
+    });
   };
 
   const runDataVisFallback = async (
@@ -1155,6 +1290,34 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       }
       return;
     }
+    if (isSpatialV2Chat) {
+      const userId = createMessageId();
+      setMessages((previous) => [
+        ...previous,
+        { id: userId, role: 'user', content: query },
+      ]);
+      setInput('');
+      chatDraftsRef.current['spatial-insights-v2'] = '';
+      setIsLoading(true);
+      try {
+        if (!onSpatialV2Query) {
+          throw new Error('Spatial Insights v2 query handler is unavailable.');
+        }
+        if (!spatialV2?.sessionId) {
+          throw new Error('Run Take Snapshot on the interactive map before asking a spatial query.');
+        }
+        await onSpatialV2Query(query);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to run spatial query.';
+        setMessages((previous) => [
+          ...previous,
+          { id: createMessageId(), role: 'assistant', content: `**Error:** ${message}` },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
     if (!isLandGisChat) return;
 
     if (pendingRetrievalClarification) {
@@ -1310,12 +1473,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
   };
 
   const handleCategoryChange = (nextCategory: ChatCategory) => {
-    chatDraftsRef.current[chatCategory] = input;
-    setChatCategory(nextCategory);
-    setInput(chatDraftsRef.current[nextCategory]);
-    if (nextCategory === 'insight-generation') {
-      setInsightMapModalOpen(true);
-    }
+    activateChatCategory(nextCategory);
   };
 
   const handleSelectInsightMap = (mapId: string) => {
@@ -1344,7 +1502,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
               </h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                  {isInsightChat ? 'Module 7' : 'Module 1'}
+                  {isSpatialV2Chat ? 'Spatial Insights v2' : isInsightChat ? 'Module 7' : 'Module 1'}
                 </span>
                 <div className="h-1 w-1 rounded-full bg-emerald-500" />
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest leading-none">
@@ -1355,6 +1513,15 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSpatialInsightModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 transition-all duration-300 hover:border-indigo-300 hover:bg-indigo-100"
+              title="Open Spatial Insight POC — test map snapshot, OSM, and analysis workflow"
+            >
+              <Satellite className="h-3.5 w-3.5" />
+              Spatial Insight
+            </button>
             {messages.length > 0 && (
               <>
                 <button
@@ -1391,7 +1558,65 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
         {/* Chat messages area */}
         <div className="workspace-scroll flex-1 overflow-y-auto p-5 scrollbar-thin">
-          {messages.length === 0 && !isLoading ? (
+          {isSpatialV2Chat ? (
+            <div className="space-y-6">
+              {spatialV2 && onSpatialV2PreviewKeyChange ? (
+                <SpatialInsightV2ChatPanel
+                  spatialV2={spatialV2}
+                  onPreviewKeyChange={onSpatialV2PreviewKeyChange}
+                />
+              ) : null}
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                >
+                  <div className={`flex max-w-[85%] gap-3 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div
+                      className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                        m.role === 'user'
+                          ? 'border-indigo-100 bg-indigo-50 text-indigo-600'
+                          : 'border-slate-100 bg-slate-50 text-slate-400'
+                      }`}
+                    >
+                      {m.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                    </div>
+                    <div
+                      className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                        m.role === 'user'
+                          ? 'bg-indigo-600 text-white shadow-indigo-100'
+                          : 'border border-slate-100 bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      {m.role === 'assistant' ? (
+                        <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:text-slate-900 prose-strong:text-slate-900 prose-code:text-indigo-600 prose-code:bg-slate-100 prose-code:rounded prose-code:px-1 prose-table:text-xs prose-a:text-indigo-600">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p>{m.content}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {isLoading ? (
+                <div className="flex justify-start animate-in fade-in duration-300">
+                  <div className="flex max-w-[85%] gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-slate-50">
+                      <Bot className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
+                      <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        Running spatial query...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} />
+            </div>
+          ) : messages.length === 0 && !isLoading ? (
             <div className="flex h-full flex-col items-center justify-center text-center animate-in fade-in duration-700">
               <div className="relative mb-6">
                 <div className="absolute inset-0 rounded-full bg-indigo-500/5 animate-pulse blur-xl" />
@@ -1403,12 +1628,18 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                 Visualization Agent
               </h3>
               <p className="mt-2.5 max-w-[240px] text-xs font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
-                {isInsightChat ? 'MODULE 7 - INSIGHT GENERATION' : 'MODULE 1 - INTENT FINALIZATION'}
+                {isSpatialV2Chat
+                  ? 'SPATIAL INSIGHTS V2'
+                  : isInsightChat
+                    ? 'MODULE 7 - INSIGHT GENERATION'
+                    : 'MODULE 1 - INTENT FINALIZATION'}
               </p>
               <p className="mt-4 max-w-[280px] text-sm font-medium text-slate-500 leading-relaxed">
-                {isInsightChat
-                  ? 'Select a generated map and ask for analysis grounded in its plotted data.'
-                  : 'Enter a real estate visualization query to generate structured intent, map requirements, and an execution plan.'}
+                {isSpatialV2Chat
+                  ? 'Take Snapshot on Interactive Map or 3D, then ask spatial questions about the generated analysis.'
+                  : isInsightChat
+                    ? 'Select a generated map and ask for analysis grounded in its plotted data.'
+                    : 'Enter a real estate visualization query to generate structured intent, map requirements, and an execution plan.'}
               </p>
             </div>
           ) : (
@@ -1497,89 +1728,21 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                           )}
 
                           {m.retrieval?.status === 'needs_clarification' && (
-                            <div className="w-full max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900 shadow-sm">
-                              <div className="flex items-start gap-2">
-                                <span className="text-base font-black leading-none text-red-500">?</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-extrabold uppercase tracking-widest text-[10px] text-amber-700">
-                                    {m.retrieval.clarification?.stopped_at_stage?.replace(/_/g, ' ') || 'Data Retrieval V2'} Clarification
-                                  </p>
-                                  <p className="mt-1 font-semibold leading-5">
-                                    {m.retrieval.clarification?.clarification_question ||
-                                      m.retrieval.clarification?.message ||
-                                      'Please clarify the requested values.'}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {m.retrieval.clarification?.next_action ? (
-                                <p className="mt-2 text-[11px] font-medium leading-4 text-amber-800">
-                                  {m.retrieval.clarification.next_action}
-                                </p>
-                              ) : null}
-
-                              {Array.isArray(m.retrieval.clarification?.fields) && m.retrieval.clarification.fields.length > 0 ? (
-                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                  {m.retrieval.clarification.fields.map((field) => {
-                                    const label = clarificationFieldLabel(field);
-                                    const value = clarificationAnswers[m.id]?.[field.field] ?? defaultClarificationValue(field);
-                                    return (
-                                      <label key={field.field} className="block min-w-0">
-                                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
-                                          {label}
-                                        </span>
-                                        {field.help_text ? (
-                                          <span className="mt-1 block text-[10px] font-semibold leading-4 text-amber-700">
-                                            {field.help_text}
-                                          </span>
-                                        ) : null}
-                                        {field.type === 'select' ? (
-                                          <select
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          >
-                                            {(field.options || []).map((option) => (
-                                              <option key={option.value} value={option.value}>
-                                                {option.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        ) : field.type === 'textarea' ? (
-                                          <textarea
-                                            rows={3}
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
-                                            className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          />
-                                        ) : (
-                                          <input
-                                            type="text"
-                                            value={value}
-                                            onChange={(event) => updateClarificationAnswer(m.id, field.field, event.target.value)}
-                                            placeholder={field.placeholder || `Enter ${label.toLowerCase()}`}
-                                            className="mt-2 h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                          />
-                                        )}
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <label className="mt-4 block">
-                                  <span className="block text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-800">
-                                    Answer
-                                  </span>
-                                  <textarea
-                                    rows={3}
-                                    value={clarificationAnswers[m.id]?.clarification_answer || ''}
-                                    onChange={(event) => updateClarificationAnswer(m.id, 'clarification_answer', event.target.value)}
-                                    placeholder="Provide the missing detail"
-                                    className="mt-2 min-h-20 w-full resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                                  />
-                                </label>
-                              )}
+                            <div className="w-full max-w-xl rounded-lg border px-3 py-3 shadow-sm" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-card)' }}>
+                              <ClarificationFields
+                                clarification={{
+                                  ...m.retrieval.clarification,
+                                  clarification_type: m.retrieval.clarification?.clarification_type || 'v2_pipeline',
+                                  meta: { ...m.retrieval.clarification, clarification_type: m.retrieval.clarification?.clarification_type || 'v2_pipeline' }
+                                }}
+                                fieldValues={clarificationAnswers[m.id]?.fieldValues || {}}
+                                onFieldChange={(field: string, value: string) => updateClarificationAnswer(m.id, field, value)}
+                                selectedOptions={clarificationAnswers[m.id]?.selectedOptions || []}
+                                onToggleOption={(optionId: string) => toggleClarificationOption(m.id, optionId)}
+                                otherText={clarificationAnswers[m.id]?.otherText || ''}
+                                onOtherTextChange={(text: string) => updateClarificationOtherText(m.id, text)}
+                                interactive={true}
+                              />
 
                               {m.retrieval.error ? (
                                 <p className="mt-2 text-[11px] font-bold text-red-600">{m.retrieval.error}</p>
@@ -1589,7 +1752,8 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => submitRetrievalClarification(m.id, m.retrieval as VisualizationRetrievalState)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-700"
+                                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-sm transition-colors hover:opacity-90"
+                                  style={{ background: 'var(--accent)' }}
                                 >
                                   <Send className="h-3 w-3" />
                                   Submit Answer
@@ -1674,7 +1838,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                     <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
                       <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                        {isInsightChat ? 'Analyzing selected map...' : 'Finalizing intent...'}
+                        {isSpatialV2Chat
+                          ? 'Running spatial query...'
+                          : isInsightChat
+                            ? 'Analyzing selected map...'
+                            : 'Finalizing intent...'}
                       </span>
                     </div>
                   </div>
@@ -1725,7 +1893,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   ? 'Answer the data retrieval clarification...'
                   : isLandGisChat
                     ? 'Ask the Visualization Agent what to analyze or visualize...'
-                  : 'Ask for anything about insights from the loaded map...'
+                    : isSpatialV2Chat
+                      ? 'Ask a spatial query about the snapshot analysis...'
+                      : 'Ask for anything about insights from the loaded map...'
               }
               disabled={isLoading}
               className="max-h-[100px] min-h-[22px] flex-1 resize-none bg-transparent px-4 py-2 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
@@ -1733,16 +1903,25 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
             <button
               onClick={handleSend}
-              disabled={isLoading || !input.trim() || (isInsightChat && !selectedInsightMap)}
+              disabled={
+                isLoading
+                || !input.trim()
+                || (isInsightChat && !selectedInsightMap)
+                || (isSpatialV2Chat && !spatialV2?.sessionId)
+              }
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-40"
               title={
                 pendingRetrievalClarification
                   ? 'Submit clarification answer'
                   : isLandGisChat
-                  ? 'Send message'
-                  : selectedInsightMap
-                    ? 'Generate insights for the selected map'
-                    : 'Select a generated map to ask for insights'
+                    ? 'Send message'
+                    : isSpatialV2Chat
+                      ? spatialV2?.sessionId
+                        ? 'Ask a spatial query'
+                        : 'Take Snapshot on the interactive map first'
+                      : selectedInsightMap
+                        ? 'Generate insights for the selected map'
+                        : 'Select a generated map to ask for insights'
               }
             >
               {isLoading ? (
@@ -2159,6 +2338,11 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       )}
 
       {/* ===== Retrieved data popup modal ===== */}
+      <SpatialInsightsModal
+        open={spatialInsightModalOpen}
+        onClose={() => setSpatialInsightModalOpen(false)}
+      />
+
       {retrievalModalOpen && retrievalModalData && (
         <div className="workspace-modal fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="workspace-modal-card h-[85vh] w-full max-w-6xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col">
