@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { EyeOff, Eye, Loader2, Bot, Sparkles, Lock, Cpu, Globe } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { API_ROUTES, apiUrl } from '@/lib/api-client';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,28 +25,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
-
-      const res = await fetch(apiUrl(API_ROUTES.authLogin), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || 'Authentication failed. Please check your credentials.');
-      }
-
-      if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
-        router.push('/dashboard');
-      }
+      await login(username, password);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Connection to Neural Core failed.');
     } finally {

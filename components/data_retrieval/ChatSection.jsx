@@ -93,7 +93,11 @@ export default function ChatSection({
     if (!Array.isArray(fields) || !fields.length) {
       return false;
     }
-    return fields.some((schema) => String(clarificationState.fieldValues?.[schema.field] || "").trim());
+    return fields.some((schema) => {
+      const val = clarificationState.fieldValues?.[schema.field];
+      if (Array.isArray(val)) return val.length > 0;
+      return String(val || "").trim().length > 0;
+    });
   }
 
   const canSubmit = clarificationState.awaiting

@@ -2,13 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Cpu, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { Cpu, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
 
 const Header = () => {
   const [isDark, setIsDark] = React.useState(false);
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   React.useEffect(() => {
     const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
@@ -71,6 +73,24 @@ const Header = () => {
         </div>
 
         <div className={`flex items-center gap-6 pl-8 ${borderTextClass} border-l`}>
+          {user && (
+            <div className="flex items-center gap-3 mr-2 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100/50 dark:border-indigo-900/30">
+                <UserIcon className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  {user.username}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="flex items-center justify-center p-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-400 hover:text-rose-500 hover:border-rose-100 dark:hover:border-rose-950 transition-all cursor-pointer shadow-sm hover:shadow-rose-50 dark:hover:shadow-none"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <button
             onClick={toggleTheme}
             className={`flex items-center gap-2 p-1 rounded-full border transition-all hover:shadow-inner ${toggleClass}`}

@@ -206,13 +206,16 @@ export default function FrontendDashboard() {
 
   function formatClarificationAnswerLines(fieldValues, fields) {
     const lines = [];
+
     const schemas = Array.isArray(fields) ? fields : [];
     const schemaByField = new Map(
       schemas.map((schema) => [schema.field, schema]),
     );
 
     for (const [field, rawValue] of Object.entries(fieldValues || {})) {
-      const value = String(rawValue || "").trim();
+      const value = Array.isArray(rawValue)
+        ? rawValue.join(", ").trim()
+        : String(rawValue || "").trim();
       if (!value) {
         continue;
       }
