@@ -28,7 +28,11 @@ import type {
   VisualizationRetrievalState,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
+).replace(/\/$/, '');
 
 const DEFAULT_INPUTS: Module2InputsConsidered = {
   retrieved_data: true,

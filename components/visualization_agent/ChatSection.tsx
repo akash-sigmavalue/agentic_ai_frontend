@@ -104,8 +104,10 @@ interface Module1ResponseData {
 const DEMO_MODE_ENABLED = false;
 const EXAMPLE_QUERY = 'Top 10 Projects in Baner based on rate'
 const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8000')
+  'http://localhost:8000'
+).replace(/\/$/, '');
 
 const TAB_NAMES = [
   'Structured Output',
