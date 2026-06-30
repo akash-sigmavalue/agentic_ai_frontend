@@ -4962,10 +4962,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Construct identity, type, approach, and detail fields matching current property type
     const identityFields = [
-      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
-      { field: "location_name", label: "Location / Locality", type: "text" },
-      { field: "city_name", label: "City Name", type: "text" },
-      { field: "country", label: "Country", type: "text" },
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text", required: false }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text", required: true },
+      { field: "city_name", label: "City Name", type: "text", required: false },
+      { field: "country", label: "Country", type: "text", required: false },
     ];
     const typeFields = [
       {
@@ -7120,12 +7120,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
     };
     const isFilled = String(val).trim() !== "";
+    const isRequired = schema.required !== false;
 
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
       return (
         <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
           <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
             {schema.label || humanizeFieldName(schema.field)}
+            {isRequired && <span className="text-danger ml-0.5">*</span>}
             {isFilled && <span className="ml-1.5 inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
           </span>
           <select
@@ -7149,6 +7151,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
         <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim flex items-center gap-1.5">
           {schema.label || humanizeFieldName(schema.field)}
+          {isRequired && <span className="text-danger ml-0.5">*</span>}
           {isFilled && <span className="inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
         </span>
         <input
@@ -7181,10 +7184,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Dynamically build all fields for the active property type
     const identityFields = [
-      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
-      { field: "location_name", label: "Location / Locality", type: "text" },
-      { field: "city_name", label: "City Name", type: "text" },
-      { field: "country", label: "Country", type: "text" },
+      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text", required: false }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text", required: true },
+      { field: "city_name", label: "City Name", type: "text", required: false },
+      { field: "country", label: "Country", type: "text", required: false },
     ];
 
     const typeFields = [
@@ -7286,7 +7289,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Validate mandatory for current step
     const mandatoryStep = gateStep === 1
-      ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
+      ? (gateValues["location_name"] && String(gateValues["location_name"]).trim() !== "")
       : gateStep === 2
         ? (gateValues["property_type"] && (gateValues["property_type"] !== "building_land" || gateValues["building_type"]))
         : gateStep === 3
@@ -7517,8 +7520,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     >← Back</button>
                     <button
                       type="button"
+                      disabled={!gateValues["location_name"] || String(gateValues["location_name"]).trim() === ""}
                       onClick={gateSubmitFinal}
-                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
                     >Confirm & Proceed →</button>
                   </>
                 ) : (
