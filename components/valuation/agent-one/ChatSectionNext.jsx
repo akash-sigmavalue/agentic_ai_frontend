@@ -3870,9 +3870,8 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
   if (progress.detail?.lat && progress.detail?.lng) {
     detailChips.push(`Coords ${Number(progress.detail.lat).toFixed(4)}, ${Number(progress.detail.lng).toFixed(4)}`);
   }
-  if (progress.detail?.count) {
-    detailChips.push(`${progress.detail.count} comparables selected`);
-  }
+
+  const selectedComparables = Array.isArray(progress.detail?.comparables) ? progress.detail.comparables : [];
 
   return (
     <div className="mr-8 overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 shadow-panel animate-in slide-in-from-bottom-2 duration-300">
@@ -3970,6 +3969,56 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
             );
           })}
         </div>
+
+        {/* ── Selected Comparables Card List ───────────────────────── */}
+        {selectedComparables.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-accent/20 bg-bg-input/40 animate-in fade-in slide-in-from-bottom-2 duration-400">
+            <div className="flex items-center gap-2 border-b border-accent/15 bg-accent/5 px-3.5 py-2">
+              <span className="text-accent text-[10px]">◈</span>
+              <p className="text-[9px] font-black uppercase tracking-[0.22em] text-accent">
+                Selected Comparables
+              </p>
+              <span className="ml-auto rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[8px] font-bold text-accent">
+                {selectedComparables.length} found
+              </span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {selectedComparables.map((comp, idx) => {
+                const src = (comp.data_source || "").trim();
+                const isWeb = src.toLowerCase() === "web";
+                const isDb = src.toLowerCase().includes("internal") || src.toLowerCase() === "transaction";
+                const sourceBadgeClass = isWeb
+                  ? "border-sky-400/30 bg-sky-400/10 text-sky-300"
+                  : isDb
+                    ? "border-violet-400/30 bg-violet-400/10 text-violet-300"
+                    : "border-border/40 bg-bg-card/60 text-text-dim";
+                const sourceIcon = isWeb ? "🌐" : isDb ? "🗄️" : "📁";
+                const sourceLabel = isWeb ? "Web" : isDb ? "Transaction" : (src || "Unknown");
+                const reason = comp.confidence_reasoning || comp.reason || "";
+                return (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-1.5 px-3.5 py-2.5 hover:bg-accent/[0.03] transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="flex-1 truncate text-[11px] font-semibold text-text-primary leading-tight">
+                        {comp.project_name || "—"}
+                      </span>
+                      <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${sourceBadgeClass}`}>
+                        {sourceIcon} {sourceLabel}
+                      </span>
+                    </div>
+                    {reason && (
+                      <p className="text-[10px] leading-relaxed text-text-dim line-clamp-2">
+                        {reason}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {(progress.message || detailChips.length > 0) && (
           <div className="rounded-xl border border-border/50 bg-bg-input/60 px-3.5 py-3">
@@ -4632,6 +4681,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             }
             if (Array.isArray(event.content?.comparables) && event.content.comparables.length > 0) {
               detail.count = event.content.comparables.length;
+              detail.comparables = event.content.comparables;
             }
             updateQuickEstimateProgress(stage, message, detail);
             setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
