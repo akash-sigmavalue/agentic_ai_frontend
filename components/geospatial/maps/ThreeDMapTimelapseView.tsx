@@ -82,6 +82,7 @@ interface ThreeDMapTimelapseViewProps {
   metricUnitContext?: Record<string, unknown>;
   metricDomainMin?: number;
   metricDomainMax?: number;
+  metricLabel?: string;
 }
 
 function rateToColor(normalizedValue: number): [number, number, number, number] {
@@ -155,6 +156,7 @@ export default function ThreeDMapTimelapseView({
   metricUnitContext,
   metricDomainMin,
   metricDomainMax,
+  metricLabel,
 }: ThreeDMapTimelapseViewProps) {
   const [placeName, setPlaceName] = useState(
     initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India'
@@ -541,21 +543,21 @@ export default function ThreeDMapTimelapseView({
     }
     if ('kind' in object && object.kind === 'building_time') {
       return {
-        html: `<div><strong>${object.name}</strong></div><div>Rate: ${object.rateDisplay}</div><div>Date: ${object.dateLabel}</div>`,
+        html: `<div><strong>${object.name}</strong></div><div>${metricLabel || 'Rate'}: ${object.rateDisplay}</div><div>Date: ${object.dateLabel}</div>`,
       };
     }
     if ('kind' in object && object.kind === 'floor') {
       const sourceLabel = object.source === 'actual' ? '' : `<div style="color:#888;font-size:11px">Source: ${object.source} (${Math.round(object.confidence * 100)}%)</div>`;
       const noteLabel = object.note ? `<div style="color:#aaa;font-size:10px">${object.note}</div>` : '';
       return {
-        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>Rate: ${object.rateDisplay}</div><div>Date: ${object.dateLabel}</div>${sourceLabel}${noteLabel}`,
+        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>${metricLabel || 'Rate'}: ${object.rateDisplay}</div><div>Date: ${object.dateLabel}</div>${sourceLabel}${noteLabel}`,
       };
     }
     if ('properties' in object && object.properties) {
       if (object.properties.is_custom && object.properties.runtime_has_floor_data === false) {
         const metric = object.properties.floor_rates_by_date?.[dateIndex]?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
         return {
-          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Date: ${currentDateLabel}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>${metricLabel || 'Rate'}: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Date: ${currentDateLabel}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
         };
       }
       return {

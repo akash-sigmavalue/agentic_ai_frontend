@@ -86,6 +86,7 @@ interface ThreeDMapViewProps {
   /** Module 2 / dataset-wide metric bounds for floor-wise color normalization */
   metricDomainMin?: number;
   metricDomainMax?: number;
+  metricLabel?: string;
 }
 
 function rateToColor(normalizedValue: number) {
@@ -178,6 +179,7 @@ export default function ThreeDMapView({
   metricUnitContext,
   metricDomainMin,
   metricDomainMax,
+  metricLabel,
 }: ThreeDMapViewProps) {
   const [placeName, setPlaceName] = useState(initialPlaceName || markers[0]?.address || markers[0]?.label || 'Vision Flora mall Pimple saudagar Pune, Maharashtra, India');
   const [radius, setRadius] = useState(initialRadius || 450);
@@ -476,13 +478,13 @@ export default function ThreeDMapView({
 
     if ('kind' in object && object.kind === 'building') {
       return {
-        html: `<div><strong>${object.name}</strong></div><div>Rate: ${object.rateDisplay}</div><div>Height: ${object.heightDisplay}</div>`,
+        html: `<div><strong>${object.name}</strong></div><div>${metricLabel || 'Rate'}: ${object.rateDisplay}</div><div>Height: ${object.heightDisplay}</div>`,
       };
     }
 
     if ('kind' in object && object.kind === 'floor') {
       return {
-        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>Rate: ${object.rateDisplay}</div><div>Height: ${object.baseZ.toFixed(1)}m - ${(object.baseZ + FLOOR_HEIGHT).toFixed(1)}m</div>`,
+        html: `<div><strong>${object.name}</strong></div><div>Floor: ${object.floor} / ${object.totalFloors}</div><div>${metricLabel || 'Rate'}: ${object.rateDisplay}</div><div>Height: ${object.baseZ.toFixed(1)}m - ${(object.baseZ + FLOOR_HEIGHT).toFixed(1)}m</div>`,
       };
     }
 
@@ -493,7 +495,7 @@ export default function ThreeDMapView({
           ? match.metric_value 
           : object.properties.floor_rates?.find((value): value is number => typeof value === 'number' && Number.isFinite(value));
         return {
-          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>Rate: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
+          html: `<div><strong>${object.properties.building_name || 'Runtime Building'}</strong></div><div>${metricLabel || 'Rate'}: ${metric == null ? 'N/A' : formatMetricValue(metric, metricUnitContext)}</div><div>Height: ${Number(object.properties.height_render || 15).toFixed(1)}m</div>`,
         };
       }
       return {
