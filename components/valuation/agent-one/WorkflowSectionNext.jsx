@@ -162,6 +162,86 @@ function showFloorFields(propertyType) {
 }
 
 // ── Detail row component ───────────────────────────────────────────────────────
+function getSublocalityItems(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function formatSublocalities(data) {
+  if (!data) return "";
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+  const seen = new Set();
+  const names = values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return names.join(", ");
+}
+
+function SublocalityChipList({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DetailRow({ label, value }) {
   if (value === null || value === undefined || value === "") return null;
   const isExcluded = ["Notes", "Remarks", "Question", "Message", "Methodology"].includes(label);
@@ -187,10 +267,14 @@ function StepDetails({ step }) {
   const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5";
 
   if (type === "entities" && content) {
+    const sublocalityItems = getSublocalityItems(content);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={content.property_type} />
         <DetailRow label="Location" value={content.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(content)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(content).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
         <DetailRow label="City" value={content.city_name || content.city} />
         <DetailRow label="Country" value={content.country} />
         <DetailRow label="Project" value={content.project_name} />
@@ -229,21 +313,29 @@ function StepDetails({ step }) {
   }
 
   if (type === "map_confirmation" && content) {
+    const sublocalityItems = getSublocalityItems(content);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Latitude" value={content.lat} />
         <DetailRow label="Longitude" value={content.lng} />
         <DetailRow label="Location" value={content.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(content)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(content).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
       </div>
     );
   }
 
   if (type === "extraction_verification" && content) {
     const ent = content.entities || {};
+    const sublocalityItems = getSublocalityItems(ent);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={ent.property_type} />
         <DetailRow label="Location" value={ent.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(ent)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(ent).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
         <DetailRow label="City" value={ent.city_name || ent.city} />
         <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
@@ -317,7 +409,7 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Total Found" value={content.total_found} />
         <DetailRow label="Source" value={sourceLabel} />
-        <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%)" />
+        <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>
     );
   }

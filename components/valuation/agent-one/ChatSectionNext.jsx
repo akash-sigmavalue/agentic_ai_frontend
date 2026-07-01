@@ -64,6 +64,7 @@ const QUICK_ESTIMATE_DEFAULTS = {
 const QUICK_FIELD_CONFIG = {
   project_name: { label: "Project", type: "text", placeholder: "Project or society name" },
   location_name: { label: "Location", type: "text", placeholder: "Locality or micro-market" },
+  "sub-locality": { label: "Sub-locality", type: "text", placeholder: "Fetched micro-market pockets" },
   city_name: { label: "City", type: "text", placeholder: "City" },
   country: { label: "Country", type: "text", placeholder: "Country" },
   salable_area_sqft: { label: "Saleable Area", type: "number", placeholder: "sqft" },
@@ -289,7 +290,12 @@ function ReActReasoningReport({ report }) {
 
 function summarizeEvent(event) {
   if (typeof event.content === "string") return event.content;
-  if (event.type === "entities") return "I extracted the structured property details and pushed them into the workflow panel.";
+  if (event.type === "entities") {
+    const sublocalities = formatSublocalities(event.content);
+    return sublocalities
+      ? `I extracted the structured property details and fetched sub-localities for the plot: ${sublocalities}.`
+      : "I extracted the structured property details and pushed them into the workflow panel.";
+  }
   if (event.type === "clarification_needed") return event.content?.question || "I need a few more details before I can continue.";
   if (event.type === "map_confirmation") return event.content?.message || "I found a probable property location.";
   if (event.type === "approach") return "Agent 2 has recommended a valuation approach based on property intelligence.";
@@ -331,7 +337,77 @@ function summarizeEvent(event) {
 }
 
 function humanizeFieldName(field) {
-  return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+  return field.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function getSubjectSublocalityList(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getSublocalityItems(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function formatSublocalities(data) {
+  const names = getSubjectSublocalityList(data);
+  return names.length > 0 ? names.join(", ") : "";
 }
 
 const getRowKey = (lst, rowIndex = "") => {
@@ -4209,7 +4285,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     total_tokens: 0,
     cost_usd: 0,
     model_breakdown: {},
-    tool_breakdown: {}
+    tool_breakdown: {},
+    stage_breakdown: {}
   });
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
@@ -4246,6 +4323,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     );
     return modelCost + toolCost;
   }, [tokenStats.model_breakdown, tokenStats.tool_breakdown]);
+
+  const stageBreakdownEntries = useMemo(() => {
+    return Object.entries(tokenStats.stage_breakdown || {})
+      .filter(([, usage]) => (usage.total || 0) > 0)
+      .sort((a, b) => (a[0] || "").localeCompare(b[0] || ""));
+  }, [tokenStats.stage_breakdown]);
 
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [clarificationPrompt, setClarificationPrompt] = useState("");
@@ -5056,12 +5139,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
     } else if (activeType === "plot") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         {
           field: "land_type", label: "Land Type", type: "select", options: [
             { value: "agricultural", label: "Agricultural" },
@@ -5506,12 +5591,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     total: currentModelStats.total + total
                   };
 
+                  const nextStageBreakdown = { ...prev.stage_breakdown };
+                  const stageName = "Listing Search";
+                  const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
+                  nextStageBreakdown[stageName] = {
+                    prompt: currentStageStats.prompt + promptDiff,
+                    completion: currentStageStats.completion + completionDiff,
+                    total: currentStageStats.total + total
+                  };
+
                   const addedCost = getModelCost(model, promptDiff, completionDiff);
 
                   return {
                     ...prev,
                     total_tokens: prev.total_tokens + total,
                     model_breakdown: nextModelBreakdown,
+                    stage_breakdown: nextStageBreakdown,
                     cost_usd: (prev.cost_usd || 0) + addedCost
                   };
                 });
@@ -6207,12 +6302,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   total: currentModelStats.total + total
                 };
 
+                const nextStageBreakdown = { ...prev.stage_breakdown };
+                const stageName = "Agent Factoring (Stage 5)";
+                const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
+                nextStageBreakdown[stageName] = {
+                  prompt: currentStageStats.prompt + promptDiff,
+                  completion: currentStageStats.completion + completionDiff,
+                  total: currentStageStats.total + total
+                };
+
                 const addedCost = getModelCost(model, promptDiff, completionDiff);
 
                 return {
                   ...prev,
                   total_tokens: prev.total_tokens + total,
                   model_breakdown: nextModelBreakdown,
+                  stage_breakdown: nextStageBreakdown,
                   cost_usd: (prev.cost_usd || 0) + addedCost,
                   last_stage_tokens: total,
                   last_stage_name: "Agent Factoring (Stage 5)"
@@ -6396,6 +6501,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
     }
 
+    const sublocalityText = formatSublocalities(sData);
+    if (sublocalityText) {
+      initVals["sub-locality"] = sublocalityText;
+    }
+
     // Ensure all expected fields are strings/numbers, not undefined
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
@@ -6463,12 +6573,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "token_usage") {
             const content = event.content || {};
-            setTokenStats({
-              total_tokens: content.cumulative_total_tokens || 0,
-              cost_usd: content.cumulative_cost_usd || 0,
-              model_breakdown: content.model_breakdown || {},
-              tool_breakdown: content.tool_breakdown || {}
-            });
+            setTokenStats((prev) => ({
+              ...prev,
+              total_tokens: content.cumulative_total_tokens || prev.total_tokens || 0,
+              cost_usd: content.cumulative_cost_usd || prev.cost_usd || 0,
+              model_breakdown: content.model_breakdown || prev.model_breakdown || {},
+              tool_breakdown: content.tool_breakdown || prev.tool_breakdown || {},
+              stage_breakdown: content.stage_breakdown || prev.stage_breakdown || {}
+            }));
           }
 
 
@@ -6590,7 +6702,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               "intent", "extraction_verified", "coordinates_confirmed",
               "user_requested_approach", "_original_query", "missing_mandatory",
               "clarification_needed", "recommended_approach", "coordinates",
-              "property_type_missing", "pt_clarification", "others_clarification"
+              "property_type_missing", "pt_clarification", "others_clarification",
+              "location_details", "nearby_sublocalities", "location_details_error"
             ];
             const propType = ents?.property_type;
             const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
@@ -6610,6 +6723,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             if (ents.coordinates && typeof ents.coordinates === 'object') {
               if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
               if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
+            }
+            const sublocalityText = formatSublocalities(ents);
+            if (sublocalityText) {
+              fields.push({ field: "sub-locality", label: "Sub-locality", type: "text", default: sublocalityText, required: false, readOnly: true });
+              fields.push({ field: "sub-locality-list", label: "Sub-locality List", type: "text", default: getSublocalityItems(ents).join(", "), required: false, readOnly: true });
             }
             const initVals = buildGateInitialValues(fields, currentSubjectObj || ents, currentMapConf);
             setClarificationFields(fields);
@@ -6768,7 +6886,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     if (confirmed) {
       setMapConfirmation(null);
-      submitQuestion(`${currentQuestion}. The map location is confirmed to be correct.`, true, "Location confirmed");
+      submitQuestion(`${currentQuestion}. The map location is confirmed to be correct. Coordinates Confirmed: true. Latitude: ${mapConfirmation.lat}. Longitude: ${mapConfirmation.lng}.`, true, "Location confirmed");
       return;
     }
 
@@ -6777,7 +6895,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     setMapConfirmation(null);
     setClarificationValues((prev) => ({ ...prev, coordinates: "" }));
-    submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}.`, true, `Updated coordinates to ${corrected}`);
+    submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}. Coordinates Confirmed: true.`, true, `Updated coordinates to ${corrected}`);
   };
 
   const handleGeocodeRefresh = async () => {
@@ -7067,6 +7185,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       const normVal = (val) => {
         if (val === undefined || val === null) return "";
+        if (Array.isArray(val)) return val.map((item) => typeof item === "object" ? item?.name : item).filter(Boolean).join(", ").trim().toLowerCase();
+        if (typeof val === "object") return formatSublocalities(val) || JSON.stringify(val);
         return String(val).trim().toLowerCase();
       };
 
@@ -7171,6 +7291,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     };
     const isFilled = String(val).trim() !== "";
     const isRequired = schema.required !== false;
+    const isReadOnly = schema.readOnly === true;
+    const sublocalityItems = schema.field === "sub-locality"
+      ? getSubjectSublocalityList(gateValues)
+      : [];
 
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
       return (
@@ -7183,7 +7307,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           <select
             value={val}
             onChange={e => update(e.target.value)}
-            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+            disabled={isReadOnly}
+            className={`rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5 ${isReadOnly ? "cursor-not-allowed opacity-75" : ""}`}
           >
             <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
             {schema.options?.map(opt => {
@@ -7207,10 +7332,23 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         <input
           type={schema.type === "number" ? "number" : "text"}
           value={val}
-          onChange={e => update(e.target.value)}
+          readOnly={isReadOnly}
+          onChange={e => !isReadOnly && update(e.target.value)}
           placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+          className={`rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5 ${isReadOnly ? "cursor-not-allowed opacity-75" : ""}`}
         />
+        {schema.field === "sub-locality" && sublocalityItems.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {sublocalityItems.map((item) => (
+              <span
+                key={item}
+                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
         {schema.field === "age_years" && String(val) === "0" && (
           <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">* Property marked as Under Construction</span>
         )}
@@ -7283,6 +7421,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
         { field: "facing", label: "Facing", type: "text", required: false },
@@ -7290,6 +7429,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "plot") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         {
           field: "land_type", label: "Land Type", type: "select", options: [
             { value: "agricultural", label: "Agricultural" },
@@ -8229,6 +8369,31 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           </div>
                         ))
                     )}
+
+                    <div className="rounded-xl bg-bg-input p-3 border border-border/40">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Stage Breakdown</span>
+                        <span className="text-[10px] font-bold text-accent-light">{stageBreakdownEntries.length} stages</span>
+                      </div>
+                      {stageBreakdownEntries.length === 0 ? (
+                        <p className="text-[10px] text-text-dim italic">No stage usage yet...</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {stageBreakdownEntries.map(([stage, usage]) => (
+                            <div key={stage} className="rounded-lg border border-border/30 bg-bg-card/70 px-2.5 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold text-text-primary">{stage}</span>
+                                <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
+                              </div>
+                              <div className="mt-1 flex gap-3">
+                                <span className="text-[8px] uppercase text-text-dim">Input {usage.prompt?.toLocaleString()}</span>
+                                <span className="text-[8px] uppercase text-text-dim">Output {usage.completion?.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -8263,7 +8428,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <span className="text-[10px] font-bold text-success">Optimal</span>
                       </div>
                       <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
-                        Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
+                        Stage 1 profiles the property, Stage 2 plans the workflow, Stage 3 finds comparables and listings, and Stage 4/5 handle cleaning and valuation using the models and tools shown above.
                       </div>
                     </div>
                   </div>
