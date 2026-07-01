@@ -121,7 +121,7 @@ function ValuationMapLayers({
   );
 }
 
-function MapSearchBox({ onSelect }: { onSelect: (coordinates: Coordinates) => void }) {
+function MapSearchBox({ onSelect }: { onSelect: (result: MapPlaceSearchResult) => void }) {
   const map = useMap();
   const searchRef = useRef<HTMLDivElement | null>(null);
   const suggestionRequestId = useRef(0);
@@ -197,7 +197,7 @@ function MapSearchBox({ onSelect }: { onSelect: (coordinates: Coordinates) => vo
     setResults([]);
     setIsSuggesting(false);
     setError("");
-    onSelect(result.coordinates);
+    onSelect(result);
   };
 
   return (
@@ -303,7 +303,12 @@ export default function FullScreenMap() {
     onConfirmCallbackRef.current = cb;
   }, []);
 
-  const selectLocation = useCallback((coordinates: Coordinates) => {
+  const selectLocation = useCallback((source: Coordinates | MapPlaceSearchResult) => {
+    const isSearchResult = "coordinates" in source;
+    const coordinates = isSearchResult ? source.coordinates : source;
+    const selectedProjectName = isSearchResult ? source.name.trim() : "";
+    const selectedAddress = isSearchResult ? source.address.trim() : "";
+    const selectedPlaceId = isSearchResult ? source.placeId : undefined;
     const requestId = lookupRequestId.current + 1;
     lookupRequestId.current = requestId;
     setAnalysisResult(null);
@@ -316,10 +321,12 @@ export default function FullScreenMap() {
     setSelection({
       coordinates,
       lookupStatus: "resolving",
-      projectName: "",
-      location: "",
+      projectName: selectedProjectName,
+      location: selectedAddress,
       city: "",
       propertyType: "plot",
+      placeId: selectedPlaceId,
+      formattedAddress: selectedAddress || undefined,
     });
 
     resolveClickedLocation(coordinates).then((resolved) => {
@@ -329,11 +336,11 @@ export default function FullScreenMap() {
         return {
           ...current,
           lookupStatus: resolved.error ? "failed" : "resolved",
-          projectName: resolved.projectName || current.projectName,
-          location: resolved.location || current.location,
+          projectName: current.projectName || resolved.projectName,
+          location: current.location || resolved.location,
           city: resolved.city || current.city,
-          placeId: resolved.placeId,
-          formattedAddress: resolved.formattedAddress,
+          placeId: current.placeId || resolved.placeId,
+          formattedAddress: current.formattedAddress || resolved.formattedAddress,
           lookupError: resolved.error,
         };
       });
