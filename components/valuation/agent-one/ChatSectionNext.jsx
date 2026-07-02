@@ -4201,6 +4201,21 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
       </div>
 
       <div className="space-y-4 p-4">
+        <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Property Information</p>
+              <p className="mt-1 text-[11px] text-text-dim">Start with the identity fields, then add the remaining details.</p>
+            </div>
+            <div className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+              Step 1 First
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {['project_name', 'location_name', 'city_name', 'country'].map(renderField)}
+          </div>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Property Type</span>
@@ -4232,7 +4247,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {fields.map(renderField)}
+          {fields.filter((field) => !['project_name', 'location_name', 'city_name', 'country'].includes(field)).map(renderField)}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-3">
