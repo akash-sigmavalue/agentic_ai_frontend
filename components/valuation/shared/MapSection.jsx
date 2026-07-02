@@ -518,11 +518,15 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       if (mapMode === "roads" && !liveRoads && !isFetchingRoads) {
         fetchLiveRoads();
       } else if (mapMode === "density" && !liveDensity && !isFetchingDensity) {
-        fetchLiveDensity();
+        const hasDensity = factorialData?.table?.some(p => p.builtup_density && !p.builtup_density.error);
+        if (!hasDensity) fetchLiveDensity();
       } else if (mapMode === "amenity" && !liveAmenities && !isFetchingAmenities) {
-        fetchLiveAmenities();
+        const hasAmenities = factorialData?.table?.some(p => p.amenities && p.amenities.length > 0);
+        if (!hasAmenities) fetchLiveAmenities();
       } else if (mapMode === "cbd" && !liveCbd && !isFetchingCbd) {
-        fetchLiveCbd();
+        // Check if factorial_table already computed CBD data
+        const hasCbd = factorialData?.table?.some(p => p.cbd_data && p.cbd_data.length > 0);
+        if (!hasCbd) fetchLiveCbd();
       }
     }
   }, [mapMode, markers, factorialData]);
