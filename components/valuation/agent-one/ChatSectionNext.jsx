@@ -3887,7 +3887,7 @@ function CostResultCard({ data, subjectData }) {
 const QUICK_ESTIMATE_PIPELINE_STAGES = [
   { id: "geocoding", label: "Location", desc: "Resolve coordinates for the subject property", icon: MapPin, events: ["geocoding", "geocoding_done"] },
   { id: "comparables", label: "Comparables", desc: "Search internal database and the web", icon: Search, events: ["comparables", "comparables_web", "comparables_done"] },
-  { id: "listings", label: "Listings", desc: "Fetch live sale and rent listings", icon: FileSearch, events: ["listings"] },
+  { id: "listings", label: "Listings", desc: "Fetch live sale listings", icon: FileSearch, events: ["listings"] },
   { id: "transactions", label: "Transactions", desc: "Pull internal transaction evidence", icon: Database, events: ["transactions"] },
   { id: "cleaning", label: "Cleaning", desc: "Normalize prices, areas, and duplicates", icon: Sparkles, events: ["cleaning"] },
   { id: "factorial", label: "Rate Table", desc: "Build statistical rate baseline", icon: TrendingUp, events: ["factorial"] },
@@ -4786,10 +4786,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               ...result,
               subject_final_rate: result.subject_final_rate ?? result.subject_final_plot_rate,
             };
+            const resultSubject = result.subject || {};
             const subjectObj = {
               ...payload,
+              ...resultSubject,
               project_name: payload.project_name || "Subject Property",
-              location_name: payload.location_name || "",
+              location_name: resultSubject.location_name || payload.location_name || "",
               country: payload.country || "India",
               currency: payload.currency || "INR",
               property_type: payload.property_type || "apartment",
@@ -4826,6 +4828,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 meta: "quick estimate result",
                 factorial_analysis_data: analysis,
                 cost_calculation_data: result.cost_calculation_data || null,
+                sub_locality: result.sub_locality || resultSubject.sub_locality || null,
+                sub_locality_list: result["sub-locality"] || resultSubject["sub-locality"] || [],
+                location_details: result.location_details || resultSubject.location_details || null,
               },
             ]);
           } else if (event.type === "error") {
@@ -7877,6 +7882,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   }
                 >
                   {message.content}
+                  {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
+                    <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
+                      {message.sub_locality && (
+                        <p className="mt-1 text-sm font-medium text-text-primary">{message.sub_locality}</p>
+                      )}
+                      {Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {message.sub_locality_list.map((item) => (
+                            <span
+                              key={item}
+                              className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {message.comparables && (
                     <div className="space-y-3">
                       <ComparableTable
