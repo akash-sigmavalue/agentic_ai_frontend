@@ -53,6 +53,8 @@ type PlanningSectionResult = {
   document_status?: string;
   plan_status?: string;
   exact_document_url?: string;
+  direct_document_url?: string;
+  notification_url?: string;
   source_page_url?: string;
   official_source?: boolean;
   trust_score?: number;
@@ -71,6 +73,8 @@ type PlanningSectionResult = {
   reason_for_selection?: string;
   summary?: string;
 };
+
+type DocumentUrlStatus = 'direct_pdf' | 'downloadable' | 'webpage' | 'unknown';
 
 const planningSectionTitles: Record<string, string> = {
   section_1: 'Section 1: Building, Development and Zoning Regulations',
@@ -137,6 +141,76 @@ const scoreItems = (item: PlanningSectionResult): [string, number | undefined][]
   ['Confidence Score', item.confidence_score],
 ];
 
+const downloadableDocumentExtensions = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.ppt',
+  '.pptx',
+  '.rtf',
+  '.txt',
+  '.zip',
+];
+
+const normalizeUrlForExtensionCheck = (url: string) => {
+  try {
+    return new URL(url).pathname.toLowerCase();
+  } catch {
+    return url.split(/[?#]/)[0].toLowerCase();
+  }
+};
+
+const getUrlExtensionStatus = (url?: string): DocumentUrlStatus => {
+  if (!url) return 'unknown';
+  const pathname = normalizeUrlForExtensionCheck(url);
+  if (pathname.endsWith('.pdf')) return 'direct_pdf';
+  if (downloadableDocumentExtensions.some((extension) => pathname.endsWith(extension))) return 'downloadable';
+  return 'unknown';
+};
+
+const getDocumentCandidateUrl = (item: PlanningSectionResult) =>
+  item.exact_document_url || item.direct_document_url || item.notification_url || '';
+
+const getDocumentFileName = (url: string) => {
+  try {
+    const pathname = new URL(url).pathname;
+    const fileName = pathname.split('/').filter(Boolean).pop();
+    return fileName ? decodeURIComponent(fileName) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const downloadExactDocument = async (url: string) => {
+  const fileName = getDocumentFileName(url);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Download failed with ${response.status}`);
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    if (fileName) link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    const link = document.createElement('a');
+    link.href = url;
+    if (fileName) link.download = fileName;
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+};
+
 const renderSourceRow = (label: string, url?: string) => (
   <div className="planning-source-row">
     <span>{label}</span>
@@ -153,6 +227,38 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
   const totalItems = sectionEntries.reduce((total, [, items]) => total + (items?.length || 0), 0);
   const locationDetails = getLocationDetails(sections);
   const confidence = confidencePercent(sections);
+  const [documentUrlStatuses, setDocumentUrlStatuses] = useState<Record<string, DocumentUrlStatus>>({});
+
+  useEffect(() => {
+    const urls = Array.from(new Set(
+      Object.values(sections)
+        .flat()
+        .flatMap((item) => [item.exact_document_url, item.direct_document_url, item.notification_url])
+        .filter((url): url is string => Boolean(url))
+    ));
+
+    urls.forEach((url) => {
+      const extensionStatus = getUrlExtensionStatus(url);
+      if (extensionStatus !== 'unknown') {
+        setDocumentUrlStatuses((previous) => ({ ...previous, [url]: extensionStatus }));
+        return;
+      }
+
+      setDocumentUrlStatuses((previous) => ({ ...previous, [url]: previous[url] || 'unknown' }));
+
+      fetch(url, { method: 'HEAD' })
+        .then((response) => {
+          const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+          setDocumentUrlStatuses((previous) => ({
+            ...previous,
+            [url]: contentType.includes('application/pdf') ? 'direct_pdf' : 'webpage',
+          }));
+        })
+        .catch(() => {
+          setDocumentUrlStatuses((previous) => ({ ...previous, [url]: 'webpage' }));
+        });
+    });
+  }, [sections]);
 
   return (
     <div className="planning-report">
@@ -201,6 +307,11 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
                 const status = item.plan_status || item.document_status || 'Status to be verified';
                 const applicability = item.applicability || item.applicability_to_location || item.jurisdiction || 'Applicability must be verified from official source';
                 const exactUrl = item.exact_document_url || '';
+                const directUrl = item.direct_document_url || '';
+                const notificationUrl = item.notification_url || '';
+                const documentUrl = getDocumentCandidateUrl(item);
+                const documentStatus = documentUrl ? (documentUrlStatuses[documentUrl] || getUrlExtensionStatus(documentUrl)) : 'unknown';
+                const isDirectDocument = documentStatus === 'direct_pdf' || documentStatus === 'downloadable';
                 const sourceUrl = item.source_page_url || '';
                 const mapUrl = item.map_or_gis_url || '';
 
@@ -225,14 +336,28 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
                       </div>
 
                       <div className="planning-actions">
-                        {exactUrl ? (
-                          <a className="planning-btn primary" href={exactUrl} target="_blank" rel="noopener noreferrer" download>
-                            {sectionKey === 'section_2' ? 'Download Exact Development Plan' : sectionKey === 'section_3' ? 'Download Exact Notification' : 'Download Exact Document'}
+                        {documentUrl ? (
+                          <a
+                            className="planning-btn primary"
+                            href={documentUrl}
+                            rel="noopener noreferrer"
+                            download={isDirectDocument ? getDocumentFileName(documentUrl) || true : undefined}
+                            target={isDirectDocument ? undefined : '_blank'}
+                            onClick={(event) => {
+                              if (!isDirectDocument) return;
+                              event.preventDefault();
+                              void downloadExactDocument(documentUrl);
+                            }}
+                          >
+                            {isDirectDocument ? (documentStatus === 'direct_pdf' ? 'Download PDF' : 'Download Exact Document') : 'Open Source Page'}
                           </a>
                         ) : (
-                          <span className="planning-btn muted">Exact downloadable document not found</span>
+                          <span className="planning-document-access-missing">
+                            <strong>Document Access</strong>
+                            <span>Download Exact Document</span>
+                          </span>
                         )}
-                        {sourceUrl && <a className="planning-btn secondary" href={sourceUrl} target="_blank" rel="noopener noreferrer">Open Official Source</a>}
+                        {sourceUrl && <a className="planning-btn secondary" href={sourceUrl} target="_blank" rel="noopener noreferrer">Open Source Page</a>}
                         {mapUrl && <a className="planning-btn secondary" href={mapUrl} target="_blank" rel="noopener noreferrer">Open Development Plan Map</a>}
                       </div>
 
@@ -240,7 +365,9 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
                         <h5>Source Details</h5>
                         <div className="planning-source-box">
                           {renderSourceRow('Official Source Page', sourceUrl)}
-                          {renderSourceRow(sectionKey === 'section_3' ? 'Direct Notification URL' : 'Direct Document URL', exactUrl)}
+                          {renderSourceRow('Exact Document URL', exactUrl)}
+                          {directUrl && renderSourceRow('Direct Document URL', directUrl)}
+                          {notificationUrl && renderSourceRow('Notification URL', notificationUrl)}
                           {mapUrl && renderSourceRow('Map or GIS URL', mapUrl)}
                         </div>
                       </div>

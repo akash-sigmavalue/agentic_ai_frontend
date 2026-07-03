@@ -355,6 +355,31 @@ body {
   color: var(--planning-warning);
 }
 
+.planning-document-access-missing {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 12px;
+  background: #0f172a;
+  padding: 9px 12px;
+  color: #dbeafe;
+}
+
+.planning-document-access-missing strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.planning-document-access-missing span {
+  color: #67e8f9;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .planning-subsection {
   margin-top: 20px;
 }
