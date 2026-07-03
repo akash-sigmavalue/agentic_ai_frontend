@@ -8,8 +8,10 @@ import MapLibreMap, { NavigationControl as MapLibreNavigationControl } from 'rea
 import 'leaflet/dist/leaflet.css';
 import {
   AlertTriangle,
+  Camera,
   Database,
   Download,
+  Globe,
   Layers,
   Lightbulb,
   ListTree,
@@ -63,6 +65,8 @@ import {
   snapshotInteractiveMarkers,
   softCacheToRuntimeOption,
   type InteractiveInsightLayerPoint,
+  type InteractiveMapPlottedSnapshot,
+  type InteractiveMapViewer,
   type InteractivePlottedDelta,
   type InteractiveMapSoftCache,
 } from '@/lib/visualization-agent-interactive-cache';
@@ -1649,6 +1653,96 @@ interface MapSectionProps {
     corridors: Module7PlottableEnrichmentCorridor[];
   } | null;
   onPlottableEnrichmentApplied?: () => void;
+  spatialV2Busy?: boolean;
+  spatialV2OsmBusy?: boolean;
+  onTakeSpatialSnapshot?: (viewer: InteractiveMapViewer, plotted: InteractiveMapPlottedSnapshot) => void | Promise<void>;
+  onFetchExpandedOsm?: (viewer: InteractiveMapViewer, plotted: InteractiveMapPlottedSnapshot) => void | Promise<void>;
+}
+
+function SpatialInsightV2ToolbarButtons({
+  busy,
+  osmBusy,
+  onTakeSnapshot,
+  onFetchOsm,
+  disabled,
+  visible = true,
+}: {
+  busy?: boolean;
+  osmBusy?: boolean;
+  onTakeSnapshot?: () => void;
+  onFetchOsm?: () => void;
+  disabled?: boolean;
+  visible?: boolean;
+}) {
+  if (!visible) return null;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center Gap-2">
+      <button
+        type="button"
+        onClick={() => onFetchOsm?.()}
+        disabled={disabled || busy || osmBusy || !onFetchOsm}
+        title={
+          disabled
+            ? 'Plot the interactive map with Module 2 data first'
+            : 'Fetch expanded OSM infrastructure for Spatial Insights v2'
+        }
+        className="inline-flex items-center Gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-widest text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {osmBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+        Fetch OSM
+      </button>
+      <button
+        type="button"
+        onClick={() => onTakeSnapshot?.()}
+        disabled={disabled || busy || !onTakeSnapshot}
+        title={
+          disabled
+            ? 'Plot the interactive map with Module 2 data first'
+            : 'Capture map snapshot and run Spatial Insights v2 pipeline'
+        }
+        className="inline-flex items-center Gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-widest text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+        Take Snapshot
+      </button>
+    </div>
+  );
+}
+
+function buildInteractivePlottedSnapshotFromRuntime(
+  module31Config: GeneratedMapConfig | null,
+  moduleOutput: Module1IntentOutput | null,
+  module2Output: Module2Output | null,
+  retrievalOutput: VisualizationRetrievalState | null,
+  basemapMode: GeneratedBasemapMode,
+  extras?: Partial<InteractiveMapPlottedSnapshot>,
+): InteractiveMapPlottedSnapshot | null {
+  if (!moduleOutput) return null;
+
+  const rows = getInteractiveRows(module2Output, retrievalOutput);
+  const markers = buildFallbackInteractiveMarkers(rows);
+  const records = module31Config?.records?.length
+    ? module31Config.records
+    : mergeInteractiveMarkersIntoRecords(undefined, snapshotInteractiveMarkers(markers));
+
+  if (records.length === 0 && markers.length === 0) return null;
+
+  return {
+    module31Config,
+    records,
+    projectMarkers: snapshotInteractiveMarkers(markers),
+    amenities: extras?.amenities ?? [],
+    corridors: extras?.corridors ?? [],
+    insightLayers: extras?.insightLayers ?? [],
+    runtimeContext: {
+      city: resolveInteractiveCity(moduleOutput) || extras?.runtimeContext?.city,
+      location: resolveInteractiveCity(moduleOutput) || extras?.runtimeContext?.location,
+      basemap: basemapMode,
+      selectedAmenities: extras?.runtimeContext?.selectedAmenities,
+      selectedCorridors: extras?.runtimeContext?.selectedCorridors,
+    },
+  };
 }
 
 function getRecordCenter(records: GeneratedMapRecord[]): [number, number] {
@@ -2642,6 +2736,7 @@ function GeneratedRuntimeThreeDPanel({
     metricUnitContext: (config.sourceModule2Output?.unit_identification as Record<string, unknown> | undefined) ?? undefined,
     metricDomainMin: runtime3D.metricMin,
     metricDomainMax: runtime3D.metricMax,
+    metricLabel: config.metricLabel,
   };
 
   return (
@@ -4149,6 +4244,7 @@ function InteractiveRuntimeMapView({
   onMapLoaded,
   insightLayers = [],
   onPlottedSnapshotChange,
+  spatialInsightActions,
 }: {
   moduleOutput: Module1IntentOutput | null;
   module2Output: Module2Output | null;
@@ -4162,6 +4258,13 @@ function InteractiveRuntimeMapView({
   onMapLoaded?: (config: GeneratedMapConfig) => void;
   insightLayers?: InteractiveInsightLayerPoint[];
   onPlottedSnapshotChange?: (delta: InteractivePlottedDelta) => void;
+  spatialInsightActions?: {
+    busy?: boolean;
+    osmBusy?: boolean;
+    onTakeSnapshot?: () => void;
+    onFetchOsm?: () => void;
+    disabled?: boolean;
+  };
 }) {
   const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
   const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
@@ -4412,6 +4515,15 @@ function InteractiveRuntimeMapView({
         <h3 className="text-sm font-extrabold text-slate-950">Interactive Map</h3>
       </div>
 
+      <SpatialInsightV2ToolbarButtons
+        busy={spatialInsightActions?.busy}
+        osmBusy={spatialInsightActions?.osmBusy}
+        onTakeSnapshot={spatialInsightActions?.onTakeSnapshot}
+        onFetchOsm={spatialInsightActions?.onFetchOsm}
+        disabled={spatialInsightActions?.disabled}
+        visible={Boolean(spatialInsightActions)}
+      />
+
       {isLoadingModule31 ? (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-600">
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -4460,17 +4572,27 @@ function InteractiveRuntimeMapView({
   );
 
   const statusFooter = (
-    <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
-      <span>
-        {filteredModule31Config
-          ? `${filteredModule31Config.records.length} records · same 2D map family renderer`
-          : isLoadingModule31
-            ? 'Module 3.1 processing finalized data'
-            : waitingStatus}
-      </span>
-      <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
-      <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
-      <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+    <div className="flex flex-wrap items-center justify-between Gap-3 border-t border-slate-100 bg-white px-5 py-3">
+      <div className="grid flex-1 Gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
+        <span>
+          {filteredModule31Config
+            ? `${filteredModule31Config.records.length} records · same 2D map family renderer`
+            : isLoadingModule31
+              ? 'Module 3.1 processing finalized data'
+              : waitingStatus}
+        </span>
+        <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+        <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
+        <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+      </div>
+      <SpatialInsightV2ToolbarButtons
+        busy={spatialInsightActions?.busy}
+        osmBusy={spatialInsightActions?.osmBusy}
+        onTakeSnapshot={spatialInsightActions?.onTakeSnapshot}
+        onFetchOsm={spatialInsightActions?.onFetchOsm}
+        disabled={spatialInsightActions?.disabled}
+        visible={Boolean(spatialInsightActions)}
+      />
     </div>
   );
 
@@ -4615,6 +4737,7 @@ function InteractiveRuntime3DMapView({
   onMapLoaded,
   insightLayers = [],
   onPlottedSnapshotChange,
+  spatialInsightActions,
 }: {
   moduleOutput: Module1IntentOutput | null;
   module2Output: Module2Output | null;
@@ -4627,6 +4750,13 @@ function InteractiveRuntime3DMapView({
   onMapLoaded?: (config: GeneratedMapConfig) => void;
   insightLayers?: InteractiveInsightLayerPoint[];
   onPlottedSnapshotChange?: (delta: InteractivePlottedDelta) => void;
+  spatialInsightActions?: {
+    busy?: boolean;
+    osmBusy?: boolean;
+    onTakeSnapshot?: () => void;
+    onFetchOsm?: () => void;
+    disabled?: boolean;
+  };
 }) {
   const resolvedCity = useMemo(() => resolveInteractiveCity(moduleOutput), [moduleOutput]);
   const intentLocations = useMemo(() => extractIntentLocations(moduleOutput), [moduleOutput]);
@@ -4754,37 +4884,6 @@ function InteractiveRuntime3DMapView({
     };
   }, [selectedCorridors, selectedCity, selectedLocation]);
 
-  useEffect(() => {
-    if (!onPlottedSnapshotChange || !moduleOutput) return;
-    onPlottedSnapshotChange({
-      module31Config: module31Config || undefined,
-      records: mergeInteractiveMarkersIntoRecords(module31Config?.records, snapshotInteractiveMarkers(markers)),
-      projectMarkers: snapshotInteractiveMarkers(markers),
-      amenities,
-      corridors: corridorLines,
-      runtimeContext: {
-        city: selectedCity || undefined,
-        location: selectedLocation || undefined,
-        basemap: basemapMode,
-        selectedAmenities,
-        selectedCorridors,
-      },
-    });
-  }, [
-    amenities,
-    basemapMode,
-    corridorLines,
-    markers,
-    module31Config,
-    moduleOutput,
-    onPlottedSnapshotChange,
-    selectedAmenities,
-    selectedCity,
-    selectedCorridors,
-    selectedLocation,
-  ]);
-
-
   const catchmentEntityList = useMemo(
     () => buildCatchmentEntityList(rows, moduleOutput, module2Output),
     [rows, moduleOutput, module2Output],
@@ -4821,6 +4920,36 @@ function InteractiveRuntime3DMapView({
     [module31Config, catchmentActive, selectedCatchmentCategories, catchmentEntityList.length, markers]
   );
 
+  useEffect(() => {
+    if (!onPlottedSnapshotChange || !moduleOutput) return;
+    onPlottedSnapshotChange({
+      module31Config: filteredModule31Config || undefined,
+      records: mergeInteractiveMarkersIntoRecords(filteredModule31Config?.records, snapshotInteractiveMarkers(markers)),
+      projectMarkers: snapshotInteractiveMarkers(markers),
+      amenities,
+      corridors: corridorLines,
+      runtimeContext: {
+        city: selectedCity || undefined,
+        location: selectedLocation || undefined,
+        basemap: basemapMode,
+        selectedAmenities,
+        selectedCorridors,
+      },
+    });
+  }, [
+    amenities,
+    basemapMode,
+    corridorLines,
+    filteredModule31Config,
+    markers,
+    moduleOutput,
+    onPlottedSnapshotChange,
+    selectedAmenities,
+    selectedCity,
+    selectedCorridors,
+    selectedLocation,
+  ]);
+
   const extraDeckLayers = useMemo(
     () => buildInteractive3DOverlayLayers({
       amenities,
@@ -4851,6 +4980,15 @@ function InteractiveRuntime3DMapView({
         <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-600">MapView</p>
         <h3 className="text-sm font-extrabold text-slate-950">Interactive Map 3D</h3>
       </div>
+
+      <SpatialInsightV2ToolbarButtons
+        busy={spatialInsightActions?.busy}
+        osmBusy={spatialInsightActions?.osmBusy}
+        onTakeSnapshot={spatialInsightActions?.onTakeSnapshot}
+        onFetchOsm={spatialInsightActions?.onFetchOsm}
+        disabled={spatialInsightActions?.disabled}
+        visible={Boolean(spatialInsightActions)}
+      />
 
       {isLoadingModule31 ? (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-600">
@@ -4895,17 +5033,27 @@ function InteractiveRuntime3DMapView({
   );
 
   const statusFooter = (
-    <div className="grid gap-2 border-t border-slate-100 bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
-      <span>
-        {filteredModule31Config
-          ? `${filteredModule31Config.records.length} records · same 3D map family renderer`
-          : isLoadingModule31
-            ? 'Module 3.1 processing finalized data'
-            : waitingStatus}
-      </span>
-      <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
-      <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
-      <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+    <div className="flex flex-wrap items-center justify-between Gap-3 border-t border-slate-100 bg-white px-5 py-3">
+      <div className="grid flex-1 Gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 md:grid-cols-4">
+        <span>
+          {filteredModule31Config
+            ? `${filteredModule31Config.records.length} records · same 3D map family renderer`
+            : isLoadingModule31
+              ? 'Module 3.1 processing finalized data'
+              : waitingStatus}
+        </span>
+        <span>{filteredModule31Config ? 'module_3_1_records + osm overlays' : 'Waiting for Module 3.1'}</span>
+        <span>{amenitiesLoading ? 'Waiting for OSM amenities...' : amenitiesStatus}</span>
+        <span>{corridorsLoading ? 'Waiting for OSM corridors...' : corridorsStatus}</span>
+      </div>
+      <SpatialInsightV2ToolbarButtons
+        busy={spatialInsightActions?.busy}
+        osmBusy={spatialInsightActions?.osmBusy}
+        onTakeSnapshot={spatialInsightActions?.onTakeSnapshot}
+        onFetchOsm={spatialInsightActions?.onFetchOsm}
+        disabled={spatialInsightActions?.disabled}
+        visible={Boolean(spatialInsightActions)}
+      />
     </div>
   );
 
@@ -5017,6 +5165,10 @@ const MapSection: React.FC<MapSectionProps> = ({
   onRuntimeGeneratedMapsChange,
   pendingPlottableEnrichment = null,
   onPlottableEnrichmentApplied,
+  spatialV2Busy = false,
+  spatialV2OsmBusy = false,
+  onTakeSpatialSnapshot,
+  onFetchExpandedOsm,
 }) => {
   const [leafletReady, setLeafletReady] = useState(false);
   const [activeViewerModule, setActiveViewerModule] = useState<'3.1' | '3'>('3.1');
@@ -5253,6 +5405,110 @@ const MapSection: React.FC<MapSectionProps> = ({
     },
     [module2Output, moduleOutput],
   );
+
+  const resolveInteractive2DPlotted = React.useCallback((): InteractiveMapPlottedSnapshot | null => {
+    const cached = interactive2DSoftCache?.plottedSnapshot;
+    if (cached?.records?.length || cached?.projectMarkers?.length) return cached;
+    return buildInteractivePlottedSnapshotFromRuntime(
+      interactiveModule31Config,
+      moduleOutput,
+      module2Output,
+      retrievalOutput,
+      generatedBasemapMode,
+      cached ?? undefined,
+    );
+  }, [
+    generatedBasemapMode,
+    interactive2DSoftCache?.plottedSnapshot,
+    interactiveModule31Config,
+    module2Output,
+    moduleOutput,
+    retrievalOutput,
+  ]);
+
+  const resolveInteractive3DPlotted = React.useCallback((): InteractiveMapPlottedSnapshot | null => {
+    const cached = interactive3DSoftCache?.plottedSnapshot;
+    if (cached?.records?.length || cached?.projectMarkers?.length) return cached;
+    return buildInteractivePlottedSnapshotFromRuntime(
+      interactive3DModule31Config,
+      moduleOutput,
+      module2Output,
+      retrievalOutput,
+      generatedBasemapMode,
+      cached ?? undefined,
+    );
+  }, [
+    generatedBasemapMode,
+    interactive3DSoftCache?.plottedSnapshot,
+    interactive3DModule31Config,
+    module2Output,
+    moduleOutput,
+    retrievalOutput,
+  ]);
+
+  const interactive2DSpatialActions = useMemo(() => {
+    if (!onTakeSpatialSnapshot && !onFetchExpandedOsm) return undefined;
+    const disabled = !moduleOutput || !resolveInteractive2DPlotted();
+    return {
+      visible: true,
+      busy: spatialV2Busy,
+      osmBusy: spatialV2OsmBusy,
+      disabled,
+      onTakeSnapshot: onTakeSpatialSnapshot
+        ? () => {
+            const livePlotted = resolveInteractive2DPlotted();
+            if (!livePlotted) return;
+            void onTakeSpatialSnapshot('interactive-map', livePlotted);
+          }
+        : undefined,
+      onFetchOsm: onFetchExpandedOsm
+        ? () => {
+            const livePlotted = resolveInteractive2DPlotted();
+            if (!livePlotted) return;
+            void onFetchExpandedOsm('interactive-map', livePlotted);
+          }
+        : undefined,
+    };
+  }, [
+    moduleOutput,
+    onFetchExpandedOsm,
+    onTakeSpatialSnapshot,
+    resolveInteractive2DPlotted,
+    spatialV2Busy,
+    spatialV2OsmBusy,
+  ]);
+
+  const interactive3DSpatialActions = useMemo(() => {
+    if (!onTakeSpatialSnapshot && !onFetchExpandedOsm) return undefined;
+    const disabled = !moduleOutput || !resolveInteractive3DPlotted();
+    return {
+      visible: true,
+      busy: spatialV2Busy,
+      osmBusy: spatialV2OsmBusy,
+      disabled,
+      onTakeSnapshot: onTakeSpatialSnapshot
+        ? () => {
+            const livePlotted = resolveInteractive3DPlotted();
+            if (!livePlotted) return;
+            void onTakeSpatialSnapshot('interactive-map-3d', livePlotted);
+          }
+        : undefined,
+      onFetchOsm: onFetchExpandedOsm
+        ? () => {
+            const livePlotted = resolveInteractive3DPlotted();
+            if (!livePlotted) return;
+            void onFetchExpandedOsm('interactive-map-3d', livePlotted);
+          }
+        : undefined,
+    };
+  }, [
+    moduleOutput,
+    onFetchExpandedOsm,
+    onTakeSpatialSnapshot,
+    resolveInteractive3DPlotted,
+    spatialV2Busy,
+    spatialV2OsmBusy,
+  ]);
 
   const applyPlottableEnrichmentToCache = React.useCallback(
     (
@@ -6112,6 +6368,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                 onMapLoaded={handleGeneratedMapLoaded}
                 insightLayers={interactive2DSoftCache?.plottedSnapshot.insightLayers || []}
                 onPlottedSnapshotChange={handleInteractive2DPlottedChange}
+                spatialInsightActions={interactive2DSpatialActions}
               />
             ) : activeFamily === 'interactive-map-3d' ? (
               <InteractiveRuntime3DMapView
@@ -6127,6 +6384,7 @@ const MapSection: React.FC<MapSectionProps> = ({
                 onMapLoaded={handleGeneratedMapLoaded}
                 insightLayers={interactive3DSoftCache?.plottedSnapshot.insightLayers || []}
                 onPlottedSnapshotChange={handleInteractive3DPlottedChange}
+                spatialInsightActions={interactive3DSpatialActions}
               />
             ) : (
               <GeneratedMapEmptyState

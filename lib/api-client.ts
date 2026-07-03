@@ -7,6 +7,8 @@ export const API_BASE_URL = (
 export const API_ROUTES = {
   authRegister: '/auth/register',
   authLogin: '/auth/login',
+  authLogout: '/auth/logout',
+  authMe: '/auth/me',
   generationQuery: '/generation/query',
   generationUploadData: '/generation/upload-data',
   generationStream: '/generation/stream',
@@ -36,6 +38,7 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
   }
 
   return fetch(apiUrl(path), {
+    credentials: 'include',
     ...options,
     headers,
   });
