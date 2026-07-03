@@ -311,7 +311,13 @@ function summarizeEvent(event) {
     if (c?.web_error) {
       baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
     }
+    if ((c?.total_found || 0) === 0) {
+      baseMsg = "[INFO] No comparable projects were found. Continuing with the original valuation flow using subject-only evidence.";
+    }
     return baseMsg;
+  }
+  if (event.type === "comparables_empty") {
+    return event.content?.message || "No comparables were found. Continuing with the original valuation flow.";
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
@@ -4835,6 +4841,19 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setPipelineDone(true);
             onValuationResult?.(valuationPayload);
             updateQuickEstimateProgress("complete", "Quick estimate valuation complete.");
+            if (!comparables.length) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: "No comparable projects were found. Continue using subject-only data to match the original valuation flow.",
+                  meta: "info",
+                  db_no_results: true,
+                  web_comparable_search_done: true,
+                  comparables: null,
+                },
+              ]);
+            }
             setMessages((prev) => [
               ...prev,
               {
