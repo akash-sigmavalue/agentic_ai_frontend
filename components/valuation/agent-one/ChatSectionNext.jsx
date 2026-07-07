@@ -3851,6 +3851,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/cost_calculation_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -4042,6 +4043,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/listing_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: subjectData,
@@ -4645,6 +4647,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               project_id: String(projId),
@@ -4690,6 +4693,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         try {
           const response = await fetch(apiUrl("/listing_stream"), {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               subject: subjectData,
@@ -4922,6 +4926,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/cleaning_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listings: listingData || [],          // web listings only — cleaning applies here
@@ -5125,6 +5130,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       const response = await fetch(apiUrl("/recalculate_plot_rates_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -5263,6 +5269,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cleaned_listings: cleanedData,
@@ -5387,6 +5394,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/factorial_analysis_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           factorial_data: factData,
@@ -5683,6 +5691,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     try {
       const response = await fetch(apiUrl(`/ask_stream_valuation?question=${encodeURIComponent(trimmed)}&comparable_source=both`), {
+        credentials: "include",
         signal: abortRef.current.signal,
       });
 
@@ -6043,6 +6052,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/geocode"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           location_name: locName,
@@ -6161,6 +6171,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     try {
       const response = await fetch(apiUrl("/factorial_stream"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cleaned_listings: mockCleaned,

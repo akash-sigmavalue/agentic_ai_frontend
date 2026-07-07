@@ -264,6 +264,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         try {
           res = await fetch(apiUrl("/api/local-amenities"), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: amenityRadius, city_name: city })
           });
@@ -351,6 +352,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
         try {
           res = await fetch(apiUrl("/api/builtup-density"), {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: Number(m.lat), lng: Number(m.lng), radius: densityRadius })
           });
@@ -500,6 +502,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
       const res = await fetch(apiUrl("/api/cbd-identification"), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject, comparables }),
       });
