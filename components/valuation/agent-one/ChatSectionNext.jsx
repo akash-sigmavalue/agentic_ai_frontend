@@ -23,7 +23,8 @@ import {
   Filter,
   Search,
   X,
-  Zap
+  Zap,
+  Loader2,
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -31,6 +32,81 @@ const QUICK_PROMPTS = [
   "what is the value of a 500 sqft retail shop on the ground floor of MGF Metropolitan Mall, MG Road, Gurgaon? Currently self-used. Market Approach.. Frontage: 18",
   "What is the market value of a 3BHK flat in Godrej Infinity, Keshav Nagar, Pune, 1100 sqft, floor 12/20, East facing",
 ];
+
+const QUICK_ESTIMATE_DEFAULTS = {
+  mode: "research",
+  property_type: "apartment",
+  recommended_approach: "market",
+  project_name: "",
+  location_name: "",
+  city_name: "",
+  country: "India",
+  salable_area_sqft: "",
+  builtup_area_sqft: "",
+  plot_area_sqft: "",
+  age_of_property: "",
+  configuration: "",
+  floor: "",
+  total_floors: "",
+  facing: "",
+  quality: "",
+  building_type: "residential",
+  land_type: "residential",
+  frontage: "",
+  occupancy_status: "vacant",
+  clear_height: "",
+  water_availability: "good",
+  construction_rate_per_sqft: "",
+  total_life_of_building: "",
+  currency: "INR",
+};
+
+const QUICK_FIELD_CONFIG = {
+  project_name: { label: "Project", type: "text", placeholder: "Project or society name" },
+  location_name: { label: "Location", type: "text", placeholder: "Locality or micro-market" },
+  "sub-locality": { label: "Sub-locality", type: "text", placeholder: "Fetched micro-market pockets" },
+  city_name: { label: "City", type: "text", placeholder: "City" },
+  country: { label: "Country", type: "text", placeholder: "Country" },
+  salable_area_sqft: { label: "Saleable Area", type: "number", placeholder: "sqft" },
+  builtup_area_sqft: { label: "Built-up Area", type: "number", placeholder: "sqft" },
+  plot_area_sqft: { label: "Plot Area", type: "number", placeholder: "sqft" },
+  age_of_property: { label: "Age", type: "number", placeholder: "years" },
+  configuration: { label: "Config", type: "text", placeholder: "2BHK, 3BHK, etc." },
+  floor: { label: "Floor", type: "number", placeholder: "Floor" },
+  total_floors: { label: "Total Floors", type: "number", placeholder: "Total" },
+  facing: { label: "Facing", type: "text", placeholder: "East, West..." },
+  quality: { label: "Quality", type: "select", options: ["standard", "premium", "luxury"] },
+  building_type: { label: "Building Type", type: "select", options: ["residential", "commercial", "industrial"] },
+  land_type: { label: "Land Type", type: "select", options: ["agricultural", "non_agricultural", "residential", "commercial"] },
+  frontage: { label: "Frontage", type: "number", placeholder: "ft" },
+  occupancy_status: { label: "Occupancy", type: "select", options: ["vacant", "leased", "self_use"] },
+  clear_height: { label: "Clear Height", type: "number", placeholder: "ft" },
+  water_availability: { label: "Water", type: "select", options: ["good", "moderate", "poor"] },
+  construction_rate_per_sqft: { label: "Construction Rate", type: "number", placeholder: "per sqft" },
+  total_life_of_building: { label: "Building Life", type: "number", placeholder: "years" },
+};
+
+const QUICK_REQUIRED_FIELDS = {
+  apartment: ["location_name", "country", "salable_area_sqft", "age_of_property"],
+  villa: ["location_name", "country", "plot_area_sqft", "builtup_area_sqft", "age_of_property"],
+  plot: ["location_name", "country", "plot_area_sqft", "land_type"],
+  retail: ["location_name", "country", "salable_area_sqft", "frontage"],
+  commercial_office: ["location_name", "country", "salable_area_sqft", "occupancy_status"],
+  industrial: ["location_name", "country", "plot_area_sqft", "builtup_area_sqft", "clear_height"],
+  agricultural: ["location_name", "country", "plot_area_sqft", "water_availability"],
+  building_land: ["location_name", "country", "building_type", "plot_area_sqft", "builtup_area_sqft", "age_of_property"],
+};
+
+const QUICK_OPTIONAL_FIELDS = {
+  apartment: ["project_name", "city_name", "configuration", "floor", "total_floors", "facing", "quality"],
+  villa: ["project_name", "city_name", "configuration", "quality", "construction_rate_per_sqft", "total_life_of_building"],
+  plot: ["project_name", "city_name", "frontage"],
+  retail: ["project_name", "city_name", "floor", "total_floors", "occupancy_status"],
+  commercial_office: ["project_name", "city_name", "floor", "total_floors", "frontage"],
+  industrial: ["project_name", "city_name", "occupancy_status", "frontage"],
+  agricultural: ["project_name", "city_name"],
+  building_land: ["project_name", "city_name", "quality", "construction_rate_per_sqft", "total_life_of_building"],
+};
 
 const PLACEHOLDER_MAP = {
   project_name: "e.g. Godrej Infinity, Lodha Altamount, Phoenix Marketcity",
@@ -214,7 +290,12 @@ function ReActReasoningReport({ report }) {
 
 function summarizeEvent(event) {
   if (typeof event.content === "string") return event.content;
-  if (event.type === "entities") return "I extracted the structured property details and pushed them into the workflow panel.";
+  if (event.type === "entities") {
+    const sublocalities = formatSublocalities(event.content);
+    return sublocalities
+      ? `I extracted the structured property details and fetched sub-localities for the plot: ${sublocalities}.`
+      : "I extracted the structured property details and pushed them into the workflow panel.";
+  }
   if (event.type === "clarification_needed") return event.content?.question || "I need a few more details before I can continue.";
   if (event.type === "map_confirmation") return event.content?.message || "I found a probable property location.";
   if (event.type === "approach") return "Agent 2 has recommended a valuation approach based on property intelligence.";
@@ -230,7 +311,13 @@ function summarizeEvent(event) {
     if (c?.web_error) {
       baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
     }
+    if ((c?.total_found || 0) === 0) {
+      baseMsg = "[INFO] No comparable projects were found. Continuing with the original valuation flow using subject-only evidence.";
+    }
     return baseMsg;
+  }
+  if (event.type === "comparables_empty") {
+    return event.content?.message || "No comparables were found. Continuing with the original valuation flow.";
   }
   if (event.type === "listing_start") return event.content?.message || "Starting listing search...";
   if (event.type === "listing_progress") {
@@ -256,7 +343,77 @@ function summarizeEvent(event) {
 }
 
 function humanizeFieldName(field) {
-  return field.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+  return field.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function getSubjectSublocalityList(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getSublocalityItems(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function formatSublocalities(data) {
+  const names = getSubjectSublocalityList(data);
+  return names.length > 0 ? names.join(", ") : "";
 }
 
 const getRowKey = (lst, rowIndex = "") => {
@@ -3254,12 +3411,45 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
                 </div>
                 {rateRange && (
-                  <div className="inline-flex flex-col rounded-2xl border border-green-500/20 bg-green-500/[0.06] px-4 py-2">
-                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/80">Indicative Rate Range</span>
-                    <span className="font-mono text-sm font-black text-green-300">
-                      {fmtRate(rateRange.low)} - {fmtRate(rateRange.high)}/{area_unit || "sqft"}
-                    </span>
-                    <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                  <div className="w-full max-w-xs mt-1 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/70">Indicative Rate Band</span>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
+                    </div>
+                    {/* Track */}
+                    <div className="relative h-2 rounded-full overflow-visible" style={{ background: "rgba(255,255,255,0.06)" }}>
+                      {/* Gradient fill between low–high */}
+                      <div
+                        className="absolute inset-y-0 rounded-full"
+                        style={{
+                          left: "0%",
+                          right: "0%",
+                          background: "linear-gradient(90deg, rgba(34,197,94,0.18) 0%, rgba(34,197,94,0.55) 50%, rgba(34,197,94,0.18) 100%)",
+                        }}
+                      />
+                      {/* Center needle pin (point estimate) */}
+                      <div
+                        className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                        style={{ left: "50%" }}
+                      >
+                        <div className="w-1 h-5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.9)]" />
+                      </div>
+                    </div>
+                    {/* Labels row */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col items-start">
+                        <span className="font-mono text-[10px] font-black text-green-300/80">{fmtRate(rateRange.low)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">Low</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="font-mono text-[10px] font-black text-green-400">{fmtRate(finalRate)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-green-400/60">Point Est.</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono text-[10px] font-black text-green-300/80">{fmtRate(rateRange.high)}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">High</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {selectedArea > 0 ? (
@@ -3280,12 +3470,43 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                     {formatter.format(exactValue)}
                   </h2>
                   {valueRange && (
-                    <div className="ml-auto inline-flex flex-col rounded-2xl border border-accent/20 bg-accent/[0.06] px-4 py-2 text-left md:text-right">
-                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/80">Indicative Value Range</span>
-                      <span className="font-mono text-sm font-black text-accent-light">
-                        {formatter.format(valueRange.low)} - {formatter.format(valueRange.high)}
-                      </span>
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim">{rangeLabel}</span>
+                    <div className="w-full space-y-1.5 mt-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/70">Indicative Value Band</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
+                      </div>
+                      {/* Track */}
+                      <div className="relative h-2 rounded-full overflow-visible" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div
+                          className="absolute inset-y-0 rounded-full"
+                          style={{
+                            left: "0%",
+                            right: "0%",
+                            background: "linear-gradient(90deg, rgba(167,139,250,0.18) 0%, rgba(167,139,250,0.55) 50%, rgba(167,139,250,0.18) 100%)",
+                          }}
+                        />
+                        <div
+                          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                          style={{ left: "50%" }}
+                        >
+                          <div className="w-1 h-5 rounded-full bg-accent shadow-[0_0_8px_rgba(167,139,250,0.9)]" />
+                        </div>
+                      </div>
+                      {/* Labels row */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex flex-col items-start">
+                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.low)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">Low</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="font-mono text-[10px] font-black text-accent">{formatter.format(exactValue)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-accent/60">Point Est.</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.high)}</span>
+                          <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">High</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   <p className="text-[9px] text-text-dim font-semibold uppercase tracking-widest font-semibold">
@@ -3669,6 +3890,391 @@ function CostResultCard({ data, subjectData }) {
   return DashboardContent;
 }
 
+const QUICK_ESTIMATE_PIPELINE_STAGES = [
+  { id: "geocoding", label: "Location", desc: "Resolve coordinates for the subject property", icon: MapPin, events: ["geocoding", "geocoding_done"] },
+  { id: "comparables", label: "Comparables", desc: "Search internal database and the web", icon: Search, events: ["comparables", "comparables_web", "comparables_done"] },
+  { id: "listings", label: "Listings", desc: "Fetch live sale listings", icon: FileSearch, events: ["listings"] },
+  { id: "transactions", label: "Transactions", desc: "Pull internal transaction evidence", icon: Database, events: ["transactions"] },
+  { id: "cleaning", label: "Cleaning", desc: "Normalize prices, areas, and duplicates", icon: Sparkles, events: ["cleaning"] },
+  { id: "factorial", label: "Rate Table", desc: "Build statistical rate baseline", icon: TrendingUp, events: ["factorial"] },
+  { id: "factoring", label: "Valuation", desc: "Reconcile final subject rate", icon: ShieldCheck, events: ["factoring"] },
+  { id: "cost", label: "Cost Approach", desc: "Apply depreciated replacement cost", icon: SlidersHorizontal, events: ["cost"], optional: true },
+  { id: "complete", label: "Complete", desc: "Prepare valuation report", icon: CheckCircle, events: ["complete"] },
+];
+
+const QUICK_ESTIMATE_STAGE_EVENT_MAP = QUICK_ESTIMATE_PIPELINE_STAGES.reduce((acc, stage, index) => {
+  stage.events.forEach((eventName) => {
+    acc[eventName] = index;
+  });
+  return acc;
+}, {});
+
+function getQuickEstimateStages(includeCost) {
+  return QUICK_ESTIMATE_PIPELINE_STAGES.filter((stage) => !stage.optional || includeCost);
+}
+
+function resolveQuickEstimateStageIndex(stageName, includeCost) {
+  const stages = getQuickEstimateStages(includeCost);
+  const globalIndex = QUICK_ESTIMATE_STAGE_EVENT_MAP[stageName];
+  if (globalIndex === undefined) return 0;
+  const stageId = QUICK_ESTIMATE_PIPELINE_STAGES[globalIndex]?.id;
+  const localIndex = stages.findIndex((stage) => stage.id === stageId);
+  return localIndex >= 0 ? localIndex : 0;
+}
+
+function formatElapsedTime(startedAt) {
+  if (!startedAt) return "0s";
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
+}
+
+function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, locationLabel }) {
+  const stages = getQuickEstimateStages(includeCost);
+  const activeIndex = Math.min(progress.activeIndex ?? 0, stages.length - 1);
+  const progressPct = stages.length > 1
+    ? Math.round((Math.max(0, activeIndex) / (stages.length - 1)) * 100)
+    : 0;
+  const [elapsed, setElapsed] = useState(() => formatElapsedTime(progress.startedAt));
+
+  useEffect(() => {
+    if (!progress.startedAt) return undefined;
+    setElapsed(formatElapsedTime(progress.startedAt));
+    const timer = setInterval(() => {
+      setElapsed(formatElapsedTime(progress.startedAt));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [progress.startedAt]);
+
+  const detailChips = [];
+  if (progress.detail?.lat && progress.detail?.lng) {
+    detailChips.push(`Coords ${Number(progress.detail.lat).toFixed(4)}, ${Number(progress.detail.lng).toFixed(4)}`);
+  }
+
+  const selectedComparables = Array.isArray(progress.detail?.comparables) ? progress.detail.comparables : [];
+
+  return (
+    <div className="mr-8 overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 shadow-panel animate-in slide-in-from-bottom-2 duration-300">
+      <div className="border-b border-accent/15 bg-[linear-gradient(135deg,rgba(56,189,248,0.12),rgba(168,85,247,0.08))] px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10">
+              <Zap className="h-5 w-5 text-accent" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-40" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
+              </span>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+                Quick Estimate Running
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {propertyLabel} · {locationLabel}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-full border border-accent/20 bg-bg-input/80 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent">
+            {elapsed}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-text-dim">
+            <span>Pipeline progress</span>
+            <span className="text-accent">{progressPct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-border/30">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-purple))] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+              style={{ width: `${Math.max(8, progressPct)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <div className="grid gap-2">
+          {stages.map((stage, index) => {
+            const Icon = stage.icon;
+            const isComplete = index < activeIndex || (stage.id === "complete" && progress.done);
+            const isActive = index === activeIndex && !progress.done;
+
+            return (
+              <div
+                key={stage.id}
+                className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300 ${
+                  isActive
+                    ? "border-accent/35 bg-accent/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]"
+                    : isComplete
+                      ? "border-success/20 bg-success/5"
+                      : "border-border/40 bg-bg-input/40 opacity-70"
+                }`}
+              >
+                <div
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                    isActive
+                      ? "border-accent/30 bg-accent/15 text-accent"
+                      : isComplete
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-border/50 bg-bg-card text-text-dim"
+                  }`}
+                >
+                  {isComplete ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : isActive ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Icon className="h-4 w-4" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
+                      isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                    }`}>
+                      {stage.label}
+                    </p>
+                    {isActive && (
+                      <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent animate-pulse">
+                        Live
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">
+                    {isActive && progress.message ? progress.message : stage.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Selected Comparables Card List ───────────────────────── */}
+        {selectedComparables.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-accent/20 bg-bg-input/40 animate-in fade-in slide-in-from-bottom-2 duration-400">
+            <div className="flex items-center gap-2 border-b border-accent/15 bg-accent/5 px-3.5 py-2">
+              <span className="text-accent text-[10px]">◈</span>
+              <p className="text-[9px] font-black uppercase tracking-[0.22em] text-accent">
+                Selected Comparables
+              </p>
+              <span className="ml-auto rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[8px] font-bold text-accent">
+                {selectedComparables.length} found
+              </span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {selectedComparables.map((comp, idx) => {
+                const src = (comp.data_source || "").trim();
+                const isWeb = src.toLowerCase() === "web";
+                const isDb = src.toLowerCase().includes("internal") || src.toLowerCase() === "transaction";
+                const sourceBadgeClass = isWeb
+                  ? "border-sky-400/30 bg-sky-400/10 text-sky-300"
+                  : isDb
+                    ? "border-violet-400/30 bg-violet-400/10 text-violet-300"
+                    : "border-border/40 bg-bg-card/60 text-text-dim";
+                const sourceIcon = isWeb ? "🌐" : isDb ? "🗄️" : "📁";
+                const sourceLabel = isWeb ? "Web" : isDb ? "Transaction" : (src || "Unknown");
+                const reason = comp.confidence_reasoning || comp.reason || "";
+                return (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-1.5 px-3.5 py-2.5 hover:bg-accent/[0.03] transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="flex-1 truncate text-[11px] font-semibold text-text-primary leading-tight">
+                        {comp.project_name || "—"}
+                      </span>
+                      <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${sourceBadgeClass}`}>
+                        {sourceIcon} {sourceLabel}
+                      </span>
+                    </div>
+                    {reason && (
+                      <p className="text-[10px] leading-relaxed text-text-dim line-clamp-2">
+                        {reason}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {(progress.message || detailChips.length > 0) && (
+          <div className="rounded-xl border border-border/50 bg-bg-input/60 px-3.5 py-3">
+            {progress.message && (
+              <p className="text-xs leading-relaxed text-text-primary">{progress.message}</p>
+            )}
+            {detailChips.length > 0 && (
+              <div className={`flex flex-wrap gap-2 ${progress.message ? "mt-2.5" : ""}`}>
+                {detailChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="text-[10px] leading-relaxed text-text-dim">
+          This usually takes 1–3 minutes depending on listing availability and comparable coverage.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
+  const propertyType = values.property_type || "apartment";
+  const requiredFields = QUICK_REQUIRED_FIELDS[propertyType] || QUICK_REQUIRED_FIELDS.apartment;
+  const optionalFields = QUICK_OPTIONAL_FIELDS[propertyType] || [];
+  const fields = [...requiredFields, ...optionalFields].filter((field, index, arr) => arr.indexOf(field) === index);
+  const isCostCapable = propertyType === "villa" || propertyType === "building_land";
+
+  const updateField = (field, value) => {
+    const next = { ...values, [field]: value };
+    if (field === "property_type") {
+      next.recommended_approach = value === "building_land" ? "cost" : "market";
+    }
+    onChange(next);
+  };
+
+  const missingRequired = requiredFields.filter((field) => {
+    const value = values[field];
+    return value === undefined || value === null || String(value).trim() === "";
+  });
+
+  const renderField = (field) => {
+    const config = QUICK_FIELD_CONFIG[field];
+    if (!config) return null;
+    const isRequired = requiredFields.includes(field);
+
+    return (
+      <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
+        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">
+          {config.label}{isRequired ? " *" : ""}
+        </span>
+        {config.type === "select" ? (
+          <select
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+          >
+            {(config.options || []).map((option) => (
+              <option key={option} value={option} style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>
+                {option.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={config.type}
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            placeholder={config.placeholder}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
+          />
+        )}
+      </label>
+    );
+  };
+
+  return (
+    <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel">
+      <div className="border-b border-accent/15 bg-accent/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+              <Zap className="h-5 w-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Quick Estimate</p>
+              <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+                Enter the subject details once and get a direct valuation result.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+            Research Mode
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Property Information</p>
+              <p className="mt-1 text-[11px] text-text-dim">Start with the identity fields, then add the remaining details.</p>
+            </div>
+            <div className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+              Step 1 First
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {['project_name', 'location_name', 'city_name', 'country'].map(renderField)}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Property Type</span>
+            <select
+              value={propertyType}
+              onChange={(event) => updateField("property_type", event.target.value)}
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+            >
+              <option value="apartment" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Apartment</option>
+              <option value="villa" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Villa</option>
+              <option value="plot" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Plot</option>
+              <option value="retail" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Retail</option>
+              <option value="commercial_office" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Commercial Office</option>
+              <option value="building_land" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Building + Land</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Approach</span>
+            <select
+              value={values.recommended_approach}
+              onChange={(event) => updateField("recommended_approach", event.target.value)}
+              disabled={!isCostCapable && values.recommended_approach === "market"}
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
+            >
+              <option value="market" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Market Approach</option>
+              {isCostCapable && <option value="cost" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Cost Approach</option>}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {fields.filter((field) => !['project_name', 'location_name', 'city_name', 'country'].includes(field)).map(renderField)}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-3">
+          <p className="text-[10px] leading-relaxed text-text-dim">
+            Uses comparables, listings, transactions, cleaning, and factoring.
+          </p>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={disabled || missingRequired.length > 0}
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Zap className="h-4 w-4" />
+            Get Valuation
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -3685,12 +4291,23 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     }
   }, [revertNotice]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isQuickEstimateStreaming, setIsQuickEstimateStreaming] = useState(false);
+  const [quickEstimateValues, setQuickEstimateValues] = useState(QUICK_ESTIMATE_DEFAULTS);
+  const [quickEstimateProgress, setQuickEstimateProgress] = useState({
+    activeIndex: 0,
+    message: "Connecting to quick estimate stream...",
+    detail: {},
+    done: false,
+    startedAt: null,
+  });
+  const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
   const [tokenStats, setTokenStats] = useState({
     total_tokens: 0,
     cost_usd: 0,
     model_breakdown: {},
-    tool_breakdown: {}
+    tool_breakdown: {},
+    stage_breakdown: {}
   });
   const [showTokenBreakdown, setShowTokenBreakdown] = useState(false);
 
@@ -3727,6 +4344,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     );
     return modelCost + toolCost;
   }, [tokenStats.model_breakdown, tokenStats.tool_breakdown]);
+
+  const stageBreakdownEntries = useMemo(() => {
+    return Object.entries(tokenStats.stage_breakdown || {})
+      .filter(([, usage]) => (usage.total || 0) > 0)
+      .sort((a, b) => (a[0] || "").localeCompare(b[0] || ""));
+  }, [tokenStats.stage_breakdown]);
 
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [clarificationPrompt, setClarificationPrompt] = useState("");
@@ -4027,6 +4650,258 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setFetchedCompIds(new Set());
   };
 
+  const buildQuickEstimatePayload = () => {
+    const numericFields = [
+      "salable_area_sqft",
+      "builtup_area_sqft",
+      "plot_area_sqft",
+      "age_of_property",
+      "floor",
+      "total_floors",
+      "frontage",
+      "clear_height",
+      "construction_rate_per_sqft",
+      "total_life_of_building",
+    ];
+
+    const payload = {
+      ...quickEstimateValues,
+      age_years: quickEstimateValues.age_of_property,
+      construction_quality: quickEstimateValues.quality,
+      listing_type: "sale",
+      area_unit: "sqft",
+    };
+
+    numericFields.forEach((field) => {
+      if (payload[field] === "" || payload[field] === null || payload[field] === undefined) {
+        delete payload[field];
+      } else {
+        payload[field] = Number(payload[field]);
+      }
+    });
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === "" || payload[key] === null || payload[key] === undefined) {
+        delete payload[key];
+      }
+    });
+
+    return payload;
+  };
+
+  const submitQuickEstimate = async () => {
+    if (isQuickEstimateStreaming) return;
+
+    setShowQuickEstimateModal(false);
+    abortRef.current?.abort?.();
+    abortRef.current = new AbortController();
+    const payload = buildQuickEstimatePayload();
+    const propertyLabel = String(payload.property_type || "property").replaceAll("_", " ");
+    const locationLabel = payload.location_name || payload.city_name || "selected location";
+    const summary = `Research quick estimate for ${propertyLabel} in ${locationLabel}`;
+    const includeCost = payload.recommended_approach === "cost"
+      && ["villa", "building_land"].includes(String(payload.property_type || "").toLowerCase());
+    const startedAt = Date.now();
+
+    onClear?.();
+    clearInteractiveState();
+    setMessages([
+      { role: "user", content: summary, meta: "Now" },
+    ]);
+    setCurrentQuestion(summary);
+    setOriginalQuestion(summary);
+    setCurrentStage("Quick Estimate: Starting");
+    setStreamingNote("");
+    setQuickEstimateProgress({
+      activeIndex: 0,
+      message: "Starting quick estimate...",
+      detail: {},
+      done: false,
+      startedAt,
+    });
+    setIsQuickEstimateStreaming(true);
+
+    const updateQuickEstimateProgress = (stageName, message, detail = {}) => {
+      const stages = getQuickEstimateStages(includeCost);
+      let activeIndex = resolveQuickEstimateStageIndex(stageName, includeCost);
+      if (stageName.endsWith("_done")) {
+        activeIndex = Math.min(activeIndex + 1, stages.length - 1);
+      }
+      setQuickEstimateProgress((prev) => ({
+        ...prev,
+        activeIndex,
+        message: message || prev.message,
+        detail: { ...prev.detail, ...detail },
+        done: stageName === "complete",
+      }));
+    };
+
+    try {
+      const response = await fetch(apiUrl("/quick_estimate_stream"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: abortRef.current.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Quick Estimate request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let resolvedCoords = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+          onEvent?.(event);
+
+          if (event.type === "quick_estimate_start") {
+            setCurrentStage("Quick Estimate: Running");
+            updateQuickEstimateProgress("geocoding", event.content?.message || "Starting quick estimate...");
+          } else if (event.type === "quick_estimate_progress") {
+            const stage = event.stage || "quick_estimate";
+            const message = event.content?.message || "Quick estimate update received.";
+            const detail = {};
+            if (event.content?.lat && event.content?.lng) {
+              resolvedCoords = {
+                lat: Number(event.content.lat),
+                lng: Number(event.content.lng),
+              };
+              detail.lat = event.content.lat;
+              detail.lng = event.content.lng;
+            }
+            if (event.content?.count) {
+              detail.count = event.content.count;
+            }
+            if (Array.isArray(event.content?.comparables) && event.content.comparables.length > 0) {
+              detail.count = event.content.comparables.length;
+              detail.comparables = event.content.comparables;
+            }
+            updateQuickEstimateProgress(stage, message, detail);
+            setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
+          } else if (event.type === "quick_estimate_validation_error") {
+            const missing = event.content?.missing_fields?.join(", ") || "required fields";
+            updateQuickEstimateProgress("geocoding", event.content?.message || `Missing required fields: ${missing}`);
+            setIsQuickEstimateStreaming(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: event.content?.message || `Missing required fields: ${missing}`,
+                meta: "error",
+              },
+            ]);
+          } else if (event.type === "quick_estimate_result") {
+            const result = event.content || {};
+            const analysis = {
+              ...result,
+              subject_final_rate: result.subject_final_rate ?? result.subject_final_plot_rate,
+            };
+            const resultSubject = result.subject || {};
+            const subjectObj = {
+              ...payload,
+              ...resultSubject,
+              project_name: payload.project_name || "Subject Property",
+              location_name: resultSubject.location_name || payload.location_name || "",
+              country: payload.country || "India",
+              currency: payload.currency || "INR",
+              property_type: payload.property_type || "apartment",
+              recommended_approach: payload.recommended_approach || "market",
+              age_years: payload.age_of_property,
+              lat: result.lat || payload.lat || resolvedCoords?.lat || 0,
+              lng: result.lng || payload.lng || resolvedCoords?.lng || 0,
+            };
+            const comparables = Array.isArray(result.comparables) ? result.comparables : [];
+            const selected = new Set(comparables.map((_, index) => index));
+            const valuationPayload = {
+              type: subjectObj.recommended_approach || "market",
+              subjectData: subjectObj,
+              factorialAnalysis: analysis,
+              costCalculation: result.cost_calculation_data || null,
+              factorialData: null,
+              timestamp: new Date().toISOString(),
+            };
+
+            setSubjectData(subjectObj);
+            subjectDataRef.current = subjectObj;
+            setComparableData(comparables.length > 0 ? comparables : null);
+            setSelectedComps(selected);
+            setFactorialAnalysisData(analysis);
+            setCostCalculationData(result.cost_calculation_data || null);
+            setPipelineDone(true);
+            onValuationResult?.(valuationPayload);
+            updateQuickEstimateProgress("complete", "Quick estimate valuation complete.");
+            if (!comparables.length) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: "No comparable projects were found. Continue using subject-only data to match the original valuation flow.",
+                  meta: "info",
+                  db_no_results: true,
+                  web_comparable_search_done: true,
+                  comparables: null,
+                },
+              ]);
+            }
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: "Quick estimate valuation is ready.",
+                meta: "quick estimate result",
+                factorial_analysis_data: analysis,
+                cost_calculation_data: result.cost_calculation_data || null,
+                sub_locality: result.sub_locality || resultSubject.sub_locality || null,
+                sub_locality_list: result["sub-locality"] || resultSubject["sub-locality"] || [],
+                location_details: result.location_details || resultSubject.location_details || null,
+              },
+            ]);
+          } else if (event.type === "error") {
+            setIsQuickEstimateStreaming(false);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `Quick Estimate failed: ${event.content}`,
+                meta: "error",
+              },
+            ]);
+          } else if (event.type === "quick_estimate_done") {
+            setCurrentStage("Quick Estimate: Complete");
+            setQuickEstimateProgress((prev) => ({ ...prev, done: true }));
+            window.setTimeout(() => setIsQuickEstimateStreaming(false), 900);
+          }
+        }
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setIsQuickEstimateStreaming(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Quick Estimate failed: ${error.message}`,
+            meta: "error",
+          },
+        ]);
+      }
+    } finally {
+      setStreamingNote("");
+    }
+  };
+
   // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
   const submitSubjectOnlyListingFetch = async () => {
     if (!subjectData || isListingStreaming) return;
@@ -4261,10 +5136,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Construct identity, type, approach, and detail fields matching current property type
     const identityFields = [
-      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
-      { field: "location_name", label: "Location / Locality", type: "text" },
-      { field: "city_name", label: "City Name", type: "text" },
-      { field: "country", label: "Country", type: "text" },
+      ...(activeType !== "plot" ? [{ field: "project_name", label: "Project Name", type: "text", required: false }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text", required: true },
+      { field: "city_name", label: "City Name", type: "text", required: false },
+      { field: "country", label: "Country", type: "text", required: false },
     ];
     const typeFields = [
       {
@@ -4305,12 +5180,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
       ];
     } else if (activeType === "plot") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         {
           field: "land_type", label: "Land Type", type: "select", options: [
             { value: "agricultural", label: "Agricultural" },
@@ -4757,12 +5634,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     total: currentModelStats.total + total
                   };
 
+                  const nextStageBreakdown = { ...prev.stage_breakdown };
+                  const stageName = "Listing Search";
+                  const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
+                  nextStageBreakdown[stageName] = {
+                    prompt: currentStageStats.prompt + promptDiff,
+                    completion: currentStageStats.completion + completionDiff,
+                    total: currentStageStats.total + total
+                  };
+
                   const addedCost = getModelCost(model, promptDiff, completionDiff);
 
                   return {
                     ...prev,
                     total_tokens: prev.total_tokens + total,
                     model_breakdown: nextModelBreakdown,
+                    stage_breakdown: nextStageBreakdown,
                     cost_usd: (prev.cost_usd || 0) + addedCost
                   };
                 });
@@ -5462,12 +6349,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   total: currentModelStats.total + total
                 };
 
+                const nextStageBreakdown = { ...prev.stage_breakdown };
+                const stageName = "Agent Factoring (Stage 5)";
+                const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
+                nextStageBreakdown[stageName] = {
+                  prompt: currentStageStats.prompt + promptDiff,
+                  completion: currentStageStats.completion + completionDiff,
+                  total: currentStageStats.total + total
+                };
+
                 const addedCost = getModelCost(model, promptDiff, completionDiff);
 
                 return {
                   ...prev,
                   total_tokens: prev.total_tokens + total,
                   model_breakdown: nextModelBreakdown,
+                  stage_breakdown: nextStageBreakdown,
                   cost_usd: (prev.cost_usd || 0) + addedCost,
                   last_stage_tokens: total,
                   last_stage_name: "Agent Factoring (Stage 5)"
@@ -5651,6 +6548,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
     }
 
+    const sublocalityText = formatSublocalities(sData);
+    if (sublocalityText) {
+      initVals["sub-locality"] = sublocalityText;
+    }
+
     // Ensure all expected fields are strings/numbers, not undefined
     allExpectedFields.forEach(field => {
       if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
@@ -5719,12 +6621,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "token_usage") {
             const content = event.content || {};
-            setTokenStats({
-              total_tokens: content.cumulative_total_tokens || 0,
-              cost_usd: content.cumulative_cost_usd || 0,
-              model_breakdown: content.model_breakdown || {},
-              tool_breakdown: content.tool_breakdown || {}
-            });
+            setTokenStats((prev) => ({
+              ...prev,
+              total_tokens: content.cumulative_total_tokens || prev.total_tokens || 0,
+              cost_usd: content.cumulative_cost_usd || prev.cost_usd || 0,
+              model_breakdown: content.model_breakdown || prev.model_breakdown || {},
+              tool_breakdown: content.tool_breakdown || prev.tool_breakdown || {},
+              stage_breakdown: content.stage_breakdown || prev.stage_breakdown || {}
+            }));
           }
 
 
@@ -5846,7 +6750,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               "intent", "extraction_verified", "coordinates_confirmed",
               "user_requested_approach", "_original_query", "missing_mandatory",
               "clarification_needed", "recommended_approach", "coordinates",
-              "property_type_missing", "pt_clarification", "others_clarification"
+              "property_type_missing", "pt_clarification", "others_clarification",
+              "location_details", "nearby_sublocalities", "location_details_error"
             ];
             const propType = ents?.property_type;
             const projectNameTypes = ["apartment", "villa", "retail", "commercial_office"];
@@ -5866,6 +6771,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             if (ents.coordinates && typeof ents.coordinates === 'object') {
               if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
               if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
+            }
+            const sublocalityText = formatSublocalities(ents);
+            if (sublocalityText) {
+              fields.push({ field: "sub-locality", label: "Sub-locality", type: "text", default: sublocalityText, required: false, readOnly: true });
+              fields.push({ field: "sub-locality-list", label: "Sub-locality List", type: "text", default: getSublocalityItems(ents).join(", "), required: false, readOnly: true });
             }
             const initVals = buildGateInitialValues(fields, currentSubjectObj || ents, currentMapConf);
             setClarificationFields(fields);
@@ -6024,7 +6934,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     if (confirmed) {
       setMapConfirmation(null);
-      submitQuestion(`${currentQuestion}. The map location is confirmed to be correct.`, true, "Location confirmed");
+      submitQuestion(`${currentQuestion}. The map location is confirmed to be correct. Coordinates Confirmed: true. Latitude: ${mapConfirmation.lat}. Longitude: ${mapConfirmation.lng}.`, true, "Location confirmed");
       return;
     }
 
@@ -6033,7 +6943,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     setMapConfirmation(null);
     setClarificationValues((prev) => ({ ...prev, coordinates: "" }));
-    submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}.`, true, `Updated coordinates to ${corrected}`);
+    submitQuestion(`${currentQuestion}. The correct coordinates are ${corrected}. Coordinates Confirmed: true.`, true, `Updated coordinates to ${corrected}`);
   };
 
   const handleGeocodeRefresh = async () => {
@@ -6325,6 +7235,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       const normVal = (val) => {
         if (val === undefined || val === null) return "";
+        if (Array.isArray(val)) return val.map((item) => typeof item === "object" ? item?.name : item).filter(Boolean).join(", ").trim().toLowerCase();
+        if (typeof val === "object") return formatSublocalities(val) || JSON.stringify(val);
         return String(val).trim().toLowerCase();
       };
 
@@ -6428,18 +7340,25 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
     };
     const isFilled = String(val).trim() !== "";
+    const isRequired = schema.required !== false;
+    const isReadOnly = schema.readOnly === true;
+    const sublocalityItems = schema.field === "sub-locality"
+      ? getSubjectSublocalityList(gateValues)
+      : [];
 
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
       return (
         <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
           <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
             {schema.label || humanizeFieldName(schema.field)}
+            {isRequired && <span className="text-danger ml-0.5">*</span>}
             {isFilled && <span className="ml-1.5 inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
           </span>
           <select
             value={val}
             onChange={e => update(e.target.value)}
-            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+            disabled={isReadOnly}
+            className={`rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5 ${isReadOnly ? "cursor-not-allowed opacity-75" : ""}`}
           >
             <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select {schema.label}...</option>
             {schema.options?.map(opt => {
@@ -6457,15 +7376,29 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       <label key={schema.field} className="flex flex-col gap-1.5 min-w-[170px] flex-1">
         <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim flex items-center gap-1.5">
           {schema.label || humanizeFieldName(schema.field)}
+          {isRequired && <span className="text-danger ml-0.5">*</span>}
           {isFilled && <span className="inline-flex items-center rounded-full bg-success/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success">Autofilled</span>}
         </span>
         <input
           type={schema.type === "number" ? "number" : "text"}
           value={val}
-          onChange={e => update(e.target.value)}
+          readOnly={isReadOnly}
+          onChange={e => !isReadOnly && update(e.target.value)}
           placeholder={PLACEHOLDER_MAP[schema.field] || `Enter ${schema.label || humanizeFieldName(schema.field)}`}
-          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+          className={`rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5 ${isReadOnly ? "cursor-not-allowed opacity-75" : ""}`}
         />
+        {schema.field === "sub-locality" && sublocalityItems.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {sublocalityItems.map((item) => (
+              <span
+                key={item}
+                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
         {schema.field === "age_years" && String(val) === "0" && (
           <span className="mt-1 px-1 text-[10px] font-medium text-warning tracking-wide">* Property marked as Under Construction</span>
         )}
@@ -6489,10 +7422,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Dynamically build all fields for the active property type
     const identityFields = [
-      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text" }] : []),
-      { field: "location_name", label: "Location / Locality", type: "text" },
-      { field: "city_name", label: "City Name", type: "text" },
-      { field: "country", label: "Country", type: "text" },
+      ...(activeType !== "plot" || isProjectNamePresent ? [{ field: "project_name", label: "Project Name", type: "text", required: false }] : []),
+      { field: "location_name", label: "Location / Locality", type: "text", required: true },
+      { field: "city_name", label: "City Name", type: "text", required: false },
+      { field: "country", label: "Country", type: "text", required: false },
     ];
 
     const typeFields = [
@@ -6538,6 +7471,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "villa" || activeType === "building_land") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         { field: "builtup_area_sqft", label: "Built-up Area (sqft)", type: "number" },
         { field: "age_years", label: "Age of Building (yrs)", type: "number" },
         { field: "facing", label: "Facing", type: "text", required: false },
@@ -6545,6 +7479,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } else if (activeType === "plot") {
       detailFields = [
         { field: "plot_area_sqft", label: "Plot Area (sqft)", type: "number" },
+        ...(formatSublocalities(subjectData || extractionVerification?.entities) ? [{ field: "sub-locality", label: "Sub-locality", type: "text", required: false, readOnly: true }] : []),
         {
           field: "land_type", label: "Land Type", type: "select", options: [
             { value: "agricultural", label: "Agricultural" },
@@ -6594,7 +7529,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Validate mandatory for current step
     const mandatoryStep = gateStep === 1
-      ? (gateValues["project_name"] || activeType === "plot" || gateValues["location_name"])
+      ? (gateValues["location_name"] && String(gateValues["location_name"]).trim() !== "")
       : gateStep === 2
         ? (gateValues["property_type"] && (gateValues["property_type"] !== "building_land" || gateValues["building_type"]))
         : gateStep === 3
@@ -6825,8 +7760,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     >← Back</button>
                     <button
                       type="button"
+                      disabled={!gateValues["location_name"] || String(gateValues["location_name"]).trim() === ""}
                       onClick={gateSubmitFinal}
-                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
+                      className="rounded-xl bg-success px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
                     >Confirm & Proceed →</button>
                   </>
                 ) : (
@@ -6869,10 +7805,38 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     );
   })() : null;
 
-  const anyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
+  const anyStreaming = isStreaming || isQuickEstimateStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
+
+  const quickEstimateModal = showQuickEstimateModal && typeof document !== "undefined" ? createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
+      onClick={() => setShowQuickEstimateModal(false)}
+    >
+      <div 
+        className="relative w-full max-w-2xl animate-in zoom-in-95 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setShowQuickEstimateModal(false)}
+          className="absolute right-4 top-3 z-10 rounded-xl border border-border bg-bg-input p-2 text-text-secondary transition hover:bg-accent/10 hover:text-accent cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <QuickEstimatePanel
+          values={quickEstimateValues}
+          onChange={setQuickEstimateValues}
+          onSubmit={submitQuickEstimate}
+          disabled={anyStreaming}
+        />
+      </div>
+    </div>,
+    document.body
+  ) : null;
 
   return (
-    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+    <>
+      <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
       <div className="panel-header-shell border-b border-border/60">
         <div className="panel-title-shell">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
@@ -6881,6 +7845,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
         </div>
         <div className="flex items-center gap-2">
+          {!anyStreaming && (
+            <button
+              type="button"
+              onClick={() => setShowQuickEstimateModal(true)}
+              className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 transition cursor-pointer"
+            >
+              <Zap className="h-3 w-3" />
+              Quick Estimate
+            </button>
+          )}
           {subjectData && !anyStreaming && (
             <button
               type="button"
@@ -6907,6 +7881,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
               Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
             </p>
+            <button
+              type="button"
+              onClick={() => setShowQuickEstimateModal(true)}
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+            >
+              <Zap className="h-4 w-4" />
+              Quick Estimate Valuation
+            </button>
             <div className="mt-6 grid gap-3 w-full max-w-lg">
               {QUICK_PROMPTS.map((prompt) => (
                 <button
@@ -6945,6 +7927,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   }
                 >
                   {message.content}
+                  {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
+                    <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
+                      {message.sub_locality && (
+                        <p className="mt-1 text-sm font-medium text-text-primary">{message.sub_locality}</p>
+                      )}
+                      {Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {message.sub_locality_list.map((item) => (
+                            <span
+                              key={item}
+                              className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {message.comparables && (
                     <div className="space-y-3">
                       <ComparableTable
@@ -6996,7 +7998,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <>
                           <p className="text-sm text-text-secondary leading-relaxed">
                             Would you like to continue the valuation using only the{" "}
-                            <span className="font-semibold text-accent-light">subject property's own listings</span>?{" "}
+                            <span className="font-semibold text-accent-light">subject property&apos;s own listings</span>?{" "}
                             The system will derive a market rate from available signals for the subject alone
                             (Subject-Only Mode).
                           </p>
@@ -7026,7 +8028,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       {/* After the user confirmed, show a soft status note */}
                       {(listingData || cleanedData || isListingStreaming) && (
                         <p className="text-[10px] text-text-dim italic pt-1">
-                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property's listings.
+                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property&apos;s listings.
                         </p>
                       )}
                     </div>
@@ -7088,7 +8090,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             ))}
 
-            {streamingNote ? (
+            {streamingNote && !isQuickEstimateStreaming ? (
               <div className="mr-8 animate-slide-in">
                 <p className="mb-1 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
                   Assistant · Streaming
@@ -7099,8 +8101,20 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             ) : null}
 
+            {isQuickEstimateStreaming && (
+              <QuickEstimateProgressPanel
+                progress={quickEstimateProgress}
+                includeCost={
+                  quickEstimateValues.recommended_approach === "cost"
+                  && ["villa", "building_land"].includes(String(quickEstimateValues.property_type || "").toLowerCase())
+                }
+                propertyLabel={String(quickEstimateValues.property_type || "property").replaceAll("_", " ")}
+                locationLabel={quickEstimateValues.location_name || quickEstimateValues.city_name || "selected location"}
+              />
+            )}
+
             {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !isListingStreaming && (
+            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
               <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
                 <div
                   onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
@@ -7425,6 +8439,31 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           </div>
                         ))
                     )}
+
+                    <div className="rounded-xl bg-bg-input p-3 border border-border/40">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Stage Breakdown</span>
+                        <span className="text-[10px] font-bold text-accent-light">{stageBreakdownEntries.length} stages</span>
+                      </div>
+                      {stageBreakdownEntries.length === 0 ? (
+                        <p className="text-[10px] text-text-dim italic">No stage usage yet...</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {stageBreakdownEntries.map(([stage, usage]) => (
+                            <div key={stage} className="rounded-lg border border-border/30 bg-bg-card/70 px-2.5 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold text-text-primary">{stage}</span>
+                                <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
+                              </div>
+                              <div className="mt-1 flex gap-3">
+                                <span className="text-[8px] uppercase text-text-dim">Input {usage.prompt?.toLocaleString()}</span>
+                                <span className="text-[8px] uppercase text-text-dim">Output {usage.completion?.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -7459,7 +8498,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <span className="text-[10px] font-bold text-success">Optimal</span>
                       </div>
                       <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
-                        Agent 1 & 2 are using <span className="text-accent-light">gpt-4o-mini</span> to minimize costs, while Stage 3 utilizes <span className="text-warning">web_search</span> for real-time market accuracy.
+                        Stage 1 profiles the property, Stage 2 plans the workflow, Stage 3 finds comparables and listings, and Stage 4/5 handle cleaning and valuation using the models and tools shown above.
                       </div>
                     </div>
                   </div>
@@ -7517,5 +8556,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         )}
       </div>
     </section>
+    {quickEstimateModal}
+    </>
   );
 }
