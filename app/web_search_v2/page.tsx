@@ -43,6 +43,15 @@ type SourceResult = {
   verification_status?: string;
 };
 
+type LinkSelectionReason = {
+  url?: string;
+  label?: string;
+  reason?: string;
+  selection_reason?: string;
+  reason_for_selection?: string;
+  description?: string;
+};
+
 type PlanningSectionResult = {
   document_title?: string;
   plan_title?: string;
@@ -71,10 +80,32 @@ type PlanningSectionResult = {
   related_planning_authority?: string;
   notification_date?: string;
   reason_for_selection?: string;
+  source_page_reason_for_selection?: string;
+  exact_document_reason_for_selection?: string;
+  direct_document_reason_for_selection?: string;
+  notification_reason_for_selection?: string;
+  map_or_gis_reason_for_selection?: string;
+  link_selection_reasons?: Record<string, string> | LinkSelectionReason[];
+  document_url_reasons?: Record<string, string> | LinkSelectionReason[];
+  url_selection_reasons?: Record<string, string> | LinkSelectionReason[];
   summary?: string;
 };
 
 type DocumentUrlStatus = 'direct_pdf' | 'downloadable' | 'webpage' | 'unknown';
+
+type SourceRowInput = {
+  label: string;
+  url?: string;
+  reason?: string;
+};
+
+const perLinkReasonInstruction = `
+
+Planning document link explanation requirement:
+For every PDF link or document URL included in each planning_sections section, generate a separate Reason for Selection for that exact URL. Do not provide one common reason for all links.
+Return URL-specific reasons using fields such as source_page_reason_for_selection, exact_document_reason_for_selection, direct_document_reason_for_selection, notification_reason_for_selection, map_or_gis_reason_for_selection, or a link_selection_reasons map keyed by URL.
+Each reason must explain official source reliability, match with the user's location and coordinates, planning authority or jurisdiction match, section type fit (regulation, development plan, notification, map/GIS, or source page), title/content relevance, current applicability or document status, and confidence that the link is useful and valid.
+`;
 
 const planningSectionTitles: Record<string, string> = {
   section_1: 'Section 1: Building, Development and Zoning Regulations',
@@ -211,11 +242,99 @@ const downloadExactDocument = async (url: string) => {
   }
 };
 
-const renderSourceRow = (label: string, url?: string) => (
+const normalizeReasonText = (value?: string) => value?.replace(/\s+/g, ' ').trim();
+
+const reasonFromCollection = (
+  collection: PlanningSectionResult['link_selection_reasons'],
+  label: string,
+  url: string
+) => {
+  if (!collection) return undefined;
+
+  if (Array.isArray(collection)) {
+    const match = collection.find((entry) => entry.url === url || entry.label === label);
+    return normalizeReasonText(match?.reason || match?.selection_reason || match?.reason_for_selection || match?.description);
+  }
+
+  return normalizeReasonText(collection[url] || collection[label]);
+};
+
+const getFallbackLinkReason = (sectionKey: string, item: PlanningSectionResult, label: string, url: string) => {
+  const title = item.document_title || item.plan_title || item.notification_title || 'this planning document';
+  const authority = item.planning_authority || item.related_planning_authority || item.issuing_authority || 'the relevant planning authority';
+  const jurisdiction = item.jurisdiction || item.applicability_to_location || 'the selected location';
+  const status = item.plan_status || item.document_status || item.applicability || 'current applicability must be verified from the official source';
+  const sectionType = planningSectionTitles[sectionKey]?.replace(/^Section \d+:\s*/, '').toLowerCase() || 'planning source';
+  const trust = normalizeScore(item.trust_score);
+  const relevance = normalizeScore(item.relevance_score);
+  const confidence = normalizeScore(item.confidence_score || item.rank_score);
+  const officialReliability = item.official_source
+    ? 'an official source'
+    : trust >= 80
+      ? 'a high-trust source associated with the planning record'
+      : 'a source that should be cross-checked against the issuing authority';
+  const confidenceText = Math.round(Math.max(confidence, relevance, trust)) || 'available';
+
+  return `${label} was selected for ${title} because it is ${officialReliability}, aligns with ${jurisdiction} and ${authority}, and fits the ${sectionType} section. Its title/content signals planning relevance, its status is ${status}, and the link is treated as useful with ${confidenceText} confidence for validation: ${url}`;
+};
+
+const getLinkSelectionReason = (sectionKey: string, item: PlanningSectionResult, label: string, url?: string) => {
+  if (!url) return undefined;
+
+  const fieldReasons: Record<string, string | undefined> = {
+    'Official Source Page': item.source_page_reason_for_selection,
+    'Exact Document URL': item.exact_document_reason_for_selection,
+    'Direct Document URL': item.direct_document_reason_for_selection,
+    'Notification URL': item.notification_reason_for_selection,
+    'Map or GIS URL': item.map_or_gis_reason_for_selection,
+  };
+
+  return normalizeReasonText(fieldReasons[label])
+    || reasonFromCollection(item.link_selection_reasons, label, url)
+    || reasonFromCollection(item.document_url_reasons, label, url)
+    || reasonFromCollection(item.url_selection_reasons, label, url)
+    || getFallbackLinkReason(sectionKey, item, label, url);
+};
+
+const buildSourceRows = (sectionKey: string, item: PlanningSectionResult): SourceRowInput[] => [
+  {
+    label: 'Official Source Page',
+    url: item.source_page_url,
+    reason: getLinkSelectionReason(sectionKey, item, 'Official Source Page', item.source_page_url),
+  },
+  {
+    label: 'Exact Document URL',
+    url: item.exact_document_url,
+    reason: getLinkSelectionReason(sectionKey, item, 'Exact Document URL', item.exact_document_url),
+  },
+  {
+    label: 'Direct Document URL',
+    url: item.direct_document_url,
+    reason: getLinkSelectionReason(sectionKey, item, 'Direct Document URL', item.direct_document_url),
+  },
+  {
+    label: 'Notification URL',
+    url: item.notification_url,
+    reason: getLinkSelectionReason(sectionKey, item, 'Notification URL', item.notification_url),
+  },
+  {
+    label: 'Map or GIS URL',
+    url: item.map_or_gis_url,
+    reason: getLinkSelectionReason(sectionKey, item, 'Map or GIS URL', item.map_or_gis_url),
+  },
+];
+
+const renderSourceRow = ({ label, url, reason }: SourceRowInput) => (
   <div className="planning-source-row">
     <span>{label}</span>
     {url ? (
-      <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+      <>
+        <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+        <div className="planning-link-reason">
+          <strong>Reason for Selection</strong>
+          <p>{reason}</p>
+        </div>
+      </>
     ) : (
       <em>Exact source not found</em>
     )}
@@ -307,8 +426,6 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
                 const status = item.plan_status || item.document_status || 'Status to be verified';
                 const applicability = item.applicability || item.applicability_to_location || item.jurisdiction || 'Applicability must be verified from official source';
                 const exactUrl = item.exact_document_url || '';
-                const directUrl = item.direct_document_url || '';
-                const notificationUrl = item.notification_url || '';
                 const documentUrl = getDocumentCandidateUrl(item);
                 const documentStatus = documentUrl ? (documentUrlStatuses[documentUrl] || getUrlExtensionStatus(documentUrl)) : 'unknown';
                 const isDirectDocument = documentStatus === 'direct_pdf' || documentStatus === 'downloadable';
@@ -364,11 +481,11 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
                       <div className="planning-subsection">
                         <h5>Source Details</h5>
                         <div className="planning-source-box">
-                          {renderSourceRow('Official Source Page', sourceUrl)}
-                          {renderSourceRow('Exact Document URL', exactUrl)}
-                          {directUrl && renderSourceRow('Direct Document URL', directUrl)}
-                          {notificationUrl && renderSourceRow('Notification URL', notificationUrl)}
-                          {mapUrl && renderSourceRow('Map or GIS URL', mapUrl)}
+                          {buildSourceRows(sectionKey, item).map((row) => (
+                            <div key={`${row.label}-${row.url || 'missing'}`}>
+                              {renderSourceRow(row)}
+                            </div>
+                          ))}
                         </div>
                       </div>
 
@@ -447,7 +564,8 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(apiUrl(`/api/web_search_v2/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`));
+      const agentQuery = `${userMessage.content}${perLinkReasonInstruction}`;
+      const response = await fetch(apiUrl(`/api/web_search_v2/chat_stream?query=${encodeURIComponent(agentQuery)}&no_cache=true`));
 
       if (!response.body) throw new Error("No response body");
 

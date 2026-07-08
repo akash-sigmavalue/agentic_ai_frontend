@@ -1001,6 +1001,26 @@
       return byId("api-base").value.trim() || "http://localhost:8000";
     }
 
+    function getSelectedModel() {
+      return byId("cfg-model").value.trim();
+    }
+
+    async function applyModelSelection() {
+      const model = getSelectedModel();
+      if (!model) return;
+
+      const response = await fetch(`${getBaseUrl()}/api/llm/selection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || data.detail || `Model selection failed with HTTP ${response.status}`);
+      }
+    }
+
     function addLog(message, level = "muted") {
       const row = document.createElement("div");
       const time = new Date().toLocaleTimeString("en-IN", { hour12: false });
@@ -1135,13 +1155,16 @@
       const query = byId("inp-query").value.trim();
       const district = byId("inp-district").value.trim();
       const registrationType = byId("inp-type").value.trim();
+      const model = getSelectedModel();
+      const headless = byId("cfg-headless").value === "true";
+      const actionDelay = Number(byId("cfg-delay").value || 1.5);
 
       if (!url || !query) {
         window.alert("Please enter both the MahaRERA URL and query.");
         return null;
       }
 
-      return { url, query, district, registrationType };
+      return { url, query, district, registrationType, model, headless, actionDelay };
     }
 
     function buildQuery(input) {
@@ -1151,10 +1174,13 @@
       });
       if (input.district) params.set("district", input.district);
       if (input.registrationType) params.set("registration_type", input.registrationType);
+      if (input.model) params.set("model", input.model);
+      params.set("headless", String(input.headless));
+      params.set("action_delay", String(input.actionDelay));
       return params.toString();
     }
 
-    function runAgent() {
+    async function runAgent() {
       const input = readAgentInput();
       if (!input) return;
 
@@ -1165,6 +1191,15 @@
       addLog("Starting MahaRERA agent", "info");
       addLog("URL: " + input.url, "muted");
       addLog("Query: " + input.query, "muted");
+      addLog("Model: " + input.model, "muted");
+
+      try {
+        await applyModelSelection();
+      } catch (error) {
+        addLog("Could not apply selected model: " + error.message, "danger");
+        finishRun();
+        return;
+      }
 
       const streamUrl = `${getBaseUrl()}/crawl/stream?${buildQuery(input)}`;
       state.eventSource = new EventSource(streamUrl);
@@ -1235,13 +1270,26 @@
       addLog("Asking MahaRERA planner", "info");
 
       try {
-        const response = await fetch(`${getBaseUrl()}/ask`, {
+        await applyModelSelection();
+        let response = await fetch(`${getBaseUrl()}/ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(input)
         });
 
-        const data = await response.json();
+        let data = await response.json().catch(() => ({}));
+        if (response.status === 404) {
+          addLog("/ask not available; using planner endpoint", "warn");
+          response = await fetch(`${getBaseUrl()}/plan`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(input)
+          });
+          data = await response.json().catch(() => ({}));
+          data.answer = data.answer || data.query_understanding || "The planner returned steps for this query.";
+          data.model_used = data.model_used || input.model;
+        }
+
         if (!response.ok) {
           throw new Error(data.message || `HTTP ${response.status}`);
         }
@@ -1281,6 +1329,7 @@
       addLog("Planning only, no browser actions", "info");
 
       try {
+        await applyModelSelection();
         const response = await fetch(`${getBaseUrl()}/plan`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1318,6 +1367,7 @@
       show(byId("stream-bar"));
       setRunning(true, "Launching browser...");
       addLog("Starting browser test", "info");
+      addLog(`Browser mode: ${input.headless ? "Headless" : "Visible"}`, "muted");
 
       state.eventSource = new EventSource(`${getBaseUrl()}/browser/test?url=${encodeURIComponent(input.url)}`);
 
@@ -1368,6 +1418,14 @@
         dot.classList.remove("offline");
         text.textContent = "API ready";
         addLog(`API connected${data.model ? ": " + data.model : ""}`, "success");
+
+        const selection = await fetch(`${getBaseUrl()}/api/llm/selection`, { signal: controller.signal })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+        if (selection?.selected) {
+          byId("cfg-model").value = selection.selected;
+          addLog(`Selected model synced: ${selection.selected}`, "muted");
+        }
       } catch {
         dot.classList.add("offline");
         text.textContent = "API offline";
