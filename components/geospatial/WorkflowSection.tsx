@@ -565,7 +565,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase mt-1 leading-none">Interactive process map</p>
           </div>
         </div>
-
+        {/* HIDE AGENT LAYER OPEN BUTTON*/}
         {/* <button
           type="button"
           onClick={() => setIsAgentsOpen((open) => !open)}
