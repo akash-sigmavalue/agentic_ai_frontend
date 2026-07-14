@@ -101,8 +101,8 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-blue-600 border-blue-100 bg-blue-50',
     soft: 'from-blue-500/10 to-cyan-500/10',
     agents: [
-      { name: 'Land/GIS', icon: MapPinned , href: '/visualization_agent'},
-      { name: "Elevation Agent", icon: MapPinned, href: '/elevation' },      
+      { name: 'Land/GIS', icon: MapPinned, href: '/visualization_agent' },
+      { name: "Elevation Agent", icon: MapPinned, href: '/elevation' },
       { name: 'Valuation', icon: BarChart3, href: '/valuation' },
       { name: 'Market Research', icon: Search },
       { name: 'Physical AI', icon: Bot },
@@ -118,7 +118,7 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-indigo-600 border-indigo-100 bg-indigo-50',
     soft: 'from-indigo-500/10 to-sky-500/10',
     agents: [
-      { name: 'User Input (Docs/Images)', icon: FileText,href: '/user_input' },
+      { name: 'User Input (Docs/Images)', icon: FileText, href: '/user_input' },
       { name: 'Web Data', icon: Globe2, href: '/web_search' },
       { name: 'Data Retriever Agent', icon: Server, href: '/data_retrieval' },
       { name: 'Analytics', icon: LineChart },
@@ -134,7 +134,7 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-violet-600 border-violet-100 bg-violet-50',
     soft: 'from-violet-500/10 to-fuchsia-500/10',
     agents: [
-      { name: 'UI Creation', icon: MonitorCog , href: '/ui_creation'},
+      { name: 'UI Creation', icon: MonitorCog, href: '/ui_creation' },
       { name: 'Solution Engine', icon: Settings },
       { name: 'CRM', icon: Handshake },
       { name: 'ERP', icon: Building2 },
@@ -150,7 +150,7 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-emerald-600 border-emerald-100 bg-emerald-50',
     soft: 'from-emerald-500/10 to-teal-500/10',
     agents: [
-      { name: 'Connector', icon: Plug ,href : '/connector'},
+      { name: 'Connector', icon: Plug, href: '/connector' },
       { name: 'Team Collaboration', icon: Users },
     ],
   },
@@ -565,8 +565,8 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase mt-1 leading-none">Interactive process map</p>
           </div>
         </div>
-
-        <button
+        {/* HIDE AGENT LAYER OPEN BUTTON*/}
+        {/* <button
           type="button"
           onClick={() => setIsAgentsOpen((open) => !open)}
           className={`group inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[11px] font-extrabold uppercase tracking-[0.18em] shadow-sm transition-all duration-200 ${
@@ -580,19 +580,19 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           <Bot className="h-4 w-4" />
           Agents
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isAgentsOpen ? 'rotate-180' : ''}`} />
-        </button>
+        </button> */}
 
         <div className="flex items-center justify-end gap-3">
           <div
             className={`flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${nodes.length > 0
-                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                : 'bg-slate-100 text-slate-400 border border-slate-200'
+              ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+              : 'bg-slate-100 text-slate-400 border border-slate-200'
               }`}
           >
             {nodes.length > 0 ? 'Active' : 'Inactive'}
           </div>
-          
-          <button 
+
+          <button
             onClick={onToggle}
             className="text-slate-400 hover:text-slate-600 transition-colors p-1"
           >
@@ -635,16 +635,14 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                       key={layer.id}
                       type="button"
                       onClick={() => setActiveAgentLayerId(layer.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 ${
-                        isActive
-                          ? 'border-violet-200 bg-violet-50 shadow-sm'
-                          : 'border-transparent bg-white hover:border-slate-200 hover:bg-slate-50'
-                      }`}
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 ${isActive
+                        ? 'border-violet-200 bg-violet-50 shadow-sm'
+                        : 'border-transparent bg-white hover:border-slate-200 hover:bg-slate-50'
+                        }`}
                     >
                       <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
-                          isActive ? layer.accent : 'border-slate-200 bg-slate-50 text-slate-500'
-                        }`}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${isActive ? layer.accent : 'border-slate-200 bg-slate-50 text-slate-500'
+                          }`}
                       >
                         <Icon className="h-5 w-5" />
                       </span>
@@ -692,9 +690,8 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                           setIsAgentsOpen(false);
                           router.push(agent.href);
                         }}
-                        className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${
-                          agent.href ? 'hover:bg-violet-50/70 cursor-pointer' : ''
-                        }`}
+                        className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${agent.href ? 'hover:bg-violet-50/70 cursor-pointer' : ''
+                          }`}
                       >
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${activeAgentLayer.accent}`}>
                           <AgentIcon className="h-[18px] w-[18px]" />
@@ -776,24 +773,24 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </ReactFlow>
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-8 text-center animate-in fade-in duration-700">
-             <div className="relative mb-6">
-                <div className="absolute inset-0 rounded-full bg-violet-500/5 animate-pulse blur-xl" />
-                <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-2xl border border-slate-100">
-                  <Network className="h-10 w-10 text-violet-500/40" />
-                </div>
-             </div>
-             <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">No workflow yet</h3>
-             <p className="mt-2.5 max-w-[240px] text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
-               Logic synthesis framework
-             </p>
-             <p className="mt-4 max-w-[280px] text-sm font-medium text-slate-500 leading-relaxed text-center">
-               Ask the AI Assistant to generate a process map or analyze a workflow sequence to see it visualized here.
-             </p>
+            <div className="relative mb-6">
+              <div className="absolute inset-0 rounded-full bg-violet-500/5 animate-pulse blur-xl" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-2xl border border-slate-100">
+                <Network className="h-10 w-10 text-violet-500/40" />
+              </div>
+            </div>
+            <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">No workflow yet</h3>
+            <p className="mt-2.5 max-w-[240px] text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-relaxed">
+              Logic synthesis framework
+            </p>
+            <p className="mt-4 max-w-[280px] text-sm font-medium text-slate-500 leading-relaxed text-center">
+              Ask the AI Assistant to generate a process map or analyze a workflow sequence to see it visualized here.
+            </p>
 
-             <div className="mt-8 flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50 px-4 py-2 opacity-50">
-               <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Awaiting interaction</span>
-             </div>
+            <div className="mt-8 flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50 px-4 py-2 opacity-50">
+              <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Awaiting interaction</span>
+            </div>
           </div>
         )}
       </div>

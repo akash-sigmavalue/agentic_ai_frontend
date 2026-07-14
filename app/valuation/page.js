@@ -6,6 +6,7 @@ import { Building2 } from "lucide-react";
 import ThemeToggle from "@/components/valuation/shared/ThemeToggle";
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
+import TokenAccessGate from "@/components/shared/TokenAccessGate";
 
 const MapSection = dynamic(() => import("@/components/valuation/shared/MapSection"), { ssr: false });
 
@@ -173,23 +174,25 @@ export default function HomePage() {
         <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-6">
           <section ref={containerRef} className="flex flex-col xl:flex-row h-full min-h-0 flex-1 gap-4 xl:gap-0">
             {/* Chat section */}
-            <div className="resize-panel-left w-full xl:h-full min-h-0">
-              <ChatSection
-                onClear={() => {
-                  setEvents([]);
-                  setMarkers([]);
-                  setValuationResult(null);
-                }}
-                onEvent={(event) => setEvents((prev) => [...prev, event])}
-                onEventsReset={handleEventsReset}
-                onMarkersUpdate={(m) => {
-                  setMarkers(m);
-                }}
-                factorialData={factorialData}
-                onValuationResult={setValuationResult}
-                events={events}
-                setEvents={setEvents}
-              />
+            <div className="resize-panel-left w-full xl:h-full min-h-0 relative">
+              <TokenAccessGate featureName="Valuation Agent">
+                <ChatSection
+                  onClear={() => {
+                    setEvents([]);
+                    setMarkers([]);
+                    setValuationResult(null);
+                  }}
+                  onEvent={(event) => setEvents((prev) => [...prev, event])}
+                  onEventsReset={handleEventsReset}
+                  onMarkersUpdate={(m) => {
+                    setMarkers(m);
+                  }}
+                  factorialData={factorialData}
+                  onValuationResult={setValuationResult}
+                  events={events}
+                  setEvents={setEvents}
+                />
+              </TokenAccessGate>
             </div>
 
             {/* Splitter 1 */}
