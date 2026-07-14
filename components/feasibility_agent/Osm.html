@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Congestion MiniMap – Parallel Roads (Always Sum)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e1e2f; color: #e0e0e0; }
+        #app { display: flex; height: 100vh; }
+        #sidebar {
+            width: 300px;
+            background: #2d2d44;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+        }
+        #map-container { flex: 1; position: relative; }
+        #map { height: 100%; width: 100%; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9em; color: #aaa; }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: #3a3a55;
+            color: #fff;
+            font-size: 1em;
+        }
+        button {
+            background: #4a6fa5;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background: #5f8bc9; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background: #3a3a55;
+            border-radius: 5px;
+            font-size: 0.9em;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #table-container {
+            margin-top: 20px;
+            background: #2d2d44;
+            border-radius: 5px;
+            padding: 10px;
+            flex-shrink: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #555;
+        }
+        th { background: #3a3a55; color: #fff; }
+        td { color: #ccc; }
+        .leaflet-tooltip { background: #2d2d44; color: #fff; border: 1px solid #666; }
+        .leaflet-control-attribution { font-size: 8px; background: rgba(0,0,0,0.5); color: #ccc; }
+        .retry-btn {
+            background: #d97706;
+            margin-top: 5px;
+        }
+        .retry-btn:hover { background: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="sidebar">
+            <h2>📍 Location</h2>
+            <div class="input-group">
+                <label>Latitude, Longitude (e.g. 18.592778, 73.800043)</label>
+                <input type="text" id="coordInput" value="18.64346276118795, 73.74785716201662" placeholder="lat, lon">
+            </div>
+            <div class="input-group">
+                <label>Radius (meters) – reduce if timeout occurs</label>
+                <input type="number" id="radiusInput" value="200" min="50" max="2000">
+            </div>
+            <button id="loadBtn">Load Map</button>
+            <div id="status">Ready</div>
+
+            <!-- Final Adjacent Road table (sum per direction) -->
+            <div id="final-table-container" style="margin-top: 10px;">
+                <h3>Final Adjacent Road</h3>
+                <div id="finalRoadTable"></div>
+            </div>
+
+            <!-- Adjacent Roads table (clustered) -->
+            <div id="table-container">
+                <h3>Adjacent Roads</h3>
+                <div id="roadTable"></div>
+            </div>
+        </div>
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+    <script>
+        // ================== INIT MAP ==================
+        const map = L.map('map').setView([40.7128, -74.0060], 16);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB'
+        }).addTo(map);
+
+        // ================== GLOBALS ==================
+        let currentLayers = [];
+        let subjectPoint = null;
+        let subjectMarker = null;
+        let radiusCircle = null;
+        let loadBtn = document.getElementById('loadBtn');
+        let statusEl = document.getElementById('status');
+        let retryCount = 0;
+        const MAX_RETRIES = 5;
+
+        // ------------------------------------------------------------------
+        // Helper: parse coordinates
+        function parseCoordinates(str) {
+            const parts = str.trim().split(/[,\s]+/);
+            const numbers = parts.map(p => parseFloat(p)).filter(n => !isNaN(n));
+            if (numbers.length >= 2) return { lat: numbers[0], lng: numbers[1] };
+            return null;
+        }
+
+        // Helper: escape HTML for tooltips
+        function escapeHtml(unsafe) {
+            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Clear previous layers
+        function clearLayers() {
+            currentLayers.forEach(layer => map.removeLayer(layer));
+            currentLayers = [];
+            if (subjectMarker) map.removeLayer(subjectMarker);
+            if (radiusCircle) map.removeLayer(radiusCircle);
+        }
+
+        // Fetch Overpass with retry and fallback for 504
+        async function fetchOverpassWithFallback(queryFull, queryRoadsOnly, retries = MAX_RETRIES) {
+            const url = 'https://overpass-api.de/api/interpreter';
+            
+            // First attempt with full query
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: queryFull,
+                        headers: { 'Content-Type': 'text/plain' }
+                    });
+                    if (response.status === 429) {
+                        const waitTime = Math.pow(2, i) * 2000;
+                        statusEl.innerHTML = `⏳ Rate limited. Retrying in ${waitTime/1000}s... (attempt ${i+1}/${retries})`;
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        continue;
+                    }
+                    if (response.status === 504) {
+                        // Gateway timeout – break out and try roads-only query
+                        throw new Error('TIMEOUT_FULL');
+                    }
+                    if (!response.ok) throw new Error(`Overpass error: ${response.status}`);
+                    return { data: await response.json(), mode: 'full' };
+                } catch (err) {
+                    if (err.message === 'TIMEOUT_FULL') {
+                        // Immediately try roads-only query
+                        statusEl.innerHTML = '⚠️ Full query timed out. Trying simplified query (roads & buildings only)...';
+                        break; // exit retry loop for full query
+                    }
+                    if (i === retries - 1) throw err;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // Attempt roads-only query
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: queryRoadsOnly,
+                        headers: { 'Content-Type': 'text/plain' }
+                    });
+                    if (response.status === 429) {
+                        const waitTime = Math.pow(2, i) * 2000;
+                        statusEl.innerHTML = `⏳ Rate limited (roads-only). Retrying in ${waitTime/1000}s... (attempt ${i+1}/${retries})`;
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        continue;
+                    }
+                    if (response.status === 504) {
+                        throw new Error('Even the simplified query timed out. Please reduce radius further.');
+                    }
+                    if (!response.ok) throw new Error(`Overpass error: ${response.status}`);
+                    return { data: await response.json(), mode: 'roads-only' };
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+            throw new Error('Max retries exceeded for both query types');
+        }
+
+        // ================== MAIN LOAD FUNCTION ==================
+        async function loadMap() {
+            const coordStr = document.getElementById('coordInput').value;
+            const coords = parseCoordinates(coordStr);
+            if (!coords) {
+                alert('Invalid coordinates');
+                return;
+            }
+            const radius = parseFloat(document.getElementById('radiusInput').value);
+            const lat = coords.lat, lng = coords.lng;
+            subjectPoint = turf.point([lng, lat]);
+
+            map.setView([lat, lng], 16);
+            clearLayers();
+
+            // radius circle & marker
+            radiusCircle = L.circle([lat, lng], {
+                radius: radius,
+                color: '#22c55e',
+                weight: 4,
+                fillColor: '#22c55e',
+                fillOpacity: 0.18
+            }).addTo(map);
+            currentLayers.push(radiusCircle);
+
+            subjectMarker = L.circleMarker([lat, lng], {
+                radius: 8,
+                color: '#facc15',
+                weight: 3,
+                fillColor: '#fb923c',
+                fillOpacity: 1
+            }).bindTooltip('Subject', { direction: 'right' }).addTo(map);
+            currentLayers.push(subjectMarker);
+
+            statusEl.innerHTML = '⏳ Fetching OSM data...';
+            loadBtn.disabled = true;
+
+            try {
+                const radiusDeg = radius / 111320;
+                const bbox = `${lat-radiusDeg},${lng-radiusDeg},${lat+radiusDeg},${lng+radiusDeg}`;
+
+                // Full query (all categories) – timeout 120s
+                const fullQuery = `
+                    [out:json][timeout:120];
+                    (
+                        way["building"](${bbox});
+                        relation["building"](${bbox});
+                        way["highway"](${bbox});
+                        relation["highway"](${bbox});
+                        way["natural"="water"](${bbox});
+                        relation["natural"="water"](${bbox});
+                        way["waterway"="riverbank"](${bbox});
+                        relation["waterway"="riverbank"](${bbox});
+                        way["landuse"~"grass|farmland|meadow|orchard|vineyard|allotments"](${bbox});
+                        relation["landuse"~"grass|farmland|meadow|orchard|vineyard|allotments"](${bbox});
+                        way["natural"~"wood|grassland|heath|scrub|wetland"](${bbox});
+                        relation["natural"~"wood|grassland|heath|scrub|wetland"](${bbox});
+                        way["leisure"~"park|garden|golf_course"](${bbox});
+                        relation["leisure"~"park|garden|golf_course"](${bbox});
+                        way["landuse"](${bbox});
+                        relation["landuse"](${bbox});
+                    );
+                    out body;
+                    >;
+                    out skel qt;
+                `;
+
+                // Simplified query – only roads and buildings (essential for width tables)
+                const roadsOnlyQuery = `
+                    [out:json][timeout:120];
+                    (
+                        way["building"](${bbox});
+                        relation["building"](${bbox});
+                        way["highway"](${bbox});
+                        relation["highway"](${bbox});
+                    );
+                    out body;
+                    >;
+                    out skel qt;
+                `;
+
+                const result = await fetchOverpassWithFallback(fullQuery, roadsOnlyQuery, MAX_RETRIES);
+                const data = result.data;
+                const mode = result.mode;
+
+                if (mode === 'roads-only') {
+                    statusEl.innerHTML = '⚠️ Using simplified data (roads & buildings only). Some map layers may be missing.';
+                } else {
+                    statusEl.innerHTML = '⏳ Processing full data...';
+                }
+
+                // Convert OSM elements to GeoJSON
+                function osmelementsToGeojson(elements) {
+                    const nodes = {};
+                    elements.forEach(el => {
+                        if (el.type === 'node') nodes[el.id] = [el.lon, el.lat];
+                    });
+                    const features = [];
+                    elements.forEach(el => {
+                        if (el.type === 'way' && el.nodes) {
+                            const coords = el.nodes.map(nodeId => nodes[nodeId]).filter(c => c);
+                            if (coords.length < 2) return;
+                            let geometry;
+                            if (coords.length >= 3 && coords[0][0] === coords[coords.length-1][0] && coords[0][1] === coords[coords.length-1][1]) {
+                                geometry = { type: 'Polygon', coordinates: [coords] };
+                            } else {
+                                geometry = { type: 'LineString', coordinates: coords };
+                            }
+                            features.push({
+                                type: 'Feature',
+                                id: el.id,
+                                geometry: geometry,
+                                properties: el.tags || {}
+                            });
+                        }
+                    });
+                    return { type: 'FeatureCollection', features };
+                }
+
+                const allGeojson = osmelementsToGeojson(data.elements);
+
+                // Split categories (some may be empty in roads-only mode)
+                const buildingsGeojson = { type: 'FeatureCollection', features: [] };
+                const roadsGeojson = { type: 'FeatureCollection', features: [] };
+                const waterGeojson = { type: 'FeatureCollection', features: [] };
+                const landuseGeojson = { type: 'FeatureCollection', features: [] };
+
+                allGeojson.features.forEach(f => {
+                    const props = f.properties;
+                    if (props.building) {
+                        buildingsGeojson.features.push(f);
+                    } else if (props.highway) {
+                        roadsGeojson.features.push(f);
+                    } else if (props.natural === 'water' || props.waterway === 'riverbank') {
+                        waterGeojson.features.push(f);
+                    } else if (props.landuse || props.natural || props.leisure) {
+                        landuseGeojson.features.push(f);
+                    }
+                });
+
+                // Helper area/length
+                function addAreaAndLength(feature) {
+                    if (feature.geometry.type === 'Polygon') {
+                        feature.properties.area_m2 = Math.round(turf.area(feature) * 10) / 10;
+                    } else if (feature.geometry.type === 'LineString') {
+                        feature.properties.length_m = Math.round(turf.length(feature, {units: 'meters'}) * 10) / 10;
+                    }
+                    return feature;
+                }
+
+                // Determine subject (building/landuse) – landuse may be missing in roads-only mode
+                let subjectBuildingId = null;
+                let subjectLanduseId = null;
+
+                buildingsGeojson.features = buildingsGeojson.features.filter(f => {
+                    if (f.geometry.type === 'Polygon' && turf.booleanPointInPolygon(subjectPoint, f)) {
+                        subjectBuildingId = f.id;
+                    }
+                    return true;
+                });
+
+                if (!subjectBuildingId && mode !== 'roads-only') {
+                    landuseGeojson.features.forEach(f => {
+                        if (f.geometry.type === 'Polygon' && turf.booleanPointInPolygon(subjectPoint, f)) {
+                            subjectLanduseId = f.id;
+                        }
+                    });
+                }
+
+                // ---------- ROAD PROCESSING with explicit/estimated flag (kept for tooltip only) ----------
+                function processBuildings(feature) {
+                    feature = addAreaAndLength(feature);
+                    const props = feature.properties;
+                    let name = props.name || props.building || 'Building';
+                    if (typeof name === 'string') name = name.replace('building=', '').replace('Yes', 'Generic Building').charAt(0).toUpperCase() + name.slice(1);
+                    const area = props.area_m2 ? `${props.area_m2} m²` : '';
+                    props.tooltip = `<b>${escapeHtml(name)}</b><br>Area: ${area}`;
+                    props.color = feature.id === subjectBuildingId ? '#22c55e' : '#3b82f6';
+                    return feature;
+                }
+
+                function processWater(feature) {
+                    feature = addAreaAndLength(feature);
+                    const area = feature.properties.area_m2 ? `${feature.properties.area_m2} m²` : '';
+                    feature.properties.tooltip = `Water<br>Area: ${area}`;
+                    feature.properties.color = '#00d4ff';
+                    return feature;
+                }
+
+                function processLanduse(feature) {
+                    feature = addAreaAndLength(feature);
+                    const props = feature.properties;
+                    let typ = props.landuse || props.natural || props.leisure || 'Open area';
+                    if (typeof typ === 'string') typ = typ.charAt(0).toUpperCase() + typ.slice(1);
+                    const area = props.area_m2 ? `${props.area_m2} m²` : '';
+                    props.tooltip = `<b>${escapeHtml(typ)}</b><br>Area: ${area}`;
+                    props.color = feature.id === subjectLanduseId ? '#ffd700' : '#ffff99';
+                    return feature;
+                }
+
+                // Width estimation helpers (unchanged)
+                function extractWidthFromTags(tags) {
+                    if (tags.width) {
+                        const match = tags.width.match(/(\d+\.?\d*)/);
+                        if (match) return parseFloat(match[1]);
+                    }
+                    if (tags['width:lanes']) {
+                        const match = tags['width:lanes'].match(/(\d+\.?\d*)/);
+                        if (match) return parseFloat(match[1]);
+                    }
+                    if (tags.est_width) {
+                        const match = tags.est_width.match(/(\d+\.?\d*)/);
+                        if (match) return parseFloat(match[1]);
+                    }
+                    return null;
+                }
+
+                function estimateWidthFromLanes(lanes, highwayType) {
+                    let laneCount = null;
+                    if (typeof lanes === 'string') {
+                        const match = lanes.match(/(\d+\.?\d*)/);
+                        if (match) laneCount = parseFloat(match[1]);
+                    } else if (typeof lanes === 'number') {
+                        laneCount = lanes;
+                    }
+                    if (laneCount === null) return null;
+                    let laneWidth = 3.5;
+                    if (highwayType) {
+                        if (['motorway', 'trunk'].includes(highwayType)) laneWidth = 3.75;
+                        else if (['residential', 'service'].includes(highwayType)) laneWidth = 3.0;
+                    }
+                    return laneCount * laneWidth;
+                }
+
+                function getHighwayDefaultWidth(highwayType, serviceType) {
+                    const defaults = {
+                        'motorway':11.5, 'motorway_link':8.0, 'trunk':10.0, 'trunk_link':7.0,
+                        'primary':8.5, 'primary_link':6.5, 'secondary':7.5, 'secondary_link':6.0,
+                        'tertiary':6.5, 'tertiary_link':5.5, 'unclassified':5.5, 'residential':5.5,
+                        'living_street':5.0, 'service':4.5, 'track':3.5, 'path':2.0, 'footway':2.0,
+                        'cycleway':2.0, 'bridleway':2.5, 'steps':1.5, 'pedestrian':5.0
+                    };
+                    if (highwayType === 'service' && serviceType) {
+                        const serviceDefaults = { 'parking_aisle':3.5, 'driveway':3.0, 'alley':3.5, 'emergency_access':4.0, 'drive-through':3.5 };
+                        if (serviceDefaults[serviceType]) return serviceDefaults[serviceType];
+                    }
+                    return defaults[highwayType] || 5.0;
+                }
+
+                function processRoads(feature) {
+                    feature = addAreaAndLength(feature);
+                    const props = feature.properties;
+                    
+                    const hasExplicitTag = !!(props.width || props['width:lanes'] || props.est_width);
+                    let width = extractWidthFromTags(props);
+                    if (width === null && props.lanes) {
+                        width = estimateWidthFromLanes(props.lanes, props.highway);
+                    }
+                    if (width === null && props.highway) {
+                        width = getHighwayDefaultWidth(props.highway, props.service);
+                    }
+                    props.width_m = width;
+                    props.widthExplicit = hasExplicitTag;   // still stored for tooltip
+
+                    // Tooltip
+                    let name = props.name ? `<b>${escapeHtml(props.name)}</b><br>` : '';
+                    const length = props.length_m ? `Length: ${props.length_m} m` : '';
+                    const widthText = width !== null ? `Width: ${width.toFixed(1)} m` : 'Width: Unknown';
+                    const source = hasExplicitTag ? '✓ explicit tag' : (props.lanes ? '✓ estimated from lanes' : '✓ estimated from road type');
+                    props.tooltip = name + [length, widthText, source].filter(s => s).join('<br>');
+                    
+                    return feature;
+                }
+
+                // Apply processors
+                buildingsGeojson.features = buildingsGeojson.features.map(processBuildings);
+                waterGeojson.features = waterGeojson.features.map(processWater);
+                landuseGeojson.features = landuseGeojson.features.map(processLanduse);
+                roadsGeojson.features = roadsGeojson.features.map(processRoads);
+
+                // Add layers to map (skip water/landuse if empty)
+                function addGeojsonLayer(geojson, styleFn) {
+                    if (!geojson.features.length) return;
+                    const layer = L.geoJSON(geojson, {
+                        style: styleFn,
+                        onEachFeature: (feature, layer) => {
+                            if (feature.properties.tooltip) {
+                                layer.bindTooltip(feature.properties.tooltip, { sticky: true, direction: 'top' });
+                            }
+                        }
+                    }).addTo(map);
+                    currentLayers.push(layer);
+                }
+
+                const polygonStyle = (feature) => ({
+                    fillColor: feature.properties.color,
+                    color: '#111827',
+                    weight: 1.3,
+                    fillOpacity: 0.85
+                });
+                const roadStyle = { color: '#ff1744', weight: 6, opacity: 1 };
+
+                addGeojsonLayer(waterGeojson, polygonStyle);
+                addGeojsonLayer(landuseGeojson, polygonStyle);
+                addGeojsonLayer(buildingsGeojson, polygonStyle);
+                addGeojsonLayer(roadsGeojson, () => roadStyle);
+
+                // ---------- ADJACENT ROADS (within 150m) ----------
+                const adjacentRoads = [];
+                roadsGeojson.features.forEach(feature => {
+                    if (feature.geometry.type !== 'LineString') return;
+                    const distance = turf.pointToLineDistance(subjectPoint, feature, { units: 'meters' });
+                    if (distance <= 50) {
+                        const nearest = turf.nearestPointOnLine(feature, subjectPoint);
+                        const bearing = turf.bearing(subjectPoint, nearest);
+                        let direction;
+                        if (bearing >= -45 && bearing < 45) direction = 'N';
+                        else if (bearing >= 45 && bearing < 135) direction = 'E';
+                        else if (bearing >= 135 && bearing < 225) direction = 'S';
+                        else direction = 'W';
+
+                        const coords = feature.geometry.coordinates;
+                        let roadBearing = null;
+                        if (coords.length >= 2) {
+                            roadBearing = turf.bearing(turf.point(coords[0]), turf.point(coords[coords.length - 1]));
+                        }
+
+                        adjacentRoads.push({
+                            direction,
+                            width_m: feature.properties.width_m,
+                            widthExplicit: feature.properties.widthExplicit, // for tooltip only
+                            distance,
+                            name: feature.properties.name || 'Unnamed',
+                            feature: feature,
+                            nearestPoint: nearest,
+                            roadBearing: roadBearing
+                        });
+                    }
+                });
+
+                // ---------- FINAL ADJACENT ROAD TABLE (sum per direction) ----------
+                const directionTotals = { N: 0, E: 0, S: 0, W: 0 };
+                adjacentRoads.forEach(r => {
+                    if (r.width_m && !isNaN(r.width_m)) {
+                        directionTotals[r.direction] += r.width_m;
+                    }
+                });
+
+                // Categorize width (function defined later, hoisted)
+                let finalTableHtml = '<table><tr><th>Direction</th><th>Total Width (m)</th><th>Category</th></tr>';
+                ['N', 'E', 'S', 'W'].forEach(dir => {
+                    const total = directionTotals[dir];
+                    const cat = categorizeWidth(total);
+                    finalTableHtml += `<tr><td>${dir}</td><td>${total > 0 ? total.toFixed(1) : '0'}</td><td>${cat}</td></tr>`;
+                });
+                finalTableHtml += '</table>';
+                document.getElementById('finalRoadTable').innerHTML = finalTableHtml;
+
+                // ---------- CLUSTERING LOGIC (always sum parallel roads) ----------
+                const CLUSTER_RADIUS = 10;      // meters (from one road's nearest point to another)
+                const BEARING_TOLERANCE = 20;     // degrees
+
+                function normalizeBearing(b) {
+                    if (b === null) return null;
+                    let norm = b % 180;
+                    if (norm < 0) norm += 180;
+                    return norm;
+                }
+
+                const directionGroups = {};
+                adjacentRoads.forEach(r => {
+                    if (!directionGroups[r.direction]) directionGroups[r.direction] = [];
+                    directionGroups[r.direction].push(r);
+                });
+
+                const clusters = [];
+
+                for (const [dir, roads] of Object.entries(directionGroups)) {
+                    roads.sort((a, b) => a.distance - b.distance);
+                    const used = new Array(roads.length).fill(false);
+
+                    for (let i = 0; i < roads.length; i++) {
+                        if (used[i]) continue;
+                        const road = roads[i];
+                        const clusterRoads = [road];
+                        used[i] = true;
+                        const normBearing = normalizeBearing(road.roadBearing);
+
+                        for (let j = i + 1; j < roads.length; j++) {
+                            if (used[j]) continue;
+                            const other = roads[j];
+                            const dist = turf.pointToLineDistance(road.nearestPoint, other.feature, { units: 'meters' });
+                            if (dist > CLUSTER_RADIUS) continue;
+
+                            const otherNorm = normalizeBearing(other.roadBearing);
+                            if (normBearing !== null && otherNorm !== null) {
+                                const diff = Math.abs(normBearing - otherNorm);
+                                const angleDiff = Math.min(diff, 180 - diff);
+                                if (angleDiff > BEARING_TOLERANCE) continue;
+                            }
+                            clusterRoads.push(other);
+                            used[j] = true;
+                        }
+
+                        let totalWidth = 0;
+                        clusterRoads.forEach(r => {
+                            if (r.width_m !== null && !isNaN(r.width_m)) totalWidth += r.width_m;
+                        });
+                        clusters.push({
+                            direction: dir,
+                            totalWidth: totalWidth,
+                            laneCount: clusterRoads.length,
+                            roads: clusterRoads
+                        });
+                    }
+                }
+
+                const dirOrder = { 'N': 0, 'E': 1, 'S': 2, 'W': 3 };
+                clusters.sort((a, b) => dirOrder[a.direction] - dirOrder[b.direction] || a.totalWidth - b.totalWidth);
+
+                function categorizeWidth(w) {
+                    if (w === null || isNaN(w) || w === 0) return 'Unknown';
+                    if (w < 9) return 'Below 9 m';
+                    if (w < 12) return '9 m to 12 m';
+                    if (w < 15) return '12 m to 15 m';
+                    if (w < 24) return '15 m to 24 m';
+                    if (w < 30) return '24 m to 30 m';
+                    return '30 m and above';
+                }
+
+                let tableHtml = '<table><tr><th>Direction</th><th>Total Width (m)</th><th>No. of Lanes</th><th>Category</th></tr>';
+                if (clusters.length === 0) {
+                    tableHtml += '<tr><td colspan="4">No adjacent roads found within 150m</td></tr>';
+                } else {
+                    clusters.forEach(cluster => {
+                        const cat = categorizeWidth(cluster.totalWidth);
+                        tableHtml += `<tr><td>${cluster.direction}</td><td>${cluster.totalWidth > 0 ? cluster.totalWidth.toFixed(1) : '?'}</td><td>${cluster.laneCount}</td><td>${cat}</td></tr>`;
+                    });
+                }
+                tableHtml += '</table>';
+                document.getElementById('roadTable').innerHTML = tableHtml;
+
+                const stats = `Buildings: ${buildingsGeojson.features.length}<br>Roads: ${roadsGeojson.features.length}<br>Water: ${waterGeojson.features.length}<br>Landuse: ${landuseGeojson.features.length}`;
+                statusEl.innerHTML = `✅ Done (${mode === 'roads-only' ? 'simplified data' : 'full data'})<br>${stats}`;
+                loadBtn.disabled = false;
+
+            } catch (err) {
+                statusEl.innerHTML = `❌ Error: ${err.message}`;
+                console.error(err);
+                const retryBtn = document.createElement('button');
+                retryBtn.className = 'retry-btn';
+                retryBtn.innerText = 'Retry';
+                retryBtn.onclick = () => loadMap();
+                statusEl.appendChild(document.createElement('br'));
+                statusEl.appendChild(retryBtn);
+                loadBtn.disabled = false;
+            }
+        }
+
+        // Attach event & initial load
+        document.getElementById('loadBtn').addEventListener('click', loadMap);
+        window.addEventListener('load', loadMap);
+    </script>
+</body>
+</html>
