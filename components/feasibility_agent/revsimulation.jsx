@@ -2732,11 +2732,33 @@ const RevSimulation = ({ embedded = false } = {}) => {
     });
 
     // Revenuep Unit Range - from A5 to A10 (rows 4-9, 0-indexed)
+    const unitDesign = readUnitDesignStructure();
+    const calcMode = unitDesign?.calculationMode || 'carpet';
+    let areaCalcForm = {};
+    try {
+      areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
+    } catch(e) {}
+    const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
+    const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
+    const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
+
     const revenuepUnitRange = Array.from({ length: 6 }, (_, i) => {
       const rowIndex = 4 + i; // 4-9 (0-indexed) = A5-A10 (1-indexed)
       const bhkType = String(grid?.[rowIndex]?.[0]?.value ?? '').trim(); // A column (index 0)
-      const avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
-      const { low: lowrange, high: highrange } = getAreaRange(avgUnitArea);
+      let avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
+      
+      if (avgUnitArea != null && calcMode === 'saleable') {
+        const normalizedBhk = normalizeUnitTypeKey(bhkType);
+        let loadingFactor = 1.0;
+        if (normalizedBhk === 'shop') loadingFactor = shopLoading;
+        else if (normalizedBhk === 'office') loadingFactor = officeLoading;
+        else loadingFactor = resLoading;
+        
+        avgUnitArea = avgUnitArea / loadingFactor;
+      }
+      
+      const lowrange = avgUnitArea != null ? avgUnitArea - 25 : null;
+      const highrange = avgUnitArea != null ? avgUnitArea + 25 : null;
 
       return {
         BHK_type: bhkType,

@@ -130,18 +130,18 @@ const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) =>
         applyAutoTotalCarpet(savedZoningType);
     }, [calculationMode, applyAutoTotalCarpet]);
 
+    // Load initial data from localStorage (Run Once)
     useEffect(() => {
-        // First, get the zoning type from land details
         const savedZoningType = localStorage.getItem("zoningType") || 'residential';
-
-        // Then get any previously saved unit design data
         const saved = localStorage.getItem("unitDesignStructure");
 
-        // Set development category based on zoning type from land details
         setDevelopmentCategory(savedZoningType);
 
         if (saved) {
             const parsed = JSON.parse(saved);
+            if (parsed.calculationMode) {
+                setCalculationMode(parsed.calculationMode);
+            }
             if (parsed.residentialData) {
                 const totalCarpet = parseFloat(parsed?.residentialData?.totalCarpet) || 0;
                 if (!parsed.residentialData.variations || !Array.isArray(parsed.residentialData.variations)) {
@@ -204,10 +204,14 @@ const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) =>
                 setCommercialData(parsed.commercialData);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
+    // Listen for updates from other components
+    useEffect(() => {
+        const savedZoningType = localStorage.getItem("zoningType") || 'residential';
         applyAutoTotalCarpet(savedZoningType);
 
-        // Listen for updates to land details
         const handleLandDetailsUpdate = () => {
             const updatedZoningType = localStorage.getItem("zoningType") || 'residential';
             setDevelopmentCategory(updatedZoningType);
@@ -313,16 +317,19 @@ const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) =>
         if (savedZoningType === 'residential') {
             dataToSave = {
                 developmentCategory: 'residential',
+                calculationMode: calculationMode,
                 residentialData: withAreaAllotted(residentialData),
             };
         } else if (savedZoningType === 'commercial') {
             dataToSave = {
                 developmentCategory: 'commercial',
+                calculationMode: calculationMode,
                 commercialData: withAreaAllotted(commercialData),
             };
         } else {
             dataToSave = {
                 developmentCategory: 'mixed',
+                calculationMode: calculationMode,
                 residentialData: withAreaAllotted(residentialData),
                 commercialData: withAreaAllotted(commercialData),
             };
