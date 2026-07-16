@@ -440,15 +440,30 @@ const BayesianOptimizer = () => {
         if (villagesList.length > 0) {
           let defaultVillage = null;
           try {
-            const savedData = localStorage.getItem('Market Analysis Payload');
-            if (savedData) {
-              const parsed = JSON.parse(savedData);
-              if (parsed.villageId) {
-                defaultVillage = villagesList.find((v) => v.id === parsed.villageId);
+            const landDetailsData = localStorage.getItem('landDetailsForm');
+            if (landDetailsData) {
+              const parsed = JSON.parse(landDetailsData);
+              if (parsed.village) {
+                const target = String(parsed.village).toLowerCase().trim();
+                defaultVillage = villagesList.find((v) => String(v.name).toLowerCase().trim() === target);
               }
             }
           } catch (e) {
-            console.error("Failed to parse Market Analysis Payload", e);
+            console.error("Failed to parse land details", e);
+          }
+
+          if (!defaultVillage) {
+            try {
+              const savedData = localStorage.getItem('Market Analysis Payload');
+              if (savedData) {
+                const parsed = JSON.parse(savedData);
+                if (parsed.villageId) {
+                  defaultVillage = villagesList.find((v) => v.id === parsed.villageId);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to parse Market Analysis Payload", e);
+            }
           }
 
           const villageToSelect = defaultVillage || villagesList[0];
@@ -464,19 +479,17 @@ const BayesianOptimizer = () => {
     loadMeta();
   }, []);
 
-  // Listen for market analysis updates
+  // Listen for market analysis updates and land details updates
   useEffect(() => {
     const handleMarketAnalysisUpdate = (event) => {
       if (event.detail && event.detail.villageId) {
         const newVillageId = event.detail.villageId;
         const newVillageName = event.detail.villageName;
 
-        // If we have villages loaded, verify it exists
         if (villages.length > 0) {
           const villageExists = villages.some(v => v.id === newVillageId);
           if (villageExists) {
             setSelectedVillageId(newVillageId);
-            // Use name from event if valid, or find in list
             if (newVillageName) setSelectedVillageName(newVillageName);
             else {
               const v = villages.find(v => v.id === newVillageId);
@@ -484,17 +497,37 @@ const BayesianOptimizer = () => {
             }
           }
         } else {
-          // If villages not loaded yet/empty, just set the ID/Name so it might match later or at least show
           setSelectedVillageId(newVillageId);
           if (newVillageName) setSelectedVillageName(newVillageName);
         }
       }
     };
 
+    const handleLandDetailsUpdate = () => {
+      try {
+        const landDetailsData = localStorage.getItem('landDetailsForm');
+        if (landDetailsData && villages.length > 0) {
+          const parsed = JSON.parse(landDetailsData);
+          if (parsed.village) {
+            const target = String(parsed.village).toLowerCase().trim();
+            const matchingVillage = villages.find((v) => String(v.name).toLowerCase().trim() === target);
+            if (matchingVillage) {
+              setSelectedVillageId(matchingVillage.id);
+              setSelectedVillageName(matchingVillage.name);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse land details on update event", e);
+      }
+    };
+
     window.addEventListener('marketAnalysisUpdated', handleMarketAnalysisUpdate);
+    window.addEventListener('landDetailsUpdated', handleLandDetailsUpdate);
 
     return () => {
       window.removeEventListener('marketAnalysisUpdated', handleMarketAnalysisUpdate);
+      window.removeEventListener('landDetailsUpdated', handleLandDetailsUpdate);
     };
   }, [villages]);
 
