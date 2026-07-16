@@ -502,7 +502,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
     // Helper to check if two file lists are identical (checking length, name, size, lastModified)
     const filesMatch = (filesA, filesB) => {
       if (filesA.length !== filesB.length) return false;
-      const serialize = (files) => 
+      const serialize = (files) =>
         [...files]
           .map(f => `${f.name}-${f.size}-${f.lastModified}`)
           .sort()
@@ -539,7 +539,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
           formDataObj.append("file", file);
         });
 
-        const uploadResponse = await fetch("http://localhost:8001/user-input/documents", {
+        const uploadResponse = await fetch("http://localhost:8000/user-input/documents", {
           method: "POST",
           body: formDataObj,
         });
@@ -553,7 +553,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
         setDocStatusLog((prev) => [...prev, "Upload successful.", "Sending query to Ask API..."]);
       }
 
-      const askResponse = await fetch("http://localhost:8001/api/user-input/ask", {
+      const askResponse = await fetch("http://localhost:8000/api/user-input/ask", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -569,7 +569,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       }
 
       const result = await askResponse.json();
-      
+
       setDocLoading(false);
       setDocStatus("Completed successfully.");
       setDocStatusLog((prev) => [...prev, "Response received.", "Completed."]);
@@ -604,7 +604,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
         const developmentCategory = zoningVal ? zoningVal.charAt(0).toUpperCase() + zoningVal.slice(1).toLowerCase() : '';
         const roadWidth = getLandDetailsField('roadWidening') || '';
         const planningAuthority = getLandDetailsField('planningAdvisory') || '';
-        
+
         setDocQuestion(`For given land parcel coordinates ${coordinates}, development catgeory is ${developmentCategory}, Road Width is ${roadWidth}, planning authority is ${planningAuthority}, Provide the maximum permissible FSI aslo provide table for it`);
       }
     }
@@ -645,8 +645,8 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       e.stopPropagation();
     }
 
-    const city = getLandDetailsField('location') === 'Other Location' 
-      ? getLandDetailsField('otherLocationName') 
+    const city = getLandDetailsField('location') === 'Other Location'
+      ? getLandDetailsField('otherLocationName')
       : getLandDetailsField('location');
     const planningAuthority = getLandDetailsField('planningAdvisory');
     const lat = getLandDetailsField('latitude');
@@ -673,8 +673,8 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       eventSourceRef.current.close();
     }
 
-    const url = `http://localhost:8001/api/chat_stream?query=${encodedQuery}&no_cache=true`;
-    
+    const url = `http://localhost:8000/api/chat_stream?query=${encodedQuery}&no_cache=true`;
+
     try {
       const source = new EventSource(url);
       eventSourceRef.current = source;
@@ -682,7 +682,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       source.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (data.type === "status") {
             setAgentCurrentStatus(data.content);
             setAgentStatusLog((prev) => [...prev, data.content]);
@@ -714,7 +714,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
 
   const renderMarkdown = (text) => {
     if (!text) return null;
-    
+
     const parseInlineStyles = (lineText) => {
       if (!lineText) return "";
       let elements = [];
@@ -1451,7 +1451,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                     type="button"
                     className="fsi-second-pane-card text-start"
                     style={{ ...secondPaneStyles.card, width: '100%', marginBottom: 0 }}
-                    onClick={() => window.open("https://os.sigmavalue.ai/web_search", "_blank", "noopener,noreferrer")}
+                    onClick={() => window.open("https://os.sigmavalue/web_search", "_blank", "noopener,noreferrer")}
                   >
                     <div className="fsi-second-pane-card-icon" style={secondPaneStyles.cardIcon}>
                       <FaGlobe />
@@ -1629,9 +1629,9 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                 <div className="fsi-second-pane-field" style={secondPaneStyles.field}>
                   <div className="fsi-second-pane-label" style={secondPaneStyles.label}>Permissible FSI / FAR (Sq ft)</div>
                   <input
-                  type="text"
-                  className="form-control"
-                  style={secondPaneStyles.input}
+                    type="text"
+                    className="form-control"
+                    style={secondPaneStyles.input}
                     value={agenticPermissibleFsiValue}
                     readOnly
                     placeholder="Max Permissible Area from FSI Utilization Breakdown"
@@ -2103,220 +2103,131 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
           </div>
         ) : (
           <div className="fsi-proposal-table-wrap table-responsive">
-          <table className="table table-bordered fsi-proposal-table">
-            <thead className="table-light">
-              <tr>
-                <th className="text-start">Particulars</th>
-                <th className="text-start">Permissible FSI</th>
-                <th className="text-start">Proposed FSI</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="fw-medium">Basic FSI</td>
-                <td>
-                  {!puneThaneStrict ? (
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={formData.Permissible_Basic_FSI}
-                      onChange={(e) => handleInputChange('Permissible_Basic_FSI', e.target.value)}
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  ) : landResults.basicFSI.toFixed(2)}
-                </td>
-                <td>
-                  {!puneThaneStrict ? (
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={formData.Proposed_Basic_FSI}
-                      onChange={(e) => handleInputChange('Proposed_Basic_FSI', e.target.value)}
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  ) : landResults.basicFSI.toFixed(2)}
-                </td>
-              </tr>
-              <tr>
-                <td className="fw-medium">Premium FSI</td>
-                <td>
-                  {!puneThaneStrict ? (
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={formData.Permissible_Premium_FSI}
-                      onChange={(e) => handleInputChange('Permissible_Premium_FSI', e.target.value)}
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  ) : landResults.premium.toFixed(2)}
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm"
-                    value={formData.Proposed_Premium_FSI}
-                    onChange={(e) => handleInputChange('Proposed_Premium_FSI', e.target.value)}
-                    placeholder="0.00"
-                    max={puneThaneStrict ? landResults.premium : undefined}
-                    step="0.01"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td className="fw-medium">TDR FSI</td>
-                <td>
-                  {!puneThaneStrict ? (
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={formData.Permissible_TDR_FSI}
-                      onChange={(e) => handleInputChange('Permissible_TDR_FSI', e.target.value)}
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  ) : landResults.tdr.toFixed(2)}
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm"
-                    value={formData.Proposed_TDR_FSI}
-                    onChange={(e) => handleInputChange('Proposed_TDR_FSI', e.target.value)}
-                    placeholder="0.00"
-                    max={puneThaneStrict ? landResults.tdr : undefined}
-                    step="0.01"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td className="fw-medium">Max Building Potential</td>
-                <td>{formData.Permissible_Max_Building_Potential || landResults.maxBuildingPotential.toFixed(2)}</td>
-                <td>{formData.Proposed_Max_Building_Potential}</td>
-              </tr>
-
-
-              {/* Add Other FSI row here - will show for all zoning types */}
-              <tr>
-                <td className="fw-medium">Other FSI</td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm"
-                    value={formData.Permissible_Other_FSI || ''}
-                    onChange={(e) => handleInputChange('Permissible_Other_FSI', e.target.value)}
-                    placeholder="Enter value"
-                    step="0.01"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm"
-                    value={formData.Proposed_Other_FSI || ''}
-                    onChange={(e) => handleInputChange('Proposed_Other_FSI', e.target.value)}
-                    placeholder="Enter value"
-                    step="0.01"
-                  />
-                </td>
-              </tr>
-
-              {currentZoning === 'residential' && (
+            <table className="table table-bordered fsi-proposal-table">
+              <thead className="table-light">
                 <tr>
-                  <td className="fw-medium">Ancillary Area coefficient for Residential</td>
+                  <th className="text-start">Particulars</th>
+                  <th className="text-start">Permissible FSI</th>
+                  <th className="text-start">Proposed FSI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="fw-medium">Basic FSI</td>
                   <td>
-                    {!isPuneThane ? (
+                    {!puneThaneStrict ? (
                       <input
                         type="number"
                         className="form-control form-control-sm"
-                        value={formData.Permissible_Residential_Ancillary_Area_Constant}
-                        onChange={(e) => handleInputChange('Permissible_Residential_Ancillary_Area_Constant', e.target.value)}
-                        placeholder="Percentage"
+                        value={formData.Permissible_Basic_FSI}
+                        onChange={(e) => handleInputChange('Permissible_Basic_FSI', e.target.value)}
+                        placeholder="0.00"
                         step="0.01"
                       />
-                    ) : "0.6"}
+                    ) : landResults.basicFSI.toFixed(2)}
+                  </td>
+                  <td>
+                    {!puneThaneStrict ? (
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={formData.Proposed_Basic_FSI}
+                        onChange={(e) => handleInputChange('Proposed_Basic_FSI', e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                    ) : landResults.basicFSI.toFixed(2)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="fw-medium">Premium FSI</td>
+                  <td>
+                    {!puneThaneStrict ? (
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={formData.Permissible_Premium_FSI}
+                        onChange={(e) => handleInputChange('Permissible_Premium_FSI', e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                    ) : landResults.premium.toFixed(2)}
                   </td>
                   <td>
                     <input
                       type="number"
                       className="form-control form-control-sm"
-                      value={formData.Proposed_Residential_Ancillary_Area_Constant}
-                      onChange={(e) => handleInputChange('Proposed_Residential_Ancillary_Area_Constant', e.target.value)}
-                      placeholder="Percentage"
-                      max={isPuneThane ? 0.6 : undefined}
-                      min={0}
+                      value={formData.Proposed_Premium_FSI}
+                      onChange={(e) => handleInputChange('Proposed_Premium_FSI', e.target.value)}
+                      placeholder="0.00"
+                      max={puneThaneStrict ? landResults.premium : undefined}
                       step="0.01"
                     />
                   </td>
                 </tr>
-              )}
-
-              {currentZoning === 'commercial' && (
                 <tr>
-                  <td className="fw-medium">Ancillary Area coefficient for Commercial</td>
+                  <td className="fw-medium">TDR FSI</td>
                   <td>
-                    {!isPuneThane ? (
+                    {!puneThaneStrict ? (
                       <input
                         type="number"
                         className="form-control form-control-sm"
-                        value={formData.Permissible_Commercial_Ancillary_Area_Constant}
-                        onChange={(e) => handleInputChange('Permissible_Commercial_Ancillary_Area_Constant', e.target.value)}
-                        placeholder="Percentage"
+                        value={formData.Permissible_TDR_FSI}
+                        onChange={(e) => handleInputChange('Permissible_TDR_FSI', e.target.value)}
+                        placeholder="0.00"
                         step="0.01"
                       />
-                    ) : "0.8"}
+                    ) : landResults.tdr.toFixed(2)}
                   </td>
                   <td>
                     <input
                       type="number"
                       className="form-control form-control-sm"
-                      value={formData.Proposed_Commercial_Ancillary_Area_Constant}
-                      onChange={(e) => handleInputChange('Proposed_Commercial_Ancillary_Area_Constant', e.target.value)}
-                      placeholder="Percentage"
-                      max={isPuneThane ? 0.8 : undefined}
-                      min={0}
+                      value={formData.Proposed_TDR_FSI}
+                      onChange={(e) => handleInputChange('Proposed_TDR_FSI', e.target.value)}
+                      placeholder="0.00"
+                      max={puneThaneStrict ? landResults.tdr : undefined}
                       step="0.01"
                     />
                   </td>
                 </tr>
-              )}
+                <tr>
+                  <td className="fw-medium">Max Building Potential</td>
+                  <td>{formData.Permissible_Max_Building_Potential || landResults.maxBuildingPotential.toFixed(2)}</td>
+                  <td>{formData.Proposed_Max_Building_Potential}</td>
+                </tr>
 
-              {currentZoning === 'mixed' && (
-                <>
-                  <tr>
-                    <td className="fw-medium">Ancillary Area coefficient for Commercial</td>
-                    <td>
-                      {!puneThaneStrict ? (
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={formData.Permissible_Commercial_Ancillary_Area_Constant}
-                          onChange={(e) => handleInputChange('Permissible_Commercial_Ancillary_Area_Constant', e.target.value)}
-                          placeholder="Percentage"
-                          step="0.01"
-                        />
-                      ) : "0.8"}
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={formData.Proposed_Commercial_Ancillary_Area_Constant}
-                        onChange={(e) => handleInputChange('Proposed_Commercial_Ancillary_Area_Constant', e.target.value)}
-                        placeholder="Percentage"
-                        max={puneThaneStrict ? 0.8 : undefined}
-                        min={0}
-                        step="0.01"
-                      />
-                    </td>
-                  </tr>
 
+                {/* Add Other FSI row here - will show for all zoning types */}
+                <tr>
+                  <td className="fw-medium">Other FSI</td>
+                  <td>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={formData.Permissible_Other_FSI || ''}
+                      onChange={(e) => handleInputChange('Permissible_Other_FSI', e.target.value)}
+                      placeholder="Enter value"
+                      step="0.01"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={formData.Proposed_Other_FSI || ''}
+                      onChange={(e) => handleInputChange('Proposed_Other_FSI', e.target.value)}
+                      placeholder="Enter value"
+                      step="0.01"
+                    />
+                  </td>
+                </tr>
+
+                {currentZoning === 'residential' && (
                   <tr>
                     <td className="fw-medium">Ancillary Area coefficient for Residential</td>
                     <td>
-                      {!puneThaneStrict ? (
+                      {!isPuneThane ? (
                         <input
                           type="number"
                           className="form-control form-control-sm"
@@ -2334,18 +2245,107 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                         value={formData.Proposed_Residential_Ancillary_Area_Constant}
                         onChange={(e) => handleInputChange('Proposed_Residential_Ancillary_Area_Constant', e.target.value)}
                         placeholder="Percentage"
-                        max={puneThaneStrict ? 0.6 : undefined}
+                        max={isPuneThane ? 0.6 : undefined}
                         min={0}
                         step="0.01"
                       />
                     </td>
                   </tr>
+                )}
 
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
+                {currentZoning === 'commercial' && (
+                  <tr>
+                    <td className="fw-medium">Ancillary Area coefficient for Commercial</td>
+                    <td>
+                      {!isPuneThane ? (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={formData.Permissible_Commercial_Ancillary_Area_Constant}
+                          onChange={(e) => handleInputChange('Permissible_Commercial_Ancillary_Area_Constant', e.target.value)}
+                          placeholder="Percentage"
+                          step="0.01"
+                        />
+                      ) : "0.8"}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={formData.Proposed_Commercial_Ancillary_Area_Constant}
+                        onChange={(e) => handleInputChange('Proposed_Commercial_Ancillary_Area_Constant', e.target.value)}
+                        placeholder="Percentage"
+                        max={isPuneThane ? 0.8 : undefined}
+                        min={0}
+                        step="0.01"
+                      />
+                    </td>
+                  </tr>
+                )}
+
+                {currentZoning === 'mixed' && (
+                  <>
+                    <tr>
+                      <td className="fw-medium">Ancillary Area coefficient for Commercial</td>
+                      <td>
+                        {!puneThaneStrict ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={formData.Permissible_Commercial_Ancillary_Area_Constant}
+                            onChange={(e) => handleInputChange('Permissible_Commercial_Ancillary_Area_Constant', e.target.value)}
+                            placeholder="Percentage"
+                            step="0.01"
+                          />
+                        ) : "0.8"}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={formData.Proposed_Commercial_Ancillary_Area_Constant}
+                          onChange={(e) => handleInputChange('Proposed_Commercial_Ancillary_Area_Constant', e.target.value)}
+                          placeholder="Percentage"
+                          max={puneThaneStrict ? 0.8 : undefined}
+                          min={0}
+                          step="0.01"
+                        />
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="fw-medium">Ancillary Area coefficient for Residential</td>
+                      <td>
+                        {!puneThaneStrict ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={formData.Permissible_Residential_Ancillary_Area_Constant}
+                            onChange={(e) => handleInputChange('Permissible_Residential_Ancillary_Area_Constant', e.target.value)}
+                            placeholder="Percentage"
+                            step="0.01"
+                          />
+                        ) : "0.6"}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={formData.Proposed_Residential_Ancillary_Area_Constant}
+                          onChange={(e) => handleInputChange('Proposed_Residential_Ancillary_Area_Constant', e.target.value)}
+                          placeholder="Percentage"
+                          max={puneThaneStrict ? 0.6 : undefined}
+                          min={0}
+                          step="0.01"
+                        />
+                      </td>
+                    </tr>
+
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {activeView === "default" && (
