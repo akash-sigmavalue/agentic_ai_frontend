@@ -788,6 +788,12 @@ import Select from "react-select"
 import OsmInline from "./OsmInline";
 import { useGlobalState } from "@/components/GlobalContext";
 
+const ALLOWED_CITIES = [
+  "Pune", "Thane", "Abu Dhabi", "Dubai", 
+  "Hyderabad", "Medchal-Malkajgiri", "Mumbai", 
+  "Rangareddy", "Sangareddy", "Yadadri Bhuvanagiri"
+];
+
 const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
   const [formData, setFormData] = useState({
     clientName: "",
@@ -829,7 +835,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
   const theme = gstate?.theme || "light"
 
   useEffect(() => {
-    const allowed = new Set(["Pune", "Thane"]);
+    const allowed = new Set(ALLOWED_CITIES);
     const city = (formData.location ?? "").trim();
     if (!allowed.has(city)) return;
 
@@ -1572,18 +1578,9 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
               onChange={(e) => handleInputChange("location", e.target.value)}
             >
               <option value="">Select location</option>
-              <option value="Pune">Pune</option>
-              <option value="Nagpur">Nagpur</option>
-              <option value="Aurangabad">Aurangabad</option>
-              <option value="Nashik">Nashik</option>
-              <option value="Thane">Thane</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Bangalore">Bangalore</option>
-              <option value="Delhi-ncr">Delhi NCR</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Ahmedabad">Ahmedabad</option>
-              <option value="Surat">Surat</option>
+              {ALLOWED_CITIES.map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
               <option value="Other Location">Other Location</option>
             </select>
           </div>
@@ -1605,7 +1602,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
             </div>
           )}
 
-          {(formData.location === "Pune" || formData.location === "Thane") && (
+          {ALLOWED_CITIES.includes(formData.location) && (
             <>
               {villagesError && (
                 <div className="alert alert-danger border-0 shadow-sm rounded-3" role="alert">
