@@ -72,15 +72,28 @@ const useBayesianOptimizer = () => {
                 if (villagesList.length > 0) {
                     let defaultVillage = null;
                     try {
-                        const savedData = localStorage.getItem('Market Analysis Payload');
-                        if (savedData) {
-                            const parsed = JSON.parse(savedData);
-                            if (parsed.villageId) {
-                                defaultVillage = villagesList.find((v) => v.id === parsed.villageId);
+                        // First try to match directly from landDetailsForm (instant sync)
+                        const landDetailsData = localStorage.getItem('landDetailsForm');
+                        if (landDetailsData) {
+                            const parsed = JSON.parse(landDetailsData);
+                            if (parsed.village) {
+                                const target = String(parsed.village).toLowerCase().trim();
+                                defaultVillage = villagesList.find((v) => String(v.name).toLowerCase().trim() === target);
+                            }
+                        }
+
+                        // If not found, fallback to Market Analysis Payload
+                        if (!defaultVillage) {
+                            const savedData = localStorage.getItem('Market Analysis Payload');
+                            if (savedData) {
+                                const parsed = JSON.parse(savedData);
+                                if (parsed.villageId) {
+                                    defaultVillage = villagesList.find((v) => v.id === parsed.villageId);
+                                }
                             }
                         }
                     } catch (e) {
-                        console.error("Failed to parse Market Analysis Payload", e);
+                        console.error("Failed to parse local storage", e);
                     }
                     const villageToSelect = defaultVillage || villagesList[0];
                     setSelectedVillageId(villageToSelect.id);
@@ -95,12 +108,13 @@ const useBayesianOptimizer = () => {
         loadMeta();
     }, []);
 
-    // Listen for market analysis updates
+    // Listen for market analysis updates and land details updates
     useEffect(() => {
         const handleMarketAnalysisUpdate = (event) => {
             if (event.detail && event.detail.villageId) {
                 const newVillageId = event.detail.villageId;
                 const newVillageName = event.detail.villageName;
+
                 if (villages.length > 0) {
                     const villageExists = villages.some(v => v.id === newVillageId);
                     if (villageExists) {
@@ -117,8 +131,33 @@ const useBayesianOptimizer = () => {
                 }
             }
         };
+
+        const handleLandDetailsUpdate = () => {
+            try {
+                const landDetailsData = localStorage.getItem('landDetailsForm');
+                if (landDetailsData && villages.length > 0) {
+                    const parsed = JSON.parse(landDetailsData);
+                    if (parsed.village) {
+                        const target = String(parsed.village).toLowerCase().trim();
+                        const matchingVillage = villages.find((v) => String(v.name).toLowerCase().trim() === target);
+                        if (matchingVillage) {
+                            setSelectedVillageId(matchingVillage.id);
+                            setSelectedVillageName(matchingVillage.name);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to parse land details on update event", e);
+            }
+        };
+
         window.addEventListener('marketAnalysisUpdated', handleMarketAnalysisUpdate);
-        return () => window.removeEventListener('marketAnalysisUpdated', handleMarketAnalysisUpdate);
+        window.addEventListener('landDetailsUpdated', handleLandDetailsUpdate);
+
+        return () => {
+            window.removeEventListener('marketAnalysisUpdated', handleMarketAnalysisUpdate);
+            window.removeEventListener('landDetailsUpdated', handleLandDetailsUpdate);
+        };
     }, [villages]);
 
     const getUnitCount = useCallback((bhk) => {

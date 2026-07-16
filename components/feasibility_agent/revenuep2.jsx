@@ -2611,12 +2611,34 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
 
       // 3. fetchBhkMonthlyAverageByArea (POST)
       const areaPayload = [];
+      let areaCalcForm = {};
+      try {
+        areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
+      } catch(e) {}
+      
+      const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
+      const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
+      const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
+      
+      const unitDesign = readUnitDesignStructure();
+      const calcMode = unitDesign?.calculationMode || 'carpet';
+
       for (let i = 4; i <= 9; i++) {
         const bhkType = String(currentLocalGrid?.[i]?.[0]?.value ?? '').trim();
         const avgUnitArea = parseFloat(currentLocalGrid?.[i]?.[2]?.value);
         if (bhkType && !isNaN(avgUnitArea)) {
-          const { low, high } = getAreaRange(avgUnitArea);
-          areaPayload.push({ BHK_type: bhkType, Avg_Unit_Area: avgUnitArea, Lowrange: low, Highrange: high });
+          let searchArea = avgUnitArea;
+          if (calcMode === 'saleable') {
+            const normalizedBhk = normalizeUnitTypeKey(bhkType);
+            let loadingFactor = 1.0;
+            if (normalizedBhk === 'shop') loadingFactor = shopLoading;
+            else if (normalizedBhk === 'office') loadingFactor = officeLoading;
+            else loadingFactor = resLoading;
+            searchArea = avgUnitArea / loadingFactor;
+          }
+
+          const { low, high } = getAreaRange(searchArea);
+          areaPayload.push({ BHK_type: bhkType, Avg_Unit_Area: searchArea, Lowrange: low, Highrange: high });
         }
       }
       if (areaPayload.length > 0) {
@@ -2662,7 +2684,22 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         const bhkType = String(currentLocalGrid?.[i]?.[0]?.value ?? '').trim();
         const userRate = parseFloat(currentLocalGrid?.[i]?.[3]?.value);
         if (bhkType && !isNaN(userRate)) {
-          ratePayload.push({ BHK_type: bhkType, UserRate: userRate, Lowrange: userRate * 0.9, Highrange: userRate * 1.1 });
+          let searchRate = userRate;
+          if (calcMode === 'saleable') {
+            const normalizedBhk = normalizeUnitTypeKey(bhkType);
+            let loadingFactor = 1.0;
+            if (normalizedBhk === 'shop') loadingFactor = shopLoading;
+            else if (normalizedBhk === 'office') loadingFactor = officeLoading;
+            else loadingFactor = resLoading;
+            searchRate = userRate * loadingFactor;
+          }
+          
+          ratePayload.push({ 
+            BHK_type: bhkType, 
+            UserRate: searchRate, 
+            Lowrange: searchRate * 0.9, 
+            Highrange: searchRate * 1.1 
+          });
         }
       }
       if (ratePayload.length > 0) {
@@ -2678,8 +2715,18 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             let updated = false;
             data.data.forEach((item) => {
               const apiBhkType = String(item?.BHK_type || '').trim();
-              const avgRate = item?.average_rate_per_sqft_on_sa;
+              let avgRate = item?.average_rate_per_sqft_on_sa;
               if (!apiBhkType || avgRate == null) return;
+              
+              if (calcMode === 'saleable') {
+                const normalizedBhk = normalizeUnitTypeKey(apiBhkType);
+                let loadingFactor = 1.0;
+                if (normalizedBhk === 'shop') loadingFactor = shopLoading;
+                else if (normalizedBhk === 'office') loadingFactor = officeLoading;
+                else loadingFactor = resLoading;
+                avgRate = avgRate / loadingFactor;
+              }
+
               const apiBhkNormalized = normalizeUnitTypeKey(apiBhkType);
               let matchedRow = null;
               for (let i = 15; i <= 20; i++) {
@@ -2784,10 +2831,31 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
     });
 
     // Revenuep Unit Range - from A5 to A10 (rows 4-9, 0-indexed)
+    const unitDesign = readUnitDesignStructure();
+    const calcMode = unitDesign?.calculationMode || 'carpet';
+    let areaCalcForm = {};
+    try {
+      areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
+    } catch(e) {}
+    const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
+    const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
+    const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
+
     const revenuepUnitRange = Array.from({ length: 6 }, (_, i) => {
       const rowIndex = 4 + i; // 4-9 (0-indexed) = A5-A10 (1-indexed)
       const bhkType = String(grid?.[rowIndex]?.[0]?.value ?? '').trim(); // A column (index 0)
-      const avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
+      let avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
+      
+      if (avgUnitArea != null && calcMode === 'saleable') {
+        const normalizedBhk = normalizeUnitTypeKey(bhkType);
+        let loadingFactor = 1.0;
+        if (normalizedBhk === 'shop') loadingFactor = shopLoading;
+        else if (normalizedBhk === 'office') loadingFactor = officeLoading;
+        else loadingFactor = resLoading;
+        
+        avgUnitArea = avgUnitArea / loadingFactor;
+      }
+      
       const lowrange = avgUnitArea != null ? avgUnitArea - 25 : null;
       const highrange = avgUnitArea != null ? avgUnitArea + 25 : null;
 
