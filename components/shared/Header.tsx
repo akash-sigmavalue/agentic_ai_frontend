@@ -37,10 +37,14 @@ const Header = () => {
   );
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  
+  const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
+  const [llmModel, setLlmModel] = React.useState('');
+  const [modelsByProvider, setModelsByProvider] = React.useState<Record<string, string[]>>({});
+  const [shouldSyncLlmSelection, setShouldSyncLlmSelection] = React.useState(true);
 
   React.useEffect(() => {
     const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
-    setIsDark(theme);
   }, []);
 
   React.useEffect(() => {
