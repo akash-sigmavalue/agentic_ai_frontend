@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { Building2 } from "lucide-react";
 import ThemeToggle from "@/components/valuation/shared/ThemeToggle";
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
@@ -33,6 +33,15 @@ export default function HomePage() {
   const [leftWidth, setLeftWidth] = useState(33); // 33%
   const [middleWidth, setMiddleWidth] = useState(34); // 34%
   const containerRef = useRef(null);
+
+  const handleEventsReset = useCallback((keepUpToEventType) => {
+    setEvents((prev) => {
+      const idx = [...prev].reverse().findIndex(e => e.type === keepUpToEventType);
+      if (idx === -1) return prev;
+      const cutPoint = prev.length - idx; // keep events up to and including that event
+      return prev.slice(0, cutPoint);
+    });
+  }, []);
 
   const handleMouseDown = (dividerIndex) => (e) => {
     e.preventDefault();
@@ -172,11 +181,14 @@ export default function HomePage() {
                   setValuationResult(null);
                 }}
                 onEvent={(event) => setEvents((prev) => [...prev, event])}
+                onEventsReset={handleEventsReset}
                 onMarkersUpdate={(m) => {
                   setMarkers(m);
                 }}
                 factorialData={factorialData}
                 onValuationResult={setValuationResult}
+                events={events}
+                setEvents={setEvents}
               />
             </div>
 

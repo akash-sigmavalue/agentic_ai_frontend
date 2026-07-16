@@ -8,9 +8,22 @@ import ResizeHandle from '@/components/shared/ResizeHandle';
 import type {
   Module1IntentOutput,
   Module2Output,
+  Module7PlottableEnrichmentCorridor,
+  Module7PlottableEnrichmentPoint,
   RuntimeGeneratedMapOption,
   VisualizationRetrievalState,
 } from '@/components/visualization_agent/types';
+import {
+  buildIntegratedRunPayload,
+  EMPTY_SPATIAL_INSIGHT_V2_STATE,
+  ensureSpatialInsightSession,
+  fetchExpandedOsmForInteractiveMap,
+  getDefaultPreviewKey,
+  runIntegratedSpatialInsightV2,
+  querySpatialInsightV2,
+  type SpatialInsightV2State,
+} from '@/lib/visualization-agent-spatial-insight-v2';
+import type { InteractiveMapPlottedSnapshot, InteractiveMapViewer } from '@/lib/visualization-agent-interactive-cache';
 
 const DEFAULT_PANEL_WIDTHS = { chat: 25, workflow: 50, map: 25 };
 const EXPANDED_PANEL_WIDTHS = {
@@ -21,33 +34,156 @@ const EXPANDED_PANEL_WIDTHS = {
 type PanelKey = keyof typeof EXPANDED_PANEL_WIDTHS;
 
 export default function VisualizationAgentPage() {
-  const [panelWidths, setPanelWidths] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_PANEL_WIDTHS;
-
-    const savedWidths = localStorage.getItem('visualization_panel_widths');
-    if (!savedWidths) return DEFAULT_PANEL_WIDTHS;
-
-    try {
-      return JSON.parse(savedWidths) as typeof DEFAULT_PANEL_WIDTHS;
-    } catch (error) {
-      console.error('Failed to load saved panel widths', error);
-      return DEFAULT_PANEL_WIDTHS;
-    }
-  });
+  const [panelWidths, setPanelWidths] = useState(DEFAULT_PANEL_WIDTHS);
   const [expandedPanel, setExpandedPanel] = useState<PanelKey | null>(null);
   const [isDragging, setIsDragging] = useState<'chat' | 'workflow' | null>(null);
-  const [moduleOutput, setModuleOutput] = useState<Module1IntentOutput | null>(null);
-  const [module2Output, setModule2Output] = useState<Module2Output | null>(null);
-  const [retrievalOutput, setRetrievalOutput] = useState<VisualizationRetrievalState | null>(null);
-  const [runtimeGeneratedMaps, setRuntimeGeneratedMaps] = useState<RuntimeGeneratedMapOption[]>([]);
-  const [selectedInsightMapId, setSelectedInsightMapId] = useState<string | null>(null);
-  const restoredPanelWidthsRef = useRef(panelWidths);
 
+  // Restore saved panel widths AFTER hydration so server & client first-render match
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('visualization_panel_widths');
+      if (saved) {
+        const parsed = JSON.parse(saved) as typeof DEFAULT_PANEL_WIDTHS;
+        if (parsed && typeof parsed.chat === 'number') {
+          setPanelWidths(parsed);
+        }
+      }
+    } catch {
+      // ignore corrupt localStorage
+    }
+  }, []);
+
+  // Persist panel widths whenever they change (but not when a panel is expanded)
   useEffect(() => {
     if (!expandedPanel) {
       localStorage.setItem('visualization_panel_widths', JSON.stringify(panelWidths));
     }
   }, [expandedPanel, panelWidths]);
+
+  const [moduleOutput, setModuleOutput] = useState<Module1IntentOutput | null>(null);
+  const [module2Output, setModule2Output] = useState<Module2Output | null>(null);
+  const [retrievalOutput, setRetrievalOutput] = useState<VisualizationRetrievalState | null>(null);
+  const [runtimeGeneratedMaps, setRuntimeGeneratedMaps] = useState<RuntimeGeneratedMapOption[]>([]);
+  const [selectedInsightMapId, setSelectedInsightMapId] = useState<string | null>(null);
+  const [pendingPlottableEnrichment, setPendingPlottableEnrichment] = useState<{
+    mapId: string;
+    points: Module7PlottableEnrichmentPoint[];
+    corridors: Module7PlottableEnrichmentCorridor[];
+  } | null>(null);
+  const [spatialV2, setSpatialV2] = useState<SpatialInsightV2State>(EMPTY_SPATIAL_INSIGHT_V2_STATE);
+  const [requestedChatCategory, setRequestedChatCategory] = useState<'spatial-insights-v2' | null>(null);
+  const restoredPanelWidthsRef = useRef(panelWidths);
+
+  const handleTakeSpatialSnapshot = useCallback(
+    async (viewer: InteractiveMapViewer, plotted: InteractiveMapPlottedSnapshot) => {
+      const fallbackLat = plotted.records?.[0]?.lat ?? plotted.projectMarkers?.[0]?.lat ?? 18.5204;
+      const fallbackLng = plotted.records?.[0]?.lng ?? plotted.projectMarkers?.[0]?.lon ?? 73.8567;
+      setSpatialV2((previous) => ({
+        ...previous,
+        isRunning: true,
+        statusLevel: 'info',
+        statusMessage: `Running Spatial Insight v2 from ${viewer === 'interactive-map-3d' ? 'Interactive Map 3D' : 'Interactive Map'}...`,
+      }));
+      setRequestedChatCategory('spatial-insights-v2');
+      try {
+        const payload = buildIntegratedRunPayload(plotted, {
+          sessionId: spatialV2.sessionId,
+          locationName: plotted.runtimeContext.location || plotted.runtimeContext.city,
+          fallbackCenter: { lat: fallbackLat, lng: fallbackLng },
+        });
+        if (payload.realEstatePoints.length === 0) {
+          throw new Error('No plotted Module 2 coordinates were found on the interactive map.');
+        }
+        const result = await runIntegratedSpatialInsightV2(payload);
+        const previewKey = getDefaultPreviewKey(result.result_summary);
+        setSpatialV2({
+          sessionId: result.session_id,
+          resultSummary: result.result_summary,
+          state: result.state,
+          statusMessage: result.message,
+          statusLevel: result.level === 'success' ? 'success' : 'warning',
+          isRunning: false,
+          isFetchingOsm: false,
+          previewKey,
+          previewContent: null,
+          queryAnswer: null,
+          queryGisResult: null,
+        });
+        setRequestedChatCategory('spatial-insights-v2');
+      } catch (error) {
+        setSpatialV2((previous) => ({
+          ...previous,
+          isRunning: false,
+          statusLevel: 'error',
+          statusMessage: error instanceof Error ? error.message : 'Spatial Insight v2 failed.',
+        }));
+        setRequestedChatCategory('spatial-insights-v2');
+      }
+    },
+    [spatialV2.sessionId],
+  );
+
+  const handleFetchExpandedOsm = useCallback(
+    async (viewer: InteractiveMapViewer, plotted: InteractiveMapPlottedSnapshot) => {
+      const fallbackLat = plotted.records?.[0]?.lat ?? plotted.projectMarkers?.[0]?.lat ?? 18.5204;
+      const fallbackLng = plotted.records?.[0]?.lng ?? plotted.projectMarkers?.[0]?.lon ?? 73.8567;
+      const payload = buildIntegratedRunPayload(plotted, {
+        sessionId: spatialV2.sessionId,
+        locationName: plotted.runtimeContext.location || plotted.runtimeContext.city,
+        fallbackCenter: { lat: fallbackLat, lng: fallbackLng },
+      });
+      setSpatialV2((previous) => ({
+        ...previous,
+        isFetchingOsm: true,
+        statusLevel: 'info',
+        statusMessage: 'Fetching expanded OSM infrastructure layer...',
+      }));
+      try {
+        const sessionId = await ensureSpatialInsightSession(spatialV2.sessionId);
+        const response = await fetchExpandedOsmForInteractiveMap(sessionId, {
+          bounds: payload.bounds,
+          lat: payload.snapshot.lat,
+          lng: payload.snapshot.lng,
+          name: payload.snapshot.name,
+          address: payload.snapshot.address,
+        });
+        setSpatialV2((previous) => ({
+          ...previous,
+          sessionId,
+          state: response.state,
+          isFetchingOsm: false,
+          statusLevel: response.level === 'success' ? 'success' : 'warning',
+          statusMessage: response.message,
+        }));
+      } catch (error) {
+        setSpatialV2((previous) => ({
+          ...previous,
+          isFetchingOsm: false,
+          statusLevel: 'error',
+          statusMessage: error instanceof Error ? error.message : 'Expanded OSM fetch failed.',
+        }));
+      }
+    },
+    [spatialV2.sessionId],
+  );
+
+  const handleSpatialV2Query = useCallback(async (query: string) => {
+    if (!spatialV2.sessionId) {
+      throw new Error('Run Take Snapshot on the interactive map before asking a spatial query.');
+    }
+    const response = await querySpatialInsightV2(spatialV2.sessionId, query);
+    setSpatialV2((previous) => ({
+      ...previous,
+      state: response.state,
+      resultSummary: response.result_summary,
+      queryAnswer: response.answer,
+      queryGisResult: response.gis_result,
+      statusLevel: 'success',
+      statusMessage: 'Spatial query answered.',
+    }));
+  }, [spatialV2.sessionId]);
+
+
 
   const handleMouseDown = (panel: 'chat' | 'workflow') => (e: React.MouseEvent) => {
     if (expandedPanel) return;
@@ -105,7 +241,7 @@ export default function VisualizationAgentPage() {
     setPanelWidths(DEFAULT_PANEL_WIDTHS);
   };
 
-  const toggleExpandedPanel = (panel: PanelKey) => {
+  const toggleExpandedPanel = useCallback((panel: PanelKey) => {
     if (expandedPanel === panel) {
       setExpandedPanel(null);
       setPanelWidths(restoredPanelWidthsRef.current);
@@ -118,7 +254,11 @@ export default function VisualizationAgentPage() {
     setExpandedPanel(panel);
     setIsDragging(null);
     setPanelWidths(EXPANDED_PANEL_WIDTHS[panel]);
-  };
+  }, [expandedPanel, panelWidths]);
+
+  const handleToggleChat = useCallback(() => toggleExpandedPanel('chat'), [toggleExpandedPanel]);
+  const handleToggleWorkflow = useCallback(() => toggleExpandedPanel('workflow'), [toggleExpandedPanel]);
+  const handleToggleMap = useCallback(() => toggleExpandedPanel('map'), [toggleExpandedPanel]);
 
   return (
     <main className="workspace-page flex min-h-screen w-screen flex-col bg-[#f8fafc] text-slate-900 overflow-y-auto custom-scrollbar relative">
@@ -136,7 +276,7 @@ export default function VisualizationAgentPage() {
           <div className="min-w-0 h-full overflow-hidden transition-all duration-300">
             <ChatSection
               isExpanded={expandedPanel === 'chat'}
-              onToggleExpand={() => toggleExpandedPanel('chat')}
+              onToggleExpand={handleToggleChat}
               onModuleOutput={(output) => {
                 setModuleOutput(output);
                 setModule2Output(null);
@@ -148,6 +288,14 @@ export default function VisualizationAgentPage() {
               runtimeGeneratedMaps={runtimeGeneratedMaps}
               selectedInsightMapId={selectedInsightMapId}
               onInsightMapSelect={setSelectedInsightMapId}
+              onPlottableEnrichment={(mapId, points, corridors) =>
+                setPendingPlottableEnrichment({ mapId, points, corridors })}
+              spatialV2={spatialV2}
+              onSpatialV2PreviewKeyChange={(previewKey) =>
+                setSpatialV2((previous) => ({ ...previous, previewKey }))}
+              onSpatialV2Query={handleSpatialV2Query}
+              requestedChatCategory={requestedChatCategory}
+              onRequestedChatCategoryHandled={() => setRequestedChatCategory(null)}
             />
           </div>
 
@@ -158,7 +306,7 @@ export default function VisualizationAgentPage() {
           <div className="min-w-0 h-full overflow-hidden transition-all duration-300">
             <WorkflowSection
               isExpanded={expandedPanel === 'workflow'}
-              onToggleExpand={() => toggleExpandedPanel('workflow')}
+              onToggleExpand={handleToggleWorkflow}
               moduleOutput={moduleOutput}
               retrievalOutput={retrievalOutput}
               onModule2Output={setModule2Output}
@@ -172,11 +320,17 @@ export default function VisualizationAgentPage() {
           <div className="min-w-0 h-full overflow-hidden transition-all duration-300">
             <MapSection
               isExpanded={expandedPanel === 'map'}
-              onToggleExpand={() => toggleExpandedPanel('map')}
+              onToggleExpand={handleToggleMap}
               moduleOutput={moduleOutput}
               module2Output={module2Output}
               retrievalOutput={retrievalOutput}
               onRuntimeGeneratedMapsChange={setRuntimeGeneratedMaps}
+              pendingPlottableEnrichment={pendingPlottableEnrichment}
+              onPlottableEnrichmentApplied={() => setPendingPlottableEnrichment(null)}
+              spatialV2Busy={spatialV2.isRunning}
+              spatialV2OsmBusy={spatialV2.isFetchingOsm}
+              onTakeSpatialSnapshot={handleTakeSpatialSnapshot}
+              onFetchExpandedOsm={handleFetchExpandedOsm}
             />
           </div>
         </div>

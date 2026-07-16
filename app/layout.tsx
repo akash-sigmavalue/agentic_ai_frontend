@@ -3,9 +3,12 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "../styles/globals.css";
 import "leaflet/dist/leaflet.css";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 import "./data_retrieval/data_retieval.css";
 import "./valuation/valuation.css"
 import Header from "@/components/shared/Header";
+import { AuthProvider } from "@/hooks/use-auth";
 
 
 const geistSans = Geist({
@@ -56,8 +59,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <Header />
-        {children}
+        <AuthProvider>
+          <Header />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

@@ -125,6 +125,7 @@ export interface Module2Output {
   processing_time_seconds?: number;
   input_summary?: Record<string, unknown>;
   mapped_fields?: Record<string, string | null>;
+  unit_identification?: Record<string, unknown>;
   filter_validation?: Record<string, unknown>;
   aggregation_summary?: Record<string, unknown>;
   analysis_ready_dataset?: Record<string, unknown>[];
@@ -159,18 +160,44 @@ export type GeneratedMapFamily =
   | 'heatmap-timelapse'
   | 'interactive-map';
 
+export interface Module7PlottableEnrichmentPoint {
+  name: string;
+  lat: number;
+  lon: number;
+  category: string;
+}
+
+export interface Module7PlottableEnrichmentCorridor {
+  type?: string;
+  layer: 'highways' | 'metro_lines' | 'insight_roads';
+  name?: string | null;
+  ref?: string | null;
+  highway?: string | null;
+  width_m?: string | number | null;
+  lanes?: string | number | null;
+  distance_m?: number | null;
+  latlngs: [number, number][];
+  source?: 'insight_enrichment';
+}
+
+export interface Module7PlottableEnrichment {
+  points?: Module7PlottableEnrichmentPoint[];
+  corridors?: Module7PlottableEnrichmentCorridor[];
+}
+
 export interface RuntimeGeneratedMapOption {
   id: string;
   label: string;
   title: string;
-  sourceModule: '3.1' | '3';
+  sourceModule: '3.1' | '3' | 'interactive';
   family: GeneratedMapFamily;
   mapType?: string;
+  stage?: string;
   insightContext: {
     mapId: string;
     mapLabel: string;
     mapFamily: GeneratedMapFamily;
-    mapSource: 'generated';
+    mapSource: 'generated' | 'interactive';
     plottedData: Record<string, unknown>;
     moduleOutput?: Module1IntentOutput;
     module2Output?: Module2Output;
@@ -463,10 +490,18 @@ export interface Module7GenerationOutput {
   module_name: string;
   status: string;
   map_id: string;
-  map_source: 'generated' | 'default';
+  map_source: 'generated' | 'default' | 'interactive';
   processing_time_seconds: number;
   insight_output: Module7InsightOutput;
   spatial_enrichment?: Module7SpatialEnrichment;
+  plottable_enrichment?: Module7PlottableEnrichment;
+  insight_data_filter?: {
+    filter_mode?: string;
+    rationale?: string;
+    selection?: Record<string, unknown>;
+    catalog_totals?: Record<string, unknown>;
+    filtered_totals?: Record<string, unknown>;
+  };
   usage: Module31Usage;
   cache_policy: string;
 }

@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   ChevronDown,
   SlidersHorizontal,
-  FileText
+  FileText,
+  FastForward
 } from "lucide-react";
 
 // ── Stage metadata matching ACTUAL backend pipeline ───────────────────────────
@@ -150,7 +151,97 @@ function formatRateBasis(basis) {
   return basis;
 }
 
+function getSubjectFloor(content) {
+  return content?.subject_floor ?? content?.floor ?? null;
+}
+
+function showFloorFields(propertyType) {
+  if (!propertyType) return true;
+  const t = String(propertyType).toLowerCase().replace(/[_\s]+/g, ' ');
+  return !['villa', 'plot', 'building land', 'building+land', 'land building'].some(x => t.includes(x));
+}
+
 // ── Detail row component ───────────────────────────────────────────────────────
+function getSublocalityItems(data) {
+  if (!data) return [];
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+
+  const seen = new Set();
+  return values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function formatSublocalities(data) {
+  if (!data) return "";
+  const values = [];
+  const pushValue = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushValue);
+      return;
+    }
+    if (typeof value === "object") {
+      if (value.name) pushValue(value.name);
+      return;
+    }
+    const text = String(value).trim();
+    if (text) values.push(text);
+  };
+  pushValue(data["sub-locality"]);
+  pushValue(data.sub_locality);
+  pushValue(data.sub_localities);
+  pushValue(data.nearby_sublocalities);
+  pushValue(data.location_details?.sublocality);
+  pushValue(data.location_details?.nearby_sublocalities);
+  const seen = new Set();
+  const names = values.filter((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return names.join(", ");
+}
+
+function SublocalityChipList({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DetailRow({ label, value }) {
   if (value === null || value === undefined || value === "") return null;
   const isExcluded = ["Notes", "Remarks", "Question", "Message", "Methodology"].includes(label);
@@ -176,20 +267,26 @@ function StepDetails({ step }) {
   const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5";
 
   if (type === "entities" && content) {
+    const sublocalityItems = getSublocalityItems(content);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={content.property_type} />
         <DetailRow label="Location" value={content.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(content)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(content).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
+        <DetailRow label="City" value={content.city_name || content.city} />
         <DetailRow label="Country" value={content.country} />
         <DetailRow label="Project" value={content.project_name} />
         <DetailRow label="Latitude" value={content.coordinates?.lat !== undefined ? content.coordinates.lat : (content.lat !== undefined ? content.lat : null)} />
         <DetailRow label="Longitude" value={content.coordinates?.lng !== undefined ? content.coordinates.lng : (content.lng !== undefined ? content.lng : null)} />
         <DetailRow label="Salable Area" value={content.salable_area_sqft ? `${content.salable_area_sqft} sqft` : null} />
-        <DetailRow label="Carpet Area" value={content.carpet_area_sqft ? `${content.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={content.builtup_area_sqft ? `${content.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={content.plot_area_sqft ? `${content.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={content.age_years !== undefined ? `${content.age_years} years` : null} />
-        <DetailRow label="Floor" value={content.floor !== undefined ? String(content.floor) : null} />
+        {showFloorFields(content.property_type) && <DetailRow label="Floor" value={getSubjectFloor(content)} />}
+        {showFloorFields(content.property_type) && <DetailRow label="Total Floors" value={content.total_floors} />}
+        <DetailRow label="Facing" value={content.facing} />
         <DetailRow label="Approach" value={content.recommended_approach} />
         {content._token_usage && <DetailRow label="Tokens Used" value={`${content._token_usage.total_tokens || 0} total`} />}
       </div>
@@ -216,31 +313,41 @@ function StepDetails({ step }) {
   }
 
   if (type === "map_confirmation" && content) {
+    const sublocalityItems = getSublocalityItems(content);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Latitude" value={content.lat} />
         <DetailRow label="Longitude" value={content.lng} />
         <DetailRow label="Location" value={content.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(content)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(content).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
       </div>
     );
   }
 
   if (type === "extraction_verification" && content) {
     const ent = content.entities || {};
+    const sublocalityItems = getSublocalityItems(ent);
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Property Type" value={ent.property_type} />
         <DetailRow label="Location" value={ent.location_name} />
+        <DetailRow label="Sub-locality" value={formatSublocalities(ent)} />
+        <DetailRow label="Sub-localities Found" value={getSublocalityItems(ent).join(", ")} />
+        <SublocalityChipList items={sublocalityItems} />
+        <DetailRow label="City" value={ent.city_name || ent.city} />
         <DetailRow label="Country" value={ent.country} />
         <DetailRow label="Project" value={ent.project_name} />
         <DetailRow label="Latitude" value={ent.coordinates?.lat !== undefined ? ent.coordinates.lat : (ent.lat !== undefined ? ent.lat : null)} />
         <DetailRow label="Longitude" value={ent.coordinates?.lng !== undefined ? ent.coordinates.lng : (ent.lng !== undefined ? ent.lng : null)} />
         <DetailRow label="Salable Area" value={ent.salable_area_sqft ? `${ent.salable_area_sqft} sqft` : null} />
-        <DetailRow label="Carpet Area" value={ent.carpet_area_sqft ? `${ent.carpet_area_sqft} sqft` : null} />
         <DetailRow label="Built-up Area" value={ent.builtup_area_sqft ? `${ent.builtup_area_sqft} sqft` : null} />
         <DetailRow label="Plot Area" value={ent.plot_area_sqft ? `${ent.plot_area_sqft} sqft` : null} />
         <DetailRow label="Age" value={ent.age_years !== undefined ? `${ent.age_years} years` : null} />
-        <DetailRow label="Floor" value={ent.floor !== undefined ? String(ent.floor) : null} />
+        {showFloorFields(ent.property_type) && <DetailRow label="Floor" value={getSubjectFloor(ent)} />}
+        {showFloorFields(ent.property_type) && <DetailRow label="Total Floors" value={ent.total_floors} />}
+        <DetailRow label="Facing" value={ent.facing} />
         <DetailRow label="Approach" value={ent.recommended_approach} />
       </div>
     );
@@ -302,7 +409,7 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Total Found" value={content.total_found} />
         <DetailRow label="Source" value={sourceLabel} />
-        <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%)" />
+        <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>
     );
   }
@@ -438,6 +545,8 @@ function StepDetails({ step }) {
       ? (content.subject_final_plot_rate || content.subject_final_rate)
       : content.subject_final_rate;
     const mktValue = content.subject_market_value;
+    const rateRange = content.subject_rate_range;
+    const valueRange = content.subject_value_range;
     const subjectRow = content.comparable_factoring_table?.find(r => r.role === "SUBJECT");
     
     return (
@@ -484,6 +593,34 @@ function StepDetails({ step }) {
     );
   }
 
+  if (type === "area_age_recalc" && content) {
+    const fields = content.changed_fields || [];
+    const approach = content.approach || "market";
+    const sym = approach === "cost" ? "Cost" : "Market";
+    const newVal = approach === "cost" ? content.new_cost_value : content.new_market_value;
+    return (
+      <div className={`${boxClass} space-y-0.5`}>
+        <DetailRow label="Changed Fields" value={fields.join(", ") || "—"} />
+        <DetailRow label="Approach" value={approach} />
+        {newVal != null && <DetailRow label={`New ${sym} Value`} value={`₹${Number(newVal).toLocaleString()}`} />}
+        <DetailRow label="Pipeline Re-Run" value="Skipped — instant client-side update" />
+      </div>
+    );
+  }
+
+  if (type === "incremental_listing" && content) {
+    const newCnt = content.new_count || 0;
+    const skipCnt = content.skipped_count || 0;
+    const names = (content.skipped_names || []).join(", ");
+    return (
+      <div className={`${boxClass} space-y-0.5`}>
+        <DetailRow label="New Fetches" value={`${newCnt} comparable${newCnt !== 1 ? "s" : ""}`} />
+        <DetailRow label="Skipped" value={skipCnt > 0 ? `${skipCnt} (${names})` : "None"} />
+        <DetailRow label="Strategy" value="Incremental — existing data preserved" />
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -495,10 +632,12 @@ function getStepIcon(type) {
     approach_choice_needed:   GitBranch,
     map_confirmation:         MapPin,
     extraction_verification:  CheckCircle2,
+    area_age_recalc:          Zap,
     workflow:                 ClipboardList,
     comparable_results:       Building2,
     listing_results:          Search,
     transaction_results:      Database,
+    incremental_listing:      FastForward,
     cleaning_results:         Sparkles,
     recalculate_results:      SlidersHorizontal,
     factorial_results:        Table,

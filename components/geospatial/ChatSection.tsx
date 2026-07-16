@@ -753,7 +753,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           </div>
 
           <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Press Enter to send · Shift+Enter for newline
+            Press Enter to send · Shift + Enter For Newline
           </p>
         </div>
       </div>

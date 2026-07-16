@@ -16,6 +16,7 @@ import {
   Globe2,
   Handshake,
   LineChart,
+  Lock,
   MapIcon,
   MapPinned,
   MonitorCog,
@@ -28,6 +29,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 interface AgentLayer {
   id: string;
@@ -41,8 +43,22 @@ interface AgentLayer {
     name: string;
     icon: LucideIcon;
     href?: string;
+    /** Internal key used for role-based access checks */
+    key?: string;
   }[];
 }
+
+/**
+ * Central permission config.
+ * ADMIN: all agents (*)
+ * FREE: only valuation
+ * PAID: placeholder — same as FREE for now
+ */
+const ALLOWED_AGENTS_BY_ROLE: Record<string, string[] | '*'> = {
+  ADMIN: '*',
+  FREE: ['valuation'],
+  PAID: ['valuation'],  // extend when paid logic is implemented
+};
 
 const agentLayers: AgentLayer[] = [
   {
@@ -54,12 +70,12 @@ const agentLayers: AgentLayer[] = [
     accent: "text-blue-600 border-blue-100 bg-blue-50",
     soft: "from-blue-500/10 to-cyan-500/10",
     agents: [
-      { name: "Land/GIS", icon: MapPinned },
-      { name: "Visualization Agent", icon: MapIcon, href: "/visualization_agent" },
-      { name: "Valuation", icon: BarChart3, href: "/valuation" },
-      { name: "Market Research", icon: Search },
-      { name: "Physical AI", icon: Bot },
-      { name: "Feasibility", icon: ClipboardCheck },
+      { name: "Land/GIS", icon: MapPinned, href: '/visualization_agent', key: 'gis' },
+      { name: "Elevation Agent", icon: MapPinned, href: '/elevation', key: 'elevation' },  
+      { name: "Valuation", icon: BarChart3, href: "/valuation", key: 'valuation' },
+      { name: "Market Research", icon: Search, key: 'market_research' },
+      { name: "Physical AI", icon: Bot, key: 'physical_ai' },
+      { name: "Feasibility", icon: ClipboardCheck, key: 'feasibility' },
     ],
   },
   {
@@ -71,11 +87,11 @@ const agentLayers: AgentLayer[] = [
     accent: "text-indigo-600 border-indigo-100 bg-indigo-50",
     soft: "from-indigo-500/10 to-sky-500/10",
     agents: [
-      { name: "User Input (Docs/Images)", icon: FileText, href: "/user_input" },
-      { name: "Web Data", icon: Globe2, href: "/web_search" },
-      { name: "Data Retriever Agent", icon: Server, href: "/data_retrieval" },
-      { name: "Analytics", icon: LineChart },
-      { name: "Legal", icon: Scale },
+      { name: "User Input (Docs/Images)", icon: FileText, href: "/user_input", key: 'user_input' },
+      { name: "Web Data", icon: Globe2, href: "/web_search", key: 'web_search' },
+      { name: "Data Retriever Agent", icon: Server, href: "/data_retrieval", key: 'data_retrieval' },
+      { name: "Analytics", icon: LineChart, key: 'analytics' },
+      { name: "Legal", icon: Scale, key: 'legal' },
     ],
   },
   {
@@ -87,11 +103,11 @@ const agentLayers: AgentLayer[] = [
     accent: "text-violet-600 border-violet-100 bg-violet-50",
     soft: "from-violet-500/10 to-fuchsia-500/10",
     agents: [
-      { name: "UI Creation", icon: MonitorCog, href: "/ui_creation" },
-      { name: "Solution Engine", icon: Settings },
-      { name: "CRM", icon: Handshake },
-      { name: "ERP", icon: Building2 },
-      { name: "Project Management", icon: FolderKanban },
+      { name: "UI Creation", icon: MonitorCog, href: "/ui_creation", key: 'ui_creation' },
+      { name: "Solution Engine", icon: Settings, key: 'solution_engine' },
+      { name: "CRM", icon: Handshake, key: 'crm' },
+      { name: "ERP", icon: Building2, key: 'erp' },
+      { name: "Project Management", icon: FolderKanban, key: 'project_mgmt' },
     ],
   },
   {
@@ -103,20 +119,31 @@ const agentLayers: AgentLayer[] = [
     accent: "text-emerald-600 border-emerald-100 bg-emerald-50",
     soft: "from-emerald-500/10 to-teal-500/10",
     agents: [
-      { name: "Connector", icon: Plug, href: "/connector" },
-      { name: "Team Collaboration", icon: Users },
+      { name: "Connector", icon: Plug, href: "/connector", key: 'connector' },
+      { name: "Team Collaboration", icon: Users, key: 'team' },
     ],
   },
 ];
 
 export default function AgentListDropdown() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isAgentsOpen, setIsAgentsOpen] = useState(false);
   const [activeAgentLayerId, setActiveAgentLayerId] = useState(agentLayers[0].id);
 
   const activeAgentLayer =
     agentLayers.find((layer) => layer.id === activeAgentLayerId) ?? agentLayers[0];
   const ActiveAgentLayerIcon = activeAgentLayer.icon;
+
+
+  const userRole = user?.role ?? 'FREE';
+  const allowedAgents = ALLOWED_AGENTS_BY_ROLE[userRole] ?? ALLOWED_AGENTS_BY_ROLE['FREE'];
+
+  const isAgentAllowed = (agentKey: string | undefined) => {
+    if (!agentKey) return false;   // no href = not navigable anyway
+    if (allowedAgents === '*') return true;
+    return allowedAgents.includes(agentKey);
+  };
 
   return (
     <div className="relative">
@@ -216,26 +243,43 @@ export default function AgentListDropdown() {
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {activeAgentLayer.agents.map((agent) => {
                   const AgentIcon = agent.icon;
+                  const allowed = isAgentAllowed(agent.key);
+                  const clickable = !!agent.href && allowed;
 
                   return (
                     <button
                       key={agent.name}
                       type="button"
                       onClick={() => {
-                        if (!agent.href) return;
+                        if (!clickable) {
+                          if (agent.href && !allowed) {
+                            setIsAgentsOpen(false);
+                            router.push('/unauthorized');
+                          }
+                          return;
+                        }
                         setIsAgentsOpen(false);
-                        router.push(agent.href);
+                        router.push(agent.href!);
                       }}
+                      title={!allowed && agent.key ? 'Access restricted for your role' : undefined}
                       className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${
-                        agent.href ? "hover:bg-violet-50/70 cursor-pointer" : ""
+                        clickable
+                          ? 'hover:bg-violet-50/70 cursor-pointer'
+                          : agent.href
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'opacity-40 cursor-default'
                       }`}
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${activeAgentLayer.accent}`}>
                         <AgentIcon className="h-[18px] w-[18px]" />
                       </span>
-                      <span className="break-words text-sm font-extrabold leading-5 text-slate-900">
+                      <span className="flex-1 break-words text-sm font-extrabold leading-5 text-slate-900">
                         {agent.name}
                       </span>
+                      {/* Lock icon for role-restricted agents */}
+                      {agent.href && !allowed && (
+                        <Lock className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                      )}
                     </button>
                   );
                 })}

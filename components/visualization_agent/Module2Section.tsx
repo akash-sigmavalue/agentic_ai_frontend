@@ -28,7 +28,11 @@ import type {
   VisualizationRetrievalState,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
+).replace(/\/$/, '');
 
 const DEFAULT_INPUTS: Module2InputsConsidered = {
   retrieved_data: true,
@@ -432,12 +436,19 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
       {/* ---- Token Ledger Metrics (if output exists) ---- */}
       {ledger && (
-        <div className="shrink-0 grid grid-cols-4 gap-3 p-5 border-b border-slate-100">
-          <MetricCard label="LLM Calls" value={ledger.total_llm_calls} accent />
-          <MetricCard label="Input Tokens" value={ledger.total_input_tokens.toLocaleString()} />
-          <MetricCard label="Output Tokens" value={ledger.total_output_tokens.toLocaleString()} />
-          <MetricCard label="Cost USD" value={`$${ledger.total_cost_usd.toFixed(6)}`} accent />
-        </div>
+        <details className="shrink-0 border-b border-slate-100 group">
+          <summary className="flex cursor-pointer select-none items-center gap-2 px-5 py-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors list-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-open:rotate-90" />
+            <Coins className="h-3.5 w-3.5 shrink-0" />
+            Token Ledger · {ledger.total_llm_calls} LLM calls · ${ledger.total_cost_usd.toFixed(6)}
+          </summary>
+          <div className="grid grid-cols-4 gap-3 px-5 pb-5 pt-2">
+            <MetricCard label="LLM Calls" value={ledger.total_llm_calls} accent />
+            <MetricCard label="Input Tokens" value={ledger.total_input_tokens.toLocaleString()} />
+            <MetricCard label="Output Tokens" value={ledger.total_output_tokens.toLocaleString()} />
+            <MetricCard label="Cost USD" value={`$${ledger.total_cost_usd.toFixed(6)}`} accent />
+          </div>
+        </details>
       )}
 
       {/* ---- Tab bar ---- */}
@@ -546,22 +557,42 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
             {/* Tab 2: Mapped Fields */}
             {activeTab === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-extrabold text-slate-900">Mapped Fields</h3>
-                {output.mapped_fields ? (
-                  <div className="grid grid-cols-1 gap-2">
-                    {Object.entries(output.mapped_fields).map(([field, col]) => (
-                      <div key={field} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <span className="text-xs font-extrabold text-slate-700">{field}</span>
-                        <span className={`text-xs font-mono ${col ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
-                          {col ?? 'unmapped'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400">No mapped fields available.</p>
-                )}
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-extrabold text-slate-900">Mapped Fields</h3>
+                  {output.mapped_fields ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {Object.entries(output.mapped_fields).map(([field, col]) => (
+                        <div key={field} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <span className="text-xs font-extrabold text-slate-700">{field}</span>
+                          <span className={`text-xs font-mono ${col ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
+                            {col ?? 'unmapped'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No mapped fields available.</p>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-extrabold text-slate-900">Unit Identification</h3>
+                  {output.unit_identification ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {Object.entries(output.unit_identification).map(([key, val]) => (
+                        <div key={key} className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <span className="text-xs font-extrabold text-slate-700 capitalize shrink-0 pt-0.5">{key.replace(/_/g, ' ')}</span>
+                          <span className={`text-xs font-mono break-words sm:text-right ${val !== null && val !== undefined && val !== '' ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
+                            {typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'N/A')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No unit identification data available.</p>
+                  )}
+                </div>
               </div>
             )}
 
