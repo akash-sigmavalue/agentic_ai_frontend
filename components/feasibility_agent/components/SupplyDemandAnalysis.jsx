@@ -1,342 +1,372 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
-import {
-  fetchLocationDetails,
-  formatArea1,
-  formatNumber,
-} from "@/components/AppUtils";
-import { useGlobalState } from "@/components/GlobalContext"; // <-- added
+import { useGlobalState } from "@/components/GlobalContext";
+
+const getMarketPayload = () => {
+  try {
+    const raw = localStorage.getItem("Market Analysis Payload");
+    if (!raw) return { city: "", villageName: "" };
+    const parsed = JSON.parse(raw);
+    return {
+      city: parsed.city || "",
+      villageName: parsed.villageName || "",
+    };
+  } catch {
+    return { city: "", villageName: "" };
+  }
+};
+
+const getCountryFromCity = (city) => {
+  if (!city) return "India";
+  const c = city.toLowerCase();
+  if (c.includes("dubai") || c.includes("uae") || c.includes("aweer")) {
+    return "Dubai";
+  }
+  return "India";
+};
+
+const formatNumberRaw = (val, country = "India") => {
+  if (val === null || val === undefined || isNaN(val)) return "0";
+  const locale = country === "Dubai" ? "en-US" : "en-IN";
+  return Math.round(Number(val)).toLocaleString(locale);
+};
 
 const SupplyDemandAnalysis = ({ option }) => {
-  const [rowsYOY, setRowsYOY] = useState([]);
-  const [rowsQOQ, setRowsQOQ] = useState([]);
+  const [gstate] = useGlobalState();
+  const theme = gstate?.theme || "light";
+  const isDark = theme === "dark";
+
+  // Common UI states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedMode, setSelectedMode] = useState("YOY");
-  const [selectedYear, setSelectedYear] = useState("all");
-  const [activeTab, setActiveTab] = useState("flat");
-  const [selectedProperty, setSelectedProperty] = useState("all");
-  const [village, setVillage] = useState(JSON.parse(localStorage.getItem("landDetailsForm"))?.village || "");
-  const [city, setCity] = useState(JSON.parse(localStorage.getItem("landDetailsForm"))?.location || "");
-  const [gstate] = useGlobalState(); // <-- added
-  const theme = gstate?.theme || "light"; // <-- added
 
+  // States for Supply option (Reserved/WIP)
+  const [village, setVillage] = useState("");
+  const [city, setCity] = useState("");
+
+  // States for Demand option
+  const [demandData, setDemandData] = useState([]);
+  const [demandCity, setDemandCity] = useState("");
+  const [demandVillageName, setDemandVillageName] = useState("");
+
+  // Sync state from landDetailsForm on mount/change for Supply
   useEffect(() => {
-    if (JSON.parse(localStorage.getItem("landDetailsForm"))) {
-      setVillage(JSON.parse(localStorage.getItem("landDetailsForm"))?.village);
-      setCity(JSON.parse(localStorage.getItem("landDetailsForm"))?.location);
-    }
-  }, [localStorage.getItem("landDetailsForm")]);
+    const handleLandFormSync = () => {
+      try {
+        const landForm = JSON.parse(localStorage.getItem("landDetailsForm"));
+        if (landForm) {
+          setVillage(landForm.village || "");
+          setCity(landForm.location || "");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
 
-  // State for storing the backend response directly
-  const [apiData, setApiData] = useState({});
+    handleLandFormSync();
 
+    window.addEventListener("landDetailsUpdated", handleLandFormSync);
+    return () => {
+      window.removeEventListener("landDetailsUpdated", handleLandFormSync);
+    };
+  }, []);
+
+  // Sync state from Market Analysis Payload on mount/change for Demand
   useEffect(() => {
-    const load = async () => {
+    if (option !== "demand") return;
+
+    const handleMarketPayloadSync = (e) => {
+      const payload = e.detail || getMarketPayload();
+      setDemandCity(payload.city || "");
+      setDemandVillageName(payload.villageName || "");
+    };
+
+    const handleLandDetailsUpdate = () => {
+      const payload = getMarketPayload();
+      setDemandCity(payload.city || "");
+      setDemandVillageName(payload.villageName || "");
+    };
+
+    const { city: c, villageName: v } = getMarketPayload();
+    setDemandCity(c);
+    setDemandVillageName(v);
+
+    window.addEventListener("marketAnalysisUpdated", handleMarketPayloadSync);
+    window.addEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+
+    return () => {
+      window.removeEventListener("marketAnalysisUpdated", handleMarketPayloadSync);
+      window.removeEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+    };
+  }, [option]);
+
+  // Load Demand data
+  useEffect(() => {
+    if (option !== "demand" || !demandCity || !demandVillageName) return;
+
+    const loadDemand = async () => {
       setLoading(true);
       setError(null);
       try {
-        const landDetails = JSON.parse(localStorage.getItem("landDetailsForm"));
-        const vId = landDetails?.village_id || landDetails?.villageId || "";
-        
-        const payload = {
-          villageId: vId,
-          villageName: village,
-          year: selectedYear === "all" ? "All" : selectedYear,
-          viewType: selectedMode === "YOY" ? "Year on Year" : "Quarter on Quarter",
-          analysisView: "Overview",
-          calculationMode: "carpet"
-        };
-        
-        // Supply maps to /supply-analysis/
-        // Demand maps to /chart/agreement-price/ (which provides transaction counts by category)
-        const endpoint = option === "supply" 
-            ? '/new_rate_simulator/simulator/supply-analysis/' 
-            : '/new_rate_simulator/simulator/chart/agreement-price/';
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
+        const response = await fetch("/new_rate_simulator/simulator/yoy-demand/", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            city_name: demandCity,
+            location_name: demandVillageName,
+          }),
         });
 
-        if (!response.ok) throw new Error("Failed to fetch data");
+        if (!response.ok) throw new Error("Failed to fetch demand data");
         const data = await response.json();
-        
+
         if (data && data.success) {
-            setApiData(data.data || {});
+          setDemandData(data.data || []);
         } else {
-            throw new Error(data.error || "Failed to fetch data");
+          throw new Error(data.error || "Failed to fetch demand data");
         }
       } catch (err) {
-        setError(err.message || "Error fetching data");
+        setError(err.message || "Error fetching demand data");
       } finally {
         setLoading(false);
       }
     };
-    if (city && village) {
-      load();
-    }
-  }, [city, village, selectedMode, selectedYear, option]);
 
-  const titleGraph2 = selectedMode === "YOY" ? "Annual Unit Supply Analysis" : "Quarterly Unit Supply Analysis";
-  const titleGraph4 = selectedMode === "YOY" ? "Yearly Trend of Units Absorbed [Primary+Secondary]" : "Quarterly Trend of Units Absorbed [Primary+Secondary]";
+    loadDemand();
+  }, [demandCity, demandVillageName, option]);
 
-  // Extract categories (periods)
-  let allPeriods = new Set();
-  if (option === "demand") {
-      Object.values(apiData).forEach(catData => {
-          if (Array.isArray(catData)) {
-              catData.forEach(item => allPeriods.add(item.period));
-          }
-      });
-  } else {
-      Object.keys(apiData).forEach(p => allPeriods.add(p));
-  }
+  // Determine country
+  const currentCity = option === "supply" ? city : demandCity;
+  const currentVillage = option === "supply" ? village : demandVillageName;
+  const country = useMemo(() => getCountryFromCity(currentCity), [currentCity]);
 
-  const timeCategories = Array.from(allPeriods).sort((a, b) => {
-      if (selectedMode === "YOY") {
-          return Number(a) - Number(b);
-      } else {
-          try {
-            const [qA, yA] = String(a).split(' ');
-            const [qB, yB] = String(b).split(' ');
-            const valA = Number(yA) * 10 + Number(qA.replace('Q', ''));
-            const valB = Number(yB) * 10 + Number(qB.replace('Q', ''));
-            return valA - valB;
-          } catch(e) { return 0; }
-      }
-  });
+  // Demand computations
+  const demandYears = useMemo(() => demandData.map((d) => String(d.year)), [demandData]);
+  const demandUnits = useMemo(() => demandData.map((d) => d.total_units_sold), [demandData]);
 
-  const filteredData = timeCategories.length > 0 ? timeCategories : [];
-  
-  // Need to structure graph data
-  const getSeriesData = () => {
-      const keys = [
-          { backendDemandKey: 'residential', backendSupplyKey: 'residential', name: "Flat" },
-          { backendDemandKey: 'shop', backendSupplyKey: 'shop', name: "Shop" },
-          { backendDemandKey: 'office', backendSupplyKey: 'office', name: "Office" }
-      ];
-      
-      return keys.map((col) => ({
-        name: col.name,
-        data: timeCategories.map((cat) => {
-          if (option === "demand") {
-              const catData = apiData[col.backendDemandKey];
-              if (!catData || !Array.isArray(catData)) return 0;
-              const periodMatch = catData.find(item => item.period === cat);
-              return periodMatch ? Math.round(Number(periodMatch.transaction_count || 0)) : 0;
-          } else {
-              const periodData = apiData[cat];
-              if (!periodData) return 0;
-              // If backend supplies 'commercial', we allocate it to Shop (or we can just allocate to 'Commercial')
-              // To avoid double counting, we'll put all commercial into Shop and 0 into Office.
-              if (col.backendSupplyKey === 'shop') {
-                  return Math.round(Number(periodData['commercial'] || periodData['shop'] || 0));
-              }
-              if (col.backendSupplyKey === 'office') {
-                  return Math.round(Number(periodData['office'] || 0));
-              }
-              return Math.round(Number(periodData[col.backendSupplyKey] || 0));
-          }
-        }),
-      }));
-  };
+  // Styling & Theme options
+  const textColor = isDark ? "#e2e8f0" : "#1e293b";
+  const gridColor = isDark ? "#334155" : "#e2e8f0";
 
-  const rawSeries = getSeriesData();
-
-  const aggregatedSeries = [{
-      name: "All Properties",
-      data: rawSeries[0]?.data.map((_, idx) =>
-          rawSeries.reduce((sum, s) => sum + s.data[idx], 0)
-      ) || [],
-  }];
-
-  let targetSeries = rawSeries;
-  if (selectedProperty === "all") {
-      targetSeries = aggregatedSeries;
-  } else if (selectedProperty === "commercial") {
-      // Sum Shop and Office if "commercial" is specifically asked for
-      targetSeries = [{
-          name: "Commercial (Shop+Office)",
-          data: rawSeries[0]?.data.map((_, idx) =>
-              rawSeries.filter(s => s.name === "Shop" || s.name === "Office")
-                       .reduce((sum, s) => sum + s.data[idx], 0)
-          ) || [],
-      }];
-  } else if (selectedProperty === "flat") {
-      targetSeries = rawSeries.filter(s => s.name === "Flat");
-  }
-
-  const chartOptions = useMemo(() => {
-    // Common options for both supply and demand charts
-    const baseCommonOptions = {
+  const chartOptionsDemand = useMemo(() => {
+    return {
       chart: {
-        toolbar: {
-          show: true,
-          tools: {
-            download: true,
-            selection: false,
-            zoom: false,
-            zoomin: false,
-            zoomout: false,
-            pan: false,
-            reset: false,
-          },
-        },
-        foreColor: theme === "dark" ? "#fff" : "#000",
+        type: "bar",
+        toolbar: { show: true },
+        foreColor: textColor,
         background: "transparent",
       },
+      title: {
+        text: "Yearly Trend of Units Absorbed [Primary+Secondary]",
+        style: { color: textColor, fontSize: "14px", fontWeight: 600 },
+      },
+      colors: [isDark ? "#f59e0b" : "#d97706"],
       xaxis: {
-        categories: timeCategories,
-        title: { text: selectedMode === "YOY" ? "Year" : "Quarter" },
+        categories: demandYears,
+        title: { text: "Year" },
+        labels: { style: { colors: textColor } },
+      },
+      yaxis: {
+        title: { text: "Units Sold" },
         labels: {
-          style: { colors: theme === "dark" ? "#fff" : "#000" },
+          formatter: (val) => formatNumberRaw(val, country),
+          style: { colors: [textColor] },
         },
       },
       dataLabels: {
         enabled: true,
         offsetY: -20,
         style: {
-          fontSize: "12px",
-          colors: [theme === "dark" ? "#fff" : "#000"],
+          fontSize: "11px",
+          colors: [textColor],
+          fontWeight: 600,
         },
-        formatter: (val) => formatNumber(val),
+        formatter: (val) => formatNumberRaw(val, country),
       },
-      stroke: { curve: "smooth" },
       plotOptions: {
         bar: {
-          dataLabels: {
-            position: "top",
-          },
+          borderRadius: 6,
+          columnWidth: "50%",
+          dataLabels: { position: "top" },
         },
       },
-      legend: {
-        labels: { colors: theme === "dark" ? "#fff" : "#000" },
-      },
+      grid: { borderColor: gridColor },
+      legend: { show: false },
       tooltip: {
-        theme: theme === "dark" ? "dark" : "light",
-      },
-      theme: { mode: theme === "dark" ? "dark" : "light" },
-    };
-
-    // Supply chart options
-    const supplyOptions = {
-      ...baseCommonOptions,
-      chart: { ...baseCommonOptions.chart, type: "bar" },
-      title: {
-        text: titleGraph2,
-        style: { color: theme === "dark" ? "#fff" : "#000" },
-      },
-      yaxis: {
-        labels: {
-          formatter: formatNumber,
-          style: { colors: theme === "dark" ? "#fff" : "#000" },
+        theme: isDark ? "dark" : "light",
+        y: {
+          title: { formatter: () => "Units Sold:" },
+          formatter: (val) => formatNumberRaw(val, country),
         },
       },
-      tooltip: {
-        ...baseCommonOptions.tooltip,
-        y: { formatter: formatNumber },
-      },
     };
+  }, [demandYears, textColor, gridColor, isDark, country]);
 
-    // Demand chart options
-    const demandOptions = {
-      ...baseCommonOptions,
-      chart: { ...baseCommonOptions.chart, type: "bar" },
-      title: {
-        text: titleGraph4,
-        style: { color: theme === "dark" ? "#fff" : "#000" },
-      },
-      yaxis: {
-        labels: {
-          formatter: formatNumber,
-          style: { colors: theme === "dark" ? "#fff" : "#000" },
-        },
-      },
-      tooltip: {
-        ...baseCommonOptions.tooltip,
-        y: { formatter: formatNumber },
-      },
-    };
+  const hasData = demandData.length > 0;
 
-    return { supplyOptions, demandOptions };
-  }, [
-    theme,
-    selectedMode,
-    timeCategories,
-    titleGraph2,
-    titleGraph4,
-    formatNumber,
-  ]);
-
-  /* ───────── Render ───────── */
   return (
-    <div className="card border-0 shadow-sm rounded-4 card-hover-lift h-100">
-      <div className="card-header bg-white border-bottom border-light pt-4 px-4 pb-0">
-        <h5 className={`fw-bold ${theme === "dark" ? "text-white" : "text-dark"} mb-3`}>
-          <div className="d-flex align-items-center">
+    <div
+      className="card border-0 shadow-sm rounded-4 h-100"
+      style={{ background: isDark ? "#1e293b" : "#ffffff" }}
+    >
+      {/* Card Header */}
+      <div
+        className="card-header border-bottom pt-4 px-4 pb-3"
+        style={{
+          background: isDark ? "#1e293b" : "#ffffff",
+          borderColor: isDark ? "#334155" : "#e2e8f0",
+        }}
+      >
+        <div className="d-flex align-items-center justify-content-between">
+          <h5
+            className="fw-bold mb-0 d-flex align-items-center gap-2"
+            style={{ color: textColor, fontSize: "15px" }}
+          >
             <div
-              className={`${
-                option === "supply"
-                  ? "bg-info bg-opacity-10 text-info"
-                  : "bg-warning bg-opacity-10 text-warning"
-              } rounded-circle me-3 d-flex align-items-center justify-content-center`}
-              style={{ width: "40px", height: "40px" }}
+              className="d-flex align-items-center justify-content-center rounded-circle"
+              style={{
+                width: 38,
+                height: 38,
+                background: option === "supply"
+                  ? (isDark ? "rgba(6,182,212,0.2)" : "rgba(8,145,178,0.1)")
+                  : (isDark ? "rgba(245,158,11,0.2)" : "rgba(217,119,6,0.1)"),
+                color: option === "supply" ? (isDark ? "#22d3ee" : "#0891b2") : (isDark ? "#fbbf24" : "#d97706"),
+                fontSize: 16,
+                flexShrink: 0,
+              }}
             >
               {option === "supply" ? <FaWarehouse /> : <FaArrowTrendUp />}
             </div>
             {option === "supply" ? "Supply Analysis" : "Demand Analysis"}
-          </div>
-        </h5>
-      </div>
-      <div className="card-body">
-        <div className="row g-3">
-          {loading && <p className="text-center text-secondary">Loading...</p>}
-          {error && <p className="text-center text-danger">{error}</p>}
-          {filteredData.length === 0 && !loading && !error && (
-            <p className="text-center text-secondary">
-              No Data Available for {village}
-            </p>
-          )}
-          {!loading && !error && filteredData.length > 0 && (
-            <>
-              <div
-                style={{
-                  overflow: "auto",
-                  maxHeight: "90vh",
-                  display: "grid",
-                  gap: "20px",
-                  margin: "auto",
-                }}
-              >
-                {option === "supply" ? (
-                  <div>
-                    <Chart
-                      options={chartOptions.supplyOptions}
-                      series={targetSeries}
-                      type="bar"
-                      height={350}
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <Chart
-                      options={chartOptions.demandOptions}
-                      series={targetSeries}
-                      type="bar"
-                      height={350}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
+          </h5>
+          {(currentCity || currentVillage) && (
+            <span
+              style={{
+                fontSize: "11px",
+                background: option === "supply"
+                  ? (isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)")
+                  : (isDark ? "rgba(245,158,11,0.15)" : "rgba(217,119,6,0.08)"),
+                color: option === "supply" ? (isDark ? "#67e8f9" : "#0891b2") : (isDark ? "#fde047" : "#d97706"),
+                padding: "3px 10px",
+                borderRadius: 20,
+                fontWeight: 600,
+              }}
+            >
+              {currentVillage}{currentCity ? `, ${currentCity}` : ""}
+            </span>
           )}
         </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="card-body px-3 py-3">
+        {option === "supply" ? (
+          <div
+            className="d-flex flex-column align-items-center justify-content-center"
+            style={{ minHeight: 300 }}
+          >
+            <div
+              className="d-flex align-items-center justify-content-center rounded-circle mb-3"
+              style={{
+                width: 60,
+                height: 60,
+                background: isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)",
+                color: isDark ? "#22d3ee" : "#0891b2",
+                fontSize: 24,
+              }}
+            >
+              🚧
+            </div>
+            <h6 className="fw-bold mb-1" style={{ color: textColor }}>
+              Feature in Progress
+            </h6>
+            <p
+              className="text-center mb-0 px-3"
+              style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "12px", maxWidth: 300 }}
+            >
+              Supply Analysis metrics and visual charts are currently under development and will be available soon.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Loading State */}
+            {loading && (
+              <div
+                className="d-flex flex-column align-items-center justify-content-center"
+                style={{ minHeight: 300 }}
+              >
+                <div
+                  className="spinner-border mb-3"
+                  style={{
+                    color: isDark ? "#fbbf24" : "#d97706",
+                    width: 36,
+                    height: 36,
+                  }}
+                  role="status"
+                />
+                <p style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "13px" }}>
+                  Fetching data...
+                </p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {!loading && error && (
+              <div
+                className="d-flex flex-column align-items-center justify-content-center"
+                style={{ minHeight: 300 }}
+              >
+                <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+                <p
+                  className="text-center"
+                  style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
+                >
+                  {error}
+                </p>
+              </div>
+            )}
+
+            {/* No Data State */}
+            {!loading && !error && !hasData && (
+              <div
+                className="d-flex flex-column align-items-center justify-content-center"
+                style={{ minHeight: 300 }}
+              >
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                <p
+                  className="text-center mb-1"
+                  style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}
+                >
+                  No Data Available
+                </p>
+                <p
+                  className="text-center"
+                  style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "12px" }}
+                >
+                  {currentVillage
+                    ? `No transactional data found for "${currentVillage}".`
+                    : "Set a location in the Market Analysis section to load data."}
+                </p>
+              </div>
+            )}
+
+            {/* Chart */}
+            {!loading && !error && hasData && (
+              <div style={{ overflow: "auto", maxHeight: "80vh" }}>
+                <Chart
+                  options={chartOptionsDemand}
+                  series={[{ name: "Units Sold", data: demandUnits }]}
+                  type="bar"
+                  height={350}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,248 +1,418 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaShoppingCart } from "react-icons/fa";
-import {
-  fetchLocationDetails,
-  formatPrice1,
-} from "@/components/AppUtils";
-import { useGlobalState } from "@/components/GlobalContext"; // <-- added
+import { useGlobalState } from "@/components/GlobalContext";
+import { formatPrice1 } from "@/components/AppUtils";
+
+/**
+ * SaleAnalysis
+ *
+ * Reads city + villageName from localStorage['Market Analysis Payload']
+ * and fetches year-on-year sales analysis from
+ * POST /new_rate_simulator/simulator/yoy-sales-analysis/
+ *
+ * localStorage payload shape:
+ *   { villageName: "Al-Aweer", villageId: 119, city: "Dubai" }
+ *
+ * Mapping:
+ *   city       → city_name (SQL WHERE)
+ *   villageName → location_name (SQL WHERE)
+ */
+
+const formatValueDubai = (val) => {
+  const v = Math.round(val);
+  if (v >= 1000000) {
+    return `AED ${(v / 1000000).toFixed(1)} M`;
+  } else if (v >= 1000) {
+    return `AED ${(v / 1000).toFixed(1)} K`;
+  }
+  return `AED ${v.toLocaleString("en-US")}`;
+};
+
+const formatNumberRaw = (val, isCurrency = false, isDubai = false) => {
+  if (val === null || val === undefined || isNaN(val)) {
+    return isCurrency ? (isDubai ? "AED 0" : "₹0") : "0";
+  }
+  if (isCurrency) {
+    if (isDubai) {
+      return formatValueDubai(val);
+    }
+    return formatPrice1(val);
+  }
+  const locale = isDubai ? "en-US" : "en-IN";
+  return Math.round(Number(val)).toLocaleString(locale);
+};
+
+const getMarketPayload = () => {
+  try {
+    const raw = localStorage.getItem("Market Analysis Payload");
+    if (!raw) return { city: "", villageName: "" };
+    const parsed = JSON.parse(raw);
+    return {
+      city: parsed.city || "",
+      villageName: parsed.villageName || "",
+    };
+  } catch {
+    return { city: "", villageName: "" };
+  }
+};
 
 const SaleAnalysis = () => {
-  const [rowsYOY, setRowsYOY] = useState([]);
-  const [rowsQOQ, setRowsQOQ] = useState([]);
+  const [gstate] = useGlobalState();
+  const theme = gstate?.theme || "light";
+  const isDark = theme === "dark";
+
+  const [city, setCity] = useState("");
+  const [villageName, setVillageName] = useState("");
+  const [salesData, setSalesData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedMode,] = useState("YOY");
-  const [selectedYear,] = useState("all");
-  const [activeTab,] = useState("residential");
-  const [flatShopFilter,] = useState("flat");
-  const [bhkFilter,] = useState("2bhk");
-  const [village, setVillage] = useState(JSON.parse(localStorage.getItem("landDetailsForm"))?.village || "");
-  const [city, setCity] = useState(JSON.parse(localStorage.getItem("landDetailsForm"))?.location || "");
-  const [gstate] = useGlobalState(); // <-- added
-  const theme = gstate?.theme || "light"; // <-- added
 
+  // metric can be "value" (total_agreement_price) or "volume" (total_transactions)
+  const [metric, setMetric] = useState("value");
+
+  // Read from localStorage on mount and listen for updates
   useEffect(() => {
-    if (JSON.parse(localStorage.getItem("landDetailsForm"))) {
-      setVillage(JSON.parse(localStorage.getItem("landDetailsForm")).village);
-      setCity(JSON.parse(localStorage.getItem("landDetailsForm")).location);
-    }
-  }, [localStorage.getItem("landDetailsForm")]);
+    const { city: c, villageName: v } = getMarketPayload();
+    setCity(c);
+    setVillageName(v);
 
-  // State for storing the backend response directly
-  const [apiData, setApiData] = useState({});
+    const handleUpdate = (e) => {
+      const payload = e.detail || getMarketPayload();
+      setCity(payload.city || "");
+      setVillageName(payload.villageName || "");
+    };
 
+    const handleLandDetailsUpdate = () => {
+      const payload = getMarketPayload();
+      setCity(payload.city || "");
+      setVillageName(payload.villageName || "");
+    };
+
+    window.addEventListener("marketAnalysisUpdated", handleUpdate);
+    window.addEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+
+    return () => {
+      window.removeEventListener("marketAnalysisUpdated", handleUpdate);
+      window.removeEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+    };
+  }, []);
+
+  // Fetch YoY sales analysis whenever city or villageName changes
   useEffect(() => {
-    const loadData = async () => {
+    if (!city || !villageName) return;
+
+    const fetchSalesData = async () => {
       setLoading(true);
       setError(null);
+      setSalesData([]);
+
       try {
-        const landDetails = JSON.parse(localStorage.getItem("landDetailsForm"));
-        const vId = landDetails?.village_id || landDetails?.villageId || "";
-        
-        const payload = {
-          villageId: vId,
-          villageName: village,
-          year: selectedYear === "all" ? "All" : selectedYear,
-          viewType: selectedMode === "YOY" ? "Year on Year" : "Quarter on Quarter",
-          analysisView: "Overview",
-          calculationMode: "carpet"
-        };
+        const response = await fetch(
+          "/new_rate_simulator/simulator/yoy-sales-analysis/",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              city_name: city,
+              location_name: villageName,
+            }),
+          }
+        );
 
-        const response = await fetch('/new_rate_simulator/simulator/chart/agreement-price/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) throw new Error("Failed to fetch data");
-        const data = await response.json();
-        
-        if (data && data.success) {
-            setApiData(data.data || {});
-        } else {
-            throw new Error(data.error || "Failed to fetch data");
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
         }
+
+        const json = await response.json();
+
+        if (!json.success) {
+          throw new Error(json.error || "Failed to fetch data");
+        }
+
+        setSalesData(json.data || []);
       } catch (err) {
-        setError(err.message || "Error fetching data");
+        setError(err.message || "An error occurred while fetching data");
       } finally {
         setLoading(false);
       }
     };
-    if (city && village) {
-      loadData();
-    }
-  }, [city, village, selectedMode, selectedYear]);
 
-  // Extract all unique periods across all categories
-  const allPeriods = new Set();
-  Object.values(apiData).forEach(catData => {
-      if (Array.isArray(catData)) {
-          catData.forEach(item => allPeriods.add(item.period));
-      }
-  });
+    fetchSalesData();
+  }, [city, villageName]);
 
-  const commonCategories = Array.from(allPeriods).sort((a, b) => {
-      if (selectedMode === "YOY") {
-          return Number(a) - Number(b);
-      } else {
-          try {
-            const [qA, yA] = a.split(' ');
-            const [qB, yB] = b.split(' ');
-            const valA = Number(yA) * 10 + Number(qA.replace('Q', ''));
-            const valB = Number(yB) * 10 + Number(qB.replace('Q', ''));
-            return valA - valB;
-          } catch(e) { return 0; }
-      }
-  });
+  // Determine country/city context
+  const isDubai = useMemo(() => {
+    const c = String(city || "").toLowerCase();
+    return c.includes("dubai") || c.includes("uae");
+  }, [city]);
 
-  const filteredData = commonCategories.length > 0 ? commonCategories : [];
+  // Compute unique years and property types dynamically for ApexCharts
+  const years = useMemo(() => {
+    const allYears = salesData.map((d) => d.year);
+    return Array.from(new Set(allYears)).sort((a, b) => a - b);
+  }, [salesData]);
 
-  const getSeriesData = (metricKey) => {
-      const resData = commonCategories.map((cat) => {
-          const catData = apiData['residential'];
-          if (!catData || !Array.isArray(catData)) return 0;
-          const periodMatch = catData.find(item => item.period === cat);
-          if (!periodMatch) return 0;
-          return Math.round(Number(periodMatch[metricKey] || 0));
-      });
+  const propertyTypes = useMemo(() => {
+    const allTypes = salesData.map((d) => d.property_type);
+    return Array.from(new Set(allTypes)).filter(Boolean).sort();
+  }, [salesData]);
 
-      const commData = commonCategories.map((cat) => {
-          let sum = 0;
-          for (const key of ['shop', 'office']) {
-              const catData = apiData[key];
-              if (catData && Array.isArray(catData)) {
-                  const periodMatch = catData.find(item => item.period === cat);
-                  if (periodMatch) sum += Number(periodMatch[metricKey] || 0);
-              }
-          }
-          return Math.round(sum);
-      });
+  // Map backend data to series structure dynamically by property type
+  const series = useMemo(() => {
+    return propertyTypes.map((type) => {
+      return {
+        name: type,
+        data: years.map((yr) => {
+          const record = salesData.find(
+            (d) => d.year === yr && d.property_type === type
+          );
+          if (!record) return 0;
+          return metric === "value"
+            ? record.total_agreement_price
+            : record.total_transactions;
+        }),
+      };
+    });
+  }, [years, propertyTypes, salesData, metric]);
 
-      const otherData = commonCategories.map(() => 0);
+  const textColor = isDark ? "#e2e8f0" : "#1e293b";
+  const gridColor = isDark ? "#334155" : "#e2e8f0";
+  const isCurrency = metric === "value";
 
-      return [
-          { name: "residential", data: resData },
-          { name: "commercial", data: commData },
-          { name: "other", data: otherData }
-      ];
-  };
-
-  // 1) Price series
-  const priceSeries = getSeriesData("total_agreement_price_inr");
-
-  // 2) Unit Sold series
-  const unitSoldSeries = getSeriesData("transaction_count");
-
-  // 3) Carpet Area Consumed series
-  const carpetAreaSeries = getSeriesData("transaction_count");
-
-  const chartOptions = useMemo(() => {
-    const xaxisTitle = selectedMode === "YOY"
-      ? "Year"
-      : selectedYear === "all"
-        ? "Quarter-Year"
-        : "Quarter";
-
-    return {
+  const chartOptions = useMemo(
+    () => ({
       chart: {
-        type: "bar",
-        toolbar: {
-          show: true,
-          tools: {
-            download: true,
-            selection: false,
-            zoom: false,
-            zoomin: false,
-            zoomout: false,
-            pan: false,
-            reset: false,
-          },
-        },
-        foreColor: theme === "dark" ? "#fff" : "#000",
+        type: "area",
+        stacked: false,
+        toolbar: { show: true },
+        foreColor: textColor,
         background: "transparent",
       },
+      dataLabels: {
+        enabled: false,
+      },
+      stroke: {
+        curve: "smooth",
+        width: 3,
+      },
       xaxis: {
-        categories: commonCategories,
-        title: { text: xaxisTitle },
-        labels: {
-          style: { colors: theme === "dark" ? "#fff" : "#000" },
+        categories: years.map(String),
+        title: {
+          text: "Year",
+          style: { color: textColor, fontSize: "12px", fontWeight: 600 },
         },
+        labels: {
+          style: { colors: textColor, fontSize: "12px" },
+        },
+        axisBorder: { color: gridColor },
+        axisTicks: { color: gridColor },
       },
       yaxis: {
+        title: {
+          text: isCurrency ? (isDubai ? "Total Value (AED)" : "Total Value (₹)") : "Total Transactions",
+          style: { color: textColor, fontSize: "12px", fontWeight: 600 },
+        },
         labels: {
-          formatter: formatPrice1,
-          style: { colors: theme === "dark" ? "#fff" : "#000" },
+          formatter: (val) => formatNumberRaw(val, isCurrency, isDubai),
+          style: { colors: [textColor], fontSize: "11px" },
         },
       },
-      dataLabels: { enabled: false },
-      stroke: { curve: "smooth" },
-      title: {
-        text: "Total Agreement Price (Residential / Commercial / Other)",
-        style: { color: theme === "dark" ? "#fff" : "#000" },
-      },
-      tooltip: {
-        y: { formatter: formatPrice1 },
-        theme: theme === "dark" ? "dark" : "light",
+      grid: {
+        borderColor: gridColor,
+        strokeDashArray: 4,
       },
       legend: {
-        labels: { colors: theme === "dark" ? "#fff" : "#000" },
+        position: "top",
+        horizontalAlign: "left",
+        labels: { colors: textColor },
       },
-      theme: { mode: theme === "dark" ? "dark" : "light" },
-    };
-  }, [theme, selectedMode, selectedYear, commonCategories, formatPrice1]);
+      tooltip: {
+        shared: true,
+        intersect: false,
+        theme: isDark ? "dark" : "light",
+        y: {
+          formatter: (val) => formatNumberRaw(val, isCurrency, isDubai),
+        },
+      },
+    }),
+    [years, textColor, gridColor, isCurrency, isDark, isDubai]
+  );
 
-  /* ───────── Render ───────── */
   return (
-    <div className="card border-0 shadow-sm rounded-4 card-hover-lift h-100">
-      <div className="card-header bg-white border-bottom border-light pt-4 px-4 pb-0">
-        <h5 className={`fw-bold ${theme === "dark" ? "text-white" : "text-dark"} mb-3`}>
-          <div className="d-flex align-items-center">
-            <div className="bg-success bg-opacity-10 text-success rounded-circle me-3 d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-               <FaShoppingCart />
+    <div
+      className="card border-0 shadow-sm rounded-4 h-100"
+      style={{ background: isDark ? "#1e293b" : "#ffffff" }}
+    >
+      {/* Card Header */}
+      <div
+        className="card-header border-bottom pt-4 px-4 pb-3"
+        style={{
+          background: isDark ? "#1e293b" : "#ffffff",
+          borderColor: isDark ? "#334155" : "#e2e8f0",
+        }}
+      >
+        <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <h5
+            className="fw-bold mb-0 d-flex align-items-center gap-2"
+            style={{ color: textColor, fontSize: "15px" }}
+          >
+            <div
+              className="d-flex align-items-center justify-content-center rounded-circle"
+              style={{
+                width: 38,
+                height: 38,
+                background: isDark ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.1)",
+                color: "#22c55e",
+                fontSize: 16,
+                flexShrink: 0,
+              }}
+            >
+              <FaShoppingCart />
             </div>
             Sales Analysis
-          </div>
-        </h5>
-      </div>
-      <div className="card-body">
-        <div className="row g-3">
+          </h5>
 
-          {/* Loading and error messages */}
-          {loading && <p className="text-center text-secondary">Loading...</p>}
-          {error && <p className="text-center text-danger">{error}</p>}
-          {!loading && !error && filteredData.length === 0 && (
-            <p className="text-center text-secondary">No Data Available for {village}</p>
-          )}
-
-          {/* Render charts if data is present */}
-          {!loading && !error && filteredData.length > 0 && (
-            <div>
-              {/* Residential tab */}
-              {activeTab === "residential" && (
-                <div
-                  className={` rounded-3 p-2 ${
-                    theme === "dark" ? "bg-dark" : "bg-white"
-                  }`}
-                  style={{ maxHeight: "80vh", overflow: "auto" }}
-                >
-                  <Chart
-                    options={chartOptions}
-                    series={priceSeries}
-                    type="area"
-                    height={400}
-                  />
-                </div>
-              )}
-
-              {/* Property Type tab */}
-
+          {/* Metric Selector Buttons */}
+          <div className="d-flex align-items-center gap-2">
+            <div
+              className="btn-group p-0.5 rounded-3"
+              style={{
+                background: isDark ? "#334155" : "#f1f5f9",
+                border: `1px solid ${isDark ? "#475569" : "#e2e8f0"}`,
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-sm px-3 rounded-2 fw-semibold"
+                onClick={() => setMetric("value")}
+                style={{
+                  fontSize: "11px",
+                  border: "none",
+                  background: metric === "value" ? (isDark ? "#475569" : "#ffffff") : "transparent",
+                  color: metric === "value" ? textColor : (isDark ? "#94a3b8" : "#64748b"),
+                  boxShadow: metric === "value" && !isDark ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                Value ({isDubai ? "AED" : "₹"})
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm px-3 rounded-2 fw-semibold"
+                onClick={() => setMetric("volume")}
+                style={{
+                  fontSize: "11px",
+                  border: "none",
+                  background: metric === "volume" ? (isDark ? "#475569" : "#ffffff") : "transparent",
+                  color: metric === "volume" ? textColor : (isDark ? "#94a3b8" : "#64748b"),
+                  boxShadow: metric === "volume" && !isDark ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                Volume (Txns)
+              </button>
             </div>
-          )}
+
+            {(city || villageName) && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.08)",
+                  color: "#22c55e",
+                  padding: "4px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                {villageName}{city ? `, ${city}` : ""}
+              </span>
+            )}
+          </div>
         </div>
+        <p
+          className="mb-0 mt-1"
+          style={{ fontSize: "12px", color: isDark ? "#94a3b8" : "#64748b" }}
+        >
+          {isDubai
+            ? "Total Agreement Price (AED) - Property Type Wise"
+            : "Total Agreement Price (₹) - Property Type Wise"}
+        </p>
+      </div>
+
+      {/* Card Body */}
+      <div className="card-body px-3 py-3">
+        {/* Loading State */}
+        {loading && (
+          <div
+            className="d-flex flex-column align-items-center justify-content-center"
+            style={{ minHeight: 300 }}
+          >
+            <div
+              className="spinner-border mb-3"
+              style={{ color: "#22c55e", width: 36, height: 36 }}
+              role="status"
+            />
+            <p style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "13px" }}>
+              Fetching sales data...
+            </p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {!loading && error && (
+          <div
+            className="d-flex flex-column align-items-center justify-content-center"
+            style={{ minHeight: 300 }}
+          >
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <p
+              className="text-center"
+              style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
+            >
+              {error}
+            </p>
+          </div>
+        )}
+
+        {/* No Data State */}
+        {!loading && !error && years.length === 0 && (
+          <div
+            className="d-flex flex-column align-items-center justify-content-center"
+            style={{ minHeight: 300 }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <p
+              className="text-center mb-1"
+              style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}
+            >
+              No Data Available
+            </p>
+            <p
+              className="text-center"
+              style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "12px" }}
+            >
+              {villageName
+                ? `No sales data found for "${villageName}" from 2020 onwards.`
+                : "Set a location in the Market Analysis section to load sales data."}
+            </p>
+          </div>
+        )}
+
+        {/* Chart */}
+        {!loading && !error && years.length > 0 && (
+          <div style={{ overflow: "auto", maxHeight: "80vh" }}>
+            <Chart
+              options={chartOptions}
+              series={series}
+              type="area"
+              height={380}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1129,11 +1129,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     };
   };
 
-  const syncMarketAnalysisCity = (city) => {
+  const syncMarketAnalysisCity = (city, villageName) => {
     try {
       const existingRaw = localStorage.getItem('Market Analysis Payload');
       const existing = existingRaw ? JSON.parse(existingRaw) : {};
-      const updated = { ...existing, city };
+      const updated = { ...existing, city, villageName };
       localStorage.setItem('Market Analysis Payload', JSON.stringify(updated));
       window.dispatchEvent(new CustomEvent('marketAnalysisUpdated', { detail: updated }));
     } catch (e) {
@@ -1170,8 +1170,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     localStorage.setItem("landDetailsResults", JSON.stringify(results));
     localStorage.setItem("zoningType", formData.zoningType);
 
-    // Sync city to Market Analysis Payload
-    syncMarketAnalysisCity(formData.location);
+    // Sync city and village to Market Analysis Payload
+    syncMarketAnalysisCity(formData.location, formData.village);
 
     onCalculate(results, formData.zoningType, formData.location);
     setUpdateUI((prev) => !prev);
@@ -1194,8 +1194,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     localStorage.setItem("landDetailsResults", JSON.stringify(results));
     localStorage.setItem("zoningType", formData.zoningType);
 
-    // Sync city to Market Analysis Payload
-    syncMarketAnalysisCity(formData.location);
+    // Sync city and village to Market Analysis Payload
+    syncMarketAnalysisCity(formData.location, formData.village);
 
     onCalculate(results, formData.zoningType, formData.location);
     setUpdateUI((prev) => !prev);
