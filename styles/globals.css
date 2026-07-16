@@ -562,3 +562,17 @@
   color: #f8fafc !important;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4) !important;
 }
+
+/* Anti-copy & Anti-screenshot Protection rules */
+.security-protected {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+@media print {
+  body, .security-protected, #chat-messages-container {
+    display: none !important;
+  }
+}

@@ -6,6 +6,7 @@ import { Send, Bot, User, Loader2, Maximize2, Square, Trash2 } from 'lucide-reac
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, WorkflowData as WorkflowJson, MarkerData as Marker } from '@/lib/dashboard/geospatial/types';
+import AdminOnlyGate from '@/components/shared/AdminOnlyGate';
 
 interface ChatSectionProps {
   onAiResponse?: (content: string) => void;
@@ -724,38 +725,40 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           </div>
         )}
 
-        <div className="workspace-panel-footer p-6 bg-slate-50/30 border-t border-slate-100">
-          <div className="workspace-input-wrap relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-inner-sm focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/50 transition-all">
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Type your instruction..."
-              disabled={isStreaming}
-              className="max-h-[100px] min-h-[22px] flex-1 resize-none bg-transparent px-4 py-2 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
-            />
+        <AdminOnlyGate>
+          <div className="workspace-panel-footer p-6 bg-slate-50/30 border-t border-slate-100">
+            <div className="workspace-input-wrap relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-inner-sm focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/50 transition-all">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Type your instruction..."
+                disabled={isStreaming}
+                className="max-h-[100px] min-h-[22px] flex-1 resize-none bg-transparent px-4 py-2 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
+              />
 
-            <button
-              onClick={isStreaming ? handleStop : handleSend}
-              disabled={!isStreaming && !input.trim()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-40"
-              title={isStreaming ? 'Stop generation' : 'Send message'}
-            >
-              {isStreaming ? <Bot className="h-4 w-4 animate-pulse" /> : <Send className="h-4.5 w-4.5" />}
-            </button>
+              <button
+                onClick={isStreaming ? handleStop : handleSend}
+                disabled={!isStreaming && !input.trim()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-40"
+                title={isStreaming ? 'Stop generation' : 'Send message'}
+              >
+                {isStreaming ? <Bot className="h-4 w-4 animate-pulse" /> : <Send className="h-4.5 w-4.5" />}
+              </button>
+            </div>
+
+            <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Press Enter to send · Shift + Enter For Newline
+            </p>
           </div>
-
-          <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Press Enter to send · Shift+Enter for newline
-          </p>
-        </div>
+        </AdminOnlyGate>
       </div>
 
       {showJsonModal && workflowJson && (

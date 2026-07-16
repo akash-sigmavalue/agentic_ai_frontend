@@ -18,7 +18,20 @@ function ClarificationSelect({ schema, value, onChange }) {
   const menuRef = useRef(null);
   const placeholder = schema.placeholder || `Select ${schema.label}`;
   const options = Array.isArray(schema.options) ? schema.options : [];
-  const selectedOption = options.find((option) => option.value === value);
+
+  const isMultiple = schema.field === "property_type";
+  const selectedValues = isMultiple
+    ? (Array.isArray(value) ? value : (value ? [value] : []))
+    : (value ? [value] : []);
+
+  const selectedLabels = selectedValues
+    .map((val) => {
+      const option = options.find((opt) => opt.value === val);
+      return option ? option.label : val;
+    })
+    .filter(Boolean);
+
+  const displayValue = selectedLabels.length > 0 ? selectedLabels.join(", ") : placeholder;
 
   const updateMenuPosition = useCallback(() => {
     const button = buttonRef.current;
@@ -81,16 +94,23 @@ function ClarificationSelect({ schema, value, onChange }) {
       }}
     >
       {options.map((option) => {
-        const active = option.value === value;
+        const active = selectedValues.includes(option.value);
         return (
           <li key={option.value} role="option" aria-selected={active}>
             <button
               type="button"
               onClick={() => {
-                onChange(schema.field, option.value);
-                setOpen(false);
+                if (isMultiple) {
+                  const nextValues = active
+                    ? selectedValues.filter((val) => val !== option.value)
+                    : [...selectedValues, option.value];
+                  onChange(schema.field, nextValues);
+                } else {
+                  onChange(schema.field, option.value);
+                  setOpen(false);
+                }
               }}
-              className="w-full px-4 py-2.5 text-left text-sm transition"
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition"
               style={{
                 color: "var(--text-primary)",
                 background: active
@@ -108,7 +128,16 @@ function ClarificationSelect({ schema, value, onChange }) {
                 }
               }}
             >
-              {option.label}
+              {isMultiple && (
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => {}}
+                  className="h-4 w-4 shrink-0 rounded border-gray-300 text-accent focus:ring-accent"
+                  style={{ accentColor: "var(--accent)" }}
+                />
+              )}
+              <span className="truncate">{option.label}</span>
             </button>
           </li>
         );
@@ -128,11 +157,11 @@ function ClarificationSelect({ schema, value, onChange }) {
         style={{
           borderColor: open ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border-soft)",
           background: "var(--bg-input)",
-          color: selectedOption ? "var(--text-primary)" : "var(--text-muted)",
+          color: selectedValues.length > 0 ? "var(--text-primary)" : "var(--text-muted)",
           boxShadow: open ? "0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
         }}
       >
-        <span className="truncate">{selectedOption?.label || placeholder}</span>
+        <span className="truncate">{displayValue}</span>
         <svg
           width="16"
           height="16"

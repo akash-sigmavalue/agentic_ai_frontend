@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import ClarificationFields from "./ClarificationFields";
+import ClarificationFields from "../shared/ClarificationFields";
 import MarkdownRenderer from "./MarkdownRenderer";
 
 function SendIcon() {
@@ -93,7 +93,11 @@ export default function ChatSection({
     if (!Array.isArray(fields) || !fields.length) {
       return false;
     }
-    return fields.some((schema) => String(clarificationState.fieldValues?.[schema.field] || "").trim());
+    return fields.some((schema) => {
+      const val = clarificationState.fieldValues?.[schema.field];
+      if (Array.isArray(val)) return val.length > 0;
+      return String(val || "").trim().length > 0;
+    });
   }
 
   const canSubmit = clarificationState.awaiting
@@ -115,6 +119,78 @@ export default function ChatSection({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
   }, [input]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const container = document.getElementById("chat-messages-container");
+      if (container) {
+        if (document.hidden) {
+          container.style.filter = "blur(20px)";
+          container.style.opacity = "0";
+        } else {
+          container.style.filter = "none";
+          container.style.opacity = "1";
+        }
+      }
+    };
+
+    const handleWindowBlur = () => {
+      const container = document.getElementById("chat-messages-container");
+      if (container) {
+        container.style.filter = "blur(20px)";
+        container.style.opacity = "0.02";
+      }
+    };
+
+    const handleWindowFocus = () => {
+      const container = document.getElementById("chat-messages-container");
+      if (container) {
+        container.style.filter = "none";
+        container.style.opacity = "1";
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      // Prevent PrintScreen key
+      if (e.key === "PrintScreen" || e.keyCode === 44) {
+        e.preventDefault();
+        try {
+          navigator.clipboard?.writeText?.("Screenshots are disabled for this content.");
+        } catch (_) {}
+      }
+      // Block Ctrl+C / Cmd+C / Ctrl+X / Cmd+X / Ctrl+A / Cmd+A / Ctrl+Shift+I / F12
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X' || e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+      }
+      if (e.key === "F12" || (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "i" || e.key === "C" || e.key === "c" || e.key === "J" || e.key === "j"))) {
+        e.preventDefault();
+      }
+    };
+
+    const handleCopy = (e) => {
+      e.preventDefault();
+    };
+
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("copy", handleCopy);
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, []);
+
   function handleKeyDown(event) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -133,7 +209,7 @@ export default function ChatSection({
         {/* <small className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{backendLabel}</small> */}
       </div>
 
-      <div className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overflow-x-hidden">
+      <div id="chat-messages-container" className="panel-scroll execution-flow-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overflow-x-hidden transition-all duration-200">
         {messages.length === 0 ? (
           <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full text-2xl" style={{ background: "var(--accent-glow)", color: "var(--accent-light)" }}>🤖</div>
@@ -150,7 +226,9 @@ export default function ChatSection({
                   {message.role === "user" ? "You" : "Agent"} · {formatTime(message.time)}
                 </span>
                 <div
-                  className="max-w-[88%] rounded-[14px] px-3.5 py-2.5 text-[13px] leading-relaxed"
+                  className={`max-w-[88%] rounded-[14px] px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                    message.role !== "user" ? "security-protected" : ""
+                  }`}
                   style={{
                     background: message.role === "user" ? "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))" : "var(--bg-card)",
                     color: "var(--text-primary)",

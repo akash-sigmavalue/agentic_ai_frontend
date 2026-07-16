@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Cpu, LayoutDashboard, Sun, Moon, SlidersHorizontal } from 'lucide-react';
+import { Cpu, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon, Shield } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
 import { apiFetch } from '@/lib/api-client';
 
@@ -36,6 +37,7 @@ const Header = () => {
     getServerThemeSnapshot,
   );
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const shouldSyncLlmSelection = pathname !== '/maharera_agent';
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
   const [llmModel, setLlmModel] = React.useState('gpt-4o-mini');
@@ -156,20 +158,71 @@ const Header = () => {
         <div className="hidden lg:flex items-center gap-3">
           <Link
             href="/portfolio-management"
-            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${pathname === '/portfolio-management'
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${
+              pathname === '/portfolio-management'
                 ? isDark
                   ? 'bg-indigo-950 border-indigo-800'
                   : 'bg-indigo-50 border-indigo-200'
                 : pillClass
-              }`}
+            }`}
           >
             <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/portfolio-management' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
             <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
           </Link>
           <AgentListDropdown />
+
+          {/* Admin panel link — only shown to ADMIN users */}
+
+          {user?.role === 'ADMIN' && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${
+                pathname === '/admin'
+                  ? 'bg-violet-50 border-violet-200'
+                  : 'bg-white border-slate-200 shadow-sm hover:bg-violet-50 hover:border-violet-200'
+              }`}
+            >
+              <Shield className={`h-4 w-4 transition-colors ${pathname === '/admin' ? 'text-violet-600' : 'text-slate-400 group-hover:text-violet-600'}`} />
+              <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/admin' ? 'text-violet-700' : pillTextClass}`}>ADMIN</span>
+            </Link>
+          )}
         </div>
 
         <div className={`flex items-center gap-6 pl-8 ${borderTextClass} border-l`}>
+          {user && (
+            <div className="flex items-center gap-3 mr-2 animate-in fade-in duration-300">
+              {/* Profile link */}
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100/50 dark:border-indigo-900/30 hover:bg-indigo-50 transition-all"
+                title="My Profile"
+              >
+                <UserIcon className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  {user.username}
+                </span>
+                {/* Role badge — compact */}
+                {user.role === 'ADMIN' && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-black uppercase">
+                    ADMIN
+                  </span>
+                )}
+                {user.role === 'FREE' && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[9px] font-black uppercase">
+                    FREE
+                  </span>
+                )}
+              </Link>
+              <button
+                onClick={logout}
+                className="flex items-center justify-center p-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-400 hover:text-rose-500 hover:border-rose-100 dark:hover:border-rose-950 transition-all cursor-pointer shadow-sm hover:shadow-rose-50 dark:hover:shadow-none"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <button
             onClick={toggleTheme}
             className={`flex items-center gap-2 p-1 rounded-full border transition-all hover:shadow-inner ${toggleClass}`}
