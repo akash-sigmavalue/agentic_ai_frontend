@@ -539,7 +539,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
           formDataObj.append("file", file);
         });
 
-        const uploadResponse = await fetch("http://localhost:8000/user-input/documents", {
+        const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/documents`, {
           method: "POST",
           body: formDataObj,
         });
@@ -553,7 +553,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
         setDocStatusLog((prev) => [...prev, "Upload successful.", "Sending query to Ask API..."]);
       }
 
-      const askResponse = await fetch("http://localhost:8000/api/user-input/ask", {
+      const askResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -673,7 +673,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       eventSourceRef.current.close();
     }
 
-    const url = `http://localhost:8000/api/chat_stream?query=${encodedQuery}&no_cache=true`;
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/chat_stream?query=${encodedQuery}&no_cache=true`;
 
     try {
       const source = new EventSource(url);
@@ -1451,7 +1451,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                     type="button"
                     className="fsi-second-pane-card text-start"
                     style={{ ...secondPaneStyles.card, width: '100%', marginBottom: 0 }}
-                    onClick={() => window.open("https://os.sigmavalue/web_search", "_blank", "noopener,noreferrer")}
+                    onClick={() => window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer")}
                   >
                     <div className="fsi-second-pane-card-icon" style={secondPaneStyles.cardIcon}>
                       <FaGlobe />
@@ -1538,7 +1538,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                     type="button"
                     className="fsi-second-pane-card text-start"
                     style={{ ...secondPaneStyles.card, width: '100%', marginBottom: 0 }}
-                    onClick={() => window.open("https://os.sigmavalue.ai/user_input", "_blank", "noopener,noreferrer")}
+                    onClick={() => window.open(`${window.location.origin}/user_input`, "_blank", "noopener,noreferrer")}
                   >
                     <div className="fsi-second-pane-card-icon" style={secondPaneStyles.cardIcon}>
                       <FaFilePdf />
@@ -1888,7 +1888,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                   type="button"
                   className="fsi-second-pane-card text-start"
                   style={{ ...secondPaneStyles.card, width: '100%', marginBottom: 0 }}
-                  onClick={() => window.open("https://os.sigmavalue.ai/web_search", "_blank", "noopener,noreferrer")}
+                  onClick={() => window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer")}
                 >
                   <div className="fsi-second-pane-card-icon" style={secondPaneStyles.cardIcon}>
                     <FaGlobe />
@@ -1975,7 +1975,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                   type="button"
                   className="fsi-second-pane-card text-start"
                   style={{ ...secondPaneStyles.card, width: '100%', marginBottom: 0 }}
-                  onClick={() => window.open("https://os.sigmavalue.ai/user_input", "_blank", "noopener,noreferrer")}
+                  onClick={() => window.open(`${window.location.origin}/user_input`, "_blank", "noopener,noreferrer")}
                 >
                   <div className="fsi-second-pane-card-icon" style={secondPaneStyles.cardIcon}>
                     <FaFilePdf />
