@@ -116,6 +116,9 @@ export type WorkflowResponse = {
   reply?: string | null;
   reply_sent?: string | null;
   reply_draft?: string | null;
+  reply_body?: string | null;
+  generated_reply?: string | null;
+  intent_understanding?: Record<string, unknown> | null;
   final_answer?: string | null;
   delivery_status?: "sent" | "draft_only";
   emails_found?: number;

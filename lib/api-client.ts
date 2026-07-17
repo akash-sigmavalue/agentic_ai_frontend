@@ -7,6 +7,19 @@ export const API_BASE_URL = (
 export const API_ROUTES = {
   authRegister: '/auth/register',
   authLogin: '/auth/login',
+  authLogout: '/auth/logout',
+  authMe: '/auth/me',
+  // Profile (full, includes role + token_balance)
+  profileMe: '/profile/me',
+  profileUpdate: '/profile/me',
+  profileDelete: '/profile/me',
+  // Token redemption
+  myTokenBalance: '/tokens/my-balance',
+  requestTokenRedemption: '/tokens/request-redemption',
+  // Admin
+  adminRedemptionRequests: '/admin/redemption-requests',
+  adminPendingRequests: '/admin/redemption-requests/pending',
+  adminUsers: '/admin/users',
   generationQuery: '/generation/query',
   generationUploadData: '/generation/upload-data',
   generationStream: '/generation/stream',
@@ -36,6 +49,7 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
   }
 
   return fetch(apiUrl(path), {
+    credentials: 'include',
     ...options,
     headers,
   });

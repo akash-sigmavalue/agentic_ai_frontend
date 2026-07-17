@@ -1,0 +1,252 @@
+/* =====================================================
+   GLOBAL BORDER RADIUS
+   ===================================================== */
+* {
+  --ar-border-radius: 0.4rem !important;
+}
+
+.card,
+.modal-content,
+.btn,
+select {
+  border-radius: var(--ar-border-radius);
+}
+
+/* =====================================================
+   SIGMAVALUE NAVBAR — NEVER WRAP, NEVER HIDE ACTIONS
+   ===================================================== */
+
+/* Hard no-wrap everywhere inside navbar */
+#id_navbar,
+#id_navbar * {
+  white-space: nowrap;
+}
+
+/* Navbar container */
+#id_navbar {
+  overflow: visible !important;
+}
+
+/* Center nav must be flexible */
+#id_navbar .navbar-collapse {
+  flex: 1 1 auto !important;
+  min-width: 0;
+  /* overflow: hidden; */
+}
+
+/* Prevent Bootstrap wrapping */
+#id_navbar .navbar-nav {
+  flex-wrap: nowrap !important;
+}
+
+/* Nav items must never shrink individually */
+#id_navbar .nav-item,
+#id_navbar .nav-link {
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+/* Scale font instead of wrapping */
+#id_navbar .nav-link {
+  font-size: clamp(0.72rem, 0.85vw, 0.95rem);
+}
+
+/* Dropdown menu font */
+#id_navbar .dropdown-menu .nav-link {
+  font-size: clamp(0.7rem, 0.8vw, 0.9rem);
+}
+
+/* Dropdown arrow spacing */
+#id_navbar .dropdown-toggle::after {
+  margin-left: 0.25em;
+}
+
+/* =====================================================
+   RIGHT ACTION GROUP — SACRED ZONE (NEVER HIDE)
+   ===================================================== */
+
+#id_navbar .nav-right-group {
+  flex-shrink: 0 !important;
+  min-width: max-content;
+  position: relative;
+  z-index: 10;
+}
+
+
+/* =====================================================
+   CENTER NAV SHRINKING STRATEGY (SAFE SCALING)
+   ===================================================== */
+
+/* Start scaling BEFORE overflow */
+@media (max-width: 1600px) {
+  #id_navbar .navbar-nav {
+    transform: scale(0.95);
+    transform-origin: center;
+  }
+}
+
+@media (max-width: 1450px) {
+  #id_navbar .navbar-nav {
+    transform: scale(0.9);
+  }
+}
+
+@media (max-width: 1300px) {
+  #id_navbar .navbar-nav {
+    transform: scale(0.85);
+  }
+}
+
+/* =====================================================
+   NAV LINK PADDING REDUCTION (SECONDARY DEFENSE)
+   ===================================================== */
+
+@media (max-width: 1400px) {
+  #id_navbar .nav-link {
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+}
+
+/* =====================================================
+   LOGO RESPONSIVE CONTROL
+   ===================================================== */
+
+.logo-desktop {
+  display: block;
+  max-width: 250px;
+  height: auto;
+}
+
+.logo-mobile {
+  display: none;
+}
+
+/* Medium desktops */
+@media (max-width: 1270px) and (min-width: 992px) {
+  .logo-desktop {
+    /* max-width: ; */
+    display: none;
+  }
+
+  .logo-mobile {
+    display: block !important;
+    max-width: 50px;
+  }
+}
+
+/* Tablets */
+@media (max-width: 992px) {
+  .logo-desktop {
+    max-width: 180px;
+  }
+}
+
+/* Small devices */
+@media (max-width: 480px) {
+  .logo-mobile {
+    display: block !important;
+    max-width: 40px;
+  }
+
+  .logo-desktop {
+    display: none !important;
+  }
+}
+
+/* =====================================================
+   BOOTSTRAP SAFETY
+   ===================================================== */
+
+.navbar-toggler {
+  flex-shrink: 0;
+}
+
+/* =====================================================
+   MOBILE NAVBAR OVERLAY — NO LAYOUT PUSH
+   ===================================================== */
+@media (max-width: 991.98px) {
+
+  /* Keep navbar fixed */
+  #id_navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+  }
+
+  /* Make collapse menu overlay the page */
+  #id_navbar .navbar-collapse {
+    position: absolute;
+    top: 75%;
+    /* directly below navbar */
+    left: 0;
+    right: 0;
+    border: 2px solid #252424;
+
+    /* background: #0b0f19; */
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+
+    padding: 2rem 1.25rem;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  /* IMPORTANT: prevent margin/padding push */
+  #id_navbar+* {
+    margin-top: 0 !important;
+  }
+}
+
+
+/* =====================================================
+   MOBILE NAV ITEMS — FONT SIZE + LEFT ALIGN
+   ===================================================== */
+@media (max-width: 991.98px) {
+
+  /* Stack items properly */
+  #id_navbar .navbar-nav {
+    border: 2px solid #252424;
+    align-items: flex-start !important;
+    /* LEFT */
+    width: 100%;
+    transform: none !important;
+    margin-bottom: 13px;
+    /* disable desktop scaling */
+  }
+
+  /* Individual nav items */
+  #id_navbar .nav-item {
+    width: 100%;
+  }
+
+  /* Nav links: font + spacing */
+  #id_navbar .nav-link {
+    font-size: 0.95rem !important;
+    /* 👈 adjust if needed */
+    padding: 0.65rem 0 !important;
+    text-align: left !important;
+  }
+
+  /* Dropdown items */
+  #id_navbar .dropdown-menu .nav-link {
+    font-size: 0.9rem !important;
+    padding-left: 1rem !important;
+    /* indent sub-items */
+  }
+}
+
+
+.hover-lift-card {
+  transition: all 0.2s ease, box-shadow 0.2s ease;
+  background-color: #559481;
+}
+
+.hover-lift-card:hover {
+  transform: translateY(-4px);
+  color: #252424;
+  background-color: rgb(85, 209, 157);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  border: 2px solid #57eb5e;
+}

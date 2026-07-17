@@ -231,7 +231,7 @@ function buildWorkflowCards(response: WorkflowResponse | null, streamingSteps: S
         desc: cleanStepDescription(step, result, response),
         tag: stepTag(index),
         ms: null,
-        status: result?.status || "completed",
+        status: result?.status || "planned",
         details: buildHumanStepDetails(step, result, response),
       };
     });
@@ -275,6 +275,46 @@ function countStatus(response: WorkflowResponse | null, streamingSteps: StreamSt
   return { completed, failed };
 }
 
+
+function getResponseStatus(response: WorkflowResponse | null) {
+  return String(response?.status || "").toLowerCase();
+}
+
+
+function isWaitingForConfirmation(response: WorkflowResponse | null) {
+  return getResponseStatus(response) === "needs_confirmation";
+}
+
+function isWaitingForClarification(response: WorkflowResponse | null) {
+  return getResponseStatus(response) === "needs_clarification" || response?.requires_form === true;
+}
+
+function getStatusTitle(
+  response: WorkflowResponse | null,
+  isLoading: boolean,
+  convStep: ConvStep,
+  completionResult?: CompletionResult | null,
+) {
+  if (isWaitingForConfirmation(response)) return "Needs Confirmation";
+  if (isWaitingForClarification(response)) return "Needs Details";
+  if (completionResult) return "Complete";
+  if (isLoading || convStep === "streaming" || convStep === "submitting") return "Running";
+  if (response?.plan?.steps?.length) return "Planned";
+  return "AI Waiting";
+}
+
+function getStatusBadgeClass(response: WorkflowResponse | null, isLoading: boolean, completionResult?: CompletionResult | null) {
+  const status = getResponseStatus(response);
+
+  if (status === "needs_confirmation") return "bg-yellow-500/15 text-yellow-500";
+  if (status === "needs_clarification" || response?.requires_form === true) return "bg-orange-500/15 text-orange-500";
+  if (status === "failed" || response?.success === false) return "bg-red-500/15 text-red-500";
+  if (completionResult || status === "completed" || status === "sent" || status === "draft_ready") return "bg-green-500/15 text-green-500";
+  if (isLoading) return "bg-blue-500/15 text-blue-500";
+
+  return "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300";
+}
+
 export default function WorkflowSectionConnector({
   response,
   needsGmail,
@@ -296,7 +336,8 @@ export default function WorkflowSectionConnector({
   const cards = buildWorkflowCards(response, streamingSteps);
   const { completed, failed } = countStatus(response, streamingSteps);
   const activeCard = cards.find((item) => String(item.status).toLowerCase() === "running") || cards[cards.length - 1];
-  const statusTitle = completionResult ? "Complete" : isLoading || convStep === "streaming" || convStep === "submitting" ? "Running" : cards.length ? "Planned" : "AI Waiting";
+  const statusTitle = getStatusTitle(response, isLoading, convStep, completionResult);
+  const statusBadgeClass = getStatusBadgeClass(response, isLoading, completionResult);
   const liveTool = isLoading && activeCard ? activeCard.tag : completionResult ? "idle" : cards[0]?.tag || "—";
 
   return (
@@ -306,7 +347,7 @@ export default function WorkflowSectionConnector({
         kicker="Workflow"
         title="AI Agent Execution"
         right={
-          <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${completionResult ? "bg-green-500/15 text-green-500" : isLoading ? "bg-blue-500/15 text-blue-500" : "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`}>
+          <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${statusBadgeClass}`}>
             {statusTitle}
           </span>
         }
@@ -370,26 +411,26 @@ export default function WorkflowSectionConnector({
               ))}
             </div>
 
+            {isWaitingForConfirmation(response) ? (
+              <div className="connector-card mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                ⚠️ <b>Confirmation required:</b>{" "}
+                {response?.message || response?.summary || "Please review the generated reply before sending."}
+              </div>
+            ) : null}
+
+            {isWaitingForClarification(response) ? (
+              <div className="connector-card mt-4 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                📝 <b>More details required:</b>{" "}
+                {response?.question || response?.summary || "Please provide the missing details to continue."}
+              </div>
+            ) : null}
+
             {response?.plan?.goal ? (
               <div className="connector-card mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
                 🎯 <b>Goal:</b> {response.plan.goal}
               </div>
             ) : null}
 
-            {response?.execution_type === "automated" || response?.plan?.needs_approval ? (
-              <div className="connector-card mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-black text-slate-950 dark:text-white">⚡ Automation workflow</div>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Activate only after checking the generated workflow.</p>
-                  </div>
-                  <button onClick={handleActivateFlow} disabled={activatingFlow} className="rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white disabled:opacity-60">
-                    {activatingFlow ? "Activating..." : "Activate automation"}
-                  </button>
-                </div>
-                {activateFlowResult ? <p className={`mt-3 text-xs font-bold ${activateFlowResult.ok ? "text-green-500" : "text-red-500"}`}>{activateFlowResult.message}</p> : null}
-              </div>
-            ) : null}
           </>
         )}
       </div>

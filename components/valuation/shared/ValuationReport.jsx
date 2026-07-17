@@ -108,6 +108,18 @@ function formatAmenitySummary(summary) {
   return "—";
 }
 
+function getUpdatedAmenitySummary(row, factorialData) {
+  if (!row) return null;
+  const projName = (row.project_name || "").toLowerCase().trim();
+  if (factorialData?.table) {
+    const match = factorialData.table.find(r => (r.project_name || "").toLowerCase().trim() === projName);
+    if (match && match.amenity_summary) {
+      return match.amenity_summary;
+    }
+  }
+  return row.amenity_summary;
+}
+
 function haversineDistanceKM(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
   const R = 6371; // Earth radius in km
@@ -362,7 +374,7 @@ function SlideReportMap({ valuationResult }) {
 
 // ── SLIDE 1: Valuation Certificate Cover ────────────────────────────────────
 function SlideCover({ valuationResult }) {
-  const { subjectData, factorialAnalysis, costCalculation, type, timestamp } = valuationResult;
+  const { subjectData, factorialAnalysis, costCalculation, type, timestamp, factorialData } = valuationResult;
   const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
   const table = factorialAnalysis?.comparable_factoring_table || [];
   const subjectRow = table.find(r => r.role === "SUBJECT");
@@ -376,9 +388,13 @@ function SlideCover({ valuationResult }) {
     subjectData?.carpet_area_sqft ||
     subjectData?.plot_area_sqft || 0
   );
+  // Prefer precomputed market_value when set by instant area/age recalculation;
+  // otherwise derive from finalRate × area as usual.
   const marketValue = type === "cost"
     ? (costCalculation?.result?.cost_value || costCalculation?.depreciated_property_value || 0)
-    : (finalRate * area);
+    : (factorialAnalysis?.market_value_computed && factorialAnalysis?.market_value
+        ? factorialAnalysis.market_value
+        : finalRate * area);
 
   const confidence = factorialAnalysis?.confidence || "Medium";
   const methodology = factorialAnalysis?.methodology || (type === "cost" ? "Cost Approach" : "Market Comparison Approach");
@@ -491,7 +507,7 @@ function SlideCover({ valuationResult }) {
             ["Configuration", subjectData?.configuration || subjectData?.unit_configuration],
             ["Approach", subjectData?.recommended_approach?.toUpperCase()],
             ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(4)}, ${Number(subjectData.lng || 0).toFixed(4)}` : null],
-            ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+            ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
           ].filter(([_, v]) => v).map(([label, value]) => {
             const isFullWidth = label === "Neighborhood Amenities";
             return (
@@ -503,13 +519,34 @@ function SlideCover({ valuationResult }) {
           })}
         </div>
       </div>
+
+      {/* ── Limited Comparable Evidence Banner ─────────────────────────────── */}
+      {factorialAnalysis?.subject_only_mode && (
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-bg-card to-amber-600/5 p-4 shrink-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.12),transparent_60%)]" />
+          <div className="relative z-10 flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[14px] font-black">
+              ⚠
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-400/90 mb-1">
+                Limited Comparable Market Evidence
+              </p>
+              <p className="text-[9px] text-amber-200/80 leading-relaxed font-medium">
+                {factorialAnalysis.limited_evidence_note ||
+                  "Due to limited comparable market evidence, the valuation has been derived using the best available data for the subject property. For a detailed expert review and enhanced valuation assessment, please contact our team."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── SLIDE 2: Comparable Factoring Grid ─────────────────────────────────────
 function SlideComparableGrid({ valuationResult }) {
-  const { factorialAnalysis, subjectData } = valuationResult;
+  const { factorialAnalysis, subjectData, factorialData } = valuationResult;
   const currencyCode = subjectData?.currency || "INR";
   const formatter = buildFormatter(currencyCode);
 
@@ -558,7 +595,7 @@ function SlideComparableGrid({ valuationResult }) {
                 </td>
                 <td className="px-2 py-2.5 text-center font-mono font-bold text-accent text-[9px]">{subjectRow.road_type || "—"}</td>
                 <td className="px-2 py-2.5 text-center text-[9px] text-text-dim">
-                  {getAmenitiesCount(subjectRow.amenity_summary)}
+                  {getAmenitiesCount(getUpdatedAmenitySummary(subjectRow, factorialData))}
                 </td>
                 <td className="px-2 py-2.5 text-center font-mono text-accent text-[9px]">
                   {subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}
@@ -586,7 +623,7 @@ function SlideComparableGrid({ valuationResult }) {
                   </td>
                   <td className="px-2 py-2.5 text-center font-mono text-text-dim text-[9px]">{row.road_type || "—"}</td>
                   <td className="px-2 py-2.5 text-center text-[9px] text-text-dim">
-                    {getAmenitiesCount(row.amenity_summary)}
+                    {getAmenitiesCount(getUpdatedAmenitySummary(row, factorialData))}
                   </td>
                   <td className="px-2 py-2.5 text-center font-mono text-text-dim text-[9px]">
                     {row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}
@@ -833,13 +870,25 @@ function SlideBlending({ valuationResult }) {
         </div>
       </div>
 
-      {/* Reconciliation note */}
-      {factorialAnalysis?.reconciliation_note && (
+      {/* Reconciliation / Limited Data Note */}
+      {factorialAnalysis?.limited_data_note ? (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 shrink-0 flex gap-3 items-start">
+          <div className="mt-0.5 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-400 mb-1">Limited Market Evidence</p>
+            <p className="text-[9px] text-amber-200/80 leading-relaxed">{factorialAnalysis.limited_data_note}</p>
+          </div>
+        </div>
+      ) : factorialAnalysis?.reconciliation_note ? (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 shrink-0">
           <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1">Reconciliation Note</p>
           <p className="text-[9px] text-text-secondary leading-relaxed">{factorialAnalysis.reconciliation_note}</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -1200,6 +1249,15 @@ function downloadPDF(valuationResult) {
   <!-- Section 1: Property Details -->
   <div class="section">
     <div class="section-title">1. Subject Property Details</div>
+    ${factorialAnalysis?.subject_only_mode ? `
+    <div style="background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; gap: 12px; align-items: flex-start;">
+      <div style="font-size: 18px; line-height: 1;">⚠</div>
+      <div>
+        <div style="font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #b45309; margin-bottom: 4px;">Limited Comparable Market Evidence</div>
+        <div style="font-size: 9px; color: #78350f; line-height: 1.7;">${factorialAnalysis.limited_evidence_note || "Due to limited comparable market evidence, the valuation has been derived using the best available data for the subject property. For a detailed expert review and enhanced valuation assessment, please contact our team."}</div>
+      </div>
+    </div>
+    ` : ""}
     <div class="info-grid">
       ${[
         ["Project Name", subjectData?.project_name],
@@ -1214,7 +1272,7 @@ function downloadPDF(valuationResult) {
         ["Plot Area", subjectData?.plot_area_sqft ? `${Number(subjectData.plot_area_sqft).toLocaleString()} sqft` : null],
         ["Approach", subjectData?.recommended_approach?.toUpperCase()],
         ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(5)}, ${Number(subjectData.lng || 0).toFixed(5)}` : null],
-        ["Neighborhood Amenities", formatAmenitySummary(subjectRow?.amenity_summary)],
+        ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
       ].filter(([, v]) => v).map(([l, v]) => {
         const isAmenities = l === "Neighborhood Amenities";
         return `<div class="info-item" ${isAmenities ? 'style="grid-column: span 2;"' : ''}><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`;
@@ -1320,7 +1378,7 @@ function downloadPDF(valuationResult) {
         <tr class="subject-row">
           <td>${subjectRow.project_name} <span style="background:#0891b2;color:white;font-size:7px;padding:1px 4px;border-radius:3px;font-weight:900;">SUBJECT</span></td>
           <td class="text-center mono">${subjectRow.road_type || "—"}</td>
-          <td class="text-center">${getAmenitiesCount(subjectRow.amenity_summary)}</td>
+          <td class="text-center">${getAmenitiesCount(getUpdatedAmenitySummary(subjectRow, factorialData))}</td>
           <td class="text-center mono">${subjectRow.builtup_density_score != null ? Number(subjectRow.builtup_density_score).toFixed(1) : "—"}</td>
           <td class="text-center">${subjectRow.cbd_nearest_km != null ? Number(subjectRow.cbd_nearest_km).toFixed(1) : "—"}</td>
           <td class="text-right mono">${fmtCurrency(subjectRow.avg_rate, formatter)}</td>
@@ -1332,7 +1390,7 @@ function downloadPDF(valuationResult) {
           return `<tr>
             <td>${row.project_name}</td>
             <td class="text-center mono">${row.road_type || "—"}</td>
-            <td class="text-center">${getAmenitiesCount(row.amenity_summary)}</td>
+            <td class="text-center">${getAmenitiesCount(getUpdatedAmenitySummary(row, factorialData))}</td>
             <td class="text-center mono">${row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}</td>
             <td class="text-center">${row.cbd_nearest_km != null ? Number(row.cbd_nearest_km).toFixed(1) : "—"}</td>
             <td class="text-right mono">${fmtCurrency(row.avg_rate, formatter)}</td>
