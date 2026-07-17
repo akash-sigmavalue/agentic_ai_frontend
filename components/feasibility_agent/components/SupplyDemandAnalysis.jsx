@@ -320,7 +320,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 36, marginBottom: 12 }}>ΓÜá∩╕Å</div>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
                 <p
                   className="text-center"
                   style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
