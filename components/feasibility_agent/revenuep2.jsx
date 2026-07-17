@@ -2459,7 +2459,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       try {
         setVillageMeta(prev => ({ ...prev, loading: true, error: '' }));
         const params = new URLSearchParams({ name });
-        const resp = await fetch(`${apiUrl('/data_db/get_village_id_by_name')}?${params.toString()}`, {
+        const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',

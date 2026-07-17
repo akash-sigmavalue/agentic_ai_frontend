@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { apiUrl } from "@/lib/api-client";
 
 ChartJS.register(
   CategoryScale,
@@ -48,7 +49,7 @@ const BayesianOptimizerCard = ({ villageId, villageName, bhk, nTrials, randomSee
         random_seed: randomSeed,
       };
       const resp = await fetch(
-        "/new_rate_simulator/simulator/bayesian-optimizer/run",
+        apiUrl("/new_rate_simulator/simulator/bayesian-optimizer/run"),
         {
           method: "POST",
           headers: {
