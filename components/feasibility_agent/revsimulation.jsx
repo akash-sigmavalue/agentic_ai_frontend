@@ -1073,7 +1073,7 @@
 //         width: 100% !important;
 //         margin: 0 !important;
 //       }
-      
+
 //       @media (min-width: 1600px) {
 //         .rp2-container {
 //           max-width: 1600px;
@@ -1099,7 +1099,7 @@
 //         max-width: 100%;
 //         overflow: hidden;
 //       }
-      
+
 //       /* Optimized column widths to fit all 11 columns (A-K) exactly within container */
 //       /* Optimized column widths for Unit Mix Table (8 columns: A,B,C,F,G,H,I,J) */
 //       .excel-grid-first {
@@ -1140,7 +1140,7 @@
 //         border: 2px solid #495057;
 //         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 //       }
-      
+
 //       /* Responsive adjustments for smaller screens */
 //       @media (min-width: 1400px) {
 //         .excel-grid-first {
@@ -1150,7 +1150,7 @@
 //           grid-template-columns: 100px 110px 110px 90px 110px 110px 150px 150px 150px 130px;
 //         }
 //       }
-      
+
 //       @media (max-width: 1399px) and (min-width: 1200px) {
 //         .excel-grid-first {
 //           grid-template-columns: 85px 95px 95px 95px 130px 130px 130px 115px;
@@ -1159,7 +1159,7 @@
 //           grid-template-columns: 85px 95px 95px 75px 95px 95px 130px 130px 130px 115px;
 //         }
 //       }
-      
+
 //       @media (max-width: 1199px) {
 //         .excel-grid-first {
 //           grid-template-columns: 70px 80px 80px 80px 110px 110px 110px 100px;
@@ -1311,7 +1311,7 @@
 //         border-top-right-radius: 8px;
 //         border-bottom-right-radius: 8px;
 //       }
-      
+
 //       /* Interactive styles */
 //       .interactive-card {
 //         transition: all 0.3s ease;
@@ -1319,26 +1319,26 @@
 //         overflow: hidden;
 //         border: 1px solid rgba(0,0,0,0.05) !important;
 //       }
-      
+
 //       .interactive-card:hover {
 //         transform: translateY(-2px);
 //         box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
 //       }
-      
+
 //       .interactive-btn {
 //         transition: all 0.2s ease;
 //         transform: translateY(0);
 //       }
-      
+
 //       .interactive-btn:hover {
 //         transform: translateY(-2px);
 //         box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
 //       }
-      
+
 //       .interactive-btn:active {
 //         transform: translateY(0);
 //       }
-      
+
 //       @keyframes fadeInUp {
 //         from {
 //           opacity: 0;
@@ -1349,11 +1349,11 @@
 //           transform: translateY(0);
 //         }
 //       }
-      
+
 //       .fade-in-up {
 //         animation: fadeInUp 0.5s ease forwards;
 //       }
-      
+
 //       .ls-1 { 
 //         letter-spacing: 1px; 
 //       }
@@ -1729,7 +1729,7 @@ import {
   FaExclamationTriangle,
   FaStickyNote
 } from 'react-icons/fa';
-
+import { apiUrl } from "@/lib/api-client";
 const colLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
 const c = (value, { formula = null, type = 'text', editable = false } = {}) => ({
@@ -2406,7 +2406,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
       try {
         setVillageMeta(prev => ({ ...prev, loading: true, error: '' }));
         const params = new URLSearchParams({ name });
-        const resp = await fetch(`/data_db/get_village_id_by_name/?${params.toString()}`, {
+        const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -2737,7 +2737,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
     let areaCalcForm = {};
     try {
       areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
-    } catch(e) {}
+    } catch (e) { }
     const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
     const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
     const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
@@ -2746,17 +2746,17 @@ const RevSimulation = ({ embedded = false } = {}) => {
       const rowIndex = 4 + i; // 4-9 (0-indexed) = A5-A10 (1-indexed)
       const bhkType = String(grid?.[rowIndex]?.[0]?.value ?? '').trim(); // A column (index 0)
       let avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
-      
+
       if (avgUnitArea != null && calcMode === 'saleable') {
         const normalizedBhk = normalizeUnitTypeKey(bhkType);
         let loadingFactor = 1.0;
         if (normalizedBhk === 'shop') loadingFactor = shopLoading;
         else if (normalizedBhk === 'office') loadingFactor = officeLoading;
         else loadingFactor = resLoading;
-        
+
         avgUnitArea = avgUnitArea / loadingFactor;
       }
-      
+
       const lowrange = avgUnitArea != null ? avgUnitArea - 25 : null;
       const highrange = avgUnitArea != null ? avgUnitArea + 25 : null;
 
