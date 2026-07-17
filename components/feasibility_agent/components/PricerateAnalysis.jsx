@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaChartBar } from "react-icons/fa";
@@ -88,7 +89,7 @@ const PricerateAnalysis = () => {
 
       try {
         const response = await fetch(
-          "/new_rate_simulator/simulator/yoy-weighted-rate/",
+          apiUrl("/new_rate_simulator/simulator/yoy-weighted-rate/"),
           {
             method: "POST",
             headers: {

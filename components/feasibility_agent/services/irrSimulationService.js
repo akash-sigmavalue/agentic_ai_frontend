@@ -41,7 +41,7 @@ export async function runIrrCashflowSimulation(payload) {
 }
 
 export async function runSalesInflowSimulation(payload) {
-  const response = await fetch("/new_rate_simulator/simulator/irr/run-sales-inflow-simulation", {
+  const response = await fetch(apiUrl("/new_rate_simulator/simulator/irr/run-sales-inflow-simulation"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

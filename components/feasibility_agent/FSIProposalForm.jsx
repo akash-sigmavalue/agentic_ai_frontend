@@ -395,6 +395,7 @@
 
 // export default FSIProposalForm; 
 
+import { apiUrl } from "@/lib/api-client";
 import { useState, useEffect, useRef } from "react";
 
 import { FaGlobe, FaFilePdf, FaMinus, FaExpandAlt, FaCompressAlt, FaTimes } from "react-icons/fa";
@@ -539,7 +540,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
           formDataObj.append("file", file);
         });
 
-        const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/documents`, {
+        const uploadResponse = await fetch(apiUrl("/user-input/documents"), {
           method: "POST",
           body: formDataObj,
         });
@@ -553,7 +554,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
         setDocStatusLog((prev) => [...prev, "Upload successful.", "Sending query to Ask API..."]);
       }
 
-      const askResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/ask`, {
+      const askResponse = await fetch(apiUrl("/user-input/ask"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -673,7 +674,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       eventSourceRef.current.close();
     }
 
-    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/chat_stream?query=${encodedQuery}&no_cache=true`;
+    const url = apiUrl(`/api/chat_stream?query=${encodedQuery}&no_cache=true`);
 
     try {
       const source = new EventSource(url);

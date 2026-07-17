@@ -61,7 +61,7 @@ const useBayesianOptimizer = () => {
             setLoadingMeta(true);
             setMetaError(null);
             try {
-                const resp = await fetch("/new_rate_simulator/simulator/bayesian-optimizer/meta");
+                const resp = await fetch(apiUrl("/new_rate_simulator/simulator/bayesian-optimizer/meta"));
                 if (!resp.ok) throw new Error(`Meta request failed: ${resp.status}`);
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error || "Failed to load metadata");

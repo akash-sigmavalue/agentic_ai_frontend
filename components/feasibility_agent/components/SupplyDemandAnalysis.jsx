@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
@@ -108,7 +109,7 @@ const SupplyDemandAnalysis = ({ option }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/new_rate_simulator/simulator/yoy-demand/", {
+        const response = await fetch(apiUrl("/new_rate_simulator/simulator/yoy-demand/"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -278,7 +279,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 fontSize: 24,
               }}
             >
-              ≡ƒÜº
+              🚧
             </div>
             <h6 className="fw-bold mb-1" style={{ color: textColor }}>
               Feature in Progress
