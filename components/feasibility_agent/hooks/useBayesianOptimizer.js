@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-client';
 import { useState, useEffect, useCallback } from 'react';
 
 const BHK_TYPES = ['1Bhk', '2Bhk', '3Bhk', '>3Bhk', 'Shop', 'Office'];
