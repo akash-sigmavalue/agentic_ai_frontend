@@ -2465,7 +2465,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
       const params = new URLSearchParams({ igr_village_id: String(villageId) });
 
       // 1. fetchBhkMonthlyAverage (GET)
-      const bhkMonthlyAvgResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average/?${params.toString()}`);
+      const bhkMonthlyAvgResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average/?${params.toString()}`));
       if (bhkMonthlyAvgResp.ok) {
         const data = await bhkMonthlyAvgResp.json();
         if (data?.success && Array.isArray(data?.data)) {
@@ -2523,7 +2523,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
         }
       }
       if (ticketSizeRange.length > 0) {
-        const transCountResp = await fetch(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`, {
+        const transCountResp = await fetch(apiUrl(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ticketSizeRange),
@@ -2568,7 +2568,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
         }
       }
       if (areaPayload.length > 0) {
-        const areaResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average-by-area?${params.toString()}`, {
+        const areaResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average-by-area?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(areaPayload),
@@ -2614,7 +2614,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
         }
       }
       if (ratePayload.length > 0) {
-        const rateResp = await fetch(`/new_rate_simulator/simulator/average-rate/?${params.toString()}`, {
+        const rateResp = await fetch(apiUrl(`/new_rate_simulator/simulator/average-rate/?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ratePayload),
@@ -2647,7 +2647,7 @@ const RevSimulation = ({ embedded = false } = {}) => {
 
       // 5. fetchBhkMonthlyAverageByRate (POST)
       if (ratePayload.length > 0) {
-        const rateAvgResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average-by-rate?${params.toString()}`, {
+        const rateAvgResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average-by-rate?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ratePayload),

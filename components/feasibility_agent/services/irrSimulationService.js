@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-client";
+
 const SIMULATION_ENDPOINT = "/new_rate_simulator/simulator/irr/run-simulation";
 
 /**
@@ -6,7 +8,7 @@ const SIMULATION_ENDPOINT = "/new_rate_simulator/simulator/irr/run-simulation";
  * @returns {Promise<{ data: object, tokenLedger: object|null }>}
  */
 export async function runIrrCashflowSimulation(payload) {
-  const response = await fetch(SIMULATION_ENDPOINT, {
+  const response = await fetch(apiUrl(SIMULATION_ENDPOINT), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

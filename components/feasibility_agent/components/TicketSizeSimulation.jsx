@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-client';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FaSearchDollar, FaPlay, FaSave, FaUndo, FaDatabase, FaCheckCircle, FaChartLine, FaLayerGroup, FaTrophy } from 'react-icons/fa';
 
@@ -100,7 +101,7 @@ const SimulationTable = React.memo(({ type, avgTicketSize, onAvgTicketSizeChange
                     className="btn btn-warning btn-sm rounded-pill px-3 shadow-sm"
                     onClick={onSimulate}
                 >
-                   <FaPlay/>Simulate
+                    <FaPlay />Simulate
                 </button>
             </div>
             <div className="card-body p-4 tss-simulation-card-body">
@@ -302,7 +303,7 @@ const TicketSizeSimulation = ({ villageId }) => {
             try {
                 const payload = UNIT_TYPES.map(type => ({ BHK_Type: type }));
                 const params = new URLSearchParams({ igr_village_id: String(villageId) });
-                const response = await fetch(`/new_rate_simulator/simulator/average-ticket-size?${params.toString()}`, {
+                const response = await fetch(apiUrl(`/new_rate_simulator/simulator/average-ticket-size?${params.toString()}`), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify(payload),
@@ -377,7 +378,7 @@ const TicketSizeSimulation = ({ villageId }) => {
 
             console.log("TicketSizeSimulation: Simulate payload:", combinedPayload);
             const params = new URLSearchParams({ igr_village_id: String(villageId) });
-            const response = await fetch(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`, {
+            const response = await fetch(apiUrl(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(combinedPayload),
@@ -419,8 +420,8 @@ const TicketSizeSimulation = ({ villageId }) => {
                                     } else {
                                         console.warn(`TicketSizeSimulation: No match found for ${type}: Low=${apiLowrange}, High=${apiHighrange}`);
                                     }
-                                    }
-                                });
+                                }
+                            });
                             newResults[type] = typeResults;
                             transactionRows[normalizeMetricKey(type)] = uiRows.map((row, rowIndex) => ({
                                 bhk: type,
