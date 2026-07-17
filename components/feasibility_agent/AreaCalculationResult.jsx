@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useGlobalState } from "@/components/GlobalContext";
+
 
 const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType, location }) => {
     const [savedData, setSavedData] = useState(null);
-    const [gstate] = useGlobalState();
-    const theme = gstate?.theme || "light";
+    const theme = "light";
+
 
     const isPuneThane = location === "Pune" || location === "Thane";
 
@@ -50,7 +50,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
             <div className="area-results-panel h-100">
                 <style>{`
                     .area-results-panel {
-                        background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                        
                         border: 1px solid ${theme === "dark" ? "#353941" : "#e7ebf1"};
                         border-radius: 24px;
                         box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
@@ -59,7 +59,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
 
                     .area-results-header {
                         padding: 24px 26px 14px;
-                        background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                        
                         border-bottom: 1px solid ${theme === "dark" ? "#353941" : "#edf1f6"};
                     }
 
@@ -82,7 +82,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
 
                     .area-results-body {
                         padding: 26px;
-                        background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                        
                     }
                 `}</style>
                 <div className="area-results-header">
@@ -115,7 +115,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
         if (typeof window !== 'undefined') {
             try {
                 landDetails = JSON.parse(localStorage.getItem('landDetailsForm') || '{}');
-            } catch (e) {}
+            } catch (e) { }
         }
         const commSplit = (parseFloat(landDetails.commercialSplit) || 0) / 100;
         const resSplit = (parseFloat(landDetails.residentialSplit) || 0) / 100;
@@ -142,7 +142,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
         if (typeof window !== 'undefined') {
             try {
                 landDetails = JSON.parse(localStorage.getItem('landDetailsForm') || '{}');
-            } catch (e) {}
+            } catch (e) { }
         }
         const commSplit = (parseFloat(landDetails.commercialSplit) || 0) / 100;
         const resSplit = (parseFloat(landDetails.residentialSplit) || 0) / 100;
@@ -323,7 +323,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
         if (typeof window !== 'undefined') {
             try {
                 landDetails = JSON.parse(localStorage.getItem('landDetailsForm') || '{}');
-            } catch (e) {}
+            } catch (e) { }
         }
         const commSplit = (parseFloat(landDetails.commercialSplit) || 0) / 100;
         const resSplit = (parseFloat(landDetails.residentialSplit) || 0) / 100;
@@ -440,7 +440,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
             {/* Dark theme overrides for this component */}
             <style>{`
                 .area-results-panel {
-                    background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                    
                     border: 1px solid ${theme === "dark" ? "#353941" : "#e7ebf1"};
                     border-radius: 24px;
                     box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
@@ -449,7 +449,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
 
                 .area-results-header {
                     padding: 24px 26px 14px;
-                    background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                    
                     border-bottom: 1px solid ${theme === "dark" ? "#353941" : "#edf1f6"};
                 }
 
@@ -472,7 +472,7 @@ const AreaCalculationResult = ({ data, landResults, fsiProposalData, zoningType,
 
                 .area-results-body {
                     padding: 26px;
-                    background: ${theme === "dark" ? "#202226" : "#ffffff"};
+                    
                 }
 
                 .area-results-table-wrap {

@@ -4,9 +4,6 @@
 
 // import { FaInfo,FaExternalLinkAlt  } from "react-icons/fa";
 
-// import { get_data, refreshToken } from "@/components/AppUtils";
-// import Select from "react-select"
-
 // const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
 //   const [formData, setFormData] = useState({
 //     clientName: "",
@@ -783,10 +780,9 @@ import ReactDOM from "react-dom";
 import { FaInfo,FaExternalLinkAlt ,FaMapMarkedAlt, FaSave,
   FaSyncAlt } from "react-icons/fa";
 import { FaWandSparkles } from "react-icons/fa6";
-import { get_data, refreshToken, setAlerts } from "@/components/AppUtils";
+import { apiUrl } from "@/lib/api-client";
 import Select from "react-select"
 import OsmInline from "./OsmInline";
-import { useGlobalState } from "@/components/GlobalContext";
 
 const ALLOWED_CITIES = [
   "Pune", "Thane", "Abu Dhabi", "Dubai", 
@@ -831,8 +827,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
   const coordinateLocationRequestRef = useRef(0);
   const loadedPlanningCoordsRef = useRef("");
   const osmLoadActiveRef = useRef(false);
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light"
+
 
   useEffect(() => {
     const allowed = new Set(ALLOWED_CITIES);
@@ -850,10 +845,13 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
 
     (async () => {
       try {
-        const json = await get_data("/geospatial/villages_by_coordinates", {
-          ...refreshToken(),
+        const res = await fetch(apiUrl("/geospatial/villages_by_coordinates"), {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ City: city }),
         });
+        const json = await res.json();
         if (!json?.villages) throw new Error("No villages returned");
         if (isMounted) setVillages(json.villages);
       } catch (err) {
@@ -961,18 +959,18 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
       planningAdvisory: "",
     }));
     try {
-      const data = await get_data(
-        "/new_rate_simulator/simulator/planning-advisory",
-        {
-          ...refreshToken(),
-          body: JSON.stringify({
-            latitude,
-            longitude,
-            location: formData.location,
-            village: formData.village,
-          }),
-        }
-      );
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/planning-advisory"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          location: formData.location,
+          village: formData.village,
+        }),
+      });
+      const data = await res.json();
 
       if (data?.success && data?.planningAdvisory) {
         if (planningAdvisoryRequestRef.current !== requestId) return;
@@ -985,7 +983,6 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
       }
     } catch (err) {
       console.error("planning authority lookup error:", err);
-      setAlerts("error", "Unable to fetch planning authority.");
     } finally {
       if (planningAdvisoryRequestRef.current === requestId && !osmLoadActiveRef.current) {
         setPlanningAdvisoryLoading(false);
@@ -1009,18 +1006,18 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     }));
 
     try {
-      const data = await get_data(
-        "/new_rate_simulator/simulator/coordinate-location",
-        {
-          ...refreshToken(),
-          body: JSON.stringify({
-            latitude,
-            longitude,
-            location: formData.location,
-            village: formData.village,
-          }),
-        }
-      );
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/coordinate-location"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          location: formData.location,
+          village: formData.village,
+        }),
+      });
+      const data = await res.json();
 
       if (data?.success && data?.fetched_location) {
         if (coordinateLocationRequestRef.current !== requestId) return;
@@ -1033,7 +1030,6 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
       }
     } catch (err) {
       console.error("coordinate location lookup error:", err);
-      setAlerts("error", "Unable to fetch location.");
     }
   };
 
@@ -1225,8 +1221,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     <div className="land-details-panel h-100">
       <style>{`
         .land-details-panel {
-          background: ${theme === "dark" ? "#202226" : "#ffffff"};
-          border: 1px solid ${theme === "dark" ? "#353941" : "#e7ebf1"};
+          background: #ffffff;
+          border: 1px solid #e7ebf1;
           border-radius: 24px;
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
           overflow: hidden;
@@ -1238,11 +1234,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           align-items: flex-start;
           gap: 18px;
           padding: 24px 26px 14px;
-          background: ${theme === "dark" ? "#202226" : "#ffffff"};
+          background: #ffffff;
         }
 
         .land-details-eyebrow {
-          color: ${theme === "dark" ? "#9ca3af" : "#8b95a5"};
+          color: #8b95a5;
           font-size: 12px;
           font-weight: 800;
           letter-spacing: 0.12em;
@@ -1251,7 +1247,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         }
 
         .land-details-title {
-          color: ${theme === "dark" ? "#f8fafc" : "#111827"};
+          color: #111827;
           font-size: 32px;
           line-height: 1;
           font-weight: 800;
@@ -1267,8 +1263,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           align-items: center;
           justify-content: space-between;
           gap: 18px;
-          border: 1px solid ${theme === "dark" ? "#3a404a" : "#e4e9f1"};
-          background: ${theme === "dark" ? "#252932" : "#f9fbff"};
+          border: 1px solid #e4e9f1;
+          background: #f9fbff;
           border-radius: 18px;
           padding: 16px 18px;
           margin-bottom: 18px;
@@ -1276,14 +1272,14 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         }
 
         .coordinate-intel-title {
-          color: ${theme === "dark" ? "#f3f4f6" : "#263140"};
+          color: #263140;
           font-size: 15px;
           font-weight: 800;
           margin-bottom: 4px;
         }
 
         .coordinate-intel-copy {
-          color: ${theme === "dark" ? "#aab2c0" : "#7a8494"};
+          color: #7a8494;
           font-size: 13px;
           font-weight: 600;
           margin: 0;
@@ -1292,7 +1288,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         .coordinate-intel-btn {
           border: 0;
           border-radius: 14px;
-          background: ${theme === "dark" ? "#0f172a" : "#111827"};
+          background: #111827;
           color: #ffffff;
           font-weight: 800;
           padding: 11px 16px;
@@ -1307,15 +1303,15 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
 
         .land-details-grid > .col-md-6,
         .land-details-grid > .col-12:not(.land-actions):not(.land-osm-panel) {
-          border: 1px solid ${theme === "dark" ? "#383e49" : "#e5eaf2"};
-          background: ${theme === "dark" ? "#262a31" : "#fbfcff"};
+          border: 1px solid #e5eaf2;
+          background: #fbfcff;
           border-radius: 18px;
           padding: 16px;
           box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
         }
 
         .land-details-grid .form-label {
-          color: ${theme === "dark" ? "#eef2f7" : "#3f4a5a"} !important;
+          color: #3f4a5a !important;
           font-size: 13px;
           font-weight: 800 !important;
           text-transform: none !important;
@@ -1336,10 +1332,10 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           justify-content: center;
           width: 18px;
           height: 18px;
-          border: 1px solid ${theme === "dark" ? "#596171" : "#cfd7e4"};
+          border: 1px solid #cfd7e4;
           border-radius: 50%;
-          color: ${theme === "dark" ? "#dbe4f0" : "#526071"};
-          background: ${theme === "dark" ? "#1f232a" : "#ffffff"};
+          color: #526071;
+          background: #ffffff;
           font-size: 10px;
           cursor: help;
         }
@@ -1351,10 +1347,10 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           transform: translateX(-50%);
           width: min(360px, calc(100vw - 48px));
           padding: 14px;
-          border: 1px solid ${theme === "dark" ? "#3f4652" : "#dfe5ee"};
+          border: 1px solid #dfe5ee;
           border-radius: 14px;
-          background: ${theme === "dark" ? "#171a20" : "#ffffff"};
-          color: ${theme === "dark" ? "#e8edf5" : "#273242"};
+          background: #ffffff;
+          color: #273242;
           box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
           opacity: 0;
           visibility: hidden;
@@ -1381,7 +1377,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         .road-category-tooltip-copy {
           font-size: 12px;
           font-weight: 600;
-          color: ${theme === "dark" ? "#b8c0cc" : "#657184"};
+          color: #657184;
           margin-bottom: 10px;
         }
 
@@ -1395,21 +1391,21 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         }
 
         .road-category-tooltip-list li {
-          border: 1px solid ${theme === "dark" ? "#39404c" : "#e2e8f0"};
+          border: 1px solid #e2e8f0;
           border-radius: 999px;
           padding: 4px 8px;
           font-size: 11px;
           font-weight: 700;
-          background: ${theme === "dark" ? "#222731" : "#f8fafc"};
+          background: #f8fafc;
         }
 
         .land-details-grid .form-control,
         .land-details-grid .form-select {
           min-height: 41px;
           border-radius: 12px;
-          border: 1px solid ${theme === "dark" ? "#434956" : "#dfe5ee"};
-          background: ${theme === "dark" ? "#1f232a" : "#ffffff"};
-          color: ${theme === "dark" ? "#f8fafc" : "#111827"};
+          border: 1px solid #dfe5ee;
+          background: #ffffff;
+          color: #111827;
           box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
         }
 
@@ -1426,14 +1422,14 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           top: 50%;
           right: 14px;
           transform: translateY(-50%);
-          color: ${theme === "dark" ? "#b8c0cc" : "#647084"};
+          color: #647084;
           font-size: 13px;
           font-weight: 800;
           pointer-events: none;
         }
 
         .land-details-grid .text-muted {
-          color: ${theme === "dark" ? "#9ca3af" : "#8b95a5"} !important;
+          color: #8b95a5 !important;
           font-weight: 600;
         }
 
@@ -1442,7 +1438,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         }
 
         .land-details-grid .form-check-label {
-          color: ${theme === "dark" ? "#d9dee7" : "#3f4a5a"} !important;
+          color: #3f4a5a !important;
           font-weight: 600;
         }
 

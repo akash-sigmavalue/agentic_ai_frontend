@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { get_data } from "@/components/AppUtils";
+import { apiUrl } from "@/lib/api-client";
 import { FaArrowDown, FaArrowUp, FaChartLine, FaInfoCircle, FaCalculator, FaExclamationCircle } from 'react-icons/fa';
 
 const InvestorIRROutput = ({ totalYears, investorData }) => {
@@ -74,14 +74,15 @@ const InvestorIRROutput = ({ totalYears, investorData }) => {
       // console.log('Sending cash flows to backend:', requestBody);
       // console.log('Cash flows array:', cashFlows);
 
-      const result = await get_data('/new_rate_simulator/simulator/calculate-irr', {
+      const res = await fetch(apiUrl('/new_rate_simulator/simulator/calculate-irr'), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json', // Request JSON response
         },
         body: JSON.stringify(requestBody),
       });
+      const result = await res.json();
 
       // console.log('Backend response:', result);
       setIrrResult(result);
@@ -163,7 +164,7 @@ const InvestorIRROutput = ({ totalYears, investorData }) => {
                         ₹{investorData.investmentAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     ) : (
-                      <span className="text-muted small">—</span>
+                      <span className="text-muted small">ΓÇö</span>
                     )}
                   </td>
                 ))}
@@ -179,7 +180,7 @@ const InvestorIRROutput = ({ totalYears, investorData }) => {
                         ₹{exitValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     ) : (
-                      <span className="text-muted small">—</span>
+                      <span className="text-muted small">ΓÇö</span>
                     )}
                   </td>
                 ))}
@@ -194,7 +195,7 @@ const InvestorIRROutput = ({ totalYears, investorData }) => {
                         {cashFlows[i] > 0 ? '+' : ''}₹{cashFlows[i].toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </div>
                     ) : (
-                      <span className="text-muted small opacity-50">—</span>
+                      <span className="text-muted small opacity-50">ΓÇö</span>
                     )}
                   </td>
                 ))}

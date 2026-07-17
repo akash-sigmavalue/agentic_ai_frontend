@@ -418,11 +418,11 @@
 
 
 // const forceRequestedFieldTypes = (sections) => {
-//   const acquisitionCostLabels = ['Acquisition Cost', 'Acquisition Cost (₹)', 'Acquisition Cost ₹', 'Acquisition Cost (Rs)', 'Acquisition Cost (INR)'];
-//   const currentMarketLabels = ['Current Market Value', 'Current Market Value (₹)', 'Current Market Value ₹', 'Current Market Value (Rs)', 'Current Market Value (INR)'];
-//   const marketRateLabels = ['Market Rate', 'Market Rate (₹/sq ft on carpet area)', 'Market Rate (₹/sq ft)', 'Market Rate ₹/sq ft on carpet area', 'Market Rate (Rs/sq ft on carpet area)'];
+//   const acquisitionCostLabels = ['Acquisition Cost', 'Acquisition Cost (₹)', 'Acquisition Cost ₹', 'Acquisition Cost (₹)', 'Acquisition Cost (INR)'];
+//   const currentMarketLabels = ['Current Market Value', 'Current Market Value (₹)', 'Current Market Value ₹', 'Current Market Value (₹)', 'Current Market Value (INR)'];
+//   const marketRateLabels = ['Market Rate', 'Market Rate (₹/sq ft on carpet area)', 'Market Rate (₹/sq ft)', 'Market Rate ₹/sq ft on carpet area', 'Market Rate (₹/sq ft on carpet area)'];
 //   const targetExitLabels = ['Target Exit Value', 'Target Exit Value (₹)', 'Target Exit value', 'Target Exit value (₹)'];
-//   const otherIncomeLabels = ['Other Income', 'Other Income (₹/yr)', 'Other Income ₹/yr', 'Other Income (Rs/yr)', 'Other Income (INR/yr)'];
+//   const otherIncomeLabels = ['Other Income', 'Other Income (₹/yr)', 'Other Income ₹/yr', 'Other Income (₹/yr)', 'Other Income (INR/yr)'];
 //   return sections.map((section) => ({
 //     ...section,
 //     fields: section.fields.map((field) => {
@@ -658,7 +658,7 @@
 
 //   if (sectionName === '7. Revenue & Income') {
 //     out['Occupancy Income (₹/yr)'] = fmt(occupancyIncome, 0);
-  
+
 //     out['Total Income (₹/yr)'] = fmt(rentalIncome + otherIncome, 0);
 //     out['Total Income'] = fmt(rentalIncome + otherIncome, 0);
 // }
@@ -2325,7 +2325,7 @@
 // @ts-nocheck
 'use client';
 
-import React, {useMemo, useState, useEffect, useCallback} from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Trash2,
@@ -2695,9 +2695,9 @@ const derivedAuditTitle = (audit) => {
     `Status: ${audit.status}`,
     audit.status === 'verified' ? 'Uploaded value matches the system calculation.'
       : audit.status === 'mismatch' ? 'Uploaded value differs from the system calculation.'
-      : audit.status === 'unverified' ? 'Uploaded value could not be verified.'
-      : audit.status === 'computed' ? 'System calculated this derived value.'
-      : 'Derived value audit status received from backend.',
+        : audit.status === 'unverified' ? 'Uploaded value could not be verified.'
+          : audit.status === 'computed' ? 'System calculated this derived value.'
+            : 'Derived value audit status received from backend.',
     auditValueLine(audit, 'Uploaded value', 'uploaded_value', 'uploaded'),
     auditValueLine(audit, 'Computed value', 'computed_value', 'computed'),
     auditValueLine(audit, 'Display value', 'display_value', 'display'),
@@ -2746,11 +2746,11 @@ const forceLoanTenureField = (sections) => {
 
 
 const forceRequestedFieldTypes = (sections) => {
-  const acquisitionCostLabels = ['Acquisition Cost', 'Acquisition Cost (₹)', 'Acquisition Cost ₹', 'Acquisition Cost (Rs)', 'Acquisition Cost (INR)'];
-  const currentMarketLabels = ['Current Market Value', 'Current Market Value (₹)', 'Current Market Value ₹', 'Current Market Value (Rs)', 'Current Market Value (INR)'];
-  const marketRateLabels = ['Market Rate', 'Market Rate (₹/sq ft on carpet area)', 'Market Rate (₹/sq ft)', 'Market Rate ₹/sq ft on carpet area', 'Market Rate (Rs/sq ft on carpet area)'];
+  const acquisitionCostLabels = ['Acquisition Cost', 'Acquisition Cost (₹)', 'Acquisition Cost ₹', 'Acquisition Cost (₹)', 'Acquisition Cost (INR)'];
+  const currentMarketLabels = ['Current Market Value', 'Current Market Value (₹)', 'Current Market Value ₹', 'Current Market Value (₹)', 'Current Market Value (INR)'];
+  const marketRateLabels = ['Market Rate', 'Market Rate (₹/sq ft on carpet area)', 'Market Rate (₹/sq ft)', 'Market Rate ₹/sq ft on carpet area', 'Market Rate (₹/sq ft on carpet area)'];
   const targetExitLabels = ['Target Exit Value', 'Target Exit Value (₹)', 'Target Exit value', 'Target Exit value (₹)'];
-  const otherIncomeLabels = ['Other Income', 'Other Income (₹/yr)', 'Other Income ₹/yr', 'Other Income (Rs/yr)', 'Other Income (INR/yr)'];
+  const otherIncomeLabels = ['Other Income', 'Other Income (₹/yr)', 'Other Income ₹/yr', 'Other Income (₹/yr)', 'Other Income (INR/yr)'];
   return sections.map((section) => ({
     ...section,
     fields: section.fields.map((field) => {
@@ -2986,10 +2986,10 @@ const computeDerivedForRecord = (sectionName, record, sections) => {
 
   if (sectionName === '7. Revenue & Income') {
     out['Occupancy Income (₹/yr)'] = fmt(occupancyIncome, 0);
-  
+
     out['Total Income (₹/yr)'] = fmt(rentalIncome + otherIncome, 0);
     out['Total Income'] = fmt(rentalIncome + otherIncome, 0);
-}
+  }
 
   if (sectionName === '8. Expenses') {
     out['Opex (₹/yr)'] = fmt(opex, 0);
@@ -3608,10 +3608,10 @@ export default function PortfolioManagementApp() {
           records: section.records.map((record, index) => (
             index === selectedRecordIndex
               ? {
-                  ...record,
-                  [fieldName]: file.name,
-                  [`${fieldName}__file`]: uploadedDocument
-                }
+                ...record,
+                [fieldName]: file.name,
+                [`${fieldName}__file`]: uploadedDocument
+              }
               : record
           ))
         };
@@ -3960,9 +3960,8 @@ export default function PortfolioManagementApp() {
   const redSoftButton = `${softButton} bg-red-50 text-red-600 hover:bg-red-100`;
   const fieldInputClass = 'grid gap-[7px]';
   const textInputClass = 'w-full rounded-[14px] border border-slate-300 px-[13px] py-[11px] outline-none focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)] disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500';
-  const pillClass = (type) => `inline-flex w-fit items-center justify-center gap-1 rounded-full border px-[9px] py-1 text-[11px] font-extrabold not-italic ${
-    type === 'raw' ? 'border-blue-200 bg-blue-50 text-blue-700' : type === 'derived' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-green-200 bg-green-50 text-emerald-700'
-  }`;
+  const pillClass = (type) => `inline-flex w-fit items-center justify-center gap-1 rounded-full border px-[9px] py-1 text-[11px] font-extrabold not-italic ${type === 'raw' ? 'border-blue-200 bg-blue-50 text-blue-700' : type === 'derived' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-green-200 bg-green-50 text-emerald-700'
+    }`;
   const recordsTable = 'w-full min-w-[950px] border-collapse text-left text-sm';
   const recordsTh = 'whitespace-nowrap bg-slate-50 px-4 py-[15px] font-extrabold text-slate-500';
   const recordsTd = 'whitespace-nowrap border-t border-[#eef2f7] px-4 py-[15px]';
@@ -3972,9 +3971,8 @@ export default function PortfolioManagementApp() {
   const mappingTable = 'w-full border-collapse text-[13px]';
   const mappingTh = 'sticky top-0 z-[1] border-b border-gray-200 bg-slate-50 p-[11px] text-left text-slate-700';
   const mappingTd = 'border-b border-[#eef0f3] px-[11px] py-2.5 align-middle';
-  const auditButtonClass = (status) => `inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-[5px] text-[11px] font-bold ${
-    status === 'computed' ? 'border-blue-100 bg-blue-50 text-blue-700' : status === 'verified' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : status === 'mismatch' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'
-  }`;
+  const auditButtonClass = (status) => `inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-[5px] text-[11px] font-bold ${status === 'computed' ? 'border-blue-100 bg-blue-50 text-blue-700' : status === 'verified' ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : status === 'mismatch' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-600'
+    }`;
 
   if (!sections.length) {
     return (
@@ -4004,643 +4002,643 @@ export default function PortfolioManagementApp() {
           tokenUsageSummary={latestUploadTokenUsage}
         />
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-        <span><b>Backend:</b> {apiStatus}</span>
-        {backendSummary && (
-          <span>{backendSummary.assetCount || 0} assets | Market value {fmt(backendSummary.totalMarketValue || 0, 0)} | Income {fmt(backendSummary.totalIncome || 0, 0)}</span>
-        )}
-      </div>
-
-      {dashboardSaveMessage && <div className="mx-6 mb-4 mt-[-8px] inline-flex items-center gap-2 rounded-[14px] border border-green-200 bg-emerald-50 px-3.5 py-2.5 font-bold text-emerald-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"><RefreshCw size={15} /> {dashboardSaveMessage}</div>}
-
-      <main className="grid grid-cols-[340px_minmax(0,1fr)] gap-4 max-[1100px]:grid-cols-1">
-        <aside className={`${cardClass} sticky top-3.5 max-h-[calc(100vh-28px)] self-start overflow-auto p-3 max-[1100px]:static max-[1100px]:max-h-none`}>
-          <div className="flex items-center justify-between px-2.5 pb-3 pt-2 text-slate-700"><b>Sections</b><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">{sections.length}</span></div>
-          {sections.map((section) => {
-            const active = section.id === selectedSectionId;
-            return (
-              <div className={`mb-2 flex items-center gap-1.5 rounded-[18px] border p-2 ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white'}`} key={section.id}>
-                <button className="flex-1 bg-transparent text-left text-inherit" onClick={() => { setSelectedSectionId(section.id); setSelectedRecordIndex(0); }}>
-                  <b className="block text-sm leading-tight">{section.name}</b>
-                  <small className="mt-[3px] block text-slate-400">{section.masterName}</small>
-                </button>
-              </div>
-            );
-          })}
-        </aside>
-
-        <section className="flex flex-col gap-4">
-          <div className={`${cardClass} grid grid-cols-[1fr_auto] items-start gap-4 p-5 max-[1100px]:grid-cols-1`}>
-            <div>
-              <h2 className="text-[28px] tracking-[-0.03em]">{selectedSection?.name}</h2>
-              <p className="mt-1.5 text-slate-500">{selectedSection?.masterName}</p>
-            </div>
-            <div className="grid grid-cols-[repeat(3,108px)] gap-2.5 max-[1100px]:grid-cols-3 max-[640px]:grid-cols-1">
-              {Object.entries(fieldTypeMeta).map(([type, meta]) => {
-                const Icon = meta.icon;
-                return <div className="grid gap-1 rounded-[18px] border border-slate-200 bg-slate-50 p-3" key={type}><Icon size={16} /><b className="text-[26px]">{typeCount(type)}</b><span className="text-xs text-slate-500">{meta.label}</span></div>;
-              })}
-            </div>
-            <div className="col-span-full flex flex-wrap gap-2.5 max-[640px]:flex-col">
-              <button className={blueButton} onClick={addRecord}><Plus size={16} /> Add Record</button>
-              <button className={redSoftButton} onClick={deleteSelectedRecord}><Trash2 size={16} /> Delete Selected</button>
-              <button className={softButton} onClick={restoreFields}><RotateCcw size={16} /> Restore Fields</button>
-              <button className={softButton} onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Template</button>
-              <button className={blueButton} onClick={() => openUploadModal('section')}><Upload size={16} /> Upload Data</button>
-            </div>
-          </div>
-
-          {selectedSection?.name === '1. Dashboard' && <DashboardSection dashboardRows={dashboardRows} />}
-
-          <div className={`${cardClass} p-5`}>
-            <div className="mb-[18px] flex items-start justify-between gap-3.5 max-[1100px]:flex-col">
-              <div>
-                <h3 className="text-2xl tracking-[-0.03em]">{selectedSection?.masterName} Records</h3>
-                <p className="mt-1.5 text-slate-500">Click any row below. The editable fields will open in the panel below.</p>
-              </div>
-              <div className="flex min-w-[290px] items-center gap-2.5 rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5 max-[1100px]:w-full max-[1100px]:min-w-0"><Search size={16} /><input className="w-full border-0 bg-transparent outline-0" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search field..." /></div>
-            </div>
-            <div className="overflow-x-auto rounded-[18px] border border-slate-100">
-              <table className={recordsTable}>
-                <thead>
-                  <tr>{selectedSection.fields.slice(0, 10).map((field) => <th className={recordsTh} key={field.id}>{field.name}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {selectedSection.records.map((record, index) => {
-                    const displayRecord = applyDerivedAuditDisplayValues(
-                      computeDerivedForRecord(selectedSection.name, record, sections),
-                      selectedSection.fields
-                    );
-                    return (
-                    <tr key={index} onClick={() => setSelectedRecordIndex(index)} className={`cursor-pointer hover:bg-slate-50 ${index === selectedRecordIndex ? 'bg-blue-50' : ''}`}>
-                      {selectedSection.fields.slice(0, 10).map((field) => <td className={recordsTd} key={field.id}>{displayRecord[field.name] ?? ''}</td>)}
-                    </tr>
-                  );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className={`${cardClass} p-5`}>
-            <div className="mb-[18px] flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-2xl tracking-[-0.03em]">Edit Fields</h3>
-                <p className="mt-1.5 text-slate-500">Selected Record: <b>{selectedRecord?.[selectedSection.fields[0]?.name] || `Record ${selectedRecordIndex + 1}`}</b>. System fields are locked. Derived fields are auto-computed/validated.</p>
-              </div>
-              <button className={softButton} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={16} /> Go Top</button>
-            </div>
-
-            <div className="grid grid-cols-[repeat(4,minmax(180px,1fr))] gap-x-5 gap-y-4 max-[1100px]:grid-cols-1">
-              {filteredFields.map((field) => {
-                const meta = fieldTypeMeta[field.type];
-                const Icon = meta.icon;
-                const locked = field.type === 'system' || field.type === 'derived';
-                const isCurrentMarketValue = selectedSection?.name === '6. Financial Value' && field.name === 'Current Market Value (₹)';
-                const isValuationDate = selectedSection?.name === '6. Financial Value' && field.name === 'Valuation Date';
-                const isExpectedSaleDate = selectedSection?.name?.endsWith('Exit / Strategy') && ['Expected Sale Date', 'Expected sale date', 'Expected Sale Date (Target)', 'Expected Sale Date (Target)'].includes(field.name);
-                const isAcquisitionDate = selectedSection?.name?.endsWith('Exit / Strategy') && field.name === 'Acquisition Date';
-                const isLeaseDate = selectedSection?.name?.endsWith('Occupancy / Leasing') && ['Lease Start Date', 'Lease End Date', 'Lease Start', 'Lease End'].includes(field.name);
-                const isAppreciationDepreciation = selectedSection?.name === '6. Financial Value' && field.name === 'Appreciation/Depreciation (%)';
-                const derivedAudit = derivedAuditForField(selectedRecord, field);
-                return (
-                  <label key={field.id} className={fieldInputClass}>
-                    <div className="flex items-center justify-between gap-2 text-[13px] font-bold text-slate-500">
-                      <span>{field.name}</span>
-                      <div className="flex items-center gap-2">
-                        {isDocumentSection && field.name !== 'Asset ID' && (
-                          <label className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" title="Upload document">
-                            <Plus size={12} /> Upload
-                            <input className="hidden"
-                              type="file"
-                              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                              onChange={(e) => handleDocumentFieldUpload(field.name, e.target.files?.[0])}
-                            />
-                          </label>
-                        )}
-                        {selectedRecord?.[`${field.name}__file`] && (
-                          <button
-                            type="button"
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-green-200 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
-                            title={`Download ${selectedRecord[`${field.name}__file`]?.name || 'document'}`}
-                            onClick={() => downloadDocumentFieldFile(field.name)}
-                          >
-                            <FileCheck2 size={13} /> Uploaded <Download size={12} />
-                          </button>
-                        )}
-                        {field.type === 'derived' && (
-                          <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700" onClick={() => setRevenueInfoOpen(field.name)} title="Meaning and computation">
-                            <Info size={12} /> i
-                          </button>
-                        )}
-                        {derivedAudit && (
-                          <button type="button" className={auditButtonClass(derivedAudit.status)} title={derivedAuditTitle(derivedAudit)}>
-                            <Info size={12} /> {derivedAudit.status}
-                          </button>
-                        )}
-                        {isCurrentMarketValue && (
-                          <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" onClick={() => setValuationAgentOpen(true)}>
-                            <Sparkles size={12} /> Valuation Agent
-                          </button>
-                        )}
-                        <em className={pillClass(field.type)}><Icon size={12} /> {meta.label}</em>
-                      </div>
-                    </div>
-                    <input
-                      className={textInputClass}
-                      type={(isValuationDate || isExpectedSaleDate || isAcquisitionDate || isLeaseDate) ? 'date' : 'text'}
-                      value={selectedRecord[field.name] ?? ''}
-                      onChange={(e) => updateRecordValue(field.name, e.target.value)}
-                      disabled={locked || (Boolean(derivedFieldInfo[field.name]) && !isEditableDerivedInfoField(field.name))}
-                      placeholder={field.type === 'system' ? 'Auto-generated' : field.type === 'derived' ? 'Auto-computed' : 'Enter value'}
-                    />
-                    {isDocumentSection && selectedRecord?.[`${field.name}__file`] && (
-                      <button type="button" className="mt-[7px] inline-flex cursor-pointer items-center gap-[5px] border-0 bg-transparent p-0 text-xs font-bold text-emerald-700 hover:underline" onClick={() => downloadDocumentFieldFile(field.name)}>
-                        <Paperclip size={12} /> {selectedRecord[`${field.name}__file`]?.name} <Download size={12} />
-                      </button>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="mt-[18px] flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3.5">
-              <div>
-                <b className="mb-1 block text-green-950">Save section changes</b>
-                <span className="text-[13px] text-green-800">Save all edited fields in this section and refresh linked Dashboard values.</span>
-              </div>
-              <button className={greenButton} onClick={saveCurrentSectionFields}><Save size={16} /> Save Section</button>
-            </div>
-          </div>
-        </section>
-
-
-      {agentListOpen && (
-        <div className={modalBackdrop} onClick={() => setAgentListOpen(false)}>
-          <div className={`${modalPanel} w-[min(620px,94vw)]`} onClick={(e) => e.stopPropagation()}>
-            <div className={modalHeader}>
-              <div>
-                <h3 className="mb-2 mt-0">Choose Agent</h3>
-                <p className="m-0 text-slate-600">Select an agent to open SAR UI panel.</p>
-              </div>
-              <button className={softButton} onClick={() => setAgentListOpen(false)}><X size={14} /> Close</button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3">
-              {[
-                'Valuation Agent',
-                'Feasibility Agent',
-                'Land/GIS Agent',
-                'Transaction Data Agent',
-                'Market Research Agent'
-              ].map((agentName) => (
-                <button
-                  key={agentName}
-                  className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left font-extrabold text-slate-900 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-50 hover:text-violet-700"
-                  onClick={() => {
-                    setSelectedAgentName(agentName);
-                    setValuationAgentPrompt(agentRegistry[agentName]?.prompt || `Run ${agentName} analysis for the selected asset/section.`);
-                    setAgentPropertySearch('');
-                    setSelectedAgentProperty(null);
-                    setAgentListOpen(false);
-                    setValuationAgentOpen(true);
-                  }}
-                >
-                  <Bot size={18} />
-                  <span>{agentName}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          <span><b>Backend:</b> {apiStatus}</span>
+          {backendSummary && (
+            <span>{backendSummary.assetCount || 0} assets | Market value {fmt(backendSummary.totalMarketValue || 0, 0)} | Income {fmt(backendSummary.totalIncome || 0, 0)}</span>
+          )}
         </div>
-      )}
 
-      {valuationAgentOpen && (
-        <div className={modalBackdrop} onClick={() => setValuationAgentOpen(false)}>
-          <div className={modalPanel} onClick={(e) => e.stopPropagation()}>
-            <div className={modalHeader}>
-              <div>
-                <h3 className="mb-2 mt-0">Relevant Agent: {selectedAgentName}</h3>
-                <p className="m-0 text-slate-600"><b>Purpose:</b> {selectedAgentConfig.purpose}</p>
-              </div>
-              <button className={softButton} onClick={() => setValuationAgentOpen(false)}><X size={14} /> Close</button>
-            </div>
+        {dashboardSaveMessage && <div className="mx-6 mb-4 mt-[-8px] inline-flex items-center gap-2 rounded-[14px] border border-green-200 bg-emerald-50 px-3.5 py-2.5 font-bold text-emerald-700 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"><RefreshCw size={15} /> {dashboardSaveMessage}</div>}
 
-
-            <div className="mb-4 rounded-[18px] border border-gray-200 bg-slate-50 p-3.5">
-              <label className="mb-2 block font-extrabold text-slate-700">Search Property</label>
-              <div className="flex items-center gap-2.5 rounded-[18px] border border-slate-200 bg-white px-3 py-2.5">
-                <Search size={16} />
-                <input
-                  className="w-full border-0 bg-transparent outline-0 focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
-                  value={agentPropertySearch}
-                  onChange={(e) => {
-                    setAgentPropertySearch(e.target.value);
-                    setSelectedAgentProperty(null);
-                  }}
-                  placeholder="Search by Asset ID, property name, micromarket or city..."
-                />
-              </div>
-
-              {agentPropertySearch && (
-                <div className="mt-2.5 grid max-h-60 gap-2 overflow-auto">
-                  {filteredAgentProperties.length ? filteredAgentProperties.map((property) => (
-                    <button
-                      key={property.assetId}
-                      className={`grid cursor-pointer grid-cols-[90px_1fr] gap-x-2.5 gap-y-1 rounded-[14px] border bg-white px-3 py-[11px] text-left [&_b]:text-blue-700 [&_small]:col-start-2 [&_small]:text-slate-500 [&_span]:font-bold [&_span]:text-slate-900 hover:border-violet-600 hover:bg-violet-50 ${selectedAgentProperty?.assetId === property.assetId ? 'border-violet-600 bg-violet-50' : 'border-gray-200'}`}
-                      onClick={() => {
-                        setSelectedAgentProperty(property);
-                        setAgentPropertySearch(`${property.assetId} - ${property.propertyName}`);
-                      }}
-                    >
-                      <b>{property.assetId}</b>
-                      <span>{property.propertyName || 'Unnamed Property'}</span>
-                      <small>{property.micromarket} {property.city ? `• ${property.city}` : ''}</small>
-                    </button>
-                  )) : (
-                    <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-3 text-slate-500">No matching property found.</div>
-                  )}
+        <main className="grid grid-cols-[340px_minmax(0,1fr)] gap-4 max-[1100px]:grid-cols-1">
+          <aside className={`${cardClass} sticky top-3.5 max-h-[calc(100vh-28px)] self-start overflow-auto p-3 max-[1100px]:static max-[1100px]:max-h-none`}>
+            <div className="flex items-center justify-between px-2.5 pb-3 pt-2 text-slate-700"><b>Sections</b><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">{sections.length}</span></div>
+            {sections.map((section) => {
+              const active = section.id === selectedSectionId;
+              return (
+                <div className={`mb-2 flex items-center gap-1.5 rounded-[18px] border p-2 ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white'}`} key={section.id}>
+                  <button className="flex-1 bg-transparent text-left text-inherit" onClick={() => { setSelectedSectionId(section.id); setSelectedRecordIndex(0); }}>
+                    <b className="block text-sm leading-tight">{section.name}</b>
+                    <small className="mt-[3px] block text-slate-400">{section.masterName}</small>
+                  </button>
                 </div>
-              )}
+              );
+            })}
+          </aside>
 
-              {selectedAgentProperty && (
-                <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700 [&_span]:text-emerald-800">
-                  <b>Selected Property:</b> {selectedAgentProperty.assetId} — {selectedAgentProperty.propertyName}
-                  <span>{selectedAgentProperty.micromarket} {selectedAgentProperty.city ? `• ${selectedAgentProperty.city}` : ''}</span>
+          <section className="flex flex-col gap-4">
+            <div className={`${cardClass} grid grid-cols-[1fr_auto] items-start gap-4 p-5 max-[1100px]:grid-cols-1`}>
+              <div>
+                <h2 className="text-[28px] tracking-[-0.03em]">{selectedSection?.name}</h2>
+                <p className="mt-1.5 text-slate-500">{selectedSection?.masterName}</p>
+              </div>
+              <div className="grid grid-cols-[repeat(3,108px)] gap-2.5 max-[1100px]:grid-cols-3 max-[640px]:grid-cols-1">
+                {Object.entries(fieldTypeMeta).map(([type, meta]) => {
+                  const Icon = meta.icon;
+                  return <div className="grid gap-1 rounded-[18px] border border-slate-200 bg-slate-50 p-3" key={type}><Icon size={16} /><b className="text-[26px]">{typeCount(type)}</b><span className="text-xs text-slate-500">{meta.label}</span></div>;
+                })}
+              </div>
+              <div className="col-span-full flex flex-wrap gap-2.5 max-[640px]:flex-col">
+                <button className={blueButton} onClick={addRecord}><Plus size={16} /> Add Record</button>
+                <button className={redSoftButton} onClick={deleteSelectedRecord}><Trash2 size={16} /> Delete Selected</button>
+                <button className={softButton} onClick={restoreFields}><RotateCcw size={16} /> Restore Fields</button>
+                <button className={softButton} onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Template</button>
+                <button className={blueButton} onClick={() => openUploadModal('section')}><Upload size={16} /> Upload Data</button>
+              </div>
+            </div>
+
+            {selectedSection?.name === '1. Dashboard' && <DashboardSection dashboardRows={dashboardRows} />}
+
+            <div className={`${cardClass} p-5`}>
+              <div className="mb-[18px] flex items-start justify-between gap-3.5 max-[1100px]:flex-col">
+                <div>
+                  <h3 className="text-2xl tracking-[-0.03em]">{selectedSection?.masterName} Records</h3>
+                  <p className="mt-1.5 text-slate-500">Click any row below. The editable fields will open in the panel below.</p>
                 </div>
-              )}
-            </div>
-
-            <div>
-              <label className="mb-2 block font-bold">User Prompt</label>
-              <textarea
-                className="min-h-24 w-full resize-y rounded-[14px] border border-gray-200 p-3 outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
-                value={valuationAgentPrompt}
-                onChange={(e) => setValuationAgentPrompt(e.target.value)}
-                placeholder="Ask valuation question here..."
-              />
-            </div>
-
-            <div className="my-[18px] flex flex-wrap gap-2.5">
-              {['Compare Values', 'Check Market Trend', 'Validate LTV', 'Find Red Flags', 'Suggest Action', 'Create Report', 'Add to Workflow'].map((action) => (
-                <button className="cursor-pointer rounded-full border border-blue-100 bg-blue-50 px-3 py-[9px] font-semibold text-blue-700" key={action}>{action}</button>
-              ))}
-            </div>
-
-            {selectedAgentProperty && (
-              <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700">
-                Agent will run analysis for selected property: <b>{selectedAgentProperty.assetId}</b> — {selectedAgentProperty.propertyName}
+                <div className="flex min-w-[290px] items-center gap-2.5 rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2.5 max-[1100px]:w-full max-[1100px]:min-w-0"><Search size={16} /><input className="w-full border-0 bg-transparent outline-0" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search field..." /></div>
               </div>
-            )}
-
-            <div className="rounded-[18px] border border-gray-200 bg-slate-50 p-4">
-              <h4 className="mb-2.5 mt-0">Agent Output</h4>
-              <ul className="m-0 pl-5">
-                <li className="mb-2"><b>Summary:</b> {selectedAgentConfig.output.summary}</li>
-                <li className="mb-2"><b>Calculations:</b> {selectedAgentConfig.output.calculations}</li>
-                <li className="mb-2"><b>Red flags:</b> {selectedAgentConfig.output.redFlags}</li>
-                <li className="mb-2"><b>Recommendations:</b> {selectedAgentConfig.output.recommendations}</li>
-                <li className="mb-2"><b>Report-ready note:</b> {selectedAgentConfig.output.reportNote}</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {revenueInfoOpen && (
-        <div className={modalBackdrop} onClick={() => setRevenueInfoOpen(null)}>
-          <div className={`${modalPanel} w-[min(980px,94vw)]`} onClick={(e) => e.stopPropagation()}>
-            <div className={modalHeader}>
-              <div>
-                <h3 className="mb-2 mt-0">Derived Field Info</h3>
-                <p className="m-0 text-slate-600"><b>Field:</b> {revenueInfoOpen}</p>
+              <div className="overflow-x-auto rounded-[18px] border border-slate-100">
+                <table className={recordsTable}>
+                  <thead>
+                    <tr>{selectedSection.fields.slice(0, 10).map((field) => <th className={recordsTh} key={field.id}>{field.name}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {selectedSection.records.map((record, index) => {
+                      const displayRecord = applyDerivedAuditDisplayValues(
+                        computeDerivedForRecord(selectedSection.name, record, sections),
+                        selectedSection.fields
+                      );
+                      return (
+                        <tr key={index} onClick={() => setSelectedRecordIndex(index)} className={`cursor-pointer hover:bg-slate-50 ${index === selectedRecordIndex ? 'bg-blue-50' : ''}`}>
+                          {selectedSection.fields.slice(0, 10).map((field) => <td className={recordsTd} key={field.id}>{displayRecord[field.name] ?? ''}</td>)}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <button className={softButton} onClick={() => setRevenueInfoOpen(null)}><X size={14} /> Close</button>
             </div>
 
-            <table className="mt-2 w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Meaning</th>
-                  <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">How it is conceptually computed</th>
-                  <th className="min-w-[260px] border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Formula used in computation</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.meaning || 'Derived field used for portfolio analysis.'}</td>
-                  <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.concept || 'Conceptually computed from related raw fields and business rules.'}</td>
-                  <td className="min-w-[260px] border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.formula || (derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.computed || 'Formula defined in system logic.'}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div className="mt-5 [&_h4]:mb-2.5 [&_h4]:mt-0">
-              <h4>All Derived Fields — Meaning, Concept and Formula</h4>
-              <table className="mt-2 w-full border-collapse text-sm [&_td]:border [&_td]:border-gray-200 [&_td]:p-3 [&_td]:align-top [&_td]:text-slate-600 [&_th]:border [&_th]:border-gray-200 [&_th]:bg-slate-50 [&_th]:p-3 [&_th]:text-left [&_th]:text-slate-700 [&_td:nth-child(3)]:min-w-[260px] [&_th:nth-child(3)]:min-w-[260px]">
-                <thead>
-                  <tr>
-                    <th>Field</th>
-                    <th>Meaning</th>
-                    <th>How it is conceptually computed</th>
-                    <th>Formula used in computation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(derivedFieldInfo).map(([field, info]) => (
-                    <tr key={field}>
-                      <td><b>{field}</b></td>
-                      <td>{info.meaning}</td>
-                      <td>{info.concept}</td>
-                      <td>{info.formula}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {excelUploadOpen && (
-        <div className={modalBackdrop} onClick={() => setExcelUploadOpen(false)}>
-          <div className={`${modalPanel} w-[min(1100px,96vw)]`} onClick={(e) => e.stopPropagation()}>
-            <div className={modalHeader}>
-              <div>
-                <h3 className="mb-2 mt-0">{uploadMode === 'global' ? 'Upload File: Map to All Sections' : `Upload Data: ${selectedSection?.name}`}</h3>
-                <p className="m-0 text-slate-600">
-                  {uploadMode === 'global'
-                    ? 'Upload Excel/CSV once. The software will map columns to fields across all sections and autopopulate section-wise data.'
-                    : 'Upload Excel/CSV, map Excel columns to software fields, and autopopulate records in this section.'}
-                </p>
+            <div className={`${cardClass} p-5`}>
+              <div className="mb-[18px] flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl tracking-[-0.03em]">Edit Fields</h3>
+                  <p className="mt-1.5 text-slate-500">Selected Record: <b>{selectedRecord?.[selectedSection.fields[0]?.name] || `Record ${selectedRecordIndex + 1}`}</b>. System fields are locked. Derived fields are auto-computed/validated.</p>
+                </div>
+                <button className={softButton} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={16} /> Go Top</button>
               </div>
-              <button className={softButton} onClick={() => setExcelUploadOpen(false)}><X size={14} /> Close</button>
-            </div>
 
-            <div className="mb-4 rounded-[18px] border border-slate-200 bg-slate-50 p-3.5">
-              <div className="mb-3">
-                <h4 className="mb-1 mt-0 text-sm font-bold text-slate-900">Choose mapping mode</h4>
-                <p className="m-0 text-[13px] text-slate-500">Select how the uploaded file should be interpreted before creating the mapping preview.</p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {[
-                  {
-                    value: 'normal_ai',
-                    title: 'Normal AI Mapping',
-                    description: 'Fastest option for clean Excel/CSV files with simple rows, columns, and proper headers.'
-                  },
-                  {
-                    value: 'full_ai',
-                    title: 'Full AI Analysis Mapping',
-                    description: 'Best for Excel files with charts, graphs, dashboards, merged cells, multiple tables, or complex formatting.'
-                  }
-                ].map((option) => {
-                  const selected = mappingMode === option.value;
+              <div className="grid grid-cols-[repeat(4,minmax(180px,1fr))] gap-x-5 gap-y-4 max-[1100px]:grid-cols-1">
+                {filteredFields.map((field) => {
+                  const meta = fieldTypeMeta[field.type];
+                  const Icon = meta.icon;
+                  const locked = field.type === 'system' || field.type === 'derived';
+                  const isCurrentMarketValue = selectedSection?.name === '6. Financial Value' && field.name === 'Current Market Value (₹)';
+                  const isValuationDate = selectedSection?.name === '6. Financial Value' && field.name === 'Valuation Date';
+                  const isExpectedSaleDate = selectedSection?.name?.endsWith('Exit / Strategy') && ['Expected Sale Date', 'Expected sale date', 'Expected Sale Date (Target)', 'Expected Sale Date (Target)'].includes(field.name);
+                  const isAcquisitionDate = selectedSection?.name?.endsWith('Exit / Strategy') && field.name === 'Acquisition Date';
+                  const isLeaseDate = selectedSection?.name?.endsWith('Occupancy / Leasing') && ['Lease Start Date', 'Lease End Date', 'Lease Start', 'Lease End'].includes(field.name);
+                  const isAppreciationDepreciation = selectedSection?.name === '6. Financial Value' && field.name === 'Appreciation/Depreciation (%)';
+                  const derivedAudit = derivedAuditForField(selectedRecord, field);
                   return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setMappingMode(option.value)}
-                      className={`rounded-2xl border p-3 text-left transition ${selected ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
-                    >
-                      <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-blue-600' : 'bg-slate-300'}`} />
-                        {option.title}
+                    <label key={field.id} className={fieldInputClass}>
+                      <div className="flex items-center justify-between gap-2 text-[13px] font-bold text-slate-500">
+                        <span>{field.name}</span>
+                        <div className="flex items-center gap-2">
+                          {isDocumentSection && field.name !== 'Asset ID' && (
+                            <label className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" title="Upload document">
+                              <Plus size={12} /> Upload
+                              <input className="hidden"
+                                type="file"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                                onChange={(e) => handleDocumentFieldUpload(field.name, e.target.files?.[0])}
+                              />
+                            </label>
+                          )}
+                          {selectedRecord?.[`${field.name}__file`] && (
+                            <button
+                              type="button"
+                              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-green-200 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
+                              title={`Download ${selectedRecord[`${field.name}__file`]?.name || 'document'}`}
+                              onClick={() => downloadDocumentFieldFile(field.name)}
+                            >
+                              <FileCheck2 size={13} /> Uploaded <Download size={12} />
+                            </button>
+                          )}
+                          {field.type === 'derived' && (
+                            <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2 py-[5px] text-[11px] font-bold text-emerald-700" onClick={() => setRevenueInfoOpen(field.name)} title="Meaning and computation">
+                              <Info size={12} /> i
+                            </button>
+                          )}
+                          {derivedAudit && (
+                            <button type="button" className={auditButtonClass(derivedAudit.status)} title={derivedAuditTitle(derivedAudit)}>
+                              <Info size={12} /> {derivedAudit.status}
+                            </button>
+                          )}
+                          {isCurrentMarketValue && (
+                            <button type="button" className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-[5px] text-[11px] font-bold text-blue-700" onClick={() => setValuationAgentOpen(true)}>
+                              <Sparkles size={12} /> Valuation Agent
+                            </button>
+                          )}
+                          <em className={pillClass(field.type)}><Icon size={12} /> {meta.label}</em>
+                        </div>
                       </div>
-                      <p className="mb-0 mt-1 text-xs leading-5 text-slate-500">{option.description}</p>
-                    </button>
+                      <input
+                        className={textInputClass}
+                        type={(isValuationDate || isExpectedSaleDate || isAcquisitionDate || isLeaseDate) ? 'date' : 'text'}
+                        value={selectedRecord[field.name] ?? ''}
+                        onChange={(e) => updateRecordValue(field.name, e.target.value)}
+                        disabled={locked || (Boolean(derivedFieldInfo[field.name]) && !isEditableDerivedInfoField(field.name))}
+                        placeholder={field.type === 'system' ? 'Auto-generated' : field.type === 'derived' ? 'Auto-computed' : 'Enter value'}
+                      />
+                      {isDocumentSection && selectedRecord?.[`${field.name}__file`] && (
+                        <button type="button" className="mt-[7px] inline-flex cursor-pointer items-center gap-[5px] border-0 bg-transparent p-0 text-xs font-bold text-emerald-700 hover:underline" onClick={() => downloadDocumentFieldFile(field.name)}>
+                          <Paperclip size={12} /> {selectedRecord[`${field.name}__file`]?.name} <Download size={12} />
+                        </button>
+                      )}
+                    </label>
                   );
                 })}
               </div>
+
+              <div className="mt-[18px] flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 p-3.5">
+                <div>
+                  <b className="mb-1 block text-green-950">Save section changes</b>
+                  <span className="text-[13px] text-green-800">Save all edited fields in this section and refresh linked Dashboard values.</span>
+                </div>
+                <button className={greenButton} onClick={saveCurrentSectionFields}><Save size={16} /> Save Section</button>
+              </div>
             </div>
+          </section>
 
-            <div className="mb-4 flex flex-wrap gap-3">
-              {uploadMode === 'section' && <button className={softButton} onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Download Template</button>}
-              <label className={`${blueButton} cursor-pointer`}>
-                <Upload size={16} /> Upload Excel / CSV
-                <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelFile} />
-              </label>
-              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-                {mappingMode === 'full_ai' ? 'Full AI Analysis Mapping selected' : 'Normal AI Mapping selected'}
-              </span>
-            </div>
 
-            {uploadMessage && <div className="my-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700"><CheckCircle2 size={16} /> {uploadMessage}</div>}
-
-            {backendUploadPreview && (
-              <div className="my-3 rounded-[18px] border border-slate-200 bg-slate-50 p-3.5">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          {agentListOpen && (
+            <div className={modalBackdrop} onClick={() => setAgentListOpen(false)}>
+              <div className={`${modalPanel} w-[min(620px,94vw)]`} onClick={(e) => e.stopPropagation()}>
+                <div className={modalHeader}>
                   <div>
-                    <h4 className="mb-1 mt-0 text-slate-900">Asset Linking</h4>
-                    <p className="m-0 text-[13px] text-slate-500">Choose how uploaded asset aliases should link to canonical asset IDs.</p>
+                    <h3 className="mb-2 mt-0">Choose Agent</h3>
+                    <p className="m-0 text-slate-600">Select an agent to open SAR UI panel.</p>
                   </div>
-                  <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm">
-                    {[
-                      ['multiple', 'Multiple properties'],
-                      ['single', 'One property']
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={`rounded-xl px-3 py-2 text-sm font-bold ${workbookScope === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                        onClick={() => setWorkbookScope(value)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <button className={softButton} onClick={() => setAgentListOpen(false)}><X size={14} /> Close</button>
                 </div>
 
-                {workbookScope === 'single' && (
-                  <div className="grid gap-3 md:grid-cols-[auto_1fr] md:items-center">
-                    <div className="inline-flex w-fit rounded-2xl bg-white p-1 shadow-sm">
-                      {[
-                        ['new', 'Create new asset'],
-                        ['existing', 'Use existing asset']
-                      ].map(([value, label]) => (
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    'Valuation Agent',
+                    'Feasibility Agent',
+                    'Land/GIS Agent',
+                    'Transaction Data Agent',
+                    'Market Research Agent'
+                  ].map((agentName) => (
+                    <button
+                      key={agentName}
+                      className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left font-extrabold text-slate-900 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-50 hover:text-violet-700"
+                      onClick={() => {
+                        setSelectedAgentName(agentName);
+                        setValuationAgentPrompt(agentRegistry[agentName]?.prompt || `Run ${agentName} analysis for the selected asset/section.`);
+                        setAgentPropertySearch('');
+                        setSelectedAgentProperty(null);
+                        setAgentListOpen(false);
+                        setValuationAgentOpen(true);
+                      }}
+                    >
+                      <Bot size={18} />
+                      <span>{agentName}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {valuationAgentOpen && (
+            <div className={modalBackdrop} onClick={() => setValuationAgentOpen(false)}>
+              <div className={modalPanel} onClick={(e) => e.stopPropagation()}>
+                <div className={modalHeader}>
+                  <div>
+                    <h3 className="mb-2 mt-0">Relevant Agent: {selectedAgentName}</h3>
+                    <p className="m-0 text-slate-600"><b>Purpose:</b> {selectedAgentConfig.purpose}</p>
+                  </div>
+                  <button className={softButton} onClick={() => setValuationAgentOpen(false)}><X size={14} /> Close</button>
+                </div>
+
+
+                <div className="mb-4 rounded-[18px] border border-gray-200 bg-slate-50 p-3.5">
+                  <label className="mb-2 block font-extrabold text-slate-700">Search Property</label>
+                  <div className="flex items-center gap-2.5 rounded-[18px] border border-slate-200 bg-white px-3 py-2.5">
+                    <Search size={16} />
+                    <input
+                      className="w-full border-0 bg-transparent outline-0 focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
+                      value={agentPropertySearch}
+                      onChange={(e) => {
+                        setAgentPropertySearch(e.target.value);
+                        setSelectedAgentProperty(null);
+                      }}
+                      placeholder="Search by Asset ID, property name, micromarket or city..."
+                    />
+                  </div>
+
+                  {agentPropertySearch && (
+                    <div className="mt-2.5 grid max-h-60 gap-2 overflow-auto">
+                      {filteredAgentProperties.length ? filteredAgentProperties.map((property) => (
                         <button
-                          key={value}
-                          type="button"
-                          className={`rounded-xl px-3 py-2 text-sm font-bold ${singlePropertyMode === value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                          onClick={() => setSinglePropertyMode(value)}
+                          key={property.assetId}
+                          className={`grid cursor-pointer grid-cols-[90px_1fr] gap-x-2.5 gap-y-1 rounded-[14px] border bg-white px-3 py-[11px] text-left [&_b]:text-blue-700 [&_small]:col-start-2 [&_small]:text-slate-500 [&_span]:font-bold [&_span]:text-slate-900 hover:border-violet-600 hover:bg-violet-50 ${selectedAgentProperty?.assetId === property.assetId ? 'border-violet-600 bg-violet-50' : 'border-gray-200'}`}
+                          onClick={() => {
+                            setSelectedAgentProperty(property);
+                            setAgentPropertySearch(`${property.assetId} - ${property.propertyName}`);
+                          }}
                         >
-                          {label}
+                          <b>{property.assetId}</b>
+                          <span>{property.propertyName || 'Unnamed Property'}</span>
+                          <small>{property.micromarket} {property.city ? `• ${property.city}` : ''}</small>
                         </button>
-                      ))}
+                      )) : (
+                        <div className="rounded-[14px] border border-dashed border-slate-300 bg-white p-3 text-slate-500">No matching property found.</div>
+                      )}
                     </div>
+                  )}
 
-                    {singlePropertyMode === 'existing' && (
-                      <select
-                        className="w-full rounded-[14px] border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
-                        value={selectedExistingAssetCode}
-                        onChange={(e) => setSelectedExistingAssetCode(e.target.value)}
-                      >
-                        <option value="">Select existing canonical asset</option>
-                        {portfolioAssets.map((asset) => {
-                          const code = assetCodeValue(asset);
-                          return <option key={code || assetDisplayName(asset)} value={code}>{assetDisplayName(asset)}</option>;
-                        })}
-                      </select>
-                    )}
+                  {selectedAgentProperty && (
+                    <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700 [&_span]:text-emerald-800">
+                      <b>Selected Property:</b> {selectedAgentProperty.assetId} — {selectedAgentProperty.propertyName}
+                      <span>{selectedAgentProperty.micromarket} {selectedAgentProperty.city ? `• ${selectedAgentProperty.city}` : ''}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-2 block font-bold">User Prompt</label>
+                  <textarea
+                    className="min-h-24 w-full resize-y rounded-[14px] border border-gray-200 p-3 outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+                    value={valuationAgentPrompt}
+                    onChange={(e) => setValuationAgentPrompt(e.target.value)}
+                    placeholder="Ask valuation question here..."
+                  />
+                </div>
+
+                <div className="my-[18px] flex flex-wrap gap-2.5">
+                  {['Compare Values', 'Check Market Trend', 'Validate LTV', 'Find Red Flags', 'Suggest Action', 'Create Report', 'Add to Workflow'].map((action) => (
+                    <button className="cursor-pointer rounded-full border border-blue-100 bg-blue-50 px-3 py-[9px] font-semibold text-blue-700" key={action}>{action}</button>
+                  ))}
+                </div>
+
+                {selectedAgentProperty && (
+                  <div className="mt-2.5 grid gap-[3px] rounded-[14px] border border-green-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-700">
+                    Agent will run analysis for selected property: <b>{selectedAgentProperty.assetId}</b> — {selectedAgentProperty.propertyName}
                   </div>
                 )}
-              </div>
-            )}
 
-            {uploadImportSummary && (
-              <div className="my-3 rounded-[18px] border border-blue-100 bg-blue-50 p-3.5 text-sm text-blue-900">
-                <b>Import Summary</b>
-                <p className="mb-2 mt-1">
-                  Imported {uploadImportSummary.saved_count ?? 0} rows. Created {uploadImportSummary.created_record_count ?? 0} records, updated {uploadImportSummary.updated_record_count ?? 0} records. Shell records: {uploadImportSummary.shell_record_count ?? 0}.
-                </p>
-                {!!Object.keys(uploadAssetResolutionCounts).length && (
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(uploadAssetResolutionCounts).map(([key, value]) => (
-                      <span key={key} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">{key.replace(/_/g, ' ')}: {value}</span>
-                    ))}
+                <div className="rounded-[18px] border border-gray-200 bg-slate-50 p-4">
+                  <h4 className="mb-2.5 mt-0">Agent Output</h4>
+                  <ul className="m-0 pl-5">
+                    <li className="mb-2"><b>Summary:</b> {selectedAgentConfig.output.summary}</li>
+                    <li className="mb-2"><b>Calculations:</b> {selectedAgentConfig.output.calculations}</li>
+                    <li className="mb-2"><b>Red flags:</b> {selectedAgentConfig.output.redFlags}</li>
+                    <li className="mb-2"><b>Recommendations:</b> {selectedAgentConfig.output.recommendations}</li>
+                    <li className="mb-2"><b>Report-ready note:</b> {selectedAgentConfig.output.reportNote}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {revenueInfoOpen && (
+            <div className={modalBackdrop} onClick={() => setRevenueInfoOpen(null)}>
+              <div className={`${modalPanel} w-[min(980px,94vw)]`} onClick={(e) => e.stopPropagation()}>
+                <div className={modalHeader}>
+                  <div>
+                    <h3 className="mb-2 mt-0">Derived Field Info</h3>
+                    <p className="m-0 text-slate-600"><b>Field:</b> {revenueInfoOpen}</p>
                   </div>
-                )}
-              </div>
-            )}
-
-            {!!uploadAssetReviewItems.length && (
-              <div className="my-3 rounded-[18px] border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
-                <b>Some rows may match existing assets and need review.</b>
-                <p className="mb-3 mt-1">Review action API is not available yet; backend created a new asset for these ambiguous rows.</p>
-                <div className="grid gap-2">
-                  {uploadAssetReviewItems.map((item, index) => {
-                    const evidence = item.identity_evidence || {};
-                    return (
-                      <div key={`${item.created_asset_code || 'asset-review'}-${index}`} className="rounded-[14px] border border-amber-200 bg-white p-3">
-                        <div className="font-bold text-slate-900">Created: {item.created_asset_code || 'New asset'}</div>
-                        <div className="mt-1 text-slate-600">Candidates: {(item.candidate_asset_codes || []).join(', ') || 'None provided'}</div>
-                        <div className="mt-1 text-slate-600">
-                          Evidence: {[evidence.property_name, evidence.city, evidence.address, evidence.micromarket].filter(Boolean).join(' | ') || 'None provided'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {uploadMode === 'global' && !!Object.keys(excelWorkbookData).length && (
-              <>
-                <div className="mt-[18px]">
-                  <h4 className="mb-1.5 mt-0">Global Field-Column Mapping</h4>
-                  <p className="m-0 text-[13px] text-slate-500">Each section is mapped automatically. You can revise any mapping before confirming the backend import.</p>
+                  <button className={softButton} onClick={() => setRevenueInfoOpen(null)}><X size={14} /> Close</button>
                 </div>
 
-                <div className="mt-3.5 grid max-h-[58vh] gap-4 overflow-auto pr-1.5">
-                  {sections.filter((section) => section.name !== '1. Dashboard').map((section) => {
-                    const rowsForSection = findRowsForSectionFromWorkbook(excelWorkbookData, section);
-                    const columnsForSection = Object.keys(rowsForSection[0] || {});
-                    const mappingForSection = globalColumnMappings[section.id] || {};
-                    return (
-                      <div className="rounded-[18px] border border-gray-200 bg-white p-3.5" key={section.id}>
-                        <h4 className="mb-1.5 mt-0 text-slate-900">{section.name}</h4>
-                        <p className="mb-2.5 mt-0 text-[13px] text-slate-500">{rowsForSection.length ? `${rowsForSection.length} row(s) detected for this section.` : 'No matching sheet/columns detected for this section.'}</p>
-                        <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
-                          <table className={mappingTable}>
-                            <thead>
-                              <tr>
-                                <th className={mappingTh}>Software Field</th>
-                                <th className={mappingTh}>Field Type</th>
-                                <th className={mappingTh}>Excel Column</th>
-                                <th className={mappingTh}>Sample Value</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {section.fields.map((field) => {
-                                const mappedColumn = mappingForSection[field.name] || '';
-                                const sampleValue = mappedColumn && rowsForSection[0] ? rowsForSection[0][mappedColumn] : '';
-                                return (
-                                  <tr key={field.id}>
-                                    <td className={mappingTd}><b>{field.name}</b></td>
-                                    <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
-                                    <td className={mappingTd}>
-                                      <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateGlobalColumnMapping(section.id, field.name, e.target.value)}>
-                                        <option value="">-- Ignore / Not mapped --</option>
-                                        {columnsForSection.map((column) => (
-                                          <option key={column} value={column}>{column}</option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <table className="mt-2 w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Meaning</th>
+                      <th className="border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">How it is conceptually computed</th>
+                      <th className="min-w-[260px] border border-gray-200 bg-slate-50 p-3 text-left text-slate-700">Formula used in computation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.meaning || 'Derived field used for portfolio analysis.'}</td>
+                      <td className="border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.concept || 'Conceptually computed from related raw fields and business rules.'}</td>
+                      <td className="min-w-[260px] border border-gray-200 p-3 align-top text-slate-600">{(derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.formula || (derivedFieldInfo[revenueInfoOpen] || revenueIncomeFieldInfo[revenueInfoOpen])?.computed || 'Formula defined in system logic.'}</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-                <div className="mt-4 flex flex-wrap justify-end gap-2.5">
-                  <button className={blueButton} onClick={() => applyGlobalExcelMapping(excelWorkbookData, globalColumnMappings)}>
-                    <Columns3 size={16} /> Confirm Mapping & Import
-                  </button>
-                  <button className={softButton} onClick={() => { setExcelWorkbookData({}); setGlobalColumnMappings({}); setExcelRows([]); setExcelColumns([]); }}>Clear Upload</button>
-                </div>
-              </>
-            )}
-
-            {uploadMode === 'section' && !!excelColumns.length && (
-              <>
-                <div className="mt-[18px]">
-                  <h4 className="mb-1.5 mt-0">Field-Column Mapping</h4>
-                  <p className="m-0 text-[13px] text-slate-500">Left side shows software fields. Right side selects matching Excel column.</p>
-                </div>
-
-                <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
-                  <table className={mappingTable}>
+                <div className="mt-5 [&_h4]:mb-2.5 [&_h4]:mt-0">
+                  <h4>All Derived Fields — Meaning, Concept and Formula</h4>
+                  <table className="mt-2 w-full border-collapse text-sm [&_td]:border [&_td]:border-gray-200 [&_td]:p-3 [&_td]:align-top [&_td]:text-slate-600 [&_th]:border [&_th]:border-gray-200 [&_th]:bg-slate-50 [&_th]:p-3 [&_th]:text-left [&_th]:text-slate-700 [&_td:nth-child(3)]:min-w-[260px] [&_th:nth-child(3)]:min-w-[260px]">
                     <thead>
                       <tr>
-                        <th className={mappingTh}>Software Field</th>
-                        <th className={mappingTh}>Field Type</th>
-                        <th className={mappingTh}>Excel Column</th>
-                        <th className={mappingTh}>Sample Value</th>
+                        <th>Field</th>
+                        <th>Meaning</th>
+                        <th>How it is conceptually computed</th>
+                        <th>Formula used in computation</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedSection.fields.map((field) => {
-                        const mappedColumn = columnMapping[field.name] || '';
-                        const sampleValue = mappedColumn && excelRows[0] ? excelRows[0][mappedColumn] : '';
-                        return (
-                          <tr key={field.id}>
-                            <td className={mappingTd}><b>{field.name}</b></td>
-                            <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
-                            <td className={mappingTd}>
-                              <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateColumnMapping(field.name, e.target.value)}>
-                                <option value="">-- Ignore / Not mapped --</option>
-                                {excelColumns.map((column) => (
-                                  <option key={column} value={column}>{column}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
-                          </tr>
-                        );
-                      })}
+                      {Object.entries(derivedFieldInfo).map(([field, info]) => (
+                        <tr key={field}>
+                          <td><b>{field}</b></td>
+                          <td>{info.meaning}</td>
+                          <td>{info.concept}</td>
+                          <td>{info.formula}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div className="mt-4 flex flex-wrap justify-end gap-2.5">
-                  <button className={blueButton} onClick={applyExcelMapping}><Columns3 size={16} /> Confirm Mapping & Import</button>
-                  <button className={softButton} onClick={() => { setExcelColumns([]); setExcelRows([]); setColumnMapping({}); }}>Clear Upload</button>
+
+          {excelUploadOpen && (
+            <div className={modalBackdrop} onClick={() => setExcelUploadOpen(false)}>
+              <div className={`${modalPanel} w-[min(1100px,96vw)]`} onClick={(e) => e.stopPropagation()}>
+                <div className={modalHeader}>
+                  <div>
+                    <h3 className="mb-2 mt-0">{uploadMode === 'global' ? 'Upload File: Map to All Sections' : `Upload Data: ${selectedSection?.name}`}</h3>
+                    <p className="m-0 text-slate-600">
+                      {uploadMode === 'global'
+                        ? 'Upload Excel/CSV once. The software will map columns to fields across all sections and autopopulate section-wise data.'
+                        : 'Upload Excel/CSV, map Excel columns to software fields, and autopopulate records in this section.'}
+                    </p>
+                  </div>
+                  <button className={softButton} onClick={() => setExcelUploadOpen(false)}><X size={14} /> Close</button>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
-      </main>
+                <div className="mb-4 rounded-[18px] border border-slate-200 bg-slate-50 p-3.5">
+                  <div className="mb-3">
+                    <h4 className="mb-1 mt-0 text-sm font-bold text-slate-900">Choose mapping mode</h4>
+                    <p className="m-0 text-[13px] text-slate-500">Select how the uploaded file should be interpreted before creating the mapping preview.</p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {[
+                      {
+                        value: 'normal_ai',
+                        title: 'Normal AI Mapping',
+                        description: 'Fastest option for clean Excel/CSV files with simple rows, columns, and proper headers.'
+                      },
+                      {
+                        value: 'full_ai',
+                        title: 'Full AI Analysis Mapping',
+                        description: 'Best for Excel files with charts, graphs, dashboards, merged cells, multiple tables, or complex formatting.'
+                      }
+                    ].map((option) => {
+                      const selected = mappingMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setMappingMode(option.value)}
+                          className={`rounded-2xl border p-3 text-left transition ${selected ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+                        >
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                            {option.title}
+                          </div>
+                          <p className="mb-0 mt-1 text-xs leading-5 text-slate-500">{option.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mb-4 flex flex-wrap gap-3">
+                  {uploadMode === 'section' && <button className={softButton} onClick={downloadSectionTemplate}><FileSpreadsheet size={16} /> Download Template</button>}
+                  <label className={`${blueButton} cursor-pointer`}>
+                    <Upload size={16} /> Upload Excel / CSV
+                    <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelFile} />
+                  </label>
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
+                    {mappingMode === 'full_ai' ? 'Full AI Analysis Mapping selected' : 'Normal AI Mapping selected'}
+                  </span>
+                </div>
+
+                {uploadMessage && <div className="my-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700"><CheckCircle2 size={16} /> {uploadMessage}</div>}
+
+                {backendUploadPreview && (
+                  <div className="my-3 rounded-[18px] border border-slate-200 bg-slate-50 p-3.5">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="mb-1 mt-0 text-slate-900">Asset Linking</h4>
+                        <p className="m-0 text-[13px] text-slate-500">Choose how uploaded asset aliases should link to canonical asset IDs.</p>
+                      </div>
+                      <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm">
+                        {[
+                          ['multiple', 'Multiple properties'],
+                          ['single', 'One property']
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={`rounded-xl px-3 py-2 text-sm font-bold ${workbookScope === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setWorkbookScope(value)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {workbookScope === 'single' && (
+                      <div className="grid gap-3 md:grid-cols-[auto_1fr] md:items-center">
+                        <div className="inline-flex w-fit rounded-2xl bg-white p-1 shadow-sm">
+                          {[
+                            ['new', 'Create new asset'],
+                            ['existing', 'Use existing asset']
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`rounded-xl px-3 py-2 text-sm font-bold ${singlePropertyMode === value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                              onClick={() => setSinglePropertyMode(value)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {singlePropertyMode === 'existing' && (
+                          <select
+                            className="w-full rounded-[14px] border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(148,163,184,0.25)]"
+                            value={selectedExistingAssetCode}
+                            onChange={(e) => setSelectedExistingAssetCode(e.target.value)}
+                          >
+                            <option value="">Select existing canonical asset</option>
+                            {portfolioAssets.map((asset) => {
+                              const code = assetCodeValue(asset);
+                              return <option key={code || assetDisplayName(asset)} value={code}>{assetDisplayName(asset)}</option>;
+                            })}
+                          </select>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {uploadImportSummary && (
+                  <div className="my-3 rounded-[18px] border border-blue-100 bg-blue-50 p-3.5 text-sm text-blue-900">
+                    <b>Import Summary</b>
+                    <p className="mb-2 mt-1">
+                      Imported {uploadImportSummary.saved_count ?? 0} rows. Created {uploadImportSummary.created_record_count ?? 0} records, updated {uploadImportSummary.updated_record_count ?? 0} records. Shell records: {uploadImportSummary.shell_record_count ?? 0}.
+                    </p>
+                    {!!Object.keys(uploadAssetResolutionCounts).length && (
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(uploadAssetResolutionCounts).map(([key, value]) => (
+                          <span key={key} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">{key.replace(/_/g, ' ')}: {value}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!!uploadAssetReviewItems.length && (
+                  <div className="my-3 rounded-[18px] border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
+                    <b>Some rows may match existing assets and need review.</b>
+                    <p className="mb-3 mt-1">Review action API is not available yet; backend created a new asset for these ambiguous rows.</p>
+                    <div className="grid gap-2">
+                      {uploadAssetReviewItems.map((item, index) => {
+                        const evidence = item.identity_evidence || {};
+                        return (
+                          <div key={`${item.created_asset_code || 'asset-review'}-${index}`} className="rounded-[14px] border border-amber-200 bg-white p-3">
+                            <div className="font-bold text-slate-900">Created: {item.created_asset_code || 'New asset'}</div>
+                            <div className="mt-1 text-slate-600">Candidates: {(item.candidate_asset_codes || []).join(', ') || 'None provided'}</div>
+                            <div className="mt-1 text-slate-600">
+                              Evidence: {[evidence.property_name, evidence.city, evidence.address, evidence.micromarket].filter(Boolean).join(' | ') || 'None provided'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {uploadMode === 'global' && !!Object.keys(excelWorkbookData).length && (
+                  <>
+                    <div className="mt-[18px]">
+                      <h4 className="mb-1.5 mt-0">Global Field-Column Mapping</h4>
+                      <p className="m-0 text-[13px] text-slate-500">Each section is mapped automatically. You can revise any mapping before confirming the backend import.</p>
+                    </div>
+
+                    <div className="mt-3.5 grid max-h-[58vh] gap-4 overflow-auto pr-1.5">
+                      {sections.filter((section) => section.name !== '1. Dashboard').map((section) => {
+                        const rowsForSection = findRowsForSectionFromWorkbook(excelWorkbookData, section);
+                        const columnsForSection = Object.keys(rowsForSection[0] || {});
+                        const mappingForSection = globalColumnMappings[section.id] || {};
+                        return (
+                          <div className="rounded-[18px] border border-gray-200 bg-white p-3.5" key={section.id}>
+                            <h4 className="mb-1.5 mt-0 text-slate-900">{section.name}</h4>
+                            <p className="mb-2.5 mt-0 text-[13px] text-slate-500">{rowsForSection.length ? `${rowsForSection.length} row(s) detected for this section.` : 'No matching sheet/columns detected for this section.'}</p>
+                            <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
+                              <table className={mappingTable}>
+                                <thead>
+                                  <tr>
+                                    <th className={mappingTh}>Software Field</th>
+                                    <th className={mappingTh}>Field Type</th>
+                                    <th className={mappingTh}>Excel Column</th>
+                                    <th className={mappingTh}>Sample Value</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {section.fields.map((field) => {
+                                    const mappedColumn = mappingForSection[field.name] || '';
+                                    const sampleValue = mappedColumn && rowsForSection[0] ? rowsForSection[0][mappedColumn] : '';
+                                    return (
+                                      <tr key={field.id}>
+                                        <td className={mappingTd}><b>{field.name}</b></td>
+                                        <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
+                                        <td className={mappingTd}>
+                                          <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateGlobalColumnMapping(section.id, field.name, e.target.value)}>
+                                            <option value="">-- Ignore / Not mapped --</option>
+                                            {columnsForSection.map((column) => (
+                                              <option key={column} value={column}>{column}</option>
+                                            ))}
+                                          </select>
+                                        </td>
+                                        <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap justify-end gap-2.5">
+                      <button className={blueButton} onClick={() => applyGlobalExcelMapping(excelWorkbookData, globalColumnMappings)}>
+                        <Columns3 size={16} /> Confirm Mapping & Import
+                      </button>
+                      <button className={softButton} onClick={() => { setExcelWorkbookData({}); setGlobalColumnMappings({}); setExcelRows([]); setExcelColumns([]); }}>Clear Upload</button>
+                    </div>
+                  </>
+                )}
+
+                {uploadMode === 'section' && !!excelColumns.length && (
+                  <>
+                    <div className="mt-[18px]">
+                      <h4 className="mb-1.5 mt-0">Field-Column Mapping</h4>
+                      <p className="m-0 text-[13px] text-slate-500">Left side shows software fields. Right side selects matching Excel column.</p>
+                    </div>
+
+                    <div className="mt-3 max-h-[440px] overflow-auto rounded-[14px] border border-gray-200">
+                      <table className={mappingTable}>
+                        <thead>
+                          <tr>
+                            <th className={mappingTh}>Software Field</th>
+                            <th className={mappingTh}>Field Type</th>
+                            <th className={mappingTh}>Excel Column</th>
+                            <th className={mappingTh}>Sample Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedSection.fields.map((field) => {
+                            const mappedColumn = columnMapping[field.name] || '';
+                            const sampleValue = mappedColumn && excelRows[0] ? excelRows[0][mappedColumn] : '';
+                            return (
+                              <tr key={field.id}>
+                                <td className={mappingTd}><b>{field.name}</b></td>
+                                <td className={mappingTd}><span className={pillClass(field.type)}>{fieldTypeMeta[field.type]?.label}</span></td>
+                                <td className={mappingTd}>
+                                  <select className="w-full rounded-[10px] border border-slate-300 bg-white p-2" value={mappedColumn} onChange={(e) => updateColumnMapping(field.name, e.target.value)}>
+                                    <option value="">-- Ignore / Not mapped --</option>
+                                    {excelColumns.map((column) => (
+                                      <option key={column} value={column}>{column}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className={mappingTd}>{String(sampleValue ?? '').slice(0, 80)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap justify-end gap-2.5">
+                      <button className={blueButton} onClick={applyExcelMapping}><Columns3 size={16} /> Confirm Mapping & Import</button>
+                      <button className={softButton} onClick={() => { setExcelColumns([]); setExcelRows([]); setColumnMapping({}); }}>Clear Upload</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+        </main>
       </div>
     </div>
   );

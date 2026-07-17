@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaShoppingCart } from "react-icons/fa";
-import { useGlobalState } from "@/components/GlobalContext";
-import { formatPrice1 } from "@/components/AppUtils";
+
+const formatPrice1 = (price) => {
+  price = Math.floor(price);
+  if (price >= 10000000) return `₹ ${Math.round(price / 10000000)} Cr`;
+  if (price >= 100000) return `₹ ${Math.round(price / 100000)} lakh`;
+  return `₹ ${price.toLocaleString("en-IN")}`;
+};
 
 /**
  * SaleAnalysis
@@ -15,8 +20,8 @@ import { formatPrice1 } from "@/components/AppUtils";
  *   { villageName: "Al-Aweer", villageId: 119, city: "Dubai" }
  *
  * Mapping:
- *   city       → city_name (SQL WHERE)
- *   villageName → location_name (SQL WHERE)
+ *   city       ΓåÆ city_name (SQL WHERE)
+ *   villageName ΓåÆ location_name (SQL WHERE)
  */
 
 const formatValueDubai = (val) => {
@@ -31,7 +36,7 @@ const formatValueDubai = (val) => {
 
 const formatNumberRaw = (val, isCurrency = false, isDubai = false) => {
   if (val === null || val === undefined || isNaN(val)) {
-    return isCurrency ? (isDubai ? "AED 0" : "₹0") : "0";
+    return isCurrency ? (isDubai ? "AED 0" : "Rs0") : "0";
   }
   if (isCurrency) {
     if (isDubai) {
@@ -58,9 +63,8 @@ const getMarketPayload = () => {
 };
 
 const SaleAnalysis = () => {
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light";
-  const isDark = theme === "dark";
+  const theme = "light";
+  const isDark = false;
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
@@ -368,7 +372,7 @@ const SaleAnalysis = () => {
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>ΓÜá∩╕Å</div>
             <p
               className="text-center"
               style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
@@ -384,7 +388,7 @@ const SaleAnalysis = () => {
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
             <p
               className="text-center mb-1"
               style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

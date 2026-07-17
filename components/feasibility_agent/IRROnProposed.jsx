@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { get_data } from "@/components/AppUtils";
+import { apiUrl } from "@/lib/api-client";
 import { FaChartLine } from 'react-icons/fa';
 
 // Global variable to store the calculated IRR value
@@ -311,18 +311,19 @@ const IRROnProposed = () => {
         project_duration: projectDuration,
       });
 
-      // Make API call using get_data (returns parsed data, not Response object)
-      const data = await get_data('/new_rate_simulator/simulator/calculate-irr', {
+      // Make API call using standard fetch
+      const res = await fetch(apiUrl('/new_rate_simulator/simulator/calculate-irr'), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json', // Request JSON response
         },
         body: JSON.stringify({
           cash_flows: cashFlows,
           project_duration: projectDuration,
         }),
       });
+      const data = await res.json();
 
       // Log response data for debugging
       console.log("IRROnProposed - Response data:", data);

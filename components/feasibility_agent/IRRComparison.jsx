@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 // import Header from "./Header";
 import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
-import { get_data } from "@/components/AppUtils";
+import { apiUrl } from "@/lib/api-client";
 import Header from "./Header";
 import {
   FaMinus,
@@ -302,21 +302,19 @@ const IRRComparison = () => {
 
       console.log("Cash flows array:", cashFlows);
 
-      // Call API to calculate IRR using get_data
-      const data = await get_data(
-        "/new_rate_simulator/simulator/calculate-irr",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json", // Request JSON response
-          },
-          body: JSON.stringify({
-            cash_flows: cashFlows,
-            project_duration: scenarioProjectDuration,
-          }),
-        }
-      );
+      // Call API to calculate IRR
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/calculate-irr"), {
+        method: "POST",
+        credentials: 'include',
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cash_flows: cashFlows,
+          project_duration: scenarioProjectDuration,
+        }),
+      });
+      const data = await res.json();
 
       console.log("IRROnScenario - Response data:", data);
 
@@ -1022,7 +1020,7 @@ const IRRComparison = () => {
           <div>
             <div className="d-flex align-items-center mb-2">
               <button className="btn btn-outline-secondary btn-sm me-3 shadow-sm rounded-pill px-3 card-hover-lift" onClick={handleGoBack}>
-                	<FaArrowLeft className="me-1" /> Back
+                <FaArrowLeft className="me-1" /> Back
               </button>
               <h1 className="display-6 fw-bold text-dark mb-0">
                 <FaChartLine className="text-primary me-3" />Compared IRR Scenarios
@@ -1222,7 +1220,7 @@ const IRRComparison = () => {
                               title="Minimize"
                               style={{ width: '32px', height: '32px', padding: 0 }}
                             >
-                              <FaMinus/>
+                              <FaMinus />
                             </button>
                           </div>
                         </div>
@@ -1721,7 +1719,7 @@ const IRRComparison = () => {
                                   title="Minimize"
                                   style={{ width: '32px', height: '32px', padding: 0 }}
                                 >
-                                  <FaMinus/>
+                                  <FaMinus />
                                 </button>
                                 <button
                                   className="btn btn-outline-danger btn-sm rounded-circle shadow-sm card-hover-lift d-flex align-items-center justify-content-center"
@@ -1729,7 +1727,7 @@ const IRRComparison = () => {
                                   title="Delete"
                                   style={{ width: '32px', height: '32px', padding: 0 }}
                                 >
-                                  <FaTrashAlt/>
+                                  <FaTrashAlt />
                                 </button>
                               </div>
                             </div>

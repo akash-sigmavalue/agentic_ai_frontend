@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import { FaChartBar, FaChartLine, FaTimes } from "react-icons/fa";
 // import LocationWiseDashboardVertical from '../MMAv4/LocationAnalysis/LocationWiseDashboardhorizontal';
 // import ReraList from '../MMAv4/LocationAnalysis/ReraList';
-import { useGlobalState } from "@/components/GlobalContext";
+
 // Helper: read city from Market Analysis Payload in localStorage
 const getCityFromPayload = () => {
     if (typeof window === 'undefined') return '';
@@ -17,7 +17,7 @@ const getCityFromPayload = () => {
     }
 };
 
-// Build a coordinationData body from landDetailsForm lat/lng — same shape
+// Build a coordinationData body from landDetailsForm lat/lng ΓÇö same shape
 // that SelectCoordination passes to onCoordinationSelect
 const getCoordFromLandForm = () => {
     if (typeof window === 'undefined') return null;
@@ -62,8 +62,7 @@ const RateSim = () => {
     const [liveCoords, setLiveCoords] = useState(null);
     const [liveVillage, setLiveVillage] = useState("");
 
-    const [gstate] = useGlobalState();
-    const theme = gstate?.theme || "light" 
+    const theme = "light";
 
 
     // Keep city in sync whenever Marketanalysis updates its payload
@@ -113,7 +112,7 @@ const RateSim = () => {
                 </div>
             </div>
 
-            {/* Portal Modal — mounts on document.body so fixed = true viewport */}
+            {/* Portal Modal ΓÇö mounts on document.body so fixed = true viewport */}
             {isOpen && ReactDOM.createPortal(
                 <div
                     style={{
@@ -196,7 +195,7 @@ const RateSim = () => {
                             </button>
                         </div>
 
-                        {/* Modal Body — full height, scrollable */}
+                        {/* Modal Body ΓÇö full height, scrollable */}
                         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
                             {console.log("Rendering ReraList with props:", { city, liveCoords, liveVillage })}
                             {/* <ReraList

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
-import { useGlobalState } from "@/components/GlobalContext";
+
 
 const getMarketPayload = () => {
   try {
@@ -33,9 +33,8 @@ const formatNumberRaw = (val, country = "India") => {
 };
 
 const SupplyDemandAnalysis = ({ option }) => {
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light";
-  const isDark = theme === "dark";
+  const theme = "light";
+  const isDark = false;
 
   // Common UI states
   const [loading, setLoading] = useState(false);
@@ -279,7 +278,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 fontSize: 24,
               }}
             >
-              🚧
+              ≡ƒÜº
             </div>
             <h6 className="fw-bold mb-1" style={{ color: textColor }}>
               Feature in Progress
@@ -320,7 +319,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>ΓÜá∩╕Å</div>
                 <p
                   className="text-center"
                   style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
@@ -336,7 +335,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
                 <p
                   className="text-center mb-1"
                   style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

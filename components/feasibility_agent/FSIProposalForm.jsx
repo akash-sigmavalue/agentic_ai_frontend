@@ -396,7 +396,7 @@
 // export default FSIProposalForm; 
 
 import { useState, useEffect, useRef } from "react";
-import { useGlobalState } from "@/components/GlobalContext";
+
 import { FaGlobe, FaFilePdf, FaMinus, FaExpandAlt, FaCompressAlt, FaTimes } from "react-icons/fa";
 
 // Helper: read areaType from landDetailsForm in localStorage
@@ -938,8 +938,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
     return elements;
   };
 
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light"
+  const theme = "light";
   const agenticPermissibleFsiValue = (() => {
     const value = parseFloat(landResults?.maxPermissibleArea);
     return Number.isFinite(value) && value > 0
@@ -2870,7 +2869,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                     <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>Selected Files ({docFiles.length}):</div>
                     {docFiles.map((file, idx) => (
                       <div key={idx} style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        📄 {file.name}
+                        ≡ƒôä {file.name}
                       </div>
                     ))}
                   </div>

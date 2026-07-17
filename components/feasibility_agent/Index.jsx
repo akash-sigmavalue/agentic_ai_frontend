@@ -604,7 +604,6 @@ import TicketSizeSummary from "./components/TicketSizeSummary";
 import PricerateAnalysis from "./components/PricerateAnalysis";
 import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
-import { useGlobalState } from "@/components/GlobalContext";
 
 const sidebarButtons = [
   { id: "land-fsi", label: "Land And FSI Details", icon: FaMountainCity },
@@ -621,6 +620,7 @@ const sidebarButtons = [
 ];
 
 const Index = () => {
+  const theme = "light";
   const navigate = useNavigate();
   const [landResults, setLandResults] = useState(null);
   const [fsiProposalData, setFSIProposalData] = useState(null);
@@ -637,8 +637,6 @@ const Index = () => {
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
     useState(true);
   const [showToolsDropdown, setShowToolsDropdown] = useState(false);
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light";
   const routerLocation = useLocation();
 
   // Load saved data from localStorage on mount
@@ -703,7 +701,7 @@ const Index = () => {
     setCostData(data);
   };
 
-  const handleUnitDesignSave = () => {};
+  const handleUnitDesignSave = () => { };
 
   return (
     <div
