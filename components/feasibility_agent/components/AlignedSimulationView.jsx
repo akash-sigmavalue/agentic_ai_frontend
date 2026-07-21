@@ -31,11 +31,14 @@ const AlignedSimulationView = ({ showTicketSizeSimulation = true, showBayesianOp
 
   useEffect(() => {
     const resolveVillageId = async () => {
-      const village = readLandDetailsForm()?.village || '';
+      const landDetails = readLandDetailsForm();
+      const village = landDetails?.village || '';
+      const city = landDetails?.location || '';
       const name = (village || '').trim();
       if (!name) { setVillageId(null); return; }
       try {
         const params = new URLSearchParams({ name });
+        if (city) params.append('city', city);
         const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
           method: 'GET',
           headers: { 'Accept': 'application/json' },

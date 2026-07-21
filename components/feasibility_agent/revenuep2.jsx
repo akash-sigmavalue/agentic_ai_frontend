@@ -2262,6 +2262,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
   const navigate = useNavigate();
   const [grid, setGrid] = useState(() => buildDefaultGrid());
   const [village, setVillage] = useState(() => readLandDetailsForm()?.village || '');
+  const [city, setCity] = useState(() => readLandDetailsForm()?.location || '');
   const [villageMeta, setVillageMeta] = useState({ id: null, loading: false, error: '' });
   const [isUpdatingAnalysis, setIsUpdatingAnalysis] = useState(false);
 
@@ -2412,7 +2413,10 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
   }, []);
 
   useEffect(() => {
-    const sync = () => setVillage(readLandDetailsForm()?.village || '');
+    const sync = () => {
+      setVillage(readLandDetailsForm()?.village || '');
+      setCity(readLandDetailsForm()?.location || '');
+    };
     sync();
     window.addEventListener('landDetailsUpdated', sync);
     window.addEventListener('storage', sync);
@@ -2459,6 +2463,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       try {
         setVillageMeta(prev => ({ ...prev, loading: true, error: '' }));
         const params = new URLSearchParams({ name });
+        if (city) params.append('city', city);
         const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
           method: 'GET',
           headers: {
@@ -2494,7 +2499,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
     return () => {
       aborted = true;
     };
-  }, [village]);
+  }, [village, city]);
 
 
   const updateMarketAnalysis = useCallback(async () => {
