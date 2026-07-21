@@ -577,7 +577,7 @@ import {
   FaScaleBalanced,
   FaDatabase,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import Header from "./Header";
 import LandDetailsForm from "./LandDetailsForm";
@@ -604,19 +604,23 @@ import TicketSizeSummary from "./components/TicketSizeSummary";
 import PricerateAnalysis from "./components/PricerateAnalysis";
 import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
+import LandIdentification from "./LandIdentification";
+import RegulatoryIntelligence from "./RegulatoryIntelligence";
 
 const sidebarButtons = [
-  { id: "land-fsi", label: "Land And FSI Details", icon: FaMountainCity },
-  { id: "market-analysis", label: "Market Research", icon: FaChartLine },
-  { id: "predictive-rate-sim", label: "Predictive Rate Simulator", icon: FaChartBar },
-  { id: "building", label: "Product Mix Design", icon: FaCompassDrafting },
-  { id: "ticket-size", label: "Ticket Size Calculation", icon: FaCompassDrafting },
-  { id: "revenue", label: "Product Mix- Ticket size Simulation", icon: FaHandHoldingDollar },
-  { id: "revenue-details", label: "Revenue", icon: FaHandHoldingDollar },
-  { id: "cost-details", label: "Cost Details", icon: FaCalculator },
-  { id: "means-finance", label: "Means Of Finance", icon: FaHandHoldingDollar },
-  { id: "cashflows", label: "Cashflows and IRR", icon: FaChartLine },
-  { id: "Dashboard", label: "Dashboard", icon: FaChartLine },
+  { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
+  { id: "regulatory-intelligence", label: "Regulatory Intelligence", subtitle: "Zoning & rules", icon: FaCircleInfo },
+  { id: "land-fsi", label: "Land And FSI Details", subtitle: "Web + document assisted", icon: FaMountainCity },
+  { id: "market-analysis", label: "Market Research", subtitle: "Market trends", icon: FaChartLine },
+  { id: "predictive-rate-sim", label: "Predictive Rate Simulator", subtitle: "Rate simulation", icon: FaChartBar },
+  { id: "building", label: "Product Mix Design", subtitle: "Mix design", icon: FaCompassDrafting },
+  { id: "ticket-size", label: "Ticket Size Calculation", subtitle: "Mix and ticket sizing", icon: FaCompassDrafting },
+  { id: "revenue", label: "Product Mix- Ticket size Simulation", subtitle: "Ticket size impact simulation", icon: FaHandHoldingDollar },
+  { id: "revenue-details", label: "Revenue", subtitle: "Detailed projection", icon: FaHandHoldingDollar },
+  { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
+  { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
+  { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
+  { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
 ];
 
 const Index = () => {
@@ -717,48 +721,34 @@ const Index = () => {
         <aside
           className="sidebar"
           style={{
-            backgroundColor: theme === "dark" ? "#2c2e31" : "#1a1c1e",
+            backgroundColor: theme === "dark" ? "#2c2e31" : "#ffffff",
           }}
         >
-          <div className="sidebar-header mb-4">
-            <h4 className="fw-bold mb-0" style={{ color: "#fff" }}>
-              Simulator 361
-            </h4>
-            <small className="opacity-75">"Extra Degree of Insight"</small>
+          <div className="sidebar-header mb-4 d-flex align-items-center">
+            <div className="sidebar-logo-icon me-3">
+              <FaLayerGroup size={20} color="#fff" />
+            </div>
+            <div>
+              <h5 className="fw-bold mb-0 text-dark" style={{fontSize: "18px"}}>
+                Feasibility Agent
+              </h5>
+              <small className="text-muted" style={{fontSize: "13px"}}>Section workflow</small>
+            </div>
+          </div>
+
+          <div className="sidebar-openai-pill mb-4">
+            <span className="fw-bold text-dark" style={{fontSize: "14px"}}>OpenAI API</span>
+            <span className="badge rounded-pill config-badge">Configured</span>
           </div>
 
           <ul className="sidebar-nav">
-            {/* {sidebarButtons.map((btn) => (
-              <li key={btn.id}>
-                <button
-                  className={`nav-btn ${activeSection === btn.id ? "active" : ""}`}
-                  onClick={() => {
-                    if (btn.id === "Dashboard") {
-                      setShowDashboard(true);
-                    } else if (btn.id === "predictive-rate-sim") {
-                      setActiveSection(btn.id);
-                      // Scroll directly to the RateSim component's container
-                      document.getElementById(`predictive-rate-sim`)?.scrollIntoView({ behavior: 'smooth' });
-                    } else {
-                      setActiveSection(btn.id);
-                      document
-                        .getElementById(`section-${btn.id}`)
-                        ?.scrollIntoView({ behavior: "smooth" });
-                    }
-                  }}
-                >
-                  <i className={`fas ${btn.icon}`}></i>
-                  {btn.label}
-                </button>
-              </li>
-            ))} */}
-            {sidebarButtons.map((btn) => {
-              const Icon = btn.icon;
+            {sidebarButtons.map((btn, index) => {
+              const isActive = activeSection === btn.id;
 
               return (
                 <li key={btn.id}>
                   <button
-                    className={`nav-btn ${activeSection === btn.id ? "active" : ""}`}
+                    className={`nav-btn-modern ${isActive ? "active" : ""}`}
                     onClick={() => {
                       if (btn.id === "Dashboard") {
                         setShowDashboard(true);
@@ -782,22 +772,21 @@ const Index = () => {
                       }
                     }}
                   >
-                    <Icon className="nav-btn-icon" />
-                    {btn.label}
+                    <div className="nav-btn-modern-left">
+                      <div className="nav-btn-modern-circle">
+                        {index + 1}
+                      </div>
+                      <div className="nav-btn-modern-text text-start">
+                        <div className="nav-btn-modern-title">{btn.label}</div>
+                        <div className="nav-btn-modern-subtitle">{btn.subtitle}</div>
+                      </div>
+                    </div>
+                    <FaChevronRight className="nav-btn-modern-chevron" />
                   </button>
                 </li>
               );
             })}
           </ul>
-
-          <div className="mt-auto pt-4">
-            <div className="bg-white bg-opacity-10 rounded-4 p-3 border border-white border-opacity-10">
-              <p className="small mb-0 opacity-75">
-                <FaCircleInfo className="me-2" />
-                Sidebar navigation provides quick access to simulation stages.
-              </p>
-            </div>
-          </div>
         </aside>
 
         {/* Main Content Component */}
@@ -853,6 +842,48 @@ const Index = () => {
                   </Link>
                 </li>
               </ul>
+            </div>
+          </div>
+
+          {/* Section 0.1: Land Identification */}
+          <div
+            id="section-land-identification"
+            className="text-center mb-5 fade-in-up"
+            style={{ scrollMarginTop: "120px" }}
+          >
+            <h1 className="display-5 fw-bold text-dark mb-2">
+              <FaMountainCity
+                className="me-3"
+                style={{ color: "#448C74" }}
+              />
+              Land Identification
+            </h1>
+          </div>
+
+          <div className="row g-4 mb-5">
+            <div className="col-12 fade-in-up stagger-1">
+              <LandIdentification />
+            </div>
+          </div>
+
+          {/* Section 0.2: Regulatory Intelligence */}
+          <div
+            id="section-regulatory-intelligence"
+            className="text-center mb-5 fade-in-up"
+            style={{ scrollMarginTop: "120px" }}
+          >
+            <h1 className="display-5 fw-bold text-dark mb-2">
+              <FaCircleInfo
+                className="me-3"
+                style={{ color: "#448C74" }}
+              />
+              Regulatory Intelligence
+            </h1>
+          </div>
+
+          <div className="row g-4 mb-5">
+            <div className="col-12 fade-in-up stagger-1">
+              <RegulatoryIntelligence />
             </div>
           </div>
 
@@ -949,67 +980,130 @@ const Index = () => {
 
           /* Sidebar Styling */
           .sidebar {
-            width: 300px;
-            color: #fff;
+            width: 320px;
+            color: #333;
             padding: 30px 20px;
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+            border-right: 1px solid #f0f0f0;
+            border-radius: 0 24px 24px 0;
             z-index: 100;
+          }
+
+          .sidebar-header {
+            margin-bottom: 24px;
+          }
+
+          .sidebar-logo-icon {
+            background-color: #1a1c23;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px !important;
+          }
+
+          .sidebar-openai-pill {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #e9ecef;
+            border-radius: 24px !important;
+            padding: 12px 16px;
+            background-color: #fff;
+          }
+
+          .config-badge {
+            background-color: #d1fae5;
+            color: #065f46;
+            font-weight: 600;
+            padding: 6px 12px;
           }
 
           .sidebar-nav {
             list-style: none;
             padding: 0;
-            margin: 20px 0;
+            margin: 0;
           }
 
           .sidebar-nav li {
             margin-bottom: 12px;
           }
 
-          .nav-btn {
+          .nav-btn-modern {
             width: 100%;
-            background: transparent;
-            border: none;
-            text-align: left;
-            font-size: 15px;
-            color: rgba(255, 255, 255, 0.7);
-            padding: 14px 20px;
-            border-radius: 12px;
+            background: #fff;
+            border: 1px solid #f1f3f5;
+            border-radius: 24px !important;
+            padding: 12px 16px;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+
+          .nav-btn-modern:hover {
+            border-color: #dee2e6;
+            background: #f8f9fa;
+          }
+
+          .nav-btn-modern.active {
+            border: 2px solid #0f172a;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          }
+
+          .nav-btn-modern-left {
             display: flex;
             align-items: center;
             gap: 12px;
-            font-weight: 500;
           }
 
-          .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.05);
+          .nav-btn-modern-circle {
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            border-radius: 50%;
+            background-color: #f1f3f5;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.2s ease;
+          }
+
+          .nav-btn-modern.active .nav-btn-modern-circle {
+            background-color: #1a1c23;
             color: #fff;
-            transform: translateX(5px);
           }
 
-          .nav-btn.active {
-            background: #448C74; /* Brand Green Accents */
-            color: #fff;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(68, 140, 116, 0.3);
+          .nav-btn-modern-text {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
           }
 
-          .nav-btn.active .nav-btn-icon {
-            color: #fff;
+          .nav-btn-modern-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #212529;
+            margin-bottom: 2px;
+            line-height: 1.2;
           }
 
-          .nav-btn .nav-btn-icon {
-            font-size: 18px;
-            width: 24px;
-            min-width: 24px;
-            text-align: center;
-            color: rgba(255, 255, 255, 0.5);
-            transition: color 0.2s;
+          .nav-btn-modern-subtitle {
+            font-size: 12px;
+            color: #6c757d;
+            line-height: 1.2;
+          }
+
+          .nav-btn-modern-chevron {
+            color: #adb5bd;
+            font-size: 12px;
           }
 
           /* Content Area Styling */
