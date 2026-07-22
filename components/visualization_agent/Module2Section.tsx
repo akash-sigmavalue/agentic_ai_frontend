@@ -192,6 +192,47 @@ function DataTable({ records, maxRows = 50 }: { records: Record<string, unknown>
 }
 
 /* ------------------------------------------------------------------ */
+/* Multi-metric merge helper                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Merges all result sets from the data retrieval agent into a single flat
+ * array of rows for Module 2 processing.
+ *
+ * Priority order:
+ *  1. The backend's "combined_sql" result set (domain starts with 'v2-combined')
+ *     — already contains all metrics in a unified schema.
+ *  2. Fallback: concatenate rows from all individual per-metric tables.
+ *  3. Legacy alias: the singular resultSet field.
+ */
+function getMergedRetrievalRows(
+  retrievalOutput: VisualizationRetrievalState | null,
+): Record<string, unknown>[] {
+  const resultSets = retrievalOutput?.resultSets;
+  if (resultSets && resultSets.length > 0) {
+    // Prefer the combined result set produced by the backend
+    const combined = resultSets.find((rs) => rs.domain?.includes('combined'));
+    if (combined?.rows?.length) return combined.rows as Record<string, unknown>[];
+    // Fall back: concatenate all individual tables
+    return resultSets.flatMap((rs) => (rs.rows ?? []) as Record<string, unknown>[]);
+  }
+  // Legacy alias fallback
+  return (retrievalOutput?.resultSet?.rows ?? []) as Record<string, unknown>[];
+}
+
+/** Total row count across all result sets. */
+function getTotalRetrievalRowCount(retrievalOutput: VisualizationRetrievalState | null): number {
+  return getMergedRetrievalRows(retrievalOutput).length;
+}
+
+/** Number of non-empty result sets. */
+function getResultSetCount(retrievalOutput: VisualizationRetrievalState | null): number {
+  const resultSets = retrievalOutput?.resultSets;
+  if (resultSets?.length) return resultSets.filter((rs) => rs.rows?.length).length;
+  return retrievalOutput?.resultSet?.rows?.length ? 1 : 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Main Module2Section component                                       */
 /* ------------------------------------------------------------------ */
 
@@ -220,9 +261,10 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
       return;
     }
 
-    const runtimeRows = retrievalOutput?.resultSet?.rows ?? [];
+    // ── Multi-metric merge: use all result sets, preferring the combined table ──
+    const mergedRows = getMergedRetrievalRows(retrievalOutput);
     const runtimeRetrievalStarted = Boolean(retrievalOutput);
-    const runtimeRetrievalReady = retrievalOutput?.status === 'success' && runtimeRows.length > 0;
+    const runtimeRetrievalReady = retrievalOutput?.status === 'success' && mergedRows.length > 0;
 
     if (runtimeRetrievalStarted && !runtimeRetrievalReady) {
       setError(
@@ -255,7 +297,8 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
         body: JSON.stringify({
           inputs_considered: requestInputs,
           module_1_intent_json: inputs.module_1_intent ? moduleOutput : undefined,
-          retrieved_data_json: runtimeRetrievalReady ? runtimeRows : undefined,
+          // Send merged rows from ALL result sets so Module 2 sees all metrics
+          retrieved_data_json: runtimeRetrievalReady ? mergedRows : undefined,
           retrieval_context_json: requestInputs.retrieval_model_intent ? runtimeIntent : undefined,
           retrieval_sql_query: requestInputs.retrieval_sql_query ? runtimeSql : '',
         }),
@@ -299,7 +342,9 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
   const ledger = output?.debug_metadata?.llm_token_ledger;
   const stepSummaries = output?.debug_metadata?.step_summaries ?? [];
-  const runtimeRowsCount = retrievalOutput?.resultSet?.rows?.length ?? 0;
+  // Multi-metric: use merged row count and set count for display
+  const runtimeRowsCount = getTotalRetrievalRowCount(retrievalOutput);
+  const runtimeTableCount = getResultSetCount(retrievalOutput);
   const runtimeRetrievalReady = retrievalOutput?.status === 'success' && runtimeRowsCount > 0;
   const runtimeRetrievalRunning = retrievalOutput?.status === 'running';
 
@@ -388,7 +433,7 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
 
           {runtimeRetrievalReady && (
             <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-sky-600">
-              Runtime retrieval linked · {runtimeRowsCount} rows
+              Runtime retrieval linked{runtimeTableCount > 1 ? ` · ${runtimeTableCount} tables` : ''} · {runtimeRowsCount} rows
             </span>
           )}
 
@@ -535,6 +580,44 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
                     {!!output.missing_metric_logic && <JsonViewer data={output.missing_metric_logic} label="Missing Metric Logic" />}
                   </div>
                 )}
+
+                {/* Raw Retrieval Tables — show all per-metric tables from retrieval agent */}
+                {(() => {
+                  const allSets = retrievalOutput?.resultSets ?? (retrievalOutput?.resultSet ? [retrievalOutput.resultSet] : []);
+                  if (allSets.length === 0) return null;
+                  return (
+                    <details className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden group">
+                      <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-open:rotate-90" />
+                        <Database className="h-3.5 w-3.5 shrink-0" />
+                        Raw Retrieval Tables · {allSets.length} {allSets.length === 1 ? 'table' : 'tables'} from Data Retrieval Agent
+                      </summary>
+                      <div className="border-t border-slate-200 space-y-4 p-4">
+                        {allSets.map((rs, idx) => (
+                          <div key={`raw-rs-${idx}`} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest text-indigo-700">
+                                Table {idx + 1} of {allSets.length}
+                              </span>
+                              {rs.title && (
+                                <span className="text-xs font-extrabold text-slate-800">{rs.title}</span>
+                              )}
+                              {rs.domain && (
+                                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                  {rs.domain}
+                                </span>
+                              )}
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                {rs.row_count ?? rs.rows?.length ?? 0} rows
+                              </span>
+                            </div>
+                            <DataTable records={(rs.rows ?? []) as Record<string, unknown>[]} maxRows={20} />
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })()}
               </div>
             )}
 
@@ -558,6 +641,42 @@ const Module2Section: React.FC<Module2SectionProps> = ({ moduleOutput = null, re
             {/* Tab 2: Mapped Fields */}
             {activeTab === 2 && (
               <div className="space-y-8">
+
+                {/* Source Tables info cards — one per retrieval result set */}
+                {(() => {
+                  const allSets = retrievalOutput?.resultSets ?? (retrievalOutput?.resultSet ? [retrievalOutput.resultSet] : []);
+                  if (allSets.length <= 1) return null;
+                  return (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-extrabold text-slate-900">Source Tables ({allSets.length} metrics)</h3>
+                      <div className="grid grid-cols-1 gap-2">
+                        {allSets.map((rs, idx) => (
+                          <div key={`src-${idx}`} className="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-indigo-700 shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-extrabold text-slate-800 truncate">{rs.title ?? `Table ${idx + 1}`}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {rs.domain && (
+                                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500">
+                                  {rs.domain}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-bold text-slate-400">{rs.row_count ?? rs.rows?.length ?? 0} rows</span>
+                              <span className="text-[10px] font-bold text-slate-400">· {rs.columns?.length ?? 0} cols</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Module 2 processed these tables as a merged dataset. Mapped fields below reflect the unified column space.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 <div className="space-y-4">
                   <h3 className="text-sm font-extrabold text-slate-900">Mapped Fields</h3>
                   {output.mapped_fields ? (
