@@ -815,6 +815,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
     otherLocationName: "",
   });
 
+  const [activeView, setActiveView] = useState("V1");
   const [villages, setVillages] = useState([]);
   const [villagesLoading, setVillagesLoading] = useState(true);
   const [villagesError, setVillagesError] = useState("");
@@ -905,6 +906,39 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
       }
     }
   }, []);
+
+  const [v2FormData, setV2FormData] = useState({
+    baseFSI: "",
+    premiumFSI: "",
+    tdrPotential: "",
+    fungibleFSI: "",
+    incentiveFSI: "",
+    buildableArea: "",
+    saleableAreaEstimation: "",
+  });
+
+  useEffect(() => {
+    const savedV2 = localStorage.getItem("Land and FSI v2");
+    if (savedV2) {
+      try {
+        setV2FormData(JSON.parse(savedV2));
+      } catch (e) {
+        console.error("Error parsing Land and FSI v2", e);
+      }
+    }
+  }, []);
+
+  const handleV2InputChange = (field, value) => {
+    setV2FormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleV2Save = () => {
+    localStorage.setItem("Land and FSI v2", JSON.stringify(v2FormData));
+    alert("Land and FSI v2 data saved successfully!");
+  };
 
   const handleInputChange = (field, value) => {
     if (field === "latitude" || field === "longitude") {
@@ -1231,10 +1265,55 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         .land-details-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
+          align-items: center;
           gap: 18px;
           padding: 24px 26px 14px;
           background: #ffffff;
+        }
+
+        .land-details-toggle {
+          display: inline-flex;
+          gap: 8px;
+          padding: 6px;
+          border-radius: 999px;
+          background: #eef3f8;
+          border: 1px solid #dbe3ee;
+        }
+
+        .land-details-toggle .btn {
+          border: 0;
+          min-height: 38px;
+          min-width: 104px;
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: 13px;
+          padding: 0 14px;
+          box-shadow: none !important;
+        }
+
+        .land-details-toggle .btn-active {
+          background: #ffffff;
+          color: #111827;
+        }
+
+        .land-details-toggle .btn-inactive {
+          background: transparent;
+          color: #687384;
+        }
+
+        .v2-canvas {
+          padding: 40px;
+          text-align: center;
+          color: #64748b;
+          font-size: 16px;
+          border: 2px dashed #e2e8f0;
+          border-radius: 16px;
+          margin-top: 20px;
+          min-height: 400px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f8fafc;
         }
 
         .land-details-eyebrow {
@@ -1477,6 +1556,54 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
             width: 100%;
           }
         }
+        .v2-land-section-card {
+          background-color: #fff;
+          border-radius: 16px;
+          border: 1px solid #f1f3f5;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+          padding: 32px;
+        }
+        .v2-field-wrapper-card {
+          background: #fff;
+          border: 1px solid #e9ecef;
+          border-radius: 12px;
+          padding: 20px;
+          height: 100%;
+        }
+        .v2-field-label-text {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1a1c23;
+          margin-bottom: 12px;
+        }
+        .v2-pill-input {
+          border-radius: 24px;
+          border: 1px solid #dee2e6;
+          padding: 10px 16px;
+          font-size: 14px;
+          background-color: #fff;
+          width: 100%;
+          transition: border-color 0.2s;
+        }
+        .v2-pill-input:focus {
+          outline: none;
+          border-color: #adb5bd;
+          box-shadow: 0 0 0 3px rgba(0,0,0,0.03);
+        }
+        .v2-btn-dark-pill {
+          background-color: #1a1c23;
+          color: #fff;
+          border-radius: 24px !important;
+          padding: 10px 24px;
+          font-size: 14px;
+          font-weight: 600;
+          border: none;
+          transition: background-color 0.2s;
+        }
+        .v2-btn-dark-pill:hover {
+          background-color: #2c2e31;
+          color: #fff;
+        }
       `}</style>
 
       <div className="land-details-header">
@@ -1484,9 +1611,27 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           <div className="land-details-eyebrow">Selected Section</div>
           <h1 className="land-details-title">Land</h1>
         </div>
+        <div className="land-details-toggle">
+          <button
+            type="button"
+            className={`btn ${activeView === "V1" ? "btn-active" : "btn-inactive"}`}
+            onClick={() => setActiveView("V1")}
+          >
+            V1
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeView === "V2" ? "btn-active" : "btn-inactive"}`}
+            onClick={() => setActiveView("V2")}
+          >
+            V2 Canvas
+          </button>
+        </div>
       </div>
 
       <div className="land-details-body">
+        {activeView === "V1" ? (
+          <>
         <div className="coordinate-intel">
           <div>
             <div className="coordinate-intel-title">Coordinate intelligence</div>
@@ -2031,6 +2176,46 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
             </div>
           </div>
         </div>
+          </>
+        ) : (
+          <div className="v2-land-section-card text-start m-4">
+            <h4 className="mb-4" style={{ color: '#1a1c23', fontWeight: '800' }}>Land Details (V2)</h4>
+            <div className="v2-field-wrapper-card">
+              <div className="row g-4">
+                {[
+                  { label: "Base FSI", key: "baseFSI" },
+                  { label: "Premium FSI", key: "premiumFSI" },
+                  { label: "TDR Potential", key: "tdrPotential" },
+                  { label: "Fungible FSI", key: "fungibleFSI" },
+                  { label: "Incentive FSI", key: "incentiveFSI" },
+                  { label: "Buildable Area", key: "buildableArea" },
+                  { label: "Saleable Area Estimation", key: "saleableAreaEstimation" }
+                ].map((field) => (
+                  <div key={field.key} className="col-md-6">
+                    <label className="v2-field-label-text d-block">
+                      {field.label}
+                    </label>
+                    <input
+                      type="number"
+                      className="v2-pill-input"
+                      value={v2FormData[field.key]}
+                      onChange={(e) => handleV2InputChange(field.key, e.target.value)}
+                      placeholder={`Enter ${field.label}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4">
+              <button 
+                className="v2-btn-dark-pill d-inline-flex align-items-center" 
+                onClick={handleV2Save}
+              >
+                <FaSave className="me-2" />Save V2 Data
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
