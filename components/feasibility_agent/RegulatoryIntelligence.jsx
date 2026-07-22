@@ -1,4 +1,4 @@
-  import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   FaCircleInfo,
   FaCloudArrowUp,
@@ -248,6 +248,99 @@ const RegulatoryIntelligence = () => {
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef(null);
 
+  /* ── editable questions state ── */
+  const [editableQuestions, setEditableQuestions] = useState(
+    () =>
+      Object.fromEntries(
+        REGULATORY_SECTIONS.map((s) => [s.id, s.question])
+      )
+  );
+
+  const updateQuestion = (sectionId, value) => {
+    setEditableQuestions((prev) => ({ ...prev, [sectionId]: value }));
+  };
+
+  const userEditedRef = useRef({});
+
+  // Load location data from localStorage and construct dynamic questions
+  useEffect(() => {
+    const handleSync = () => {
+      const savedLandData = localStorage.getItem('Land Identification');
+      let location = 'Mumbai';
+      let country = 'India';
+      let village = 'Baner';
+      let planningAuthority = 'Pune Municipal Corporation';
+      let lat = '18.56176049';
+      let lng = '73.77948239';
+
+      console.log("handleSync triggered. Raw savedLandData:", savedLandData);
+      let developmentCategory = '';
+      let roadCategory = '';
+      let roadWidening = '';
+      if (savedLandData) {
+        try {
+          const parsed = JSON.parse(savedLandData);
+          console.log("Parsed Land Identification JSON:", parsed);
+          location = parsed.location || parsed.city || location;
+          country = parsed.country || country;
+          village = parsed.village || village;
+          planningAuthority = parsed.planningAuthority || parsed.planning_authority || planningAuthority;
+          lat = parsed.polygonCenterLat || lat;
+          lng = parsed.polygonCenterLng || lng;
+          developmentCategory = parsed.developmentCategory || '';
+          roadCategory = parsed.roadCategory || '';
+          roadWidening = parsed.roadWidening || '';
+          console.log("Values resolved: location =", location, "country =", country, "village =", village, "planningAuthority =", planningAuthority, "lat =", lat, "lng =", lng, "developmentCategory =", developmentCategory, "roadCategory =", roadCategory, "roadWidening =", roadWidening);
+        } catch (e) {
+          console.error("Error parsing Land Identification data:", e);
+        }
+      }
+
+      const formattedDevCat = developmentCategory
+        ? (developmentCategory === 'mixed' ? 'Mixed Use' : developmentCategory.charAt(0).toUpperCase() + developmentCategory.slice(1))
+        : '';
+
+      const formatRoadWidth = (val) => {
+        const map = {
+          below9: "Below 9 m.",
+          "9-12": "9 m. and above but below 12 m.",
+          "12-15": "12 m. and above but below 15 m.",
+          "15-24": "15 m. and above but below 24 m.",
+          "24-30": "24 and above but below 30 m.",
+          "30+": "30 and above"
+        };
+        return map[val] || val || '';
+      };
+      const formattedRoadWidening = formatRoadWidth(roadWidening);
+
+      const dynamicDefaults = {
+        reservations: `What reservations, if any, are applicable to the property as per the Master Plan / Development Plan / Survey Map in ${village}, ${location}, ${country}?`,
+        "environmental-compliance": `What environmental compliance requirements or approvals are applicable to the property in ${village ? village + ', ' : ''}${location}, ${country}?`,
+        "height-restrictions": `Are there any height restrictions applicable to the proposed development in ${village}, ${location}, ${country}? If yes, what is the maximum permissible height?`,
+        "heritage-restrictions": `Is the property located within a heritage zone or subject to any heritage restrictions in ${village}, ${location}, ${country}?`,
+        "airport-clearances": `Does the proposed development in ${village}, ${location}, ${country} require Airport Authority (AAI) or aviation clearance?`,
+        "development-regulations": `Which Development Control Regulations (DCR/UDCPR/Local Planning Regulations) govern the proposed development in ${village}, ${location}, ${country}?`,
+        "buffer-distance": `What is the minimum required buffer distance or setback from the abutting road in ${village}, ${location}, ${country}?`,
+        "fsi-sanctioned-details": `For given land parcel coordinates ${lat}, ${lng}, development category is ${formattedDevCat || 'Residential'}, Road Width is ${formattedRoadWidening || '9-12'}, planning authority is ${planningAuthority} in ${location}, ${country}, Provide the maximum permissible FSI also provide table for it?`
+      };
+
+      setEditableQuestions((prev) => {
+        const updated = { ...prev };
+        REGULATORY_SECTIONS.forEach((s) => {
+          // If the user has not manually customized the question, we always update it to the latest dynamic default
+          if (!userEditedRef.current[s.id]) {
+            updated[s.id] = dynamicDefaults[s.id];
+          }
+        });
+        return updated;
+      });
+    };
+
+    window.addEventListener('landIdentificationSaved', handleSync);
+    handleSync(); // Run initially on mount
+    return () => window.removeEventListener('landIdentificationSaved', handleSync);
+  }, []);
+
   /* ── Q&A state ── */
   const [sectionResults, setSectionResults] = useState(
     () =>
@@ -411,7 +504,7 @@ const RegulatoryIntelligence = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            question: section.question,
+            question: editableQuestions[section.id] || section.question,
             session_id: SECTION_SESSION_ID,
           }),
         });
@@ -446,6 +539,50 @@ const RegulatoryIntelligence = () => {
 
     setCurrentQuestionIdx(-1);
     setIsRunning(false);
+  };
+
+  /* ── run a single section ── */
+  const runSingleSection = async (sectionId) => {
+    const section = REGULATORY_SECTIONS.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    setSectionResults((prev) => ({
+      ...prev,
+      [sectionId]: { status: "loading", answer: "", error: "" },
+    }));
+
+    try {
+      const askResp = await fetch(apiUrl("/user-input/ask"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: editableQuestions[sectionId] || section.question,
+          session_id: SECTION_SESSION_ID,
+        }),
+      });
+
+      if (!askResp.ok) {
+        throw new Error(`Request failed (status ${askResp.status})`);
+      }
+
+      const result = await askResp.json();
+      const answer =
+        result.answer ||
+        result.response ||
+        result.output ||
+        result.content ||
+        (typeof result === "string" ? result : JSON.stringify(result));
+
+      setSectionResults((prev) => ({
+        ...prev,
+        [sectionId]: { status: "completed", answer, error: "" },
+      }));
+    } catch (err) {
+      setSectionResults((prev) => ({
+        ...prev,
+        [sectionId]: { status: "error", answer: "", error: err.message },
+      }));
+    }
   };
 
   /* ── format file size ── */
@@ -755,10 +892,81 @@ const RegulatoryIntelligence = () => {
                 {/* Section Body (collapsible) */}
                 {isExpanded && (
                   <div style={styles.answerBox}>
-                    {/* Question */}
-                    <div style={styles.questionText}>
-                      <strong style={{ color: "#448C74" }}>Q:</strong>{" "}
-                      {section.question}
+                    {/* Editable Question */}
+                    <div style={{ marginBottom: "14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                        <strong style={{ color: "#448C74", fontSize: "13px" }}>Q:</strong>
+                        <span style={{ fontSize: "11px", color: "#999", fontStyle: "italic" }}>Edit the query below before running analysis</span>
+                      </div>
+                      <textarea
+                        value={editableQuestions[section.id] || ""}
+                        onChange={(e) => {
+                          updateQuestion(section.id, e.target.value);
+                          userEditedRef.current[section.id] = true;
+                        }}
+                        disabled={isRunning}
+                        rows={3}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          border: "1px solid #dde2e8",
+                          borderLeft: "3px solid #448C74",
+                          background: isRunning ? "#f5f7fa" : "#fff",
+                          fontSize: "13px",
+                          lineHeight: "1.6",
+                          color: "#333",
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                          outline: "none",
+                          transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = "#448C74";
+                          e.target.style.boxShadow = "0 0 0 3px rgba(68,140,116,0.1)";
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = "#dde2e8";
+                          e.target.style.boxShadow = "none";
+                        }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+                        <button
+                          onClick={() => runSingleSection(section.id)}
+                          disabled={result.status === "loading"}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 16px",
+                            borderRadius: "8px",
+                            border: "none",
+                            background:
+                              result.status === "loading"
+                                ? "#ccc"
+                                : "linear-gradient(135deg, #448C74, #55d19d)",
+                            color: "#fff",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: result.status === "loading" ? "not-allowed" : "pointer",
+                            transition: "opacity 0.2s ease",
+                          }}
+                          onMouseEnter={(e) => { if (result.status !== "loading") e.target.style.opacity = "0.85"; }}
+                          onMouseLeave={(e) => { e.target.style.opacity = "1"; }}
+                        >
+                          {result.status === "loading" ? (
+                            <>
+                              <FaSpinner style={{ animation: "spin 1s linear infinite", fontSize: "11px" }} />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <FaPlay style={{ fontSize: "10px" }} />
+                              Run Query
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Answer content */}
