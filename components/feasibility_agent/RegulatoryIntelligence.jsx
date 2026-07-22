@@ -242,7 +242,7 @@ const StatusIcon = ({ status }) => {
 
 const RegulatoryIntelligence = () => {
   /* ── upload state ── */
-  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfFiles, setPdfFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | indexed | error
   const [uploadError, setUploadError] = useState("");
@@ -383,16 +383,71 @@ const RegulatoryIntelligence = () => {
   };
 
   /* ── file handling ── */
-  const handleFile = useCallback((file) => {
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      setUploadError("Only PDF files are supported.");
-      return;
+  const handleFiles = useCallback((incomingFiles) => {
+    if (!incomingFiles || incomingFiles.length === 0) return;
+
+    const newPdfs = [];
+    const invalidFiles = [];
+
+    incomingFiles.forEach((file) => {
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        newPdfs.push(file);
+      } else {
+        invalidFiles.push(file.name);
+      }
+    });
+
+    if (invalidFiles.length > 0) {
+      setUploadError(`Only PDF files are supported. Skipped: ${invalidFiles.join(", ")}`);
+    } else {
+      setUploadError("");
     }
-    setUploadError("");
-    setPdfFile(file);
+
+    if (newPdfs.length > 0) {
+      setPdfFiles((prev) => {
+        // Prevent duplicates
+        const filtered = newPdfs.filter(
+          (newF) => !prev.some((oldF) => oldF.name === newF.name && oldF.size === newF.size)
+        );
+        return [...prev, ...filtered];
+      });
+      setUploadStatus("idle");
+      setSectionResults(
+        Object.fromEntries(
+          REGULATORY_SECTIONS.map((s) => [
+            s.id,
+            { status: "pending", answer: "", error: "" },
+          ])
+        )
+      );
+      setCurrentQuestionIdx(-1);
+      setIsRunning(false);
+    }
+  }, []);
+
+  const onDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const files = Array.from(e.dataTransfer?.files || []);
+      handleFiles(files);
+    },
+    [handleFiles]
+  );
+
+  const onFileSelect = useCallback(
+    (e) => {
+      const files = Array.from(e.target.files || []);
+      handleFiles(files);
+      e.target.value = "";
+    },
+    [handleFiles]
+  );
+
+  const removeFile = (idxToRemove) => {
+    setPdfFiles((prev) => prev.filter((_, idx) => idx !== idxToRemove));
     setUploadStatus("idle");
-    // Reset all answers
+    setUploadError("");
     setSectionResults(
       Object.fromEntries(
         REGULATORY_SECTIONS.map((s) => [
@@ -403,29 +458,10 @@ const RegulatoryIntelligence = () => {
     );
     setCurrentQuestionIdx(-1);
     setIsRunning(false);
-  }, []);
+  };
 
-  const onDrop = useCallback(
-    (e) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      const file = e.dataTransfer?.files?.[0];
-      handleFile(file);
-    },
-    [handleFile]
-  );
-
-  const onFileSelect = useCallback(
-    (e) => {
-      const file = e.target.files?.[0];
-      handleFile(file);
-      e.target.value = "";
-    },
-    [handleFile]
-  );
-
-  const removeFile = () => {
-    setPdfFile(null);
+  const clearAllFiles = () => {
+    setPdfFiles([]);
     setUploadStatus("idle");
     setUploadError("");
     setSectionResults(
@@ -442,7 +478,7 @@ const RegulatoryIntelligence = () => {
 
   /* ── core: upload + sequential Q&A ── */
   const runAnalysis = async () => {
-    if (!pdfFile) return;
+    if (pdfFiles.length === 0) return;
     abortRef.current = false;
     setIsRunning(true);
     setUploadError("");
@@ -457,11 +493,13 @@ const RegulatoryIntelligence = () => {
       )
     );
 
-    /* Step 1: Upload the PDF */
+    /* Step 1: Upload the PDFs */
     setUploadStatus("uploading");
     try {
       const formData = new FormData();
-      formData.append("files", pdfFile);
+      pdfFiles.forEach((file) => {
+        formData.append("files", file);
+      });
 
       const uploadResp = await fetch(apiUrl("/user-input/documents"), {
         method: "POST",
@@ -639,100 +677,113 @@ const RegulatoryIntelligence = () => {
             Upload Regulatory Document (PDF)
           </label>
 
-          {!pdfFile ? (
-            <div
-              style={styles.dropZone(isDragOver)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={onDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <FaCloudArrowUp style={styles.uploadIcon} />
-              <div
-                style={{
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  color: "#444",
-                  marginBottom: "4px",
-                }}
-              >
-                Drag & drop your PDF here
-              </div>
-              <div style={{ fontSize: "13px", color: "#888" }}>
-                or{" "}
-                <span
-                  style={{
-                    color: "#448C74",
-                    fontWeight: 600,
-                    textDecoration: "underline",
-                    cursor: "pointer",
-                  }}
-                >
-                  click to browse
-                </span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                onChange={onFileSelect}
-                style={{ display: "none" }}
-              />
-            </div>
-          ) : (
+          <div
+            style={styles.dropZone(isDragOver)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <FaCloudArrowUp style={styles.uploadIcon} />
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "14px 18px",
-                borderRadius: "10px",
-                background:
-                  uploadStatus === "indexed"
-                    ? "rgba(46,125,50,0.05)"
-                    : "rgba(68,140,116,0.05)",
-                border: `1px solid ${uploadStatus === "indexed" ? "rgba(46,125,50,0.2)" : "rgba(68,140,116,0.15)"}`,
+                fontSize: "15px",
+                fontWeight: 600,
+                color: "#444",
+                marginBottom: "4px",
               }}
             >
-              <div style={styles.fileChip}>
-                <FaFilePdf style={{ color: "#c62828", fontSize: "18px" }} />
-                <div>
-                  <div style={{ fontWeight: 600 }}>{pdfFile.name}</div>
-                  <div style={{ fontSize: "12px", color: "#888" }}>
-                    {formatSize(pdfFile.size)}
-                    {uploadStatus === "indexed" && (
-                      <span style={{ color: "#2e7d32", marginLeft: "8px" }}>
-                        ✓ Indexed
-                      </span>
-                    )}
-                    {uploadStatus === "uploading" && (
-                      <span style={{ color: "#e65100", marginLeft: "8px" }}>
-                        Uploading...
-                      </span>
-                    )}
-                  </div>
-                </div>
+              Drag & drop your PDFs here
+            </div>
+            <div style={{ fontSize: "13px", color: "#888" }}>
+              or{" "}
+              <span
+                style={{
+                  color: "#448C74",
+                  fontWeight: 600,
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                }}
+              >
+                click to browse
+              </span>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              multiple
+              onChange={onFileSelect}
+              style={{ display: "none" }}
+            />
+          </div>
+
+          {pdfFiles.length > 0 && (
+            <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "#666" }}>
+                Selected Files ({pdfFiles.length}):
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                {!isRunning && (
-                  <button
-                    className="btn btn-sm"
-                    style={{
-                      background: "none",
-                      border: "1px solid #ddd",
-                      color: "#888",
-                      borderRadius: "8px",
-                      padding: "6px 10px",
-                    }}
-                    onClick={removeFile}
-                    title="Remove file"
-                  >
-                    <FaTrashCan />
-                  </button>
-                )}
+              {pdfFiles.map((file, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background:
+                      uploadStatus === "indexed"
+                        ? "rgba(46,125,50,0.03)"
+                        : "rgba(68,140,116,0.03)",
+                    border: `1px solid ${uploadStatus === "indexed" ? "rgba(46,125,50,0.15)" : "rgba(68,140,116,0.12)"}`,
+                  }}
+                >
+                  <div style={styles.fileChip}>
+                    <FaFilePdf style={{ color: "#c62828", fontSize: "16px" }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "13px", color: "#333" }}>{file.name}</div>
+                      <div style={{ fontSize: "11px", color: "#888" }}>
+                        {formatSize(file.size)}
+                        {uploadStatus === "indexed" && (
+                          <span style={{ color: "#2e7d32", marginLeft: "8px" }}>
+                            ✓ Indexed
+                          </span>
+                        )}
+                        {uploadStatus === "uploading" && (
+                          <span style={{ color: "#e65100", marginLeft: "8px" }}>
+                            Uploading...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {!isRunning && (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#999",
+                        padding: "4px",
+                        cursor: "pointer",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(idx);
+                      }}
+                      title="Remove file"
+                    >
+                      <FaTrashCan style={{ fontSize: "13px" }} />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                 <button
                   className="btn btn-sm"
                   style={{
@@ -743,7 +794,7 @@ const RegulatoryIntelligence = () => {
                     color: "#fff",
                     border: "none",
                     borderRadius: "8px",
-                    padding: "6px 18px",
+                    padding: "8px 20px",
                     fontWeight: 600,
                     fontSize: "13px",
                     display: "flex",
@@ -768,6 +819,21 @@ const RegulatoryIntelligence = () => {
                     </>
                   )}
                 </button>
+
+                {!isRunning && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    style={{
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                    }}
+                    onClick={clearAllFiles}
+                  >
+                    Clear All
+                  </button>
+                )}
               </div>
             </div>
           )}
