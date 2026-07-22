@@ -778,7 +778,7 @@ import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 // import { ExternalLink, Info } from "lucide-react";
 import { FaInfo,FaExternalLinkAlt ,FaMapMarkedAlt, FaSave,
-  FaSyncAlt } from "react-icons/fa";
+  FaSyncAlt, FaList, FaExpandAlt } from "react-icons/fa";
 import { FaWandSparkles } from "react-icons/fa6";
 import { apiUrl } from "@/lib/api-client";
 import Select from "react-select"
@@ -790,7 +790,7 @@ const ALLOWED_CITIES = [
   "Rangareddy", "Sangareddy", "Yadadri Bhuvanagiri"
 ];
 
-const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
+const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }) => {
   const [formData, setFormData] = useState({
     clientName: "",
     phoneNumber: "",
@@ -816,6 +816,14 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
   });
 
   const [activeView, setActiveView] = useState("V1");
+
+  const handleViewChange = (view) => {
+    setActiveView(view);
+    if (onViewChange) {
+      onViewChange(view);
+    }
+  };
+
   const [villages, setVillages] = useState([]);
   const [villagesLoading, setVillagesLoading] = useState(true);
   const [villagesError, setVillagesError] = useState("");
@@ -1563,6 +1571,37 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           box-shadow: 0 4px 20px rgba(0,0,0,0.03);
           padding: 32px;
         }
+        .v2-land-header-subtitle {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 1px;
+          color: #868e96;
+          text-transform: uppercase;
+          margin-bottom: 4px;
+        }
+        .v2-land-header-title {
+          font-size: 28px;
+          font-weight: 800;
+          color: #1a1c23;
+          margin: 0;
+        }
+        .v2-header-btn {
+          background: #fff;
+          border: 1px solid #e9ecef;
+          border-radius: 20px;
+          padding: 6px 16px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #212529;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+        }
+        .v2-header-btn:hover {
+          background: #f8f9fa;
+          border-color: #dee2e6;
+        }
         .v2-field-wrapper-card {
           background: #fff;
           border: 1px solid #e9ecef;
@@ -1615,14 +1654,14 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
           <button
             type="button"
             className={`btn ${activeView === "V1" ? "btn-active" : "btn-inactive"}`}
-            onClick={() => setActiveView("V1")}
+            onClick={() => handleViewChange("V1")}
           >
             V1
           </button>
           <button
             type="button"
             className={`btn ${activeView === "V2" ? "btn-active" : "btn-inactive"}`}
-            onClick={() => setActiveView("V2")}
+            onClick={() => handleViewChange("V2")}
           >
             V2 Canvas
           </button>
@@ -2178,35 +2217,30 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI }) => {
         </div>
           </>
         ) : (
-          <div className="v2-land-section-card text-start m-4">
-            <h4 className="mb-4" style={{ color: '#1a1c23', fontWeight: '800' }}>Land Details (V2)</h4>
-            <div className="v2-field-wrapper-card">
-              <div className="row g-4">
-                {[
-                  { label: "Base FSI", key: "baseFSI" },
-                  { label: "Premium FSI", key: "premiumFSI" },
-                  { label: "TDR Potential", key: "tdrPotential" },
-                  { label: "Fungible FSI", key: "fungibleFSI" },
-                  { label: "Incentive FSI", key: "incentiveFSI" },
-                  { label: "Buildable Area", key: "buildableArea" },
-                  { label: "Saleable Area Estimation", key: "saleableAreaEstimation" }
-                ].map((field) => (
-                  <div key={field.key} className="col-md-6">
-                    <label className="v2-field-label-text d-block">
-                      {field.label}
-                    </label>
-                    <input
-                      type="number"
-                      className="v2-pill-input"
-                      value={v2FormData[field.key]}
-                      onChange={(e) => handleV2InputChange(field.key, e.target.value)}
-                      placeholder={`Enter ${field.label}`}
-                    />
-                  </div>
-                ))}
+          <div className="land-details-grid row g-3 mt-3">
+            {[
+              { label: "Base FSI", key: "baseFSI" },
+              { label: "Premium FSI", key: "premiumFSI" },
+              { label: "TDR Potential", key: "tdrPotential" },
+              { label: "Fungible FSI", key: "fungibleFSI" },
+              { label: "Incentive FSI", key: "incentiveFSI" },
+              { label: "Buildable Area", key: "buildableArea" },
+              { label: "Saleable Area Estimation", key: "saleableAreaEstimation" }
+            ].map((field) => (
+              <div key={field.key} className="col-md-6">
+                <label className="v2-field-label-text d-block">
+                  {field.label}
+                </label>
+                <input
+                  type="number"
+                  className="v2-pill-input"
+                  value={v2FormData[field.key]}
+                  onChange={(e) => handleV2InputChange(field.key, e.target.value)}
+                  placeholder={`Enter ${field.label}`}
+                />
               </div>
-            </div>
-            <div className="mt-4">
+            ))}
+            <div className="col-12 mt-4">
               <button 
                 className="v2-btn-dark-pill d-inline-flex align-items-center" 
                 onClick={handleV2Save}

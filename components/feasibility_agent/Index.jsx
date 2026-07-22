@@ -635,12 +635,13 @@ const Index = () => {
   const [zoningType, setZoningType] = useState("");
   const [location, setLocation] = useState("");
   const [updateingUI, setUpdateUI] = useState(false);
-  const [activeSection, setActiveSection] = useState("land-fsi");
+  const [activeSection, setActiveSection] = useState("land-identification");
   const [calculationMode, setCalculationMode] = useState("carpet"); // Lifted state: 'carpet' or 'saleable'
   const [excelLogicSelected, setExcelLogicSelected] = useState(true);
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
     useState(true);
   const [showToolsDropdown, setShowToolsDropdown] = useState(false);
+  const [isLandV2Active, setIsLandV2Active] = useState(false);
   const routerLocation = useLocation();
 
   // Load saved data from localStorage on mount
@@ -1220,19 +1221,22 @@ const Index = () => {
             {/* Section 1: Land Details */}
             <div className="col-12 fade-in-up stagger-1">
               <div className="row g-4">
-                <div className="col-lg-8">
+                <div className={isLandV2Active ? "col-lg-12" : "col-lg-8"}>
                   <LandDetailsForm
                     onCalculate={handleLandCalculation}
                     updateingUI={updateingUI}
                     setUpdateUI={setUpdateUI}
+                    onViewChange={(view) => setIsLandV2Active(view === "V2")}
                   />
                 </div>
-                <div className="col-lg-4">
-                  <LandDetailsOutput
-                    results={landResults}
-                    updateingUI={updateingUI}
-                  />
-                </div>
+                {!isLandV2Active && (
+                  <div className="col-lg-4">
+                    <LandDetailsOutput
+                      results={landResults}
+                      updateingUI={updateingUI}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
