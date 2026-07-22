@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaMountainCity } from 'react-icons/fa6';
 import { FaSave, FaExpandAlt, FaList, FaDrawPolygon, FaEdit, FaTrash } from 'react-icons/fa';
-import { useJsApiLoader, Autocomplete, GoogleMap, DrawingManagerF, PolygonF } from '@react-google-maps/api';
+import { useJsApiLoader, Autocomplete, GoogleMap, DrawingManagerF, PolygonF, MarkerF } from '@react-google-maps/api';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
 
@@ -20,7 +20,10 @@ const LandIdentification = () => {
     boundaryVerification: '',
     plotDimensions: '',
     ownershipSummary: '',
-    zoning: ''
+    zoning: '',
+    developmentCategory: '',
+    roadCategory: '',
+    roadWidening: ''
   });
 
   const [saveStatus, setSaveStatus] = useState('');
@@ -45,6 +48,16 @@ const LandIdentification = () => {
   const [villagesError, setVillagesError] = useState("");
   const [selectedVillageCoords, setSelectedVillageCoords] = useState(null);
   const [planningAdvisoryLoading, setPlanningAdvisoryLoading] = useState(false);
+  const [roadWidthLoading, setRoadWidthLoading] = useState(false);
+  // Pan map when coordinates are entered manually or loaded
+  useEffect(() => {
+    const lat = parseFloat(formData.polygonCenterLat);
+    const lng = parseFloat(formData.polygonCenterLng);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      setMapCenter({ lat, lng });
+      setMapZoom(16);
+    }
+  }, [formData.polygonCenterLat, formData.polygonCenterLng]);
 
   // --- Dynamic Backend Data Logic ---
   useEffect(() => {
@@ -138,6 +151,214 @@ const LandIdentification = () => {
     }
   };
 
+  const fetchRoadWidthFromOSM = async () => {
+    const lat = parseFloat(formData.polygonCenterLat);
+    const lng = parseFloat(formData.polygonCenterLng);
+    if (isNaN(lat) || isNaN(lng)) {
+      alert("Please Save Polygon first or enter coordinates manually.");
+      return;
+    }
+
+    setRoadWidthLoading(true);
+    setSaveStatus("Fetching road width from OSM...");
+
+    try {
+      const radius = 200;
+      const radiusDeg = radius / 111320;
+      const bbox = `${lat - radiusDeg},${lng - radiusDeg},${lat + radiusDeg},${lng + radiusDeg}`;
+      
+      const query = `[out:json][timeout:30];(way["highway"](${bbox}););out body;>;out skel qt;`;
+      
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter"
+      ];
+
+      let data = null;
+      let error = null;
+
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            body: query,
+            headers: { "Content-Type": "text/plain" },
+          });
+          if (res.ok) {
+            data = await res.json();
+            break;
+          }
+        } catch (err) {
+          error = err;
+        }
+      }
+
+      if (!data || !data.elements) {
+        throw new Error(error?.message || "Failed to fetch from Overpass API endpoints.");
+      }
+
+      const elements = data.elements;
+      const nodes = {};
+      elements.forEach(el => {
+        if (el.type === "node") nodes[el.id] = { lat: el.lat, lng: el.lon };
+      });
+
+      const getDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371e3;
+        const phi1 = lat1 * Math.PI/180;
+        const phi2 = lat2 * Math.PI/180;
+        const deltaPhi = (lat2-lat1) * Math.PI/180;
+        const deltaLambda = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                  Math.cos(phi1) * Math.cos(phi2) *
+                  Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      };
+
+      const getBearing = (lat1, lon1, lat2, lon2) => {
+        const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
+        const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+                  Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
+        const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        return brng > 180 ? brng - 360 : brng; // Turf-style bearing
+      };
+
+      const directionTotals = { N: 0, E: 0, S: 0, W: 0 };
+      const CATEGORY_TO_ROAD_WIDENING = {
+        "Below 9 m": "below9",
+        "9 m to 12 m": "9-12",
+        "12 m to 15 m": "12-15",
+        "15 m to 24 m": "15-24",
+        "24 m to 30 m": "24-30",
+        "30 m and above": "30+"
+      };
+
+      const extractWidthFromTags = (tags) => {
+        if (tags.width) {
+          const match = tags.width.match(/(\d+\.?\d*)/);
+          if (match) return parseFloat(match[1]);
+        }
+        if (tags["width:lanes"]) {
+          const match = tags["width:lanes"].match(/(\d+\.?\d*)/);
+          if (match) return parseFloat(match[1]);
+        }
+        if (tags.est_width) {
+          const match = tags.est_width.match(/(\d+\.?\d*)/);
+          if (match) return parseFloat(match[1]);
+        }
+        return null;
+      };
+
+      const estimateWidthFromLanes = (lanes, highwayType) => {
+        let laneCount = null;
+        if (typeof lanes === "string") {
+          const match = lanes.match(/(\d+\.?\d*)/);
+          if (match) laneCount = parseFloat(match[1]);
+        } else if (typeof lanes === "number") {
+          laneCount = lanes;
+        }
+        if (laneCount === null) return null;
+        let laneWidth = 3.5;
+        if (highwayType) {
+          if (["motorway", "trunk"].includes(highwayType)) laneWidth = 3.75;
+          else if (["residential", "service"].includes(highwayType)) laneWidth = 3.0;
+        }
+        return laneCount * laneWidth;
+      };
+
+      const getHighwayDefaultWidth = (highwayType, serviceType) => {
+        const defaults = {
+          motorway: 11.5, motorway_link: 8.0, trunk: 10.0, trunk_link: 7.0,
+          primary: 8.5, primary_link: 6.5, secondary: 7.5, secondary_link: 6.0,
+          tertiary: 6.5, tertiary_link: 5.5, unclassified: 5.5, residential: 5.5,
+          living_street: 5.0, service: 4.5, track: 3.5, path: 2.0, footway: 2.0,
+          cycleway: 2.0, bridleway: 2.5, steps: 1.5, pedestrian: 5.0
+        };
+        if (highwayType === "service" && serviceType) {
+          const serviceDefaults = {
+            parking_aisle: 3.5, driveway: 3.0, alley: 3.5,
+            emergency_access: 4.0, "drive-through": 3.5
+          };
+          if (serviceDefaults[serviceType]) return serviceDefaults[serviceType];
+        }
+        return defaults[highwayType] || 5.0;
+      };
+
+      elements.forEach(el => {
+        if (el.type === "way" && el.nodes && el.tags && el.tags.highway) {
+          let minDistance = Infinity;
+          let closestNodeCoords = null;
+          el.nodes.forEach(nodeId => {
+            const node = nodes[nodeId];
+            if (node) {
+              const d = getDistance(lat, lng, node.lat, node.lng);
+              if (d < minDistance) {
+                minDistance = d;
+                closestNodeCoords = node;
+              }
+            }
+          });
+
+          // Match OsmInline adjacentRoads check (distance <= 50)
+          if (minDistance <= 50 && closestNodeCoords) {
+            const tb = getBearing(lat, lng, closestNodeCoords.lat, closestNodeCoords.lng);
+            
+            // Replicate OsmInline's specific direction binning logic based on Turf tb bearing
+            let dir;
+            if (tb >= -45 && tb < 45) dir = "N";
+            else if (tb >= 45 && tb < 135) dir = "E";
+            else if (tb >= 135 && tb < 225) dir = "S";
+            else dir = "W";
+            
+            let width = extractWidthFromTags(el.tags);
+            if (width === null && el.tags.lanes) {
+              width = estimateWidthFromLanes(el.tags.lanes, el.tags.highway);
+            }
+            if (width === null) {
+              width = getHighwayDefaultWidth(el.tags.highway, el.tags.service);
+            }
+            directionTotals[dir] += width;
+          }
+        }
+      });
+
+      let maxTotal = 0;
+      let highestCategory = "Below 9 m";
+
+      const categorizeWidth = (w) => {
+        if (w === null || Number.isNaN(w) || w === 0) return "Below 9 m";
+        if (w < 9) return "Below 9 m";
+        if (w < 12) return "9 m to 12 m";
+        if (w < 15) return "12 m to 15 m";
+        if (w < 24) return "15 m to 24 m";
+        if (w < 30) return "24 m to 30 m";
+        return "30 m and above";
+      };
+
+      ["N", "E", "S", "W"].forEach(dir => {
+        const total = directionTotals[dir];
+        if (total > maxTotal) {
+          maxTotal = total;
+          highestCategory = categorizeWidth(total);
+        }
+      });
+
+      const matchedWidening = CATEGORY_TO_ROAD_WIDENING[highestCategory] || "below9";
+      
+      setFormData(prev => ({ ...prev, roadWidening: matchedWidening }));
+      setSaveStatus(`Fetched OSM width successfully: ${highestCategory}`);
+      setTimeout(() => setSaveStatus(''), 3000);
+    } catch (err) {
+      console.error("OSM road width fetch failed:", err);
+      alert(`Error fetching road width from OSM: ${err.message}`);
+      setSaveStatus('');
+    } finally {
+      setRoadWidthLoading(false);
+    }
+  };
+
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -151,12 +372,19 @@ const LandIdentification = () => {
     if (autocomplete !== null) {
       const place = autocomplete.getPlace();
       if (place.geometry && place.geometry.location) {
+        const latVal = place.geometry.location.lat();
+        const lngVal = place.geometry.location.lng();
         setMapCenter({
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng()
+          lat: latVal,
+          lng: lngVal
         });
         setMapZoom(16);
         setSearchInput(place.formatted_address || place.name);
+        setFormData(prev => ({
+          ...prev,
+          polygonCenterLat: String(latVal),
+          polygonCenterLng: String(lngVal)
+        }));
       }
     }
   };
@@ -263,10 +491,18 @@ const LandIdentification = () => {
       dataToSave.polygonCenterLng = center.lng();
     } else {
       dataToSave.polygonAreaSqft = '';
-      dataToSave.polygonCenterLat = '';
-      dataToSave.polygonCenterLng = '';
+      dataToSave.polygonCenterLat = dataToSave.polygonCenterLat || '';
+      dataToSave.polygonCenterLng = dataToSave.polygonCenterLng || '';
     }
+    // Update local React state so inputs reflect values immediately on-screen
+    setFormData(prev => ({
+      ...prev,
+      polygonAreaSqft: dataToSave.polygonAreaSqft,
+      polygonCenterLat: String(dataToSave.polygonCenterLat),
+      polygonCenterLng: String(dataToSave.polygonCenterLng)
+    }));
     localStorage.setItem('Land Identification', JSON.stringify(dataToSave));
+    window.dispatchEvent(new CustomEvent('landIdentificationSaved'));
   };
 
   const deletePolygon = () => {
@@ -308,6 +544,8 @@ const LandIdentification = () => {
     }
   };
 
+  const isLoadedRef = useRef(false);
+
   // --- Form Logic ---
   useEffect(() => {
     const savedData = localStorage.getItem('Land Identification');
@@ -319,7 +557,16 @@ const LandIdentification = () => {
         console.error("Error parsing saved Land Identification data:", error);
       }
     }
+    isLoadedRef.current = true;
   }, []);
+
+  // Auto-sync formData to localStorage and notify sibling components in real-time
+  useEffect(() => {
+    if (isLoadedRef.current) {
+      localStorage.setItem('Land Identification', JSON.stringify(formData));
+      window.dispatchEvent(new CustomEvent('landIdentificationSaved'));
+    }
+  }, [formData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -591,6 +838,15 @@ const LandIdentification = () => {
                       onDragEnd={onPolygonEdit}
                     />
                   )}
+
+                  {!polygonPath && formData.polygonCenterLat && formData.polygonCenterLng && !isNaN(parseFloat(formData.polygonCenterLat)) && !isNaN(parseFloat(formData.polygonCenterLng)) && (
+                    <MarkerF
+                      position={{
+                        lat: parseFloat(formData.polygonCenterLat),
+                        lng: parseFloat(formData.polygonCenterLng)
+                      }}
+                    />
+                  )}
                 </GoogleMap>
               )}
             </div>
@@ -815,6 +1071,74 @@ const LandIdentification = () => {
               />
             </div>
           </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">Developement Category</div>
+              <select
+                className="pill-input form-select"
+                style={{ border: 'none', background: '#f8f9fa' }}
+                name="developmentCategory"
+                value={formData.developmentCategory || ""}
+                onChange={handleInputChange}
+              >
+                <option value="">Select Developement Category</option>
+                <option value="residential">Residential</option>
+                <option value="commercial">Commercial</option>
+                <option value="mixed">Mixed Use</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">Road Category</div>
+              <input 
+                type="text" 
+                className="pill-input" 
+                name="roadCategory"
+                value={formData.roadCategory || ""}
+                onChange={handleInputChange}
+                placeholder="Enter road category"
+              />
+            </div>
+          </div>
+
+          {(formData.location === "Pune" || formData.location === "Thane") && (
+            <div className="col-md-6">
+              <div className="field-wrapper-card">
+                <div className="field-label-text d-flex justify-content-between align-items-center w-100">
+                  <span>
+                    Road Width *
+                    {roadWidthLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
+                  </span>
+                  <button 
+                    className="btn btn-sm btn-outline-primary py-0 px-2" 
+                    style={{ fontSize: '11px', borderRadius: '12px' }}
+                    onClick={fetchRoadWidthFromOSM}
+                    disabled={roadWidthLoading}
+                  >
+                    Fetch
+                  </button>
+                </div>
+                <select
+                  className="pill-input form-select"
+                  style={{ border: 'none', background: '#f8f9fa' }}
+                  name="roadWidening"
+                  value={formData.roadWidening || ""}
+                  onChange={handleInputChange}
+                >
+                  <option value="">Select road widening</option>
+                  <option value="below9">Below 9 m.</option>
+                  <option value="9-12">9 m. and above but below 12 m.</option>
+                  <option value="12-15">12 m. and above but below 15 m.</option>
+                  <option value="15-24">15 m. and above but below 24 m.</option>
+                  <option value="24-30">24 and above but below 30 m.</option>
+                  <option value="30+">30 and above</option>
+                </select>
+              </div>
+            </div>
+          )}
 
         </div>
 
