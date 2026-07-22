@@ -10,6 +10,10 @@ import { apiFetch } from '@/lib/api-client';
 
 const THEME_STORAGE_KEY = 'sigmavalue_theme';
 const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+// The current agentic_ai_backend does not expose /v1/llm/selection. Keep the
+// selector local unless a deployment explicitly provides that API.
+const LLM_SELECTION_API_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_LLM_SELECTION_API === 'true';
 
 const getServerThemeSnapshot = () => false;
 
@@ -38,7 +42,8 @@ const Header = () => {
   );
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const shouldSyncLlmSelection = pathname !== '/maharera_agent';
+  const shouldSyncLlmSelection =
+    LLM_SELECTION_API_ENABLED && pathname !== '/maharera_agent';
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
   const [llmModel, setLlmModel] = React.useState('gpt-4o-mini');
   const [modelsByProvider, setModelsByProvider] = React.useState<Record<string, string[]>>({
