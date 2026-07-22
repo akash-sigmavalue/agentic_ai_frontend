@@ -10,6 +10,8 @@ import { apiFetch } from '@/lib/api-client';
 
 const THEME_STORAGE_KEY = 'sigmavalue_theme';
 const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+const LLM_SELECTION_API_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_LLM_SELECTION_API === 'true';
 
 function subscribeToThemeChanges(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -41,7 +43,10 @@ const Header = () => {
   const [llmProvider, setLlmProvider] = React.useState<'openai' | 'bedrock'>('openai');
   const [llmModel, setLlmModel] = React.useState('');
   const [modelsByProvider, setModelsByProvider] = React.useState<Record<string, string[]>>({});
-  const [shouldSyncLlmSelection, setShouldSyncLlmSelection] = React.useState(true);
+  // MahaRERA owns its backend/model configuration. The shared selection API is
+  // optional and is not exposed by the current agentic_ai_backend.
+  const shouldSyncLlmSelection =
+    LLM_SELECTION_API_ENABLED && pathname !== '/maharera_agent';
 
   React.useEffect(() => {
     const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
