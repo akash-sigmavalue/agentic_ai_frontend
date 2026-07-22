@@ -2,13 +2,19 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaMountainCity } from 'react-icons/fa6';
 import { FaSave, FaExpandAlt, FaList, FaDrawPolygon, FaEdit, FaTrash } from 'react-icons/fa';
 import { useJsApiLoader, Autocomplete, GoogleMap, DrawingManagerF, PolygonF } from '@react-google-maps/api';
+import Select from "react-select";
+import { apiUrl } from "@/lib/api-client";
 
-const libraries = ['places', 'drawing'];
+const libraries = ['places', 'drawing', 'geometry'];
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 18.52461645, lng: 73.7805654 }; // Pune
 
 const LandIdentification = () => {
   const [formData, setFormData] = useState({
+    country: '',
+    location: '',
+    village: '',
+    planningAuthority: '',
     surveyNumber: '',
     ctsNumber: '',
     boundaryVerification: '',
@@ -23,12 +29,114 @@ const LandIdentification = () => {
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(12);
   const [autocomplete, setAutocomplete] = useState(null);
+  const [mapInstance, setMapInstance] = useState(null);
+  const boundsFittedRef = useRef(false);
   
   // Drawing states
   const [drawingMode, setDrawingMode] = useState(null);
   const [polygonPath, setPolygonPath] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const polygonRef = useRef(null);
+  const [currentArea, setCurrentArea] = useState(null);
+
+  // Dynamic fetch states
+  const [villages, setVillages] = useState([]);
+  const [villagesLoading, setVillagesLoading] = useState(false);
+  const [villagesError, setVillagesError] = useState("");
+  const [selectedVillageCoords, setSelectedVillageCoords] = useState(null);
+  const [planningAdvisoryLoading, setPlanningAdvisoryLoading] = useState(false);
+
+  // --- Dynamic Backend Data Logic ---
+  useEffect(() => {
+    const ALLOWED_CITIES = [
+      "Pune", "Thane", "Abu Dhabi", "Dubai", 
+      "Hyderabad", "Medchal-Malkajgiri", "Mumbai", 
+      "Rangareddy", "Sangareddy", "Yadadri Bhuvanagiri"
+    ];
+    const allowed = new Set(ALLOWED_CITIES);
+    const city = (formData.location ?? "").trim();
+    if (!allowed.has(city)) {
+      setVillages([]);
+      return;
+    }
+
+    let isMounted = true;
+    setVillagesLoading(true);
+    setVillagesError("");
+
+    (async () => {
+      try {
+        const res = await fetch(apiUrl("/geospatial/villages_by_coordinates"), {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ City: city }),
+        });
+        const json = await res.json();
+        if (!json?.villages) throw new Error("No villages returned");
+        if (isMounted) setVillages(json.villages);
+      } catch (err) {
+        console.error("get_villages error:", err);
+        if (isMounted) {
+          setVillages([]);
+          setVillagesError("Unable to load villages. Please try again later.");
+        }
+      } finally {
+        if (isMounted) setVillagesLoading(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [formData.location]);
+
+  const villageOptions = villages.map((v) => ({
+    value: v.village,
+    label: v.village,
+    lat: v.lat,
+    lng: v.lng,
+  }));
+
+  const fetchPlanningAuthority = async () => {
+    if (!formData.polygonCenterLat || !formData.polygonCenterLng) {
+      alert("Please Save Polygon first or enter coordinates manually.");
+      return;
+    }
+    if (!formData.location || !formData.village) {
+      alert("Please select both City and Village.");
+      return;
+    }
+
+    setPlanningAdvisoryLoading(true);
+    setFormData(prev => ({ ...prev, planningAuthority: "" }));
+
+    try {
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/planning-advisory"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: formData.polygonCenterLat,
+          longitude: formData.polygonCenterLng,
+          location: formData.location,
+          village: formData.village,
+        }),
+      });
+      const data = await res.json();
+
+      if (data?.success && data?.planningAdvisory) {
+        setFormData(prev => ({
+          ...prev,
+          planningAuthority: data.planningAdvisory,
+        }));
+      } else {
+        alert("Could not fetch planning authority. Please try again.");
+      }
+    } catch (err) {
+      console.error("planning authority lookup error:", err);
+      alert("Error fetching planning authority.");
+    } finally {
+      setPlanningAdvisoryLoading(false);
+    }
+  };
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -58,6 +166,43 @@ const LandIdentification = () => {
   };
 
   // --- Polygon Drawing Logic ---
+  useEffect(() => {
+    const savedGeoJson = localStorage.getItem('subject project');
+    if (savedGeoJson) {
+      try {
+        const parsed = JSON.parse(savedGeoJson);
+        if (parsed?.geometry?.coordinates?.[0]) {
+          const coords = parsed.geometry.coordinates[0];
+          // Saved as [lat, lng]
+          const newPath = coords.map(c => ({ lat: c[0], lng: c[1] }));
+          setPolygonPath(newPath);
+        }
+      } catch (e) {
+        console.error("Error parsing saved polygon:", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mapInstance && polygonPath && polygonPath.length > 0 && !boundsFittedRef.current) {
+      const bounds = new window.google.maps.LatLngBounds();
+      polygonPath.forEach(p => bounds.extend(p));
+      mapInstance.fitBounds(bounds);
+      boundsFittedRef.current = true;
+    }
+  }, [mapInstance, polygonPath]);
+
+  useEffect(() => {
+    if (isLoaded && polygonPath && polygonPath.length > 2 && window.google?.maps?.geometry) {
+      const latLngs = polygonPath.map(p => new window.google.maps.LatLng(p.lat, p.lng));
+      const areaSqMeters = window.google.maps.geometry.spherical.computeArea(latLngs);
+      const areaSqFt = (areaSqMeters * 10.7639).toFixed(2);
+      setCurrentArea(areaSqFt);
+    } else {
+      setCurrentArea(null);
+    }
+  }, [polygonPath, isLoaded]);
+
   const onPolygonComplete = (polygon) => {
     const path = polygon.getPath().getArray().map(latLng => ({
       lat: latLng.lat(),
@@ -102,10 +247,36 @@ const LandIdentification = () => {
     }
   };
 
+  const syncLandIdentificationData = (path) => {
+    let dataToSave = { ...formData };
+    if (path && path.length > 2 && window.google?.maps?.geometry) {
+      const latLngs = path.map(p => new window.google.maps.LatLng(p.lat, p.lng));
+      const areaSqMeters = window.google.maps.geometry.spherical.computeArea(latLngs);
+      const areaSqFt = (areaSqMeters * 10.7639).toFixed(2);
+      
+      const bounds = new window.google.maps.LatLngBounds();
+      latLngs.forEach(ll => bounds.extend(ll));
+      const center = bounds.getCenter();
+      
+      dataToSave.polygonAreaSqft = areaSqFt;
+      dataToSave.polygonCenterLat = center.lat();
+      dataToSave.polygonCenterLng = center.lng();
+    } else {
+      dataToSave.polygonAreaSqft = '';
+      dataToSave.polygonCenterLat = '';
+      dataToSave.polygonCenterLng = '';
+    }
+    localStorage.setItem('Land Identification', JSON.stringify(dataToSave));
+  };
+
   const deletePolygon = () => {
     setPolygonPath(null);
     setIsEditing(false);
     setDrawingMode(null);
+    localStorage.removeItem('subject project');
+    syncLandIdentificationData(null); // Clear area data
+    setSaveStatus('Polygon deleted!');
+    setTimeout(() => setSaveStatus(''), 3000);
   };
 
   const savePolygon = () => {
@@ -128,6 +299,7 @@ const LandIdentification = () => {
       };
 
       localStorage.setItem('subject project', JSON.stringify(geoJson));
+      syncLandIdentificationData(polygonPath); // Sync area data immediately
       setSaveStatus('Polygon saved as GeoJSON!');
       setTimeout(() => setSaveStatus(''), 3000);
     } else {
@@ -141,7 +313,8 @@ const LandIdentification = () => {
     const savedData = localStorage.getItem('Land Identification');
     if (savedData) {
       try {
-        setFormData(JSON.parse(savedData));
+        const parsed = JSON.parse(savedData);
+        setFormData(prev => ({ ...prev, ...parsed }));
       } catch (error) {
         console.error("Error parsing saved Land Identification data:", error);
       }
@@ -157,7 +330,7 @@ const LandIdentification = () => {
   };
 
   const handleSaveForm = () => {
-    localStorage.setItem('Land Identification', JSON.stringify(formData));
+    syncLandIdentificationData(polygonPath);
     setSaveStatus('Data saved successfully!');
     setTimeout(() => setSaveStatus(''), 3000);
   };
@@ -346,6 +519,13 @@ const LandIdentification = () => {
             
             <div className="map-container rounded-4 overflow-hidden mt-3 position-relative" style={{ height: '480px', border: '1px solid #dee2e6' }}>
               
+              {/* Live Area Overlay */}
+              {currentArea && (
+                <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: 'rgba(255,255,255,0.95)', padding: '6px 12px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '13px', fontWeight: 'bold', color: '#1a1c23', border: '1px solid #dee2e6' }}>
+                  Area: {Number(currentArea).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} sqft
+                </div>
+              )}
+
               {/* Custom Toolbar */}
               <div className="map-tools-sidebar">
                 <button className="btn-dark-pill map-tool-btn" onClick={startDrawing} disabled={!!polygonPath || drawingMode !== null}>
@@ -368,6 +548,8 @@ const LandIdentification = () => {
                   mapContainerStyle={MAP_CONTAINER_STYLE}
                   center={mapCenter}
                   zoom={mapZoom}
+                  onLoad={setMapInstance}
+                  onUnmount={() => setMapInstance(null)}
                   options={{
                     disableDefaultUI: false,
                     zoomControl: true,
@@ -416,8 +598,140 @@ const LandIdentification = () => {
         </div>
 
         {/* Form Fields Grid */}
-        <div className="row g-4 mb-4">
-          
+        <div className="row g-4">
+
+          {/* New Fields */}
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">Country</div>
+              <input 
+                type="text" 
+                className="pill-input" 
+                name="country"
+                value={formData.country}
+                onChange={handleInputChange}
+                placeholder="Enter Country" 
+              />
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">City Name</div>
+              <select
+                className="pill-input form-select"
+                style={{ border: 'none', background: '#f8f9fa' }}
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+              >
+                <option value="">Select location</option>
+                <option value="Pune">Pune</option>
+                <option value="Thane">Thane</option>
+                <option value="Abu Dhabi">Abu Dhabi</option>
+                <option value="Dubai">Dubai</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Rangareddy">Rangareddy</option>
+                <option value="Sangareddy">Sangareddy</option>
+                <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
+                <option value="Other Location">Other Location</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">Village Name</div>
+              <Select
+                options={villageOptions}
+                value={
+                  formData.village
+                    ? villageOptions.find((o) => o.value === formData.village)
+                    : null
+                }
+                onChange={(opt) => {
+                  if (opt) {
+                    handleInputChange({ target: { name: "village", value: opt.value } });
+                    setSelectedVillageCoords({ lat: opt.lat, lng: opt.lng });
+                  } else {
+                    handleInputChange({ target: { name: "village", value: "" } });
+                    setSelectedVillageCoords(null);
+                  }
+                }}
+                isLoading={villagesLoading}
+                isDisabled={villagesLoading || !formData.location}
+                placeholder={formData.location ? "Choose village" : "Select City First"}
+                isClearable
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    border: 'none',
+                    background: '#f8f9fa',
+                    boxShadow: 'none',
+                    minHeight: '40px'
+                  })
+                }}
+              />
+              {villagesError && <small className="text-danger mt-1 d-block">{villagesError}</small>}
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text">Coordinates (Lat, Lng)</div>
+              <input
+                type="text"
+                className="pill-input"
+                name="coordinates"
+                value={formData.polygonCenterLat && formData.polygonCenterLng ? `${formData.polygonCenterLat}, ${formData.polygonCenterLng}` : formData.polygonCenterLat ? formData.polygonCenterLat : ''}
+                onChange={(e) => {
+                  const value = e.target.value.trim();
+                  if (value === '') {
+                    setFormData({ ...formData, polygonCenterLat: '', polygonCenterLng: '' });
+                  } else {
+                    const parts = value.split(',').map(p => p.trim());
+                    if (parts.length === 2) {
+                      setFormData({ ...formData, polygonCenterLat: parts[0], polygonCenterLng: parts[1] });
+                    } else if (parts.length === 1) {
+                      setFormData({ ...formData, polygonCenterLat: parts[0], polygonCenterLng: '' });
+                    }
+                  }
+                }}
+                placeholder="e.g., 18.623724, 73.724565"
+              />
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text d-flex justify-content-between align-items-center w-100">
+                <span>
+                  Planning Authority 
+                  {planningAdvisoryLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
+                </span>
+                <button 
+                  className="btn btn-sm btn-outline-primary py-0 px-2" 
+                  style={{ fontSize: '11px', borderRadius: '12px' }}
+                  onClick={fetchPlanningAuthority}
+                  disabled={planningAdvisoryLoading}
+                >
+                  Fetch
+                </button>
+              </div>
+              <input 
+                type="text" 
+                className="pill-input" 
+                name="planningAuthority"
+                value={formData.planningAuthority || ""}
+                onChange={handleInputChange}
+                placeholder="Planning Authority"
+                disabled={planningAdvisoryLoading} 
+              />
+            </div>
+          </div>
+
           <div className="col-md-6">
             <div className="field-wrapper-card">
               <div className="field-label-text">Survey Number</div>
