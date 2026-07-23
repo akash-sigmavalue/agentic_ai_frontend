@@ -76,6 +76,10 @@ const IRR = () => {
   const [cashInflowSimResult, setCashInflowSimResult] = useState(null);
   const [cashInflowSimError, setCashInflowSimError] = useState(null);
   const [activeInflowScenario, setActiveInflowScenario] = useState("Most Probable");
+  const [userCashflowRows, setUserCashflowRows] = useState([
+    { year: "Year 0", percentage: "" },
+    { year: "Year 1", percentage: "" },
+  ]);
 
   const metricListSetters = {
     setSalesInfoMethod,
@@ -457,6 +461,65 @@ const IRR = () => {
       formData: currentFormData,
       appliedAt: Date.now(),
       source: "cashflowSimulation",
+    });
+
+    setIsComparableModalOpen(false);
+  };
+
+  // ── User Cashflow: apply manually entered rows to the IRR form ──
+  const handleApplyUserCashflow = () => {
+    const newCashflow = {};
+    let maxYear = 1;
+    userCashflowRows.forEach(row => {
+      const yearNumMatch = row.year.match(/\d+/);
+      if (yearNumMatch) {
+        const yearNum = parseInt(yearNumMatch[0], 10);
+        if (yearNum > maxYear) maxYear = yearNum;
+        if (yearNum > 0) {
+          newCashflow[yearNum] = row.percentage.replace('%', '').trim();
+        }
+      }
+    });
+
+    const defaultFormData = {
+      cashflow: {},
+      landcost: {},
+      approvalcost: {},
+      constructioncost: {},
+      administrativecost: {},
+      ancillarycost: {},
+      tdrcost: {},
+      premiumcost: {},
+      marketingcost: {},
+      contingencycost: {},
+      financecost: {},
+      miscellaneouscost: {}
+    };
+
+    let currentDuration = 1;
+    let currentFormData = { ...defaultFormData };
+
+    try {
+      const savedFormStr = localStorage.getItem("irrForm");
+      if (savedFormStr) {
+        const parsed = JSON.parse(savedFormStr);
+        currentDuration = parseInt(parsed.projectDuration, 10) || 1;
+        if (parsed.formData) {
+          currentFormData = { ...defaultFormData, ...parsed.formData };
+        }
+      }
+    } catch (e) {
+      console.error("Could not parse irrForm from localStorage", e);
+    }
+
+    const finalDuration = Math.max(currentDuration, maxYear);
+    currentFormData.cashflow = newCashflow;
+
+    setIrrFormAutofill({
+      projectDuration: finalDuration,
+      formData: currentFormData,
+      appliedAt: Date.now(),
+      source: "userCashflow",
     });
 
     setIsComparableModalOpen(false);
@@ -2094,7 +2157,7 @@ const IRR = () => {
                             </div>
 
                             <div className="btn-group w-100 shadow-sm mb-4" role="group">
-                              {["Optimistic", "Most Probable", "Pessimistic", "Raw Output"].map((scen) => (
+                              {["Optimistic", "Most Probable", "Pessimistic", "User Cashflow", "Raw Output"].map((scen) => (
                                 <button
                                   key={scen}
                                   type="button"
@@ -2112,6 +2175,120 @@ const IRR = () => {
                                   {cashInflowSimResult}
                                 </pre>
                               </div>
+                            ) : activeInflowScenario === "User Cashflow" ? (
+                              (() => {
+                                const totalPct = userCashflowRows.reduce((sum, r) => {
+                                  const v = parseFloat(r.percentage);
+                                  return sum + (isNaN(v) ? 0 : v);
+                                }, 0);
+                                const totalDisplay = totalPct.toFixed(2);
+                                const isOver100 = totalPct > 100;
+                                const isUnder100 = totalPct < 100 && userCashflowRows.some(r => r.percentage !== "");
+                                const isExact100 = Math.abs(totalPct - 100) < 0.01;
+                                return (
+                                  <div>
+                                    <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight: "340px", overflowY: "auto" }}>
+                                      <table className="table table-hover table-bordered mb-0 align-middle text-center">
+                                        <thead className="table-dark" style={{ position: "sticky", top: 0 }}>
+                                          <tr>
+                                            <th className="py-3" style={{ width: "40%" }}>Year</th>
+                                            <th className="py-3">Projected Sales Percentage (%)</th>
+                                            <th className="py-3" style={{ width: "60px" }}></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {userCashflowRows.map((row, idx) => (
+                                            <tr key={idx}>
+                                              <td className="fw-bold text-dark">{row.year}</td>
+                                              <td>
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0"
+                                                  max="100"
+                                                  className="form-control form-control-sm text-center mx-auto"
+                                                  style={{ width: "110px", borderColor: "#dee2e6" }}
+                                                  placeholder="0.00"
+                                                  value={row.percentage}
+                                                  onChange={(e) => {
+                                                    const updated = [...userCashflowRows];
+                                                    updated[idx] = { ...updated[idx], percentage: e.target.value };
+                                                    setUserCashflowRows(updated);
+                                                  }}
+                                                />
+                                              </td>
+                                              <td>
+                                                {userCashflowRows.length > 1 && (
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-danger rounded-circle"
+                                                    style={{ width: 28, height: 28, padding: 0, lineHeight: "26px", fontSize: "1rem" }}
+                                                    onClick={() => {
+                                                      setUserCashflowRows(userCashflowRows.filter((_, i) => i !== idx));
+                                                    }}
+                                                    title="Remove row"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {/* Add row + Total */}
+                                    <div className="d-flex align-items-center justify-content-between mt-3">
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold"
+                                        onClick={() => {
+                                          const nextYear = userCashflowRows.length;
+                                          setUserCashflowRows([...userCashflowRows, { year: `Year ${nextYear}`, percentage: "" }]);
+                                        }}
+                                      >
+                                        + Add Year
+                                      </button>
+
+                                      <div className="d-flex align-items-center gap-2">
+                                        <span className="text-muted" style={{ fontSize: "0.85rem" }}>Total:</span>
+                                        <span
+                                          className={`fw-bold fs-6 ${isExact100 ? "text-success" : isOver100 ? "text-danger" : "text-warning"}`}
+                                        >
+                                          {totalDisplay}%
+                                        </span>
+                                        {isOver100 && (
+                                          <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ⚠️ Exceeds 100%
+                                          </span>
+                                        )}
+                                        {isUnder100 && (
+                                          <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ⚠️ Does not sum to 100%
+                                          </span>
+                                        )}
+                                        {isExact100 && (
+                                          <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ✓ Valid
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-3 text-end">
+                                      <button
+                                        className="btn btn-success fw-bold px-4"
+                                        onClick={handleApplyUserCashflow}
+                                        disabled={userCashflowRows.every(r => r.percentage === "")}
+                                      >
+                                        <i className="bi bi-check2-circle me-2"></i>
+                                        Apply User Cashflow
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })()
                             ) : (
                               <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight: "400px" }}>
                                 <table className="table table-hover table-bordered mb-0 align-middle text-center">
@@ -2139,7 +2316,7 @@ const IRR = () => {
                               </div>
                             )}
 
-                            {activeInflowScenario !== "Raw Output" && (
+                            {activeInflowScenario !== "Raw Output" && activeInflowScenario !== "User Cashflow" && (
                               <div className="mt-3 text-end">
                                 <button
                                   className="btn btn-success fw-bold px-4"
