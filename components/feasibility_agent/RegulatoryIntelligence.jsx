@@ -18,6 +18,7 @@ import {
   FaScaleBalanced,
   FaRoad,
   FaTableCells,
+  FaArrowUpRightFromSquare,
 } from "react-icons/fa6";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -351,10 +352,44 @@ const RegulatoryIntelligence = () => {
         ])
       )
   );
+
+  // Load saved Regulatory Intelligence payload on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("Regulatory Intelligence");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.editableQuestions) {
+          setEditableQuestions((prev) => ({ ...prev, ...parsed.editableQuestions }));
+        }
+        if (parsed.sectionResults) {
+          setSectionResults((prev) => ({ ...prev, ...parsed.sectionResults }));
+        }
+      } catch (e) {
+        console.error("Error parsing Regulatory Intelligence payload:", e);
+      }
+    }
+  }, []);
+
+  // Persist Regulatory Intelligence payload to localStorage
+  const saveRegulatoryPayload = (newResults, newQuestions) => {
+    const currentResults = newResults || sectionResults;
+    const currentQuestions = newQuestions || editableQuestions;
+    const payload = {
+      uploadedFiles: pdfFiles.map((f) => ({ name: f.name, size: f.size })),
+      editableQuestions: currentQuestions,
+      sectionResults: currentResults,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem("Regulatory Intelligence", JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent("regulatoryIntelligenceSaved", { detail: payload }));
+    return payload;
+  };
+
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(-1);
   const [isRunning, setIsRunning] = useState(false);
   const [expandedSections, setExpandedSections] = useState(
-    () => new Set(REGULATORY_SECTIONS.map((s) => s.id))
+    () => new Set()
   );
   const abortRef = useRef(false);
 
@@ -534,9 +569,6 @@ const RegulatoryIntelligence = () => {
         [section.id]: { status: "loading", answer: "", error: "" },
       }));
 
-      // Auto-expand current section
-      setExpandedSections((prev) => new Set(prev).add(section.id));
-
       try {
         const askResp = await fetch(apiUrl("/user-input/ask"), {
           method: "POST",
@@ -559,19 +591,27 @@ const RegulatoryIntelligence = () => {
           result.content ||
           (typeof result === "string" ? result : JSON.stringify(result));
 
-        setSectionResults((prev) => ({
-          ...prev,
-          [section.id]: { status: "completed", answer, error: "" },
-        }));
+        setSectionResults((prev) => {
+          const next = {
+            ...prev,
+            [section.id]: { status: "completed", answer, error: "" },
+          };
+          saveRegulatoryPayload(next);
+          return next;
+        });
       } catch (err) {
-        setSectionResults((prev) => ({
-          ...prev,
-          [section.id]: {
-            status: "error",
-            answer: "",
-            error: err.message,
-          },
-        }));
+        setSectionResults((prev) => {
+          const next = {
+            ...prev,
+            [section.id]: {
+              status: "error",
+              answer: "",
+              error: err.message,
+            },
+          };
+          saveRegulatoryPayload(next);
+          return next;
+        });
       }
     }
 
@@ -611,15 +651,23 @@ const RegulatoryIntelligence = () => {
         result.content ||
         (typeof result === "string" ? result : JSON.stringify(result));
 
-      setSectionResults((prev) => ({
-        ...prev,
-        [sectionId]: { status: "completed", answer, error: "" },
-      }));
+      setSectionResults((prev) => {
+        const next = {
+          ...prev,
+          [sectionId]: { status: "completed", answer, error: "" },
+        };
+        saveRegulatoryPayload(next);
+        return next;
+      });
     } catch (err) {
-      setSectionResults((prev) => ({
-        ...prev,
-        [sectionId]: { status: "error", answer: "", error: err.message },
-      }));
+      setSectionResults((prev) => {
+        const next = {
+          ...prev,
+          [sectionId]: { status: "error", answer: "", error: err.message },
+        };
+        saveRegulatoryPayload(next);
+        return next;
+      });
     }
   };
 
@@ -635,7 +683,7 @@ const RegulatoryIntelligence = () => {
     <div className="card shadow-sm border-0 rounded-3 mb-4">
       {/* Header */}
       <div
-        className="card-header border-bottom py-3"
+        className="card-header border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
         style={{
           background: "linear-gradient(135deg, #f8faf9 0%, #edf5f1 100%)",
         }}
@@ -645,7 +693,7 @@ const RegulatoryIntelligence = () => {
           style={{ fontWeight: 700 }}
         >
           <FaCircleInfo className="me-2" style={{ color: "#448C74" }} />
-          Regulatory Intelligence
+          Regulatory Intelligence (Document Agent)
           <span
             className="ms-2"
             style={{
@@ -660,6 +708,14 @@ const RegulatoryIntelligence = () => {
             {REGULATORY_SECTIONS.length} Sections
           </span>
         </h5>
+        <button
+          type="button"
+          className="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm"
+          style={{ fontSize: "12px", borderColor: "#448C74", color: "#2d6b55" }}
+          onClick={() => window.open(`${window.location.origin}/user_input`, "_blank", "noopener,noreferrer")}
+        >
+          Open Document Agent <FaArrowUpRightFromSquare size={10} />
+        </button>
       </div>
 
       <div className="card-body" style={{ padding: "24px" }}>

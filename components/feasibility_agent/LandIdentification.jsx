@@ -23,7 +23,9 @@ const LandIdentification = () => {
     zoning: '',
     developmentCategory: '',
     roadCategory: '',
-    roadWidening: ''
+    roadWidening: '',
+    netPlotAreaSqFt: '',
+    isNetPlotAreaAutoDerived: true
   });
 
   const [saveStatus, setSaveStatus] = useState('');
@@ -426,6 +428,12 @@ const LandIdentification = () => {
       const areaSqMeters = window.google.maps.geometry.spherical.computeArea(latLngs);
       const areaSqFt = (areaSqMeters * 10.7639).toFixed(2);
       setCurrentArea(areaSqFt);
+      setFormData(prev => {
+        if (!prev.netPlotAreaSqFt || prev.isNetPlotAreaAutoDerived) {
+          return { ...prev, netPlotAreaSqFt: areaSqFt, isNetPlotAreaAutoDerived: true };
+        }
+        return prev;
+      });
     } else {
       setCurrentArea(null);
     }
@@ -489,17 +497,26 @@ const LandIdentification = () => {
       dataToSave.polygonAreaSqft = areaSqFt;
       dataToSave.polygonCenterLat = center.lat();
       dataToSave.polygonCenterLng = center.lng();
+      if (!dataToSave.netPlotAreaSqFt || dataToSave.isNetPlotAreaAutoDerived) {
+        dataToSave.netPlotAreaSqFt = areaSqFt;
+        dataToSave.isNetPlotAreaAutoDerived = true;
+      }
     } else {
       dataToSave.polygonAreaSqft = '';
       dataToSave.polygonCenterLat = dataToSave.polygonCenterLat || '';
       dataToSave.polygonCenterLng = dataToSave.polygonCenterLng || '';
+      if (dataToSave.isNetPlotAreaAutoDerived) {
+        dataToSave.netPlotAreaSqFt = '';
+      }
     }
     // Update local React state so inputs reflect values immediately on-screen
     setFormData(prev => ({
       ...prev,
       polygonAreaSqft: dataToSave.polygonAreaSqft,
       polygonCenterLat: String(dataToSave.polygonCenterLat),
-      polygonCenterLng: String(dataToSave.polygonCenterLng)
+      polygonCenterLng: String(dataToSave.polygonCenterLng),
+      netPlotAreaSqFt: dataToSave.netPlotAreaSqFt !== undefined ? dataToSave.netPlotAreaSqFt : prev.netPlotAreaSqFt,
+      isNetPlotAreaAutoDerived: dataToSave.isNetPlotAreaAutoDerived !== undefined ? dataToSave.isNetPlotAreaAutoDerived : prev.isNetPlotAreaAutoDerived
     }));
     localStorage.setItem('Land Identification', JSON.stringify(dataToSave));
     window.dispatchEvent(new CustomEvent('landIdentificationSaved'));
@@ -564,7 +581,7 @@ const LandIdentification = () => {
   useEffect(() => {
     if (isLoadedRef.current) {
       localStorage.setItem('Land Identification', JSON.stringify(formData));
-      window.dispatchEvent(new CustomEvent('landIdentificationSaved'));
+      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: formData }));
     }
   }, [formData]);
 
@@ -572,7 +589,8 @@ const LandIdentification = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
+      ...(name === 'netPlotAreaSqFt' ? { isNetPlotAreaAutoDerived: false } : {})
     }));
   };
 
@@ -1046,6 +1064,20 @@ const LandIdentification = () => {
 
           <div className="col-md-6">
             <div className="field-wrapper-card">
+              <div className="field-label-text">Net Plot Area Sq Ft</div>
+              <input 
+                type="text" 
+                className="pill-input" 
+                name="netPlotAreaSqFt"
+                value={formData.netPlotAreaSqFt || ''}
+                onChange={handleInputChange}
+                placeholder="Net Plot Area (Sq Ft)" 
+              />
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
               <div className="field-label-text">Ownership Summary</div>
               <input 
                 type="text" 
@@ -1104,41 +1136,39 @@ const LandIdentification = () => {
             </div>
           </div>
 
-          {(formData.location === "Pune" || formData.location === "Thane") && (
-            <div className="col-md-6">
-              <div className="field-wrapper-card">
-                <div className="field-label-text d-flex justify-content-between align-items-center w-100">
-                  <span>
-                    Road Width *
-                    {roadWidthLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
-                  </span>
-                  <button 
-                    className="btn btn-sm btn-outline-primary py-0 px-2" 
-                    style={{ fontSize: '11px', borderRadius: '12px' }}
-                    onClick={fetchRoadWidthFromOSM}
-                    disabled={roadWidthLoading}
-                  >
-                    Fetch
-                  </button>
-                </div>
-                <select
-                  className="pill-input form-select"
-                  style={{ border: 'none', background: '#f8f9fa' }}
-                  name="roadWidening"
-                  value={formData.roadWidening || ""}
-                  onChange={handleInputChange}
+          <div className="col-md-6">
+            <div className="field-wrapper-card">
+              <div className="field-label-text d-flex justify-content-between align-items-center w-100">
+                <span>
+                  Road Width *
+                  {roadWidthLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
+                </span>
+                <button 
+                  className="btn btn-sm btn-outline-primary py-0 px-2" 
+                  style={{ fontSize: '11px', borderRadius: '12px' }}
+                  onClick={fetchRoadWidthFromOSM}
+                  disabled={roadWidthLoading}
                 >
-                  <option value="">Select road widening</option>
-                  <option value="below9">Below 9 m.</option>
-                  <option value="9-12">9 m. and above but below 12 m.</option>
-                  <option value="12-15">12 m. and above but below 15 m.</option>
-                  <option value="15-24">15 m. and above but below 24 m.</option>
-                  <option value="24-30">24 and above but below 30 m.</option>
-                  <option value="30+">30 and above</option>
-                </select>
+                  Fetch
+                </button>
               </div>
+              <select
+                className="pill-input form-select"
+                style={{ border: 'none', background: '#f8f9fa' }}
+                name="roadWidening"
+                value={formData.roadWidening || ""}
+                onChange={handleInputChange}
+              >
+                <option value="">Select road widening</option>
+                <option value="below9">Below 9 m.</option>
+                <option value="9-12">9 m. and above but below 12 m.</option>
+                <option value="12-15">12 m. and above but below 15 m.</option>
+                <option value="15-24">15 m. and above but below 24 m.</option>
+                <option value="24-30">24 m. and above but below 30 m.</option>
+                <option value="30+">30 m. and above</option>
+              </select>
             </div>
-          )}
+          </div>
 
         </div>
 

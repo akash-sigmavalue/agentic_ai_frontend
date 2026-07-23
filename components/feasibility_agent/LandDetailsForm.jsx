@@ -777,16 +777,20 @@
 import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 // import { ExternalLink, Info } from "lucide-react";
-import { FaInfo,FaExternalLinkAlt ,FaMapMarkedAlt, FaSave,
-  FaSyncAlt, FaList, FaExpandAlt } from "react-icons/fa";
-import { FaWandSparkles } from "react-icons/fa6";
+import {
+  FaInfo, FaExternalLinkAlt, FaMapMarkedAlt, FaSave,
+  FaSyncAlt, FaList, FaExpandAlt, FaCompress, FaGlobe, FaSpinner, FaChevronDown, FaChevronUp, FaInfoCircle
+} from "react-icons/fa";
+import { FaWandSparkles, FaEarthAmericas } from "react-icons/fa6";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { apiUrl } from "@/lib/api-client";
 import Select from "react-select"
 import OsmInline from "./OsmInline";
 
 const ALLOWED_CITIES = [
-  "Pune", "Thane", "Abu Dhabi", "Dubai", 
-  "Hyderabad", "Medchal-Malkajgiri", "Mumbai", 
+  "Pune", "Thane", "Abu Dhabi", "Dubai",
+  "Hyderabad", "Medchal-Malkajgiri", "Mumbai",
   "Rangareddy", "Sangareddy", "Yadadri Bhuvanagiri"
 ];
 
@@ -946,6 +950,191 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
   const handleV2Save = () => {
     localStorage.setItem("Land and FSI v2", JSON.stringify(v2FormData));
     alert("Land and FSI v2 data saved successfully!");
+  };
+
+  const [v3FormData, setV3FormData] = useState({
+    permissibleFSI_FAR: "",
+    grossFloorArea: "",
+  });
+
+  useEffect(() => {
+    const savedV3 = localStorage.getItem("Land_and_fsi_details");
+    if (savedV3) {
+      try {
+        setV3FormData(JSON.parse(savedV3));
+      } catch (e) {
+        console.error("Error parsing Land_and_fsi_details", e);
+      }
+    }
+  }, []);
+
+  const handleV3InputChange = (field, value) => {
+    setV3FormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Helper to persist complete V3 payload
+  const saveV3Payload = (overrideV3Data, overrideQuery, overrideStatus, overrideResponse) => {
+    const dataToSave = overrideV3Data || v3FormData;
+    const queryToSave = overrideQuery !== undefined ? overrideQuery : webAgentQuery;
+    const statusToSave = overrideStatus !== undefined ? overrideStatus : webAgentStatus;
+    const responseToSave = overrideResponse !== undefined ? overrideResponse : webAgentResponse;
+
+    const payload = {
+      permissibleFSI_FAR: dataToSave.permissibleFSI_FAR || "",
+      grossFloorArea: dataToSave.grossFloorArea || "",
+      webAgentQuery: queryToSave || "",
+      webAgentStatus: statusToSave || "idle",
+      webAgentResponse: responseToSave || "",
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem("Land_and_fsi_details", JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent("landAndFsiDetailsSaved", { detail: payload }));
+    return payload;
+  };
+
+  const handleV3Save = () => {
+    saveV3Payload();
+    alert("Land and FSI details (V3) payload saved successfully!");
+  };
+
+  const [webAgentStatus, setWebAgentStatus] = useState("idle");
+  const [webAgentResponse, setWebAgentResponse] = useState("");
+  const [webAgentError, setWebAgentError] = useState("");
+  const [isWebAgentExpanded, setIsWebAgentExpanded] = useState(true);
+  const [isWebAgentMaximized, setIsWebAgentMaximized] = useState(false);
+  const [webAgentQuery, setWebAgentQuery] = useState("");
+  const [webAgentCurrentStatus, setWebAgentCurrentStatus] = useState("");
+  const [webAgentStatusLog, setWebAgentStatusLog] = useState([]);
+  const userEditedQueryRef = useRef(false);
+
+  // Load saved Land_and_fsi_details V3 payload on mount
+  useEffect(() => {
+    const savedV3 = localStorage.getItem("Land_and_fsi_details");
+    if (savedV3) {
+      try {
+        const parsed = JSON.parse(savedV3);
+        setV3FormData({
+          permissibleFSI_FAR: parsed.permissibleFSI_FAR || "",
+          grossFloorArea: parsed.grossFloorArea || "",
+        });
+        if (parsed.webAgentStatus) setWebAgentStatus(parsed.webAgentStatus);
+        if (parsed.webAgentResponse) setWebAgentResponse(parsed.webAgentResponse);
+        if (parsed.webAgentQuery) {
+          setWebAgentQuery(parsed.webAgentQuery);
+          userEditedQueryRef.current = true; // Mark as saved/edited if loaded from V3 storage
+        }
+      } catch (e) {
+        console.error("Error parsing Land_and_fsi_details payload:", e);
+      }
+    }
+  }, []);
+
+  const constructQueryFromLandData = (landData) => {
+    let location = "pune";
+    let lat = "18.6448506424618";
+    let lng = "73.7781109002116";
+    let planningAuthority = "Pune Metropolitan Region Development Authority";
+
+    const savedData = landData || localStorage.getItem("Land Identification") || localStorage.getItem("landDetailsForm");
+    if (savedData) {
+      try {
+        const parsed = typeof savedData === "string" ? JSON.parse(savedData) : savedData;
+        location = (parsed.location === "Other Location" && parsed.otherLocationName)
+          ? parsed.otherLocationName
+          : parsed.location || parsed.city || location;
+        lat = parsed.polygonCenterLat || parsed.latitude || lat;
+        lng = parsed.polygonCenterLng || parsed.longitude || lng;
+        planningAuthority = parsed.planningAuthority || parsed.planning_authority || parsed.planningAdvisory || planningAuthority;
+      } catch (err) {
+        console.error("Error parsing Land Identification data for Web Agent:", err);
+      }
+    }
+
+    return `give me building code/bulding regulation rules & relevant document in ${location} ,for ${lat}, ${lng}, under ${planningAuthority}`;
+  };
+
+  useEffect(() => {
+    const updateQueryFromEvent = (e) => {
+      const newQuery = constructQueryFromLandData(e?.detail);
+      setWebAgentQuery(newQuery);
+      userEditedQueryRef.current = false;
+    };
+
+    // Initial sync on mount if not custom-edited
+    const initialQuery = constructQueryFromLandData();
+    if (!userEditedQueryRef.current) {
+      setWebAgentQuery(initialQuery);
+    }
+
+    window.addEventListener("landIdentificationSaved", updateQueryFromEvent);
+    window.addEventListener("landDetailsUpdated", updateQueryFromEvent);
+    window.addEventListener("landDetailsFormSaved", updateQueryFromEvent);
+    return () => {
+      window.removeEventListener("landIdentificationSaved", updateQueryFromEvent);
+      window.removeEventListener("landDetailsUpdated", updateQueryFromEvent);
+      window.removeEventListener("landDetailsFormSaved", updateQueryFromEvent);
+    };
+  }, []);
+
+  const webEventSourceRef = useRef(null);
+
+  const runWebDataAgent = () => {
+    setWebAgentStatus("loading");
+    setWebAgentError("");
+    setWebAgentResponse("");
+    setWebAgentCurrentStatus("Initializing web search...");
+    setWebAgentStatusLog(["Initializing web search connection..."]);
+    setIsWebAgentExpanded(true);
+
+    const queryToSend = webAgentQuery || `give me building code/bulding regulation rules & relevant document in pune ,for 18.6448506424618, 73.7781109002116, under Pune Metropolitan Region Development Authority`;
+    const encodedQuery = encodeURIComponent(queryToSend);
+
+    if (webEventSourceRef.current) {
+      webEventSourceRef.current.close();
+    }
+
+    let accumulatedResponse = "";
+
+    try {
+      const streamUrl = apiUrl(`/api/chat_stream?query=${encodedQuery}&no_cache=true`);
+      const source = new EventSource(streamUrl);
+      webEventSourceRef.current = source;
+
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "status") {
+            const statusMsg = data.content || "Processing...";
+            setWebAgentCurrentStatus(statusMsg);
+            setWebAgentStatusLog((prev) => [...prev, statusMsg]);
+          } else if (data.type === "chunk") {
+            accumulatedResponse += data.content || "";
+            setWebAgentResponse((prev) => prev + data.content);
+          } else if (data.type === "done") {
+            source.close();
+            setWebAgentStatus("completed");
+            saveV3Payload(undefined, queryToSend, "completed", accumulatedResponse);
+          }
+        } catch (e) {
+          console.error("Error parsing chat_stream event data:", e);
+        }
+      };
+
+      source.onerror = (err) => {
+        console.error("chat_stream EventSource error:", err);
+        source.close();
+        setWebAgentStatus("error");
+        setWebAgentError("Connection to Web Search Agent stream failed. Please try again.");
+      };
+    } catch (err) {
+      console.error("Error establishing EventSource:", err);
+      setWebAgentStatus("error");
+      setWebAgentError(err.message || "Failed to establish stream connection.");
+    }
   };
 
   const handleInputChange = (field, value) => {
@@ -1643,12 +1832,90 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
           background-color: #2c2e31;
           color: #fff;
         }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #94a3b8;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+        .web-response-h1, .web-response-h2 {
+          color: #1e293b;
+          font-weight: 700;
+          font-size: 15px;
+          margin-top: 18px;
+          margin-bottom: 10px;
+          padding-bottom: 6px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+        .web-response-h3 {
+          color: #334155;
+          font-weight: 600;
+          font-size: 14px;
+          margin-top: 14px;
+          margin-bottom: 8px;
+        }
+        .web-response-link {
+          display: inline-flex;
+          align-items: center;
+          background-color: #f0fdf4;
+          color: #15803d !important;
+          border: 1px solid #bbf7d0;
+          padding: 2px 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+          text-decoration: none !important;
+          word-break: break-all;
+          margin: 2px 0;
+          transition: all 0.2s ease;
+        }
+        .web-response-link:hover {
+          background-color: #dcfce7;
+          color: #166534 !important;
+          border-color: #86efac;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .web-response-blockquote {
+          background: #f8fafc;
+          border-left: 4px solid #448C74;
+          padding: 12px 16px;
+          margin: 12px 0;
+          border-radius: 0 8px 8px 0;
+          font-style: italic;
+          color: #475569;
+          font-size: 13px;
+        }
+        .web-response-table {
+          background: #ffffff;
+          border-radius: 8px;
+          overflow: hidden;
+          font-size: 13px;
+        }
+        .web-response-table th {
+          background-color: #f1f5f9 !important;
+          color: #1e293b;
+          font-weight: 600;
+          padding: 8px 12px;
+        }
+        .web-response-table td {
+          padding: 8px 12px;
+          color: #334155;
+        }
       `}</style>
 
       <div className="land-details-header">
         <div>
           <div className="land-details-eyebrow">Selected Section</div>
-          <h1 className="land-details-title">Land</h1>
+          <h1 className="land-details-title">Land and FSI Details</h1>
         </div>
         <div className="land-details-toggle">
           <button
@@ -1665,373 +1932,380 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
           >
             V2 Canvas
           </button>
+          <button
+            type="button"
+            className={`btn ${activeView === "V3" ? "btn-active" : "btn-inactive"}`}
+            onClick={() => handleViewChange("V3")}
+          >
+            V3
+          </button>
         </div>
       </div>
 
       <div className="land-details-body">
         {activeView === "V1" ? (
           <>
-        <div className="coordinate-intel">
-          <div>
-            <div className="coordinate-intel-title">Coordinate intelligence</div>
-            <p className="coordinate-intel-copy">
-              Fetch planning parameters from coordinates and update road widening automatically.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="coordinate-intel-btn"
-            disabled={!(formData.latitude && formData.longitude) || planningAdvisoryLoading}
-            onClick={handleFetchParameters}
-            title={
-              formData.latitude && formData.longitude
-                ? "Load map for this point"
-                : "Enter coordinates first"
-            }
-          >
-            <FaWandSparkles className="me-2" style={{ color: "#ffffff" }} />
-            {planningAdvisoryLoading ? "Fetching..." : "Run GIS Agent"}
-          </button>
-        </div>
-
-        {(() => {
-          const portalTarget =
-            typeof document !== "undefined"
-              ? document.getElementById("land-fsi-osm-portal-slot")
-              : null;
-          const osmPanel = (
-            <div className="land-osm-panel">
-              <OsmInline
-              coordString={`${formData.latitude}, ${formData.longitude}`}
-              defaultRadius={200}
-              height={520}
-              layout="results"
-              autoLoadTrigger={autoLoadMapTrigger}
-              onLoadStatusChange={(isLoading) => {
-                osmLoadActiveRef.current = isLoading;
-                if (!isLoading) {
-                  setPlanningAdvisoryLoading(false);
+            <div className="coordinate-intel">
+              <div>
+                <div className="coordinate-intel-title">Coordinate intelligence</div>
+                <p className="coordinate-intel-copy">
+                  Fetch planning parameters from coordinates and update road widening automatically.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="coordinate-intel-btn"
+                disabled={!(formData.latitude && formData.longitude) || planningAdvisoryLoading}
+                onClick={handleFetchParameters}
+                title={
+                  formData.latitude && formData.longitude
+                    ? "Load map for this point"
+                    : "Enter coordinates first"
                 }
-              }}
-              onHighestRoadWidthCategory={(value) =>
-                handleInputChange("roadWidening", value)
-              }
-              onPlanningParameters={(params) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  ...(params.roadWidening
-                    ? { roadWidening: params.roadWidening }
-                    : {}),
-                  fetched_location:
-                    params.fetched_location || params.location || prev.fetched_location || "",
-                  roadCategory: params.roadCategory || prev.roadCategory || "",
-                  builtupDensity:
-                    params.builtupDensity !== undefined &&
-                    params.builtupDensity !== null
-                      ? String(params.builtupDensity)
-                      : prev.builtupDensity || "",
-                }));
-              }}
-              onLoadMap={(coords) =>
-                Promise.all([
-                  fetchPlanningAdvisory(coords),
-                  fetchCoordinateLocation(coords),
-                ])
-              }
-            />
+              >
+                <FaWandSparkles className="me-2" style={{ color: "#ffffff" }} />
+                {planningAdvisoryLoading ? "Fetching..." : "Run GIS Agent"}
+              </button>
             </div>
-          );
 
-          return portalTarget
-            ? ReactDOM.createPortal(osmPanel, portalTarget)
-            : osmPanel;
-        })()}
+            {(() => {
+              const portalTarget =
+                typeof document !== "undefined"
+                  ? document.getElementById("land-fsi-osm-portal-slot")
+                  : null;
+              const osmPanel = (
+                <div className="land-osm-panel">
+                  <OsmInline
+                    coordString={`${formData.latitude}, ${formData.longitude}`}
+                    defaultRadius={200}
+                    height={520}
+                    layout="results"
+                    autoLoadTrigger={autoLoadMapTrigger}
+                    onLoadStatusChange={(isLoading) => {
+                      osmLoadActiveRef.current = isLoading;
+                      if (!isLoading) {
+                        setPlanningAdvisoryLoading(false);
+                      }
+                    }}
+                    onHighestRoadWidthCategory={(value) =>
+                      handleInputChange("roadWidening", value)
+                    }
+                    onPlanningParameters={(params) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        ...(params.roadWidening
+                          ? { roadWidening: params.roadWidening }
+                          : {}),
+                        fetched_location:
+                          params.fetched_location || params.location || prev.fetched_location || "",
+                        roadCategory: params.roadCategory || prev.roadCategory || "",
+                        builtupDensity:
+                          params.builtupDensity !== undefined &&
+                            params.builtupDensity !== null
+                            ? String(params.builtupDensity)
+                            : prev.builtupDensity || "",
+                      }));
+                    }}
+                    onLoadMap={(coords) =>
+                      Promise.all([
+                        fetchPlanningAdvisory(coords),
+                        fetchCoordinateLocation(coords),
+                      ])
+                    }
+                  />
+                </div>
+              );
 
-        <div className="land-details-grid row g-3">
-          <div className="col-md-6">
-            <label htmlFor="location" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              City *
-            </label>
-            <select
-              className="form-select"
-              value={formData.location}
-              onChange={(e) => handleInputChange("location", e.target.value)}
-            >
-              <option value="">Select location</option>
-              {ALLOWED_CITIES.map(city => (
-                <option key={city} value={city}>{city}</option>
-              ))}
-              <option value="Other Location">Other Location</option>
-            </select>
-          </div>
+              return portalTarget
+                ? ReactDOM.createPortal(osmPanel, portalTarget)
+                : osmPanel;
+            })()}
 
-          {formData.location === "Other Location" && (
-            <div className="col-md-6">
-              <label htmlFor="otherLocationName" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-                Name of Location *
-              </label>
-              <input
-                type="text"
-                className="form-control"
-                id="otherLocationName"
-                value={formData.otherLocationName}
-                onChange={(e) => handleInputChange("otherLocationName", e.target.value)}
-                placeholder="Enter location name"
-                maxLength={100}
-              />
-            </div>
-          )}
+            <div className="land-details-grid row g-3">
+              <div className="col-md-6">
+                <label htmlFor="location" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  City *
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange("location", e.target.value)}
+                >
+                  <option value="">Select location</option>
+                  {ALLOWED_CITIES.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                  <option value="Other Location">Other Location</option>
+                </select>
+              </div>
 
-          {ALLOWED_CITIES.includes(formData.location) && (
-            <>
-              {villagesError && (
-                <div className="alert alert-danger border-0 shadow-sm rounded-3" role="alert">
-                  {villagesError}
+              {formData.location === "Other Location" && (
+                <div className="col-md-6">
+                  <label htmlFor="otherLocationName" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                    Name of Location *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="otherLocationName"
+                    value={formData.otherLocationName}
+                    onChange={(e) => handleInputChange("otherLocationName", e.target.value)}
+                    placeholder="Enter location name"
+                    maxLength={100}
+                  />
                 </div>
               )}
+
+              {ALLOWED_CITIES.includes(formData.location) && (
+                <>
+                  {villagesError && (
+                    <div className="alert alert-danger border-0 shadow-sm rounded-3" role="alert">
+                      {villagesError}
+                    </div>
+                  )}
+                  <div className="col-md-6">
+                    <label className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>Village</label>
+                    <Select
+                      options={options}
+                      value={
+                        formData.village
+                          ? options.find((o) => o.value === formData.village)
+                          : null
+                      }
+                      onChange={(opt) => {
+                        if (opt) {
+                          handleInputChange("village", opt.value);
+                          setSelectedVillageCoords({ lat: opt.lat, lng: opt.lng });
+                        } else {
+                          handleInputChange("village", "");
+                          setSelectedVillageCoords(null);
+                        }
+                      }}
+                      isLoading={villagesLoading}
+                      isDisabled={villagesLoading}
+                      placeholder="Choose village"
+                      isClearable
+                    />
+                  </div>
+                </>
+              )}
+
+
+
               <div className="col-md-6">
-                <label className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>Village</label>
-                <Select
-                  options={options}
-                  value={
-                    formData.village
-                      ? options.find((o) => o.value === formData.village)
-                      : null
-                  }
-                  onChange={(opt) => {
-                    if (opt) {
-                      handleInputChange("village", opt.value);
-                      setSelectedVillageCoords({ lat: opt.lat, lng: opt.lng });
+                <label htmlFor="coordinates" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Coordinates
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  id="coordinates"
+                  value={formData.latitude && formData.longitude ? `${formData.latitude}, ${formData.longitude}` : ''}
+                  onChange={(e) => {
+                    const value = e.target.value.trim();
+                    loadedPlanningCoordsRef.current = "";
+                    planningAdvisoryRequestRef.current += 1;
+                    coordinateLocationRequestRef.current += 1;
+                    if (value === '') {
+                      // Clear both latitude and longitude
+                      setFormData({
+                        ...formData,
+                        latitude: '',
+                        longitude: '',
+                        fetched_location: '',
+                        planningAdvisory: '',
+                      });
                     } else {
-                      handleInputChange("village", "");
-                      setSelectedVillageCoords(null);
+                      // Parse comma-separated coordinates
+                      const parts = value.split(',').map(p => p.trim());
+                      if (parts.length === 2) {
+                        const lat = parts[0];
+                        const lng = parts[1];
+                        setFormData({
+                          ...formData,
+                          latitude: lat,
+                          longitude: lng,
+                          fetched_location: '',
+                          planningAdvisory: '',
+                        });
+                      } else if (parts.length === 1) {
+                        // Allow partial input while typing
+                        setFormData({
+                          ...formData,
+                          latitude: parts[0],
+                          longitude: '',
+                          fetched_location: '',
+                          planningAdvisory: '',
+                        });
+                      }
                     }
                   }}
-                  isLoading={villagesLoading}
-                  isDisabled={villagesLoading}
-                  placeholder="Choose village"
-                  isClearable
+                  placeholder="e.g., 18.623724, 73.724565"
                 />
+                <small className="text-muted">Enter coordinates in Google Maps format: latitude, longitude</small>
               </div>
-            </>
-          )}
 
+              {(showFetchedLocation || formData.fetched_location) && (
+                <div className="col-md-6">
+                  <label htmlFor="fetched_location" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="fetched_location"
+                    value={formData.fetched_location || ""}
+                    onChange={(e) => handleInputChange("fetched_location", e.target.value)}
+                    placeholder={
+                      planningAdvisoryLoading
+                        ? "Fetching location..."
+                        : "Enter location"
+                    }
+                    maxLength={180}
+                  />
+                </div>
+              )}
 
-
-          <div className="col-md-6">
-            <label htmlFor="coordinates" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Coordinates
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id="coordinates"
-              value={formData.latitude && formData.longitude ? `${formData.latitude}, ${formData.longitude}` : ''}
-              onChange={(e) => {
-                const value = e.target.value.trim();
-                loadedPlanningCoordsRef.current = "";
-                planningAdvisoryRequestRef.current += 1;
-                coordinateLocationRequestRef.current += 1;
-                if (value === '') {
-                  // Clear both latitude and longitude
-                  setFormData({
-                    ...formData,
-                    latitude: '',
-                    longitude: '',
-                    fetched_location: '',
-                    planningAdvisory: '',
-                  });
-                } else {
-                  // Parse comma-separated coordinates
-                  const parts = value.split(',').map(p => p.trim());
-                  if (parts.length === 2) {
-                    const lat = parts[0];
-                    const lng = parts[1];
-                    setFormData({
-                    ...formData,
-                    latitude: lat,
-                    longitude: lng,
-                    fetched_location: '',
-                    planningAdvisory: '',
-                  });
-                  } else if (parts.length === 1) {
-                    // Allow partial input while typing
-                    setFormData({
-                    ...formData,
-                    latitude: parts[0],
-                    longitude: '',
-                    fetched_location: '',
-                    planningAdvisory: '',
-                  });
-                  }
-                }
-              }}
-              placeholder="e.g., 18.623724, 73.724565"
-            />
-            <small className="text-muted">Enter coordinates in Google Maps format: latitude, longitude</small>
-          </div>
-
-          {(showFetchedLocation || formData.fetched_location) && (
-            <div className="col-md-6">
-              <label htmlFor="fetched_location" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-                Location
-              </label>
-              <input
-                type="text"
-                className="form-control"
-                id="fetched_location"
-                value={formData.fetched_location || ""}
-                onChange={(e) => handleInputChange("fetched_location", e.target.value)}
-                placeholder={
-                  planningAdvisoryLoading
-                    ? "Fetching location..."
-                    : "Enter location"
-                }
-                maxLength={180}
-              />
-            </div>
-          )}
-
-          <div className="col-md-6">
-            <label
-              htmlFor="netPlotArea"
-              className="form-label d-flex align-items-center gap-2 fw-bold text-dark small text-uppercase"
-              style={{ letterSpacing: '0.5px' }}
-            >
-              Net Plot Area Sq Ft *
-              <div className="position-relative d-inline-block">
-                <FaInfo
-                  className="text-muted"
-                  style={{ width: "16px", height: "16px", cursor: "help" }}
-                  onMouseEnter={(e) => {
-                    const tooltip = e.target.nextElementSibling;
-                    if (tooltip) tooltip.style.display = "block";
-                  }}
-                  onMouseLeave={(e) => {
-                    const tooltip = e.target.nextElementSibling;
-                    if (tooltip) tooltip.style.display = "none";
-                  }}
-                />
-                <div
-                  className="position-absolute bg-dark text-white p-2 rounded shadow-sm"
-                  style={{
-                    display: "none",
-                    zIndex: 1000,
-                    width: "280px",
-                    fontSize: "12px",
-                    lineHeight: "1.4",
-                    top: "-5px",
-                    left: "25px",
-                    whiteSpace: "normal",
-                  }}
+              <div className="col-md-6">
+                <label
+                  htmlFor="netPlotArea"
+                  className="form-label d-flex align-items-center gap-2 fw-bold text-dark small text-uppercase"
+                  style={{ letterSpacing: '0.5px' }}
                 >
-                  Net Plot Area = [Gross_Plot_Area] - [Deductions as per norms]
-                </div>
+                  Net Plot Area Sq Ft *
+                  <div className="position-relative d-inline-block">
+                    <FaInfo
+                      className="text-muted"
+                      style={{ width: "16px", height: "16px", cursor: "help" }}
+                      onMouseEnter={(e) => {
+                        const tooltip = e.target.nextElementSibling;
+                        if (tooltip) tooltip.style.display = "block";
+                      }}
+                      onMouseLeave={(e) => {
+                        const tooltip = e.target.nextElementSibling;
+                        if (tooltip) tooltip.style.display = "none";
+                      }}
+                    />
+                    <div
+                      className="position-absolute bg-dark text-white p-2 rounded shadow-sm"
+                      style={{
+                        display: "none",
+                        zIndex: 1000,
+                        width: "280px",
+                        fontSize: "12px",
+                        lineHeight: "1.4",
+                        top: "-5px",
+                        left: "25px",
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      Net Plot Area = [Gross_Plot_Area] - [Deductions as per norms]
+                    </div>
+                  </div>
+                </label>
+                <input
+                  type="number"
+                  className="form-control"
+                  id="netPlotArea"
+                  value={formData.netPlotArea}
+                  onChange={(e) => handleInputChange("netPlotArea", e.target.value)}
+                  placeholder="Enter area in sq ft"
+                />
               </div>
-            </label>
-            <input
-              type="number"
-              className="form-control"
-              id="netPlotArea"
-              value={formData.netPlotArea}
-              onChange={(e) => handleInputChange("netPlotArea", e.target.value)}
-              placeholder="Enter area in sq ft"
-            />
-          </div>
 
-          <div className="col-12">
-            <label htmlFor="zoningType" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Developement Category *
-              <button
-                type="button"
-                className="btn btn-link btn-sm p-0 ms-1"
-                onClick={openMmadashboard}
-                style={{ textDecoration: "none" }}
-              >
-                 <FaExternalLinkAlt style={{ width: "16px", height: "16px" }} />
-              </button>
-            </label>
-            <select
-              className="form-select"
-              value={formData.zoningType}
-              onChange={(e) => handleInputChange("zoningType", e.target.value)}
-            >
-              <option value="">Select Developement Category</option>
-              <option value="residential">Residential</option>
-              <option value="commercial">Commercial</option>
-              <option value="mixed">Mixed Use</option>
-            </select>
-          </div>
-
-          <div className="col-12">
-            <label htmlFor="areaType" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Area Type*
-              <button
-                type="button"
-                className="btn btn-link btn-sm p-0 ms-1"
-                onClick={openMmadashboard}
-                style={{ textDecoration: "none" }}
-              >
-                 <FaExternalLinkAlt style={{ width: "16px", height: "16px" }} />
-              </button>
-            </label>
-            <select
-              className="form-select"
-              value={formData.areaType}
-              onChange={(e) => handleInputChange("areaType", e.target.value)}
-            >
-              <option value="">Select Area Type</option>
-              <option value="Congested">Congested</option>
-              <option value="Non-Congested">Non-Congested</option>
-              <option value="Other">Others</option>
-            </select>
-          </div>
-
-          {formData.zoningType === "mixed" && (
-            <div className="col-12">
-              <div className="row g-3 p-3 bg-light rounded-3">
-                <div className="col-md-6">
-                  <label htmlFor="commercialSplit" className="form-label fw-bold text-dark small">
-                    Commercial Split %
-                  </label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    id="commercialSplit"
-                    min="0"
-                    max="100"
-                    value={formData.commercialSplit}
-                    onChange={(e) =>
-                      handleInputChange("commercialSplit", e.target.value)
-                    }
-                    placeholder="Enter percentage"
-                  />
-                </div>
-
-                <div className="col-md-6">
-                  <label htmlFor="residentialSplit" className="form-label fw-bold text-dark small">
-                    Residential Split %
-                  </label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    id="residentialSplit"
-                    min="0"
-                    max="100"
-                    value={formData.residentialSplit}
-                    onChange={(e) =>
-                      handleInputChange("residentialSplit", e.target.value)
-                    }
-                    placeholder="Enter percentage"
-                  />
-                </div>
+              <div className="col-12">
+                <label htmlFor="zoningType" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Developement Category *
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 ms-1"
+                    onClick={openMmadashboard}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <FaExternalLinkAlt style={{ width: "16px", height: "16px" }} />
+                  </button>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.zoningType}
+                  onChange={(e) => handleInputChange("zoningType", e.target.value)}
+                >
+                  <option value="">Select Developement Category</option>
+                  <option value="residential">Residential</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="mixed">Mixed Use</option>
+                </select>
               </div>
-            </div>
-          )}
 
-          {/* shifted this code into the developer owenership page  */}
+              <div className="col-12">
+                <label htmlFor="areaType" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Area Type*
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 ms-1"
+                    onClick={openMmadashboard}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <FaExternalLinkAlt style={{ width: "16px", height: "16px" }} />
+                  </button>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.areaType}
+                  onChange={(e) => handleInputChange("areaType", e.target.value)}
+                >
+                  <option value="">Select Area Type</option>
+                  <option value="Congested">Congested</option>
+                  <option value="Non-Congested">Non-Congested</option>
+                  <option value="Other">Others</option>
+                </select>
+              </div>
 
-          {/* <div className="col-12">
+              {formData.zoningType === "mixed" && (
+                <div className="col-12">
+                  <div className="row g-3 p-3 bg-light rounded-3">
+                    <div className="col-md-6">
+                      <label htmlFor="commercialSplit" className="form-label fw-bold text-dark small">
+                        Commercial Split %
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        id="commercialSplit"
+                        min="0"
+                        max="100"
+                        value={formData.commercialSplit}
+                        onChange={(e) =>
+                          handleInputChange("commercialSplit", e.target.value)
+                        }
+                        placeholder="Enter percentage"
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label htmlFor="residentialSplit" className="form-label fw-bold text-dark small">
+                        Residential Split %
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        id="residentialSplit"
+                        min="0"
+                        max="100"
+                        value={formData.residentialSplit}
+                        onChange={(e) =>
+                          handleInputChange("residentialSplit", e.target.value)
+                        }
+                        placeholder="Enter percentage"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* shifted this code into the developer owenership page  */}
+
+              {/* <div className="col-12">
             <label className="form-label">Who owns the land? *</label>
             <div className="form-check">
               <input
@@ -2121,102 +2395,100 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
             </div>
           )} */}
 
-          {/* shifted this code into the developer owenership page  */}
+              {/* shifted this code into the developer owenership page  */}
 
-          {(formData.location === "Pune" || formData.location === "Thane") && (
-            <div className="col-md-6">
-              <label htmlFor="roadWidening" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-                Road Width *
-              </label>
-              <select
-                className="form-select"
-                id="roadWidening"
-                name="roadWidening"
-                value={formData.roadWidening}
-                onChange={(e) => handleInputChange("roadWidening", e.target.value)}
-              >
-                <option value="">Select road widening</option>
-                <option value="below9">Below 9 m.</option>
-                <option value="9-12">9 m. and above but below 12 m.</option>
-                <option value="12-15">12 m. and above but below 15 m.</option>
-                <option value="15-24">15 m. and above but below 24 m.</option>
-                <option value="24-30">24 and above but below 30 m.</option>
-                <option value="30+">30 and above</option>
-              </select>
-            </div>
-          )}
-
-          <div className="col-md-6">
-            <label htmlFor="roadCategory" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Road Category
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id="roadCategory"
-              value={formData.roadCategory || ""}
-              onChange={(e) => handleInputChange("roadCategory", e.target.value)}
-              placeholder="Enter road category"
-              maxLength={100}
-            />
-          </div>
-
-          <div className="col-md-6">
-            <label htmlFor="planningAdvisory" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Planning Authority
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id="planningAdvisory"
-              value={formData.planningAdvisory || ""}
-              onChange={(e) => handleInputChange("planningAdvisory", e.target.value)}
-              placeholder={
-                planningAdvisoryLoading
-                  ? "Fetching planning authority..."
-                  : "Enter planning authority"
-              }
-              maxLength={150}
-            />
-          </div>
-
-          <div className="col-md-6">
-            <label htmlFor="builtupDensity" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
-              Builtup Density
-            </label>
-            <div className="builtup-density-input">
-              <input
-                type="number"
-                className="form-control"
-                id="builtupDensity"
-                value={formData.builtupDensity || ""}
-                onChange={(e) => handleInputChange("builtupDensity", e.target.value)}
-                placeholder="Enter builtup density"
-              />
-              <span className="builtup-density-symbol">%</span>
-            </div>
-          </div>
-
-          <div className="col-12 land-actions">
-            <div className="row g-3">
-              <div className="col-6">
-                <button onClick={handleSave} className="btn btn-primary rounded-pill w-100 shadow-sm card-hover-lift">
-                   <FaSave className="me-2" />Save
-                </button>
-              </div>
-              <div className="col-6">
-                <button
-                  onClick={handleUpdate}
-                  className="btn btn-secondary rounded-pill w-100 shadow-sm card-hover-lift"
+              <div className="col-md-6">
+                <label htmlFor="roadWidening" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Road Width *
+                </label>
+                <select
+                  className="form-select"
+                  id="roadWidening"
+                  name="roadWidening"
+                  value={formData.roadWidening}
+                  onChange={(e) => handleInputChange("roadWidening", e.target.value)}
                 >
-                  <FaSyncAlt className="me-2" />Update
-                </button>
+                  <option value="">Select road widening</option>
+                  <option value="below9">Below 9 m.</option>
+                  <option value="9-12">9 m. and above but below 12 m.</option>
+                  <option value="12-15">12 m. and above but below 15 m.</option>
+                  <option value="15-24">15 m. and above but below 24 m.</option>
+                  <option value="24-30">24 and above but below 30 m.</option>
+                  <option value="30+">30 and above</option>
+                </select>
+              </div>
+
+              <div className="col-md-6">
+                <label htmlFor="roadCategory" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Road Category
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  id="roadCategory"
+                  value={formData.roadCategory || ""}
+                  onChange={(e) => handleInputChange("roadCategory", e.target.value)}
+                  placeholder="Enter road category"
+                  maxLength={100}
+                />
+              </div>
+
+              <div className="col-md-6">
+                <label htmlFor="planningAdvisory" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Planning Authority
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  id="planningAdvisory"
+                  value={formData.planningAdvisory || ""}
+                  onChange={(e) => handleInputChange("planningAdvisory", e.target.value)}
+                  placeholder={
+                    planningAdvisoryLoading
+                      ? "Fetching planning authority..."
+                      : "Enter planning authority"
+                  }
+                  maxLength={150}
+                />
+              </div>
+
+              <div className="col-md-6">
+                <label htmlFor="builtupDensity" className="form-label fw-bold text-dark small text-uppercase" style={{ letterSpacing: '0.5px' }}>
+                  Builtup Density
+                </label>
+                <div className="builtup-density-input">
+                  <input
+                    type="number"
+                    className="form-control"
+                    id="builtupDensity"
+                    value={formData.builtupDensity || ""}
+                    onChange={(e) => handleInputChange("builtupDensity", e.target.value)}
+                    placeholder="Enter builtup density"
+                  />
+                  <span className="builtup-density-symbol">%</span>
+                </div>
+              </div>
+
+              <div className="col-12 land-actions">
+                <div className="row g-3">
+                  <div className="col-6">
+                    <button onClick={handleSave} className="btn btn-primary rounded-pill w-100 shadow-sm card-hover-lift">
+                      <FaSave className="me-2" />Save
+                    </button>
+                  </div>
+                  <div className="col-6">
+                    <button
+                      onClick={handleUpdate}
+                      className="btn btn-secondary rounded-pill w-100 shadow-sm card-hover-lift"
+                    >
+                      <FaSyncAlt className="me-2" />Update
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
           </>
-        ) : (
+        ) : activeView === "V2" ? (
           <div className="land-details-grid row g-3 mt-3">
             {[
               { label: "Base FSI", key: "baseFSI" },
@@ -2241,11 +2513,333 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
               </div>
             ))}
             <div className="col-12 mt-4">
-              <button 
-                className="v2-btn-dark-pill d-inline-flex align-items-center" 
+              <button
+                className="v2-btn-dark-pill d-inline-flex align-items-center"
                 onClick={handleV2Save}
               >
                 <FaSave className="me-2" />Save V2 Data
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="land-details-grid row g-3 mt-3">
+            {/* Web Data Agent Accordion Section Card */}
+            <div className="col-12 mb-3">
+              <div
+                style={{
+                  borderRadius: "10px",
+                  border: "1px solid #e8ecf0",
+                  borderLeft: "4px solid #448C74",
+                  overflow: "hidden",
+                  transition: "all 0.3s ease",
+                  boxShadow: isWebAgentExpanded ? "0 4px 16px rgba(0,0,0,0.08)" : "0 1px 4px rgba(0,0,0,0.04)",
+                  background: "#ffffff"
+                }}
+              >
+                {/* Accordion Header Row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "14px 20px",
+                    cursor: "pointer",
+                    background: "#ffffff",
+                    userSelect: "none"
+                  }}
+                  onClick={() => setIsWebAgentExpanded(!isWebAgentExpanded)}
+                >
+                  <div className="d-flex align-items-center gap-3 flex-grow-1">
+                    <div
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "8px",
+                        background: "linear-gradient(135deg, #448C74 0%, #2d6b55 100%)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#fff",
+                        fontSize: "16px",
+                        flexShrink: 0
+                      }}
+                    >
+                      <FaEarthAmericas />
+                    </div>
+                    <div>
+                      <div className="d-flex align-items-center gap-2" style={{ fontWeight: 600, fontSize: "14px", color: "#222" }}>
+                        <span style={{ color: "#448C74", fontWeight: 700, fontSize: "12px" }}></span>
+                        Web Data Agent (Building Regulations & Rules)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      className="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm me-2"
+                      style={{ fontSize: "11px", borderColor: "#448C74", color: "#2d6b55", backgroundColor: "#ffffff" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      Open Web Search Agent <FaExternalLinkAlt size={10} />
+                    </button>
+
+                    {/* Status Badge */}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        background: webAgentStatus === "completed" ? "#e8f5e9" : webAgentStatus === "loading" ? "#fff3e0" : webAgentStatus === "error" ? "#fce4ec" : "#f0f0f0",
+                        color: webAgentStatus === "completed" ? "#2e7d32" : webAgentStatus === "loading" ? "#e65100" : webAgentStatus === "error" ? "#c62828" : "#888",
+                      }}
+                    >
+                      {webAgentStatus === "completed" ? "Completed" : webAgentStatus === "loading" ? "Processing..." : webAgentStatus === "error" ? "Error" : "Pending"}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm text-secondary p-0 ms-1 border-0 bg-transparent"
+                    >
+                      {isWebAgentExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Accordion Body View */}
+                {isWebAgentExpanded && (
+                  <div
+                    style={{
+                      padding: "16px 20px 20px",
+                      background: "#fafbfc",
+                      borderTop: "1px solid #eef1f5"
+                    }}
+                  >
+                    {/* Editable Search Query Section */}
+                    <div className="mb-3">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <strong style={{ color: "#448C74", fontSize: "13px" }}>Q:</strong>
+                          <span style={{ fontSize: "12px", fontStyle: "italic", color: "#666" }}>
+                            Edit the query below before running analysis
+                          </span>
+                        </div>
+                      </div>
+                      <textarea
+                        className="form-control"
+                        value={webAgentQuery}
+                        onChange={(e) => {
+                          setWebAgentQuery(e.target.value);
+                          userEditedQueryRef.current = true;
+                        }}
+                        disabled={webAgentStatus === "loading"}
+                        rows={3}
+                        style={{
+                          fontSize: "13px",
+                          borderRadius: "8px",
+                          borderColor: "#cbd5e1",
+                          borderLeft: "4px solid #448C74",
+                          background: webAgentStatus === "loading" ? "#f8fafc" : "#ffffff",
+                          lineHeight: "1.6",
+                          fontFamily: "inherit"
+                        }}
+                        placeholder="Enter query for Web data agent..."
+                      />
+                      <div className="d-flex justify-content-end mt-2">
+                        <button
+                          type="button"
+                          className="btn btn-sm text-white rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                          onClick={runWebDataAgent}
+                          disabled={webAgentStatus === "loading"}
+                          style={{
+                            background: webAgentStatus === "loading" ? "#ccc" : "linear-gradient(135deg, #448C74, #55d19d)",
+                            border: "none"
+                          }}
+                        >
+                          {webAgentStatus === "loading" ? (
+                            <>
+                              <FaSpinner className="spinner-border spinner-border-sm me-1" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <FaWandSparkles size={12} />
+                              Run Web Agent
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Web Agent Output Response Loading State */}
+                    {webAgentStatus === "loading" && (
+                      <div className="mt-3 p-3 rounded-3 bg-white border shadow-sm">
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <div className="d-flex align-items-center gap-2" style={{ fontSize: "13px", fontWeight: 600, color: "#2d6b55" }}>
+                            <FaSpinner className="spinner-border spinner-border-sm text-success me-1" style={{ width: "0.9rem", height: "0.9rem" }} />
+                            <span>{webAgentCurrentStatus || "Querying building regulation rules & authority documents..."}</span>
+                          </div>
+                          <span className="badge bg-success bg-opacity-10 text-success" style={{ fontSize: "10px", fontWeight: 600 }}>
+                            Live Web Search Stream
+                          </span>
+                        </div>
+
+                        {/* Live Animated Progress Bar */}
+                        <div className="progress mb-2" style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e9ecef" }}>
+                          <div
+                            className="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                            role="progressbar"
+                            style={{
+                              width: webAgentResponse ? "90%" : webAgentStatusLog.length > 2 ? "65%" : "35%",
+                              transition: "width 0.4s ease"
+                            }}
+                          />
+                        </div>
+
+                        {/* Real-time Status Log Trail */}
+                        {webAgentStatusLog.length > 0 && (
+                          <div className="pt-2 mt-2 border-top" style={{ fontSize: "11px", color: "#666", maxHeight: "90px", overflowY: "auto" }}>
+                            {webAgentStatusLog.map((logMsg, i) => (
+                              <div key={i} className="d-flex align-items-center gap-2 mb-1">
+                                <span className="text-success fw-bold" style={{ fontSize: "10px" }}>✓</span>
+                                <span>{logMsg}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {webAgentStatus === "completed" && webAgentResponse && (
+                      <div className="mt-3 rounded-3 border bg-white shadow-sm overflow-hidden">
+                        <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
+                          <div className="d-flex align-items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#2d6b55" }}>
+                            <span>Analysis Result</span>
+                            <span className="badge bg-success bg-opacity-10 text-success fw-normal" style={{ fontSize: "10px" }}>Web Agent</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
+                            style={{ fontSize: "11px", fontWeight: 600 }}
+                            onClick={() => setIsWebAgentMaximized(!isWebAgentMaximized)}
+                          >
+                            {isWebAgentMaximized ? (
+                              <>
+                                <FaCompress size={11} /> Minimize View
+                              </>
+                            ) : (
+                              <>
+                                <FaExpandAlt size={11} /> Maximize View
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div
+                          className="p-3 regulatory-answer-md custom-scrollbar"
+                          style={{
+                            maxHeight: isWebAgentMaximized ? "750px" : "350px",
+                            overflowY: "scroll",
+                            fontSize: "13px",
+                            background: "#ffffff"
+                          }}
+                        >
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              h1: ({ node, ...props }) => <h4 className="web-response-h1" {...props} />,
+                              h2: ({ node, ...props }) => <h5 className="web-response-h2" {...props} />,
+                              h3: ({ node, ...props }) => <h6 className="web-response-h3" {...props} />,
+                              a: ({ node, href, children, ...props }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="web-response-link"
+                                  {...props}
+                                >
+                                  {children} <FaExternalLinkAlt size={9} className="ms-1 inline-icon" />
+                                </a>
+                              ),
+                              blockquote: ({ node, ...props }) => (
+                                <blockquote className="web-response-blockquote" {...props} />
+                              ),
+                              table: ({ node, ...props }) => (
+                                <div className="table-responsive my-3">
+                                  <table className="table table-sm table-hover table-bordered border-light-subtle web-response-table" {...props} />
+                                </div>
+                              )
+                            }}
+                          >
+                            {webAgentResponse}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {webAgentStatus === "error" && (
+                      <div className="mt-3 p-3 rounded-3 bg-danger bg-opacity-10 border border-danger text-danger small">
+                        {webAgentError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Input 1: Permissible FSI / FAR (Sq ft) */}
+            <div className="col-md-6">
+              <div className="v2-field-wrapper-card">
+                <label className="v2-field-label-text d-block">
+                  Permissible FSI / FAR (Sq ft)
+                </label>
+                <input
+                  type="text"
+                  className="v2-pill-input"
+                  value={v3FormData.permissibleFSI_FAR || ""}
+                  onChange={(e) => handleV3InputChange("permissibleFSI_FAR", e.target.value)}
+                  placeholder="Enter Permissible FSI / FAR (Sq ft)"
+                />
+              </div>
+            </div>
+
+            {/* Input 2: Gross Floor area (Sq ft) */}
+            <div className="col-md-6">
+              <div className="v2-field-wrapper-card">
+                <label className="v2-field-label-text d-block">
+                  Gross Floor area (Sq ft)
+                </label>
+                <input
+                  type="text"
+                  className="v2-pill-input"
+                  value={v3FormData.grossFloorArea || ""}
+                  onChange={(e) => handleV3InputChange("grossFloorArea", e.target.value)}
+                  placeholder="Enter Gross Floor area (Sq ft)"
+                />
+              </div>
+            </div>
+
+            {/* Disclaimer Info Banner */}
+            <div className="col-12 mt-2">
+              <div className="p-3 rounded-4 border d-flex align-items-center gap-3 bg-white text-secondary" style={{ fontSize: "13px", borderColor: "#e2e8f0" }}>
+                <FaInfoCircle className="text-primary flex-shrink-0" size={16} />
+                <span>FSI/FAR values should be verified with applicable development control rules, zoning documents and planning authority records.</span>
+              </div>
+            </div>
+
+            {/* Action Save Button */}
+            <div className="col-12 mt-3">
+              <button
+                className="v2-btn-dark-pill d-inline-flex align-items-center"
+                onClick={handleV3Save}
+              >
+                <FaSave className="me-2" />Save V3 Data
               </button>
             </div>
           </div>

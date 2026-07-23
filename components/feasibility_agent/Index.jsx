@@ -679,6 +679,65 @@ const Index = () => {
     };
   }, [showToolsDropdown]);
 
+  // Scroll spy effect: Auto-highlight current section in sidebar as user scrolls up/down
+  useEffect(() => {
+    const contentArea = document.querySelector(".content-area");
+    if (!contentArea) return;
+
+    const handleScroll = () => {
+      const sectionMap = [
+        { id: "land-identification", elementId: "section-land-identification" },
+        { id: "regulatory-intelligence", elementId: "section-regulatory-intelligence" },
+        { id: "land-fsi", elementId: "section-land-fsi" },
+        { id: "market-analysis", elementId: "section-market-analysis" },
+        { id: "predictive-rate-sim", elementId: "predictive-rate-sim" },
+        { id: "building", elementId: "section-building" },
+        { id: "ticket-size", elementId: "section-ticket-size" },
+        { id: "revenue", elementId: "section-revenue" },
+        { id: "revenue-details", elementId: "section-revenue-heading" },
+        { id: "cost-details", elementId: "section-cost-heading" },
+        { id: "means-finance", elementId: "section-means-finance-heading" },
+        { id: "cashflows", elementId: "section-cashflows" },
+      ];
+
+      const containerRect = contentArea.getBoundingClientRect();
+      const triggerPoint = containerRect.top + 200; // Offset threshold
+
+      let currentActiveId = null;
+
+      for (let i = 0; i < sectionMap.length; i++) {
+        const el = document.getElementById(sectionMap[i].elementId);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= triggerPoint) {
+            currentActiveId = sectionMap[i].id;
+          }
+        }
+      }
+
+      if (currentActiveId) {
+        setActiveSection(currentActiveId);
+      }
+    };
+
+    contentArea.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => {
+      contentArea.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  // Auto-scroll sidebar item into view when activeSection changes
+  useEffect(() => {
+    if (activeSection) {
+      const activeBtn = document.querySelector(".nav-btn-modern.active");
+      if (activeBtn) {
+        activeBtn.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+  }, [activeSection]);
+
   const handleToolsDropdownToggle = (event) => {
     event.stopPropagation();
     setShowToolsDropdown((prev) => !prev);
@@ -1226,7 +1285,7 @@ const Index = () => {
                     onCalculate={handleLandCalculation}
                     updateingUI={updateingUI}
                     setUpdateUI={setUpdateUI}
-                    onViewChange={(view) => setIsLandV2Active(view === "V2")}
+                    onViewChange={(view) => setIsLandV2Active(view !== "V1")}
                   />
                 </div>
                 {!isLandV2Active && (
@@ -1484,7 +1543,7 @@ const Index = () => {
                 </div>
 
                 {/* Ticket Size Summary + Expected Revenue Comparison Section */}
-                <div className="col-12 fade-in-up stagger-5" style={{ marginTop: '2rem' }}>
+                <div id="section-ticket-size" className="col-12 fade-in-up stagger-5" style={{ marginTop: '2rem', scrollMarginTop: '120px' }}>
                   <TicketSizeSummary />
                   <ExpectedRevenueComparison />
                 </div>
