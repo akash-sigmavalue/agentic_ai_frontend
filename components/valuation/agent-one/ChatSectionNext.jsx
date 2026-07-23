@@ -1048,6 +1048,68 @@ function ComparisonModal({ projects, onClose }) {
   );
 }
 
+// ── Geocode Source & Coordinate Edit Helpers ─────────────────────
+function formatGeocodeSource(source) {
+  if (!source) return { label: "Not Geocoded", color: "bg-red-500/15 text-red-400 border-red-500/30" };
+  const s = String(source).toLowerCase();
+  if (s.includes("google_places")) return { label: "Google Places API", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+  if (s.includes("google_geocoding") || s.includes("google")) return { label: "Google Geocoding", color: "bg-sky-500/15 text-sky-400 border-sky-500/30" };
+  if (s.includes("nominatim") || s.includes("osm") || s.includes("open_street")) return { label: "OSM (Nominatim)", color: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  if (s.includes("internal_db") || s.includes("db")) return { label: "Internal DB", color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" };
+  if (s.includes("user_override") || s.includes("user")) return { label: "User Override", color: "bg-purple-500/15 text-purple-400 border-purple-500/30" };
+  return { label: source, color: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" };
+}
+
+function EditableCoordCell({ value, onSave, placeholder = "—" }) {
+  const [editing, setEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value ?? "");
+
+  useEffect(() => {
+    setTempValue(value ?? "");
+  }, [value]);
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        autoFocus
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          if (tempValue !== String(value ?? "")) {
+            onSave(tempValue);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            setEditing(false);
+            if (tempValue !== String(value ?? "")) {
+              onSave(tempValue);
+            }
+          } else if (e.key === "Escape") {
+            setEditing(false);
+            setTempValue(value ?? "");
+          }
+        }}
+        className="w-20 rounded border border-amber-500 bg-bg-input px-1.5 py-0.5 font-mono text-[10px] text-warning text-right outline-none shadow-sm"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      title="Click to edit coordinate"
+      className="group inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-warning/90 hover:bg-warning/10 hover:text-warning text-right transition cursor-pointer"
+    >
+      <span>{value != null && value !== "" ? value : placeholder}</span>
+      <span className="opacity-0 group-hover:opacity-100 text-[9px]">✏️</span>
+    </button>
+  );
+}
+
 // ── Comparable Table with Checkboxes ─────────────────────────────
 const INITIAL_COMPARABLE_RADIUS_KM = 2;
 
@@ -1058,33 +1120,74 @@ function getComparableDistanceKm(comp) {
   return Number.isFinite(distance) ? distance : null;
 }
 
-function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
+function ComparableTable({ comparables, droppedComparables, selectedComps, onToggle, onRestoreDropped, selectable, onUpdateCoordinates, onResetCoordinates }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showAllComparables, setShowAllComparables] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB"
+  const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB" | "Dropped"
+  const [selectedDropped, setSelectedDropped] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
 
-  const compsList = useMemo(() => comparables || [], [comparables]);
+  const compsList = useMemo(() => {
+    return (comparables || []).filter(c => (!c.drop_stage && !c.isDropped) || c.restored);
+  }, [comparables]);
 
-  // Detect whether mixed sources exist
-  const hasMixedSources = useMemo(() => {
-    return compsList.some(c => c.data_source === "Internal DB") && compsList.some(c => c.data_source === "Web");
-  }, [compsList]);
+  const dropList = useMemo(() => {
+    const extraDropped = (comparables || []).filter(c => (c.drop_stage || c.isDropped) && !c.restored);
+    const rawAll = [...(droppedComparables || []), ...extraDropped];
+    const seen = new Set();
+    const unique = [];
+    for (const d of rawAll) {
+      if (d.drop_stage === "dedup") continue; // Exclude scraper duplicate drops
+      const name = (d.project_name || "").toLowerCase().trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        unique.push(d);
+      }
+    }
+    return unique;
+  }, [comparables, droppedComparables]);
+
+  const isDroppedTab = sourceFilter === "Dropped";
 
   const filteredComparables = useMemo(() => {
-    return sourceFilter === "all"
-      ? compsList
-      : compsList.filter(c => (c.data_source || "Web") === sourceFilter);
-  }, [compsList, sourceFilter]);
+    if (sourceFilter === "all") return compsList;
+    if (sourceFilter === "Dropped") return dropList;
+    return compsList.filter(c => (c.data_source || "Web") === sourceFilter);
+  }, [compsList, dropList, sourceFilter]);
 
   const indexedComparables = useMemo(() => {
-    return filteredComparables.map((comp) => ({
-      comp,
-      originalIndex: compsList.indexOf(comp), // keep original indices for selection
-      distanceKm: getComparableDistanceKm(comp),
-    }));
-  }, [filteredComparables, compsList]);
+    const rawActive = comparables || [];
+    const rawDropped = droppedComparables || [];
+    return filteredComparables.map((comp) => {
+      let originalIndex;
+      if (isDroppedTab) {
+        const idx = rawDropped.indexOf(comp);
+        if (idx !== -1) {
+          originalIndex = idx;
+        } else {
+          const targetName = (comp.project_name || "").toLowerCase().trim();
+          const foundIdx = rawDropped.findIndex(x => (x.project_name || "").toLowerCase().trim() === targetName);
+          originalIndex = foundIdx !== -1 ? foundIdx : 0;
+        }
+      } else {
+        const idx = rawActive.indexOf(comp);
+        if (idx !== -1) {
+          originalIndex = idx;
+        } else {
+          const targetName = (comp.project_name || "").toLowerCase().trim();
+          const foundIdx = rawActive.findIndex(x => (x.project_name || "").toLowerCase().trim() === targetName);
+          originalIndex = foundIdx !== -1 ? foundIdx : 0;
+        }
+      }
+
+      return {
+        comp: isDroppedTab ? { ...comp, isDropped: true } : comp,
+        originalIndex,
+        distanceKm: getComparableDistanceKm(comp),
+      };
+    });
+  }, [filteredComparables, isDroppedTab, comparables, droppedComparables]);
 
   const processedComparables = useMemo(() => {
     return filterAndSortList(indexedComparables, sortConfig, filterConfig);
@@ -1094,15 +1197,64 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
     return processedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
   }, [processedComparables]);
 
-  if (compsList.length === 0) return null;
+  if (compsList.length === 0 && dropList.length === 0) return null;
 
-  const visibleComparables = showAllComparables ? processedComparables : nearbyComparables;
+  const visibleComparables = (showAllComparables || isDroppedTab) ? processedComparables : nearbyComparables;
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
-  const hasHiddenComparables = hiddenComparableCount > 0;
-  const visibleResultLabel = showAllComparables
-    ? `${filteredComparables.length} results`
-    : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
+  const hasHiddenComparables = hiddenComparableCount > 0 && !isDroppedTab;
+  const visibleResultLabel = isDroppedTab
+    ? `${dropList.length} dropped projects`
+    : showAllComparables
+      ? `${filteredComparables.length} results`
+      : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
   const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
+  const allDroppedSelected = visibleComparables.length > 0 && visibleComparables.every(({ comp }) => selectedDropped.has(comp));
+
+  const renderTabBar = () => (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+        {["all", "Web", "Internal DB", "Dropped"].map(opt => {
+          const count = opt === "all"
+            ? compsList.length
+            : opt === "Web"
+              ? compsList.filter(c => (c.data_source || "Web") === "Web").length
+              : opt === "Internal DB"
+                ? compsList.filter(c => c.data_source === "Internal DB").length
+                : dropList.length;
+
+          if (opt === "Dropped" && count === 0) return null;
+
+          const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt === "Dropped" ? "Dropped" : opt;
+          const isTabDropped = opt === "Dropped";
+
+          return (
+            <button
+              key={opt}
+              onClick={() => setSourceFilter(opt)}
+              className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
+                ? isTabDropped ? "bg-amber-500 text-bg-deep shadow font-extrabold" : "bg-[#fb923c] text-bg-deep shadow"
+                : isTabDropped ? "text-amber-400/90 hover:text-amber-400 font-bold" : "text-text-dim hover:text-text-primary"
+                }`}
+            >
+              {`${label} (${count})`}
+            </button>
+          );
+        })}
+      </div>
+      {isDroppedTab && selectedDropped.size > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            onRestoreDropped?.(Array.from(selectedDropped));
+            setSelectedDropped(new Set());
+          }}
+          className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/25 transition cursor-pointer animate-in fade-in"
+        >
+          ✓ Restore Selected ({selectedDropped.size})
+        </button>
+      )}
+    </div>
+  );
 
   const renderTable = (maxHeightClass = "") => (
     <div className="relative">
@@ -1114,17 +1266,28 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <th className="px-3 py-2.5 font-semibold">
                   <input
                     type="checkbox"
-                    checked={allSelected}
+                    checked={isDroppedTab ? allDroppedSelected : allSelected}
                     onChange={() => {
-                      if (allSelected) {
-                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
+                      if (isDroppedTab) {
+                        if (allDroppedSelected) {
+                          setSelectedDropped(new Set());
+                        } else {
+                          setSelectedDropped(new Set(visibleComparables.map(({ comp }) => comp)));
+                        }
                       } else {
-                        visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
+                        if (allSelected) {
+                          visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, false));
+                        } else {
+                          visibleComparables.forEach(({ originalIndex }) => onToggle?.(originalIndex, true));
+                        }
                       }
                     }}
                     className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
                   />
                 </th>
+              )}
+              {isDroppedTab && (
+                <TableHeaderCell columnKey="drop_stage" label="Drop Stage" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               )}
               <TableHeaderCell columnKey="project_name" label="Project Name" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
@@ -1132,33 +1295,67 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
               <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="distance_from_subject_km" label="Distance" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="map_search_lat" label="Lat" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="map_search_lng" label="Lng" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="possession_status" label="Status" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="reason" label="Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="comp.confidence_score" label="Confidence" align="center" className="text-accent-light whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="confidence_reasoning" label="Confidence Reasoning" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="comp.location_certainty" label="Location Certainty" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="map_search_lat" label="Lat ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="map_search_lng" label="Lng ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              <TableHeaderCell columnKey="geocode_source" label="Coord Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+              {isDroppedTab ? (
+                <>
+                  <TableHeaderCell columnKey="drop_detail" label="Detail / Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                  <TableHeaderCell columnKey="action" label="Action" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                </>
+              ) : (
+                <>
+                  <TableHeaderCell columnKey="possession_status" label="Status" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                  <TableHeaderCell columnKey="reason" label="Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                  <TableHeaderCell columnKey="comp.confidence_score" label="Confidence" align="center" className="text-accent-light whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                  <TableHeaderCell columnKey="confidence_reasoning" label="Confidence Reasoning" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                  <TableHeaderCell columnKey="comp.location_certainty" label="Location Certainty" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
+                </>
+              )}
               <TableHeaderCell columnKey="source_url" label="Source URL" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="data_source" label="Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
             </tr>
           </thead>
           <tbody>
             {visibleComparables.map(({ comp, originalIndex }) => {
-              const isChecked = selectedComps?.has(originalIndex);
+              const isChecked = isDroppedTab ? selectedDropped.has(comp) : selectedComps?.has(originalIndex);
+              const stageConf = isDroppedTab
+                ? (DROP_STAGE_CONFIG[comp.drop_stage] || { label: comp.drop_stage || "Dropped", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" })
+                : null;
               return (
                 <tr
                   key={`${comp.project_name}-${originalIndex}`}
-                  className={`border-b border-border/50 transition ${isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
+                  className={`border-b border-border/50 transition ${isDroppedTab ? (isChecked ? "bg-amber-500/[0.12]" : "bg-amber-500/[0.04] hover:bg-amber-500/[0.08]") : isChecked ? "bg-[rgba(251,146,60,0.08)]" : "hover:bg-[rgba(251,146,60,0.04)]"}`}
                 >
                   {selectable && (
                     <td className="px-3 py-2.5">
                       <input
                         type="checkbox"
                         checked={isChecked || false}
-                        onChange={() => onToggle?.(originalIndex, !isChecked)}
+                        onChange={() => {
+                          if (isDroppedTab) {
+                            if (selectedDropped.has(comp)) {
+                              setSelectedDropped(prev => {
+                                const next = new Set(prev);
+                                next.delete(comp);
+                                return next;
+                              });
+                            } else {
+                              onRestoreDropped?.([comp]);
+                            }
+                          } else {
+                            onToggle?.(originalIndex, !isChecked);
+                          }
+                        }}
                         className="h-3.5 w-3.5 cursor-pointer rounded accent-[#fb923c]"
                       />
+                    </td>
+                  )}
+                  {isDroppedTab && (
+                    <td className="px-3 py-2.5">
+                      <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${stageConf.color}`}>
+                        {stageConf.label}
+                      </span>
                     </td>
                   )}
                   <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
@@ -1175,56 +1372,109 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lat || "—"}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-warning/80">{comp.map_search_lng || "—"}</td>
-                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
-                  <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    {comp.confidence_score !== undefined && comp.confidence_score !== null ? (() => {
-                      const score = comp.confidence_score;
-                      const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
-                      const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
-                        tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
-                          tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
-                            "bg-danger/20 text-danger border-danger/30";
-                      const fb = comp.factor_breakdown || {};
-                      const tooltip = [
-                        comp.confidence_reasoning || "",
-                        fb.location !== undefined ? `📍 Location: ${fb.location}` : "",
-                        fb.amenities !== undefined ? `🏊 Amenities: ${fb.amenities}` : "",
-                        fb.property_category !== undefined ? `🏷 Category: ${fb.property_category}` : "",
-                      ].filter(Boolean).join(" | ");
+                  <td className="px-3 py-2.5 text-right font-mono">
+                    <EditableCoordCell
+                      value={comp.map_search_lat}
+                      onSave={(newLat) => isDroppedTab ? onUpdateCoordinates?.(originalIndex, newLat, comp.map_search_lng, true) : onUpdateCoordinates?.(originalIndex, newLat, comp.map_search_lng)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono">
+                    <EditableCoordCell
+                      value={comp.map_search_lng}
+                      onSave={(newLng) => isDroppedTab ? onUpdateCoordinates?.(originalIndex, comp.map_search_lat, newLng, true) : onUpdateCoordinates?.(originalIndex, comp.map_search_lat, newLng)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {(() => {
+                      const isOverride = comp.geocode_source === "user_override" || comp.original_map_search_lat !== undefined;
+                      const src = formatGeocodeSource(comp.geocode_source || (comp.data_source === "Internal DB" ? "internal_db" : null));
                       return (
-                        <div className="group relative inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums ${tierColor}`}>
-                            {score}
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${src.color}`}>
+                            {src.label}
                           </span>
-                          <span className={`text-[8px] font-bold uppercase tracking-wider ${tierColor.split(" ")[1]}`}>
-                            {tier}
-                          </span>
+                          {isOverride && (
+                            <button
+                              type="button"
+                              onClick={() => isDroppedTab ? onResetCoordinates?.(originalIndex, true) : onResetCoordinates?.(originalIndex)}
+                              title="Reset to original fetched coordinates"
+                              className="inline-flex items-center gap-0.5 rounded border border-border bg-bg-input px-1.5 py-0.5 text-[9px] font-bold text-text-dim hover:border-amber-500 hover:text-amber-400 transition cursor-pointer"
+                            >
+                              <span>↺</span>
+                              <span>Reset</span>
+                            </button>
+                          )}
                         </div>
                       );
-                    })() : <span className="text-text-dim text-[10px]">—</span>}
+                    })()}
                   </td>
-                  <td className="px-3 py-2.5 max-w-[260px]">
-                    {comp.confidence_reasoning
-                      ? <p className="text-[10px] leading-relaxed text-text-secondary truncate" title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
-                      : <span className="text-text-dim text-[10px]">—</span>
-                    }
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {comp.location_certainty ? (
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                        }`}>
-                        {comp.location_certainty}
-                      </span>
-                    ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
-                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-                        }`}>
-                        {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
-                      </span>
-                    ) : "—")}
-                  </td>
+                  {isDroppedTab ? (
+                    <>
+                      <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[220px] truncate" title={comp.drop_reason || comp.drop_detail}>
+                        {comp.drop_detail || comp.drop_reason || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => onRestoreDropped?.([comp])}
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"
+                        >
+                          ✓ Restore
+                        </button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
+                      <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        {comp.confidence_score !== undefined && comp.confidence_score !== null ? (() => {
+                          const score = comp.confidence_score;
+                          const tier = comp.confidence_tier || (score >= 80 ? "High" : score >= 60 ? "Medium" : score >= 40 ? "Low" : "Very Low");
+                          const tierColor = tier === "High" ? "bg-success/20 text-success border-success/30" :
+                            tier === "Medium" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" :
+                              tier === "Low" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                                "bg-danger/20 text-danger border-danger/30";
+                          const fb = comp.factor_breakdown || {};
+                          const tooltip = [
+                            comp.confidence_reasoning || "",
+                            fb.location !== undefined ? `📍 Location: ${fb.location}` : "",
+                            fb.amenities !== undefined ? `🏊 Amenities: ${fb.amenities}` : "",
+                            fb.property_category !== undefined ? `🏷 Category: ${fb.property_category}` : "",
+                          ].filter(Boolean).join(" | ");
+                          return (
+                            <div className="group relative inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums ${tierColor}`}>
+                                {score}
+                              </span>
+                              <span className={`text-[8px] font-bold uppercase tracking-wider ${tierColor.split(" ")[1]}`}>
+                                {tier}
+                              </span>
+                            </div>
+                          );
+                        })() : <span className="text-text-dim text-[10px]">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 max-w-[260px]">
+                        {comp.confidence_reasoning
+                          ? <p className="text-[10px] leading-relaxed text-text-secondary truncate" title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
+                          : <span className="text-text-dim text-[10px]">—</span>
+                        }
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {comp.location_certainty ? (
+                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                            }`}>
+                            {comp.location_certainty}
+                          </span>
+                        ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
+                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                            }`}>
+                            {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
+                          </span>
+                        ) : "—")}
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                     {comp.source_url ? (
                       <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
@@ -1233,7 +1483,9 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                     ) : "—"}
                   </td>
                   <td className="px-3 py-2.5">
-                    {comp.data_source === "Internal DB" ? (
+                    {comp.isDropped ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">Dropped</span>
+                    ) : comp.data_source === "Internal DB" ? (
                       <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
@@ -1247,7 +1499,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
       </div>
       {visibleComparables.length === 0 && (
         <div className="px-4 py-6 text-center text-xs text-text-dim">
-          No comparable projects found within {INITIAL_COMPARABLE_RADIUS_KM} km.
+          {isDroppedTab ? "No dropped projects found." : `No comparable projects found within ${INITIAL_COMPARABLE_RADIUS_KM} km.`}
           {hasHiddenComparables ? " Use Show more to view farther projects." : ""}
         </div>
       )}
@@ -1275,28 +1527,7 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-              {["all", "Web", "Internal DB"].map(opt => {
-                const count = opt === "all"
-                  ? comparables.length
-                  : opt === "Web"
-                    ? comparables.filter(c => (c.data_source || "Web") === "Web").length
-                    : comparables.filter(c => c.data_source === "Internal DB").length;
-                const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
-                return (
-                  <button
-                    key={opt}
-                    onClick={() => setSourceFilter(opt)}
-                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                      ? "bg-[#fb923c] text-bg-deep shadow"
-                      : "text-text-dim hover:text-text-primary"
-                      }`}
-                  >
-                    {`${label} (${count})`}
-                  </button>
-                );
-              })}
-            </div>
+            {renderTabBar()}
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -1320,37 +1551,355 @@ function ComparableTable({ comparables, selectedComps, onToggle, selectable }) {
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Comparable Projects Detail</h3>
-                  <p className="text-[10px] text-text-dim">{visibleResultLabel} found in vicinity</p>
+                  <p className="text-[10px] text-text-dim">{visibleResultLabel}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
-                {["all", "Web", "Internal DB"].map(opt => {
-                  const count = opt === "all"
-                    ? comparables.length
-                    : opt === "Web"
-                      ? comparables.filter(c => (c.data_source || "Web") === "Web").length
-                      : comparables.filter(c => c.data_source === "Internal DB").length;
-                  const label = opt === "all" ? "All" : opt === "Internal DB" ? "Transaction" : opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => setSourceFilter(opt)}
-                      className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                        ? "bg-[#fb923c] text-bg-deep shadow"
-                        : "text-text-dim hover:text-text-primary"
-                        }`}
-                    >
-                      {`${label} (${count})`}
-                    </button>
-                  );
-                })}
-              </div>
+              {renderTabBar()}
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
               >
                 ×
               </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+              <div className="min-w-max border border-border rounded-2xl overflow-hidden">
+                {renderTable("")}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ── Dropped Comparable Table ─────────────────────────────────────
+const DROP_STAGE_CONFIG = {
+  type_filter:     { label: "Type Mismatch",  color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  geocode:         { label: "Geocode Failed", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  distance_filter: { label: "Too Far (>15km)",color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  url_filter:      { label: "Bad URL",        color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
+  dedup:           { label: "Duplicate",      color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
+  subject_filter:  { label: "Subject Match",  color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+};
+
+function DroppedComparableTable({ droppedComparables, onRestore, selectable, onUpdateCoordinates, onResetCoordinates }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [stageFilter, setStageFilter] = useState("all");
+  const [selectedDropped, setSelectedDropped] = useState(new Set());
+  const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
+  const [filterConfig, setFilterConfig] = useState({});
+
+  const dropList = useMemo(() => droppedComparables || [], [droppedComparables]);
+
+  // Count per stage
+  const stageCounts = useMemo(() => {
+    const counts = {};
+    dropList.forEach(c => {
+      const stage = c.drop_stage || "unknown";
+      counts[stage] = (counts[stage] || 0) + 1;
+    });
+    return counts;
+  }, [dropList]);
+
+  const filteredDropped = useMemo(() => {
+    return stageFilter === "all"
+      ? dropList
+      : dropList.filter(c => c.drop_stage === stageFilter);
+  }, [dropList, stageFilter]);
+
+  const indexedDropped = useMemo(() => {
+    return filteredDropped.map((comp, idx) => ({
+      comp,
+      originalIndex: dropList.indexOf(comp),
+      distanceKm: getComparableDistanceKm(comp),
+    }));
+  }, [filteredDropped, dropList]);
+
+  const processedDropped = useMemo(() => {
+    return filterAndSortList(indexedDropped, sortConfig, filterConfig);
+  }, [indexedDropped, sortConfig, filterConfig]);
+
+  if (dropList.length === 0) return null;
+
+  const handleToggle = (originalIndex, checked) => {
+    setSelectedDropped(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(originalIndex);
+      else next.delete(originalIndex);
+      return next;
+    });
+  };
+
+  const handleRestoreSelected = () => {
+    if (selectedDropped.size === 0) return;
+    const toRestore = Array.from(selectedDropped).map(i => dropList[i]).filter(Boolean);
+    onRestore?.(toRestore);
+    setSelectedDropped(new Set());
+  };
+
+  const allVisibleSelected = processedDropped.length > 0 && processedDropped.every(({ originalIndex }) => selectedDropped.has(originalIndex));
+
+  const renderTable = (maxHeightClass = "") => (
+    <div className="relative">
+      <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-bg-input shadow-sm">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              {selectable && (
+                <th className="px-3 py-2.5 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={() => {
+                      if (allVisibleSelected) {
+                        processedDropped.forEach(({ originalIndex }) => handleToggle(originalIndex, false));
+                      } else {
+                        processedDropped.forEach(({ originalIndex }) => handleToggle(originalIndex, true));
+                      }
+                    }}
+                    className="h-3.5 w-3.5 cursor-pointer rounded accent-amber-500"
+                  />
+                </th>
+              )}
+              <TableHeaderCell columnKey="drop_stage" label="Drop Stage" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="drop_reason" label="Drop Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="project_name" label="Project Name" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="distance_from_subject_km" label="Distance" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="map_search_lat" label="Lat ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="map_search_lng" label="Lng ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="geocode_source" label="Coord Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="drop_detail" label="Detail" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+              <TableHeaderCell columnKey="source_url" label="Source URL" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedDropped} />
+            </tr>
+          </thead>
+          <tbody>
+            {processedDropped.map(({ comp, originalIndex }) => {
+              const isChecked = selectedDropped.has(originalIndex);
+              const stageConf = DROP_STAGE_CONFIG[comp.drop_stage] || { label: comp.drop_stage || "Unknown", color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" };
+              return (
+                <tr
+                  key={`dropped-${comp.project_name}-${originalIndex}`}
+                  className={`border-b border-border/50 transition ${isChecked ? "bg-amber-500/[0.08]" : "hover:bg-amber-500/[0.04]"}`}
+                >
+                  {selectable && (
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked || false}
+                        onChange={() => handleToggle(originalIndex, !isChecked)}
+                        className="h-3.5 w-3.5 cursor-pointer rounded accent-amber-500"
+                      />
+                    </td>
+                  )}
+                  <td className="px-3 py-2.5">
+                    <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${stageConf.color}`}>
+                      {stageConf.label}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[200px] truncate" title={comp.drop_reason}>{comp.drop_reason || "—"}</td>
+                  <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
+                  <td className="px-3 py-2.5">
+                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                      {comp.property_type || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono text-text-secondary whitespace-nowrap">{comp.distance_from_subject_km ? `${comp.distance_from_subject_km} km` : "—"}</td>
+                  <td className="px-3 py-2.5 text-right font-mono">
+                    <EditableCoordCell
+                      value={comp.map_search_lat}
+                      onSave={(newLat) => onUpdateCoordinates?.(originalIndex, newLat, comp.map_search_lng)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono">
+                    <EditableCoordCell
+                      value={comp.map_search_lng}
+                      onSave={(newLng) => onUpdateCoordinates?.(originalIndex, comp.map_search_lat, newLng)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {(() => {
+                      const isOverride = comp.geocode_source === "user_override" || comp.original_map_search_lat !== undefined;
+                      const src = formatGeocodeSource(comp.geocode_source);
+                      return (
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${src.color}`}>
+                            {src.label}
+                          </span>
+                          {isOverride && (
+                            <button
+                              type="button"
+                              onClick={() => onResetCoordinates?.(originalIndex)}
+                              title="Reset to original fetched coordinates"
+                              className="inline-flex items-center gap-0.5 rounded border border-border bg-bg-input px-1.5 py-0.5 text-[9px] font-bold text-text-dim hover:border-amber-500 hover:text-amber-400 transition cursor-pointer"
+                            >
+                              <span>↺</span>
+                              <span>Reset</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[250px] truncate" title={comp.drop_detail}>{comp.drop_detail || "—"}</td>
+                  <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
+                    {comp.source_url ? (
+                      <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
+                        {comp.source_url}
+                      </a>
+                    ) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {processedDropped.length === 0 && (
+        <div className="px-4 py-6 text-center text-xs text-text-dim">
+          No dropped projects match this filter.
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="mt-3 overflow-hidden rounded-2xl border border-amber-500/30 bg-bg-card shadow-panel transition-all duration-300">
+        {/* Collapsible Header */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(prev => !prev)}
+          className="w-full border-b border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-left transition hover:bg-amber-500/[0.1] cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-sm">⚠️</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-400">
+                {dropList.length} Dropped Project{dropList.length !== 1 ? "s" : ""} — Click to Review
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectable && selectedDropped.size > 0 && (
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400">
+                  {selectedDropped.size} selected
+                </span>
+              )}
+              <span className={`text-amber-400 text-xs transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}>▾</span>
+            </div>
+          </div>
+        </button>
+
+        {isExpanded && (
+          <div className="animate-in slide-in-from-top-2 duration-300">
+            {/* Info bar */}
+            <div className="border-b border-amber-500/10 bg-amber-500/[0.03] px-4 py-2">
+              <p className="text-[10px] text-text-dim leading-relaxed">
+                These projects were filtered out during comparable identification. Some may be genuine — review and restore if needed.
+              </p>
+            </div>
+
+            {/* Stage filter pills */}
+            <div className="flex items-center gap-1 px-4 py-2.5 flex-wrap">
+              <button
+                onClick={() => setStageFilter("all")}
+                className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${stageFilter === "all" ? "bg-amber-500 text-bg-deep shadow" : "text-text-dim hover:text-text-primary"}`}
+              >
+                All ({dropList.length})
+              </button>
+              {Object.entries(stageCounts).map(([stage, count]) => {
+                const conf = DROP_STAGE_CONFIG[stage] || { label: stage };
+                return (
+                  <button
+                    key={stage}
+                    onClick={() => setStageFilter(stage)}
+                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${stageFilter === stage ? "bg-amber-500 text-bg-deep shadow" : "text-text-dim hover:text-text-primary"}`}
+                  >
+                    {conf.label} ({count})
+                  </button>
+                );
+              })}
+              <div className="ml-auto flex items-center gap-2">
+                {selectable && selectedDropped.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRestoreSelected}
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400 transition hover:border-emerald-500 hover:bg-emerald-500/20"
+                  >
+                    ✓ Restore Selected ({selectedDropped.size})
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsMaximized(true)}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-amber-500 hover:text-amber-500"
+                  title="Maximize Table"
+                >
+                  ⛶
+                </button>
+              </div>
+            </div>
+
+            {renderTable("max-h-[300px] overflow-y-auto")}
+          </div>
+        )}
+      </div>
+
+      {/* Maximized (fullscreen) modal */}
+      {isMaximized && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-amber-500/30 bg-bg-card shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-amber-500/20 bg-amber-500/[0.06] px-6 py-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-lg">⚠️</span>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-amber-400">Dropped Comparable Projects</h3>
+                  <p className="text-[10px] text-text-dim">{dropList.length} projects filtered out — review and restore if needed</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectable && selectedDropped.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRestoreSelected}
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 transition hover:border-emerald-500 hover:bg-emerald-500/20"
+                  >
+                    ✓ Restore Selected ({selectedDropped.size})
+                  </button>
+                )}
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-bg-deep/50 p-0.5">
+                  <button
+                    onClick={() => setStageFilter("all")}
+                    className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${stageFilter === "all" ? "bg-amber-500 text-bg-deep shadow" : "text-text-dim hover:text-text-primary"}`}
+                  >
+                    All ({dropList.length})
+                  </button>
+                  {Object.entries(stageCounts).map(([stage, count]) => {
+                    const conf = DROP_STAGE_CONFIG[stage] || { label: stage };
+                    return (
+                      <button
+                        key={stage}
+                        onClick={() => setStageFilter(stage)}
+                        className={`rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition ${stageFilter === stage ? "bg-amber-500 text-bg-deep shadow" : "text-text-dim hover:text-text-primary"}`}
+                      >
+                        {conf.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setIsMaximized(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
@@ -4375,6 +4924,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [ctaCleanCollapsed, setCtaCleanCollapsed] = useState(false);
   const [ctaFactorialCollapsed, setCtaFactorialCollapsed] = useState(false);
   const [comparableData, setComparableData] = useState(null);
+  const [droppedComparableData, setDroppedComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
   const [dbNoResults, setDbNoResults] = useState(false);
   const [subjectData, setSubjectData] = useState(null);
@@ -4998,6 +5548,283 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     });
   };
 
+  // ── Restore dropped comparables into active set ────────────────
+  const handleRestoreDroppedComps = (compsToRestore) => {
+    if (!compsToRestore || compsToRestore.length === 0) return;
+
+    // Clean drop metadata and assign fallback coordinates if geocoding had failed
+    const cleaned = compsToRestore.map((c, idx) => {
+      const { drop_stage, drop_reason, drop_detail, isDropped, ...rest } = c;
+
+      let lat = c.map_search_lat;
+      let lng = c.map_search_lng;
+
+      // If coordinates are missing or invalid, assign fallback coordinates near subject
+      if ((!lat || !lng || isNaN(Number(lat)) || isNaN(Number(lng))) && subjectData?.lat && subjectData?.lng) {
+        const angle = (idx / compsToRestore.length) * 2 * Math.PI;
+        const radius = 0.015 + (Math.random() * 0.01); // ~1.5 - 2.5 km away
+        lat = Number((subjectData.lat + radius * Math.cos(angle)).toFixed(6));
+        lng = Number((subjectData.lng + radius * Math.sin(angle)).toFixed(6));
+      }
+
+      const validLat = Number(lat) || subjectData?.lat || 18.5204;
+      const validLng = Number(lng) || subjectData?.lng || 73.8567;
+
+      // Recalculate exact distance from subject using Haversine
+      const distanceKm = c.distance_from_subject_km ?? (
+        (subjectData?.lat && subjectData?.lng)
+          ? (()=>{
+              const R = 6371;
+              const dLat = (validLat - subjectData.lat) * Math.PI / 180;
+              const dLng = (validLng - subjectData.lng) * Math.PI / 180;
+              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(subjectData.lat * Math.PI / 180) * Math.cos(validLat * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+              return Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(2));
+            })()
+          : 2.0
+      );
+
+      return {
+        ...rest,
+        project_name: c.project_name || "Comparable Project",
+        location: c.location || subjectData?.location_name || "Local Vicinity",
+        country: c.country || subjectData?.country || "India",
+        property_type: c.property_type || subjectData?.property_type || "apartment",
+        project_category: c.project_category || subjectData?.project_category || "Residential",
+        map_search_lat: validLat,
+        map_search_lng: validLng,
+        geocode_source: c.geocode_source || (c.data_source === "Internal DB" ? "internal_db" : "nominatim"),
+        distance_from_subject_km: distanceKm,
+        data_source: c.data_source || "Web",
+        possession_status: c.possession_status || "Ready to Move",
+        reason: c.reason || c.drop_reason || "Restored from dropped section",
+        restored: true,
+      };
+    });
+
+    const existingComps = comparableData || [];
+    const startIndex = existingComps.length;
+    const newIndices = cleaned.map((_, i) => startIndex + i);
+    const updatedComps = [...existingComps, ...cleaned];
+
+    // 1. Update active comparable list
+    setComparableData(updatedComps);
+
+    // 2. Auto-select the newly restored comparables for listing fetch & map display
+    setSelectedComps(prevSel => {
+      const next = new Set(prevSel);
+      newIndices.forEach(idx => next.add(idx));
+      return next;
+    });
+
+    // 3. Remove restored items from droppedComparableData
+    const restoreNames = new Set(compsToRestore.map(c => (c.project_name || "").toLowerCase().trim()));
+    setDroppedComparableData(prev => {
+      if (!prev) return null;
+      const remaining = prev.filter(c => !restoreNames.has((c.project_name || "").toLowerCase().trim()));
+      return remaining.length > 0 ? remaining : null;
+    });
+
+    // 4. Update the message objects so UI state stays consistent
+    setMessages(prev => {
+      const next = [...prev];
+      const compMsgIdx = next.findIndex(m => m.comparables || m.dropped_comparables);
+      if (compMsgIdx !== -1) {
+        const msg = { ...next[compMsgIdx] };
+        msg.comparables = [...(msg.comparables || []), ...cleaned];
+        if (msg.dropped_comparables) {
+          msg.dropped_comparables = msg.dropped_comparables.filter(
+            c => !restoreNames.has((c.project_name || "").toLowerCase().trim())
+          );
+          if (msg.dropped_comparables.length === 0) msg.dropped_comparables = null;
+        }
+        next[compMsgIdx] = msg;
+      }
+      return next;
+    });
+  };
+
+  // ── Update coordinates for an active comparable ───────────────
+  const handleUpdateComparableCoords = (index, newLatStr, newLngStr, isDropped = false) => {
+    if (isDropped) {
+      handleUpdateDroppedCoords(index, newLatStr, newLngStr);
+      return;
+    }
+    const lat = newLatStr !== "" && !isNaN(Number(newLatStr)) ? Number(newLatStr) : null;
+    const lng = newLngStr !== "" && !isNaN(Number(newLngStr)) ? Number(newLngStr) : null;
+
+    setComparableData(prev => {
+      if (!prev || !prev[index]) return prev;
+      const next = [...prev];
+      const comp = { ...next[index] };
+
+      if (comp.original_map_search_lat === undefined) {
+        comp.original_map_search_lat = comp.map_search_lat;
+        comp.original_map_search_lng = comp.map_search_lng;
+        comp.original_geocode_source = comp.geocode_source;
+        comp.original_distance_from_subject_km = comp.distance_from_subject_km;
+      }
+
+      comp.map_search_lat = lat;
+      comp.map_search_lng = lng;
+      comp.geocode_source = "user_override";
+
+      if (lat && lng && subjectData?.lat && subjectData?.lng) {
+        const R = 6371;
+        const dLat = (lat - subjectData.lat) * Math.PI / 180;
+        const dLng = (lng - subjectData.lng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(subjectData.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        comp.distance_from_subject_km = Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2));
+      }
+
+      next[index] = comp;
+
+      // Update message object
+      setMessages(prevMsgs => {
+        const msgs = [...prevMsgs];
+        const compMsgIdx = msgs.findIndex(m => m.comparables);
+        if (compMsgIdx !== -1) {
+          const msg = { ...msgs[compMsgIdx] };
+          msg.comparables = [...next];
+          msgs[compMsgIdx] = msg;
+        }
+        return msgs;
+      });
+
+      return next;
+    });
+  };
+
+  // ── Reset coordinates for an active comparable ───────────────
+  const handleResetComparableCoords = (index, isDropped = false) => {
+    if (isDropped) {
+      handleResetDroppedCoords(index);
+      return;
+    }
+    setComparableData(prev => {
+      if (!prev || !prev[index]) return prev;
+      const next = [...prev];
+      const comp = { ...next[index] };
+
+      if (comp.original_map_search_lat !== undefined) {
+        comp.map_search_lat = comp.original_map_search_lat;
+        comp.map_search_lng = comp.original_map_search_lng;
+        comp.geocode_source = comp.original_geocode_source;
+        comp.distance_from_subject_km = comp.original_distance_from_subject_km;
+        delete comp.original_map_search_lat;
+        delete comp.original_map_search_lng;
+        delete comp.original_geocode_source;
+        delete comp.original_distance_from_subject_km;
+      } else {
+        comp.geocode_source = comp.data_source === "Internal DB" ? "internal_db" : null;
+      }
+
+      next[index] = comp;
+
+      setMessages(prevMsgs => {
+        const msgs = [...prevMsgs];
+        const compMsgIdx = msgs.findIndex(m => m.comparables);
+        if (compMsgIdx !== -1) {
+          const msg = { ...msgs[compMsgIdx] };
+          msg.comparables = [...next];
+          msgs[compMsgIdx] = msg;
+        }
+        return msgs;
+      });
+
+      return next;
+    });
+  };
+
+  // ── Update coordinates for a dropped comparable ────────────────
+  const handleUpdateDroppedCoords = (index, newLatStr, newLngStr) => {
+    const lat = newLatStr !== "" && !isNaN(Number(newLatStr)) ? Number(newLatStr) : null;
+    const lng = newLngStr !== "" && !isNaN(Number(newLngStr)) ? Number(newLngStr) : null;
+
+    setDroppedComparableData(prev => {
+      if (!prev || !prev[index]) return prev;
+      const next = [...prev];
+      const comp = { ...next[index] };
+
+      if (comp.original_map_search_lat === undefined) {
+        comp.original_map_search_lat = comp.map_search_lat;
+        comp.original_map_search_lng = comp.map_search_lng;
+        comp.original_geocode_source = comp.geocode_source;
+        comp.original_distance_from_subject_km = comp.distance_from_subject_km;
+      }
+
+      comp.map_search_lat = lat;
+      comp.map_search_lng = lng;
+      comp.geocode_source = "user_override";
+
+      if (lat && lng && subjectData?.lat && subjectData?.lng) {
+        const R = 6371;
+        const dLat = (lat - subjectData.lat) * Math.PI / 180;
+        const dLng = (lng - subjectData.lng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(subjectData.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        comp.distance_from_subject_km = Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2));
+      }
+
+      next[index] = comp;
+
+      // Update message object
+      setMessages(prevMsgs => {
+        const msgs = [...prevMsgs];
+        const compMsgIdx = msgs.findIndex(m => m.dropped_comparables);
+        if (compMsgIdx !== -1) {
+          const msg = { ...msgs[compMsgIdx] };
+          msg.dropped_comparables = [...next];
+          msgs[compMsgIdx] = msg;
+        }
+        return msgs;
+      });
+
+      return next;
+    });
+  };
+
+  // ── Reset coordinates for a dropped comparable ────────────────
+  const handleResetDroppedCoords = (index) => {
+    setDroppedComparableData(prev => {
+      if (!prev || !prev[index]) return prev;
+      const next = [...prev];
+      const comp = { ...next[index] };
+
+      if (comp.original_map_search_lat !== undefined) {
+        comp.map_search_lat = comp.original_map_search_lat;
+        comp.map_search_lng = comp.original_map_search_lng;
+        comp.geocode_source = comp.original_geocode_source;
+        comp.distance_from_subject_km = comp.original_distance_from_subject_km;
+        delete comp.original_map_search_lat;
+        delete comp.original_map_search_lng;
+        delete comp.original_geocode_source;
+        delete comp.original_distance_from_subject_km;
+      } else {
+        comp.geocode_source = null;
+      }
+
+      next[index] = comp;
+
+      setMessages(prevMsgs => {
+        const msgs = [...prevMsgs];
+        const compMsgIdx = msgs.findIndex(m => m.dropped_comparables);
+        if (compMsgIdx !== -1) {
+          const msg = { ...msgs[compMsgIdx] };
+          msg.dropped_comparables = [...next];
+          msgs[compMsgIdx] = msg;
+        }
+        return msgs;
+      });
+
+      return next;
+    });
+  };
+
   // ── Synchronize markers when state changes ────────────────────
   useEffect(() => {
     let allMarkers = [];
@@ -5043,10 +5870,28 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       allMarkers = [...allMarkers, ...Array.from(seen.values())];
     }
 
+    // 3. Dropped comparables with valid coordinates
+    if (droppedComparableData) {
+      droppedComparableData.forEach(c => {
+        if (c.map_search_lat && c.map_search_lng && !isNaN(Number(c.map_search_lat)) && !isNaN(Number(c.map_search_lng))) {
+          const name = (c.project_name || "").toLowerCase().trim();
+          const alreadyMapped = allMarkers.some(m => (m.label || "").toLowerCase().trim() === name);
+          if (!alreadyMapped) {
+            allMarkers.push({
+              lat: Number(c.map_search_lat),
+              lng: Number(c.map_search_lng),
+              label: `${c.project_name || "Comparable"} (Dropped)`,
+              source: "dropped",
+              data_source: "Dropped"
+            });
+          }
+        }
+      });
+    }
 
     markersRef.current = allMarkers;
     onMarkersUpdate?.(allMarkers);
-  }, [subjectData, comparableData, selectedComps, factorialData]);
+  }, [subjectData, comparableData, selectedComps, droppedComparableData, factorialData]);
 
   // ── Go Back to Comparable Selection (Step 2) ──────────────────
   const handleBackToComparables = () => {
@@ -6791,10 +7636,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "comparable_results") {
             const comps = event.content?.comparables || [];
+            const dropped = event.content?.dropped_comparables || [];
             // Only set comparableData when there are actual results
             // (empty array means no comparables found — leave it null so the fallback card fires)
             if (comps.length > 0) {
               setComparableData(comps);
+            }
+            if (dropped.length > 0) {
+              setDroppedComparableData(dropped);
+            } else {
+              setDroppedComparableData(null);
             }
             // Store subject's DB entry (if found) for listing fetch
             const subjectDbProject = event.content?.subject_db_project || null;
@@ -6847,6 +7698,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         // condition `!message.comparables` remains truthy
                         comparables: (event.content?.comparables?.length > 0)
                           ? event.content.comparables
+                          : null,
+                        dropped_comparables: (event.content?.dropped_comparables?.length > 0)
+                          ? event.content.dropped_comparables
                           : null,
                       }
                     : {}),
@@ -7947,12 +8801,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       )}
                     </div>
                   )}
-                  {message.comparables && (
+                  {(message.comparables || message.dropped_comparables) && (
                     <div className="space-y-3">
                       <ComparableTable
-                        comparables={message.comparables}
+                        comparables={message.comparables || []}
+                        droppedComparables={message.dropped_comparables}
                         selectedComps={selectedComps}
                         onToggle={handleCompToggle}
+                        onRestoreDropped={handleRestoreDroppedComps}
+                        onUpdateCoordinates={handleUpdateComparableCoords}
+                        onResetCoordinates={handleResetComparableCoords}
                         selectable={pipelineDone && !isListingStreaming && !listingData}
                       />
                       {listingData && (
