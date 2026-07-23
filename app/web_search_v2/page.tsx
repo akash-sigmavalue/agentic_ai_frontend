@@ -684,14 +684,18 @@ export default function Home() {
               className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
             >
               <div
-                className={`flex flex-col max-w-[90%] sm:max-w-[85%] rounded-2xl p-5 sm:p-6 shadow-xl ${
-                  msg.role === 'user'
+                className={`flex flex-col ${
+                  msg.planningSections && Object.keys(msg.planningSections).length > 0
+                    ? 'w-full'
+                    : `max-w-[90%] sm:max-w-[85%] rounded-2xl p-5 sm:p-6 shadow-xl ${
+                        msg.role === 'user'
                     ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white rounded-tr-sm border border-blue-500/30 shadow-blue-900/20'
                     : 'bg-slate-800/60 backdrop-blur-sm text-slate-200 rounded-tl-sm border border-slate-700/50 shadow-slate-950/50'
+                      }`
                 }`}
               >
                 {/* Assistant Header / Status */}
-                {msg.role === 'assistant' && (
+                {msg.role === 'assistant' && !(msg.planningSections && Object.keys(msg.planningSections).length > 0) && (
                   <div className="flex items-center gap-3 mb-4 border-b border-slate-700/50 pb-3">
                     <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center shrink-0">
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -743,10 +747,12 @@ export default function Home() {
 
 
                 {/* Message Content */}
-                <div
-                  className={`markdown-body ${msg.role === 'user' ? 'text-white' : 'text-slate-200'} prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900/50 prose-pre:border prose-pre:border-slate-700/50 prose-a:text-cyan-400 hover:prose-a:text-cyan-300`}
-                  dangerouslySetInnerHTML={{ __html: parse(msg.content) as string }}
-                />
+                {!(msg.planningSections && Object.keys(msg.planningSections).length > 0) && (
+                  <div
+                    className={`markdown-body ${msg.role === 'user' ? 'text-white' : 'text-slate-200'} prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900/50 prose-pre:border prose-pre:border-slate-700/50 prose-a:text-cyan-400 hover:prose-a:text-cyan-300`}
+                    dangerouslySetInnerHTML={{ __html: parse(msg.content) as string }}
+                  />
+                )}
 
                 {/* Blinking Cursor for Streaming */}
                 {msg.isStreaming && !msg.status && (
@@ -758,7 +764,7 @@ export default function Home() {
                   <PlanningReport sections={msg.planningSections} />
                 )}
                 {/* Sources Area */}
-                {msg.sources && msg.sources.length > 0 && (
+                {!(msg.planningSections && Object.keys(msg.planningSections).length > 0) && msg.sources && msg.sources.length > 0 && (
                   <div className="mt-6 pt-5 border-t border-slate-700/50">
                     <div className="flex items-center gap-2 mb-3 text-slate-300 font-medium">
                       <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
