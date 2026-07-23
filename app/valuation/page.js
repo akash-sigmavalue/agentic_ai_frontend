@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState, useRef, useCallback } from "react";
 import { Building2 } from "lucide-react";
-import ThemeToggle from "@/components/valuation/shared/ThemeToggle";
+
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
 
@@ -165,7 +165,6 @@ export default function HomePage() {
               <div className="hidden rounded-lg border border-border bg-bg-card px-3 py-2 font-mono text-xs text-text-secondary md:block">
                 <span className="text-text-dim">CORE:</span> GPT-4O
               </div>
-              <ThemeToggle />
             </div>
           </div>
         </header>
@@ -197,7 +196,7 @@ export default function HomePage() {
               onMouseDown={handleMouseDown(0)}
               className="hidden xl:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
             >
-              <div className="w-[1px] h-20 bg-white/10 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
@@ -215,7 +214,7 @@ export default function HomePage() {
               onMouseDown={handleMouseDown(1)}
               className="hidden xl:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
             >
-              <div className="w-[1px] h-20 bg-white/10 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />

@@ -1127,6 +1127,7 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
   const [selectedDropped, setSelectedDropped] = useState(new Set());
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   const compsList = useMemo(() => {
     return (comparables || []).filter(c => (!c.drop_stage && !c.isDropped) || c.restored);
@@ -1193,13 +1194,22 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
     return filterAndSortList(indexedComparables, sortConfig, filterConfig);
   }, [indexedComparables, sortConfig, filterConfig]);
 
+  const searchedComparables = useMemo(() => {
+    if (!searchQuery.trim()) return processedComparables;
+    const query = searchQuery.toLowerCase().trim();
+    return processedComparables.filter(({ comp }) =>
+      String(comp.project_name || "").toLowerCase().includes(query) ||
+      String(comp.location || "").toLowerCase().includes(query)
+    );
+  }, [processedComparables, searchQuery]);
+
   const nearbyComparables = useMemo(() => {
-    return processedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
-  }, [processedComparables]);
+    return searchedComparables.filter(({ distanceKm }) => distanceKm !== null && distanceKm <= INITIAL_COMPARABLE_RADIUS_KM);
+  }, [searchedComparables]);
 
   if (compsList.length === 0 && dropList.length === 0) return null;
 
-  const visibleComparables = (showAllComparables || isDroppedTab) ? processedComparables : nearbyComparables;
+  const visibleComparables = (showAllComparables || isDroppedTab) ? searchedComparables : nearbyComparables;
   const hiddenComparableCount = Math.max(indexedComparables.length - nearbyComparables.length, 0);
   const hasHiddenComparables = hiddenComparableCount > 0 && !isDroppedTab;
   const visibleResultLabel = isDroppedTab
@@ -1520,6 +1530,27 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
     </div>
   );
 
+  const renderSearchInput = () => (
+    <div className="relative flex items-center min-w-[120px] max-w-[200px] flex-1">
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search project or location..."
+        className="w-full rounded-lg border border-border bg-bg-deep px-2.5 py-1 text-[10px] text-text-primary outline-none transition focus:border-[#fb923c] placeholder:text-text-dim"
+      />
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => setSearchQuery("")}
+          className="absolute right-2 text-text-dim hover:text-text-primary text-[10px] cursor-pointer"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
@@ -1528,6 +1559,7 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🏘️</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">Comparable Projects Found</span>
             {renderTabBar()}
+            {renderSearchInput()}
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim">{visibleResultLabel}</span>
               <button
@@ -1555,6 +1587,7 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                 </div>
               </div>
               {renderTabBar()}
+              {renderSearchInput()}
               <button
                 onClick={() => setIsMaximized(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
@@ -4851,6 +4884,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   });
   const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
+  // Streaming execution log terminal
+  const [executionLogs, setExecutionLogs] = useState([]); // [{level, text, ts}]
+  const addLog = (text, level = "info") => {
+    setExecutionLogs(prev => [...prev, { text, level, ts: Date.now() }]);
+  };
+  // Live project-wise fetch status: { [projectName]: "pending"|"fetching"|"done"|"error"|"skipping" }
+  const [projectFetchStatuses, setProjectFetchStatuses] = useState({});
   const [tokenStats, setTokenStats] = useState({
     total_tokens: 0,
     cost_usd: 0,
@@ -4950,6 +4990,28 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   // Tracks which comparable IDs have already been fetched (for incremental addition)
   const [fetchedCompIds, setFetchedCompIds] = useState(new Set());
 
+  const hasPendingFetch = useMemo(() => {
+    if (!comparableData || !subjectData) return false;
+    const selected = Array.from(selectedComps).map(i => comparableData[i]);
+    const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+    
+    // Check if any selected comparable is not fetched yet
+    const hasUnfetchedComp = selected.some(c => !fetchedCompIds.has(getCompId(c)));
+    if (hasUnfetchedComp) return true;
+
+    // Check if subject DB transactions need fetching
+    const subjectDbProject = subjectData?.subject_db_project || null;
+    const shouldFetchSubjectTx = subjectDbProject && !fetchedCompIds.has("__subject__");
+    if (shouldFetchSubjectTx) return true;
+
+    // Check if subject web listings need fetching
+    const webComps = selected.filter(c => (c.data_source || "Web") !== "Internal DB");
+    const shouldFetchWebListings = webComps.length > 0 || !fetchedCompIds.has("__subject_web__");
+    if (shouldFetchWebListings && !fetchedCompIds.has("__subject_web__")) return true;
+
+    return false;
+  }, [selectedComps, fetchedCompIds, comparableData, subjectData]);
+
   // Special Factorial Analysis State
   const [showSpecialForm, setShowSpecialForm] = useState(false);
   const [specialSubjectName, setSpecialSubjectName] = useState("Lodha Altamount");
@@ -4958,6 +5020,32 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [specialCompName, setSpecialCompName] = useState("Rustomjee Crown");
   const [specialCompLat, setSpecialCompLat] = useState("19.018");
   const [specialCompLng, setSpecialCompLng] = useState("72.827");
+
+  // Auto-collapse completed steps when new data arrives
+  const prevListingDataRef = useRef(null);
+  const prevCleanedDataRef = useRef(null);
+  const prevFactorialDataRef = useRef(null);
+
+  useEffect(() => {
+    if (listingData && !prevListingDataRef.current) {
+      setCtaListingCollapsed(true);
+    }
+    prevListingDataRef.current = listingData;
+  }, [listingData]);
+
+  useEffect(() => {
+    if (cleanedData && !prevCleanedDataRef.current) {
+      setCtaCleanCollapsed(true);
+    }
+    prevCleanedDataRef.current = cleanedData;
+  }, [cleanedData]);
+
+  useEffect(() => {
+    if (factorialData && !prevFactorialDataRef.current) {
+      setCtaFactorialCollapsed(true);
+    }
+    prevFactorialDataRef.current = factorialData;
+  }, [factorialData]);
 
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
@@ -5057,6 +5145,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
+          addLog(summary, event.type === "error" ? "error" : "info");
 
           if (event.type === "cost_calculation_result") {
             setCostCalculationData(event.content);
@@ -5198,6 +5287,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     onMarkersUpdate?.([]);
     setBackupValuationState(null);
     setFetchedCompIds(new Set());
+    setExecutionLogs([]);
+    setProjectFetchStatuses({});
   };
 
   const buildQuickEstimatePayload = () => {
@@ -6331,6 +6422,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const activePreviousDbTransactions = (backupValuationState?.dbTransactions || []).filter(isPrevTxToKeep);
 
     setBackupValuationState(null);
+    setListingData(activePreviousListings);
+    setDbTransactions(activePreviousDbTransactions);
 
     // If nothing new to fetch, nothing to do
     if (newComps.length === 0 && !shouldFetchSubjectTx && !shouldFetchWebListings) {
@@ -6339,10 +6432,19 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     }
 
     setIsListingStreaming(true);
-    setStreamingNote(isIncremental
+    const initMsg = isIncremental
       ? `⏩ Skipping ${skipComps.length} already-fetched comparable(s). Fetching ${newComps.length} new one(s)...`
-      : "Starting listing fetch pipeline...");
+      : "Starting listing fetch pipeline...";
+    setStreamingNote(initMsg);
+    addLog(initMsg);
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
+    // Initialise per-project statuses
+    const allFetchProjects = [
+      ...(shouldFetchSubjectTx ? [{ name: subjectData?.project_name || "Subject Property", type: "db" }] : []),
+      ...dbComps.map(c => ({ name: c.project_name, type: "db" })),
+      ...webComps.map(c => ({ name: c.project_name, type: "web" })),
+    ];
+    setProjectFetchStatuses(Object.fromEntries(allFetchProjects.map(p => [p.name, "pending"])));
 
     const totalDbFetches = dbComps.length + (shouldFetchSubjectTx ? 1 : 0);
     setMessages((prev) => [
@@ -6354,7 +6456,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`,
         meta: "Now",
       },
-      { role: "assistant", content: isIncremental ? "Fetching listings for new comparables only..." : "Running listing pipeline...", meta: "Live" },
+      {
+        role: "assistant",
+        content: isIncremental ? "Fetching listings for new comparables only..." : "Running listing pipeline...",
+        meta: "Live",
+        listings: activePreviousListings,
+        db_transactions: activePreviousDbTransactions,
+      },
     ]);
 
     try {
@@ -6365,6 +6473,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         if (!projId) return [];
 
         setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
+        addLog(`Fetching DB transactions for "${comp.project_name}"...`, "info");
+        setProjectFetchStatuses(prev => ({ ...prev, [comp.project_name]: "fetching" }));
         const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
@@ -6396,7 +6506,27 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 const txs = ev.content?.transactions || [];
                 const mapped = isSubject ? txs.map(t => ({ ...t, is_subject: true })) : txs;
                 projectTx.push(...mapped);
-                setStreamingNote(`✅ Got ${ev.content?.total || 0} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
+                if (mapped.length > 0) {
+                  setDbTransactions(prev => {
+                    const nextTx = [...prev, ...mapped];
+                    setMessages(prevMsgs => {
+                      const nextMsgs = [...prevMsgs];
+                      const lastIndex = nextMsgs.length - 1;
+                      if (lastIndex >= 0) {
+                        nextMsgs[lastIndex] = {
+                          ...nextMsgs[lastIndex],
+                          db_transactions: nextTx,
+                        };
+                      }
+                      return nextMsgs;
+                    });
+                    return nextTx;
+                  });
+                }
+                const txCount = ev.content?.total || 0;
+                setStreamingNote(`✅ Got ${txCount} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
+                addLog(`Got ${txCount} transactions for "${comp.project_name}"`, txCount > 0 ? "success" : "warn");
+                setProjectFetchStatuses(prev => ({ ...prev, [comp.project_name]: txCount > 0 ? "done" : "error" }));
               }
             }
           }
@@ -6411,6 +6541,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
           : `🌐 Fetching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
+        addLog(webFetchNote, "info");
+        webComps.forEach(c => setProjectFetchStatuses(prev => ({ ...prev, [c.project_name]: "fetching" })));
 
         try {
           const response = await fetch(apiUrl("/listing_stream"), {
@@ -7681,6 +7813,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           const summary = summarizeEvent(event);
           setStreamingNote(summary);
+          if (summary && summary !== "Pipeline update received.") {
+            addLog(summary, event.type === "error" ? "error" : event.type === "done" ? "success" : "info");
+          }
 
           if (["entities", "clarification_needed", "map_confirmation", "approach", "approach_choice_needed", "workflow", "comparable_results", "extraction_verification", "done", "error"].includes(event.type)) {
             setMessages((prev) => {
@@ -8458,6 +8593,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         {/* Gate body */}
         {!gateCollapsed && (
           <div className="flex flex-col min-h-0">
+            {/* Action Required Banner */}
+            <div className="px-4 pt-3 pb-0 shrink-0">
+              <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)]">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                  <span className="text-[10px] text-text-secondary leading-relaxed">
+                    Please review and verify the subject property parameters for Gate {visualStep} to proceed.
+                  </span>
+                </div>
+              </div>
+            </div>
             {/* Scrollable Content Container */}
             <div className="overflow-y-auto custom-scrollbar p-4 space-y-4 max-h-[30vh] min-h-0">
               {/* Show prompt/question from the agent if available */}
@@ -8803,6 +8950,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   )}
                   {(message.comparables || message.dropped_comparables) && (
                     <div className="space-y-3">
+                      {pipelineDone && !isListingStreaming && !listingData && (
+                        <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                            <span className="text-[10px] text-text-secondary leading-relaxed">
+                              Please review and select comparable projects from the table below, then click "Proceed to Fetch Listings".
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <ComparableTable
                         comparables={message.comparables || []}
                         droppedComparables={message.dropped_comparables}
@@ -8948,16 +9106,64 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             ))}
 
-            {streamingNote && !isQuickEstimateStreaming ? (
-              <div className="mr-8 animate-slide-in">
-                <p className="mb-1 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
-                  Assistant · Streaming
-                </p>
-                <div className="rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-secondary shadow-panel">
-                  {streamingNote}
+            {/* ── Execution Terminal Log ─────────────────────────── */}
+            {(anyStreaming || streamingNote) && !isQuickEstimateStreaming && (() => {
+              return (
+                <div className="mr-2 animate-slide-in">
+                  <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
+                    {/* Terminal header */}
+                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+                        </div>
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Execution Status</span>
+                      </div>
+                      {anyStreaming && (
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                          Processing
+                        </span>
+                      )}
+                    </div>
+                    {/* Simplified Log Status */}
+                    <div className="p-4 font-mono text-[11px] leading-relaxed">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-bold text-cyan-400">›</span>
+                        <span className="text-slate-300 font-semibold break-words">
+                          {streamingNote || "Waiting for execution..."}
+                        </span>
+                        {anyStreaming && <span className="animate-pulse text-emerald-400">█</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Live Project Fetch Status */}
+                  {Object.keys(projectFetchStatuses).length > 0 && (
+                    <div className="mt-2 rounded-xl border border-border/40 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+                      <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light">Live Fetch Status</span>
+                        <span className="text-[9px] text-text-dim">({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)</span>
+                      </div>
+                      <div className="p-2.5 grid grid-cols-1 gap-1">
+                        {Object.entries(projectFetchStatuses).map(([name, status]) => {
+                          const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                          const colors = { pending: "text-text-dim", fetching: "text-accent-light animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
+                          return (
+                            <div key={name} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                              <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                              <span className={`text-[10px] font-medium truncate flex-1 ${colors[status] || "text-text-dim"}`}>{name}</span>
+                              <span className={`text-[9px] uppercase font-bold tracking-wider ${colors[status] || "text-text-dim"}`}>{status}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ) : null}
+              );
+            })()}
 
             {isQuickEstimateStreaming && (
               <QuickEstimateProgressPanel
@@ -9038,7 +9244,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             )}
 
             {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-            {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && (listingData?.length > 0 || dbTransactions.length > 0) && (
+            {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && !hasPendingFetch && (listingData?.length > 0 || dbTransactions.length > 0) && (
               <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
                 <div
                   onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
@@ -9121,6 +9327,32 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             )}
 
+            {/* ── Start New Valuation CTA ─────────────────────── */}
+            {factorialAnalysisData && pipelineDone && !anyStreaming && (
+              <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="rounded-2xl border border-success/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.05),rgba(52,211,153,0.03))] p-5 flex flex-col items-center gap-4 shadow-panel text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-success/15 border border-success/30 text-2xl">🎉</div>
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-widest text-success">Valuation Complete</p>
+                    <p className="text-[11px] text-text-dim mt-1">Your valuation report is ready. You can start a new valuation or review the results in the panels above.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearInteractiveState();
+                      setMessages([]);
+                      setInput("");
+                      onClear?.();
+                    }}
+                    className="inline-flex items-center gap-2.5 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                  >
+                    <span>✦</span>
+                    Start New Valuation
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
             {Stage1GateWizard}
 
@@ -9155,7 +9387,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   </div>
                 </div>
                 {!mapCollapsed && (
-                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                  <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                    <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                        <span className="text-[10px] text-text-secondary leading-relaxed">
+                          Verify the marked location of the subject property on the Map panel. Choose 'Location Is Correct' or input coordinates to adjust.
+                        </span>
+                      </div>
+                    </div>
                     <div className="flex flex-wrap items-end gap-3">
                       <button
                         type="button"
@@ -9204,12 +9445,22 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   </div>
                 </div>
                 {!approachCollapsed && (
-                  <div className="overflow-y-auto custom-scrollbar max-h-[25vh] p-4 flex flex-wrap items-end gap-3 animate-in fade-in duration-200 min-h-0">
-                    <button
-                      type="button"
-                      onClick={() => submitApproachChoice(true)}
-                      className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
-                    >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                  <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                    <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                        <span className="text-[10px] text-text-secondary leading-relaxed">
+                          Select the recommended valuation methodology or choose a custom approach override to proceed.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => submitApproachChoice(true)}
+                        className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
+                      >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
                     <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
                       <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
                       <select
@@ -9231,9 +9482,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50 shrink-0"
                     >Apply Override</button>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
 
             {/* ── Token Breakdown UI ────────────────── */}
             {showTokenBreakdown && (
@@ -9374,12 +9626,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           <span className="truncate pr-4">{currentStage}</span>
           <button
             type="button"
-            onClick={() => setShowTokenBreakdown(!showTokenBreakdown)}
-            className={`flex items-center gap-1.5 transition hover:text-accent-light ${showTokenBreakdown ? "text-accent-light" : ""}`}
+            onClick={() => calculatedTotalTokens > 0 && setShowTokenBreakdown(!showTokenBreakdown)}
+            disabled={calculatedTotalTokens === 0}
+            className={`flex items-center gap-1.5 transition text-text-dim ${
+              calculatedTotalTokens > 0 
+                ? "hover:text-accent-light cursor-pointer" 
+                : "cursor-not-allowed opacity-50"
+            }`}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] animate-pulse" />
+            <span className={`h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] ${calculatedTotalTokens > 0 ? "animate-pulse" : "opacity-40"}`} />
             {calculatedTotalTokens > 0 ? `${calculatedTotalTokens.toLocaleString()} tokens` : "No usage yet"}
-            <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>
+            {calculatedTotalTokens > 0 && <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>}
           </button>
         </div>
 

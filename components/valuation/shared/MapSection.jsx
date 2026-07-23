@@ -215,7 +215,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   const [panelView, setPanelView] = useState("map"); // "map" | "report"
 
   useEffect(() => {
-    const getTheme = () => document.documentElement.classList.contains("light") ? "light" : "dark";
+    const getTheme = () => document.documentElement.classList.contains("dark-mode") ? "dark" : "light";
     setActiveTheme(getTheme());
 
     const observer = new MutationObserver(() => {
