@@ -73,7 +73,10 @@ export interface VisualizationRetrievalState {
   agentRoute?: string;
   retrievalIntent?: Record<string, unknown>;
   sqlQuery?: string;
+  /** @deprecated Use resultSets (array). Kept as a backward-compatible alias pointing to resultSets[0]. */
   resultSet?: VisualizationRetrievalResultSet;
+  /** All result sets returned by the data retrieval agent — one per metric / SQL query. */
+  resultSets?: VisualizationRetrievalResultSet[];
   clarification?: VisualizationRetrievalClarification;
   tokenEvents: VisualizationRetrievalTokenEvent[];
   metrics?: Record<string, unknown>;
