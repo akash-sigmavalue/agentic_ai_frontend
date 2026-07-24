@@ -867,10 +867,15 @@ export default function OsmInline({
 
   const landGisButtonMarkup = (
     <div className="osm-land-gis-action">
-      <button type="button" className="osm-land-gis-btn">
+      <a
+        href="/visualization_agent"
+        target="_blank"
+        rel="noreferrer"
+        className="osm-land-gis-btn text-decoration-none d-inline-flex align-items-center justify-content-center"
+      >
         <FaGlobe className="me-2" />
         Land/GIS Agent
-      </button>
+      </a>
     </div>
   );
 
