@@ -1,7 +1,7 @@
 import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
-import { FaShoppingCart } from "react-icons/fa";
+import { FaShoppingCart, FaChartArea } from "react-icons/fa";
 
 const formatPrice1 = (price) => {
   price = Math.floor(price);
@@ -67,7 +67,7 @@ const getLandIdentificationPayload = () => {
   }
 };
 
-const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
+const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
   const theme = "light";
   const isDark = false;
 
@@ -78,7 +78,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
   const [salesData, setSalesData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const cacheRef = React.useRef({ location: null, catchment: {} });
+  const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
 
   // metric can be "value" (total_agreement_price) or "volume" (total_transactions)
   const [metric, setMetric] = useState("value");
@@ -86,7 +86,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
   // Read from Land Identification localStorage on mount and listen for updates
   useEffect(() => {
     const updatePayloadState = (data) => {
-      cacheRef.current = { location: null, catchment: {} };
+      cacheRef.current = { location: null, catchment: {}, nearby: {} };
       const c = data.location || data.city || "";
       const v = data.village || data.villageName || "";
       const latVal = data.polygonCenterLat || data.latitude || null;
@@ -108,7 +108,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
       if (detail) {
         updatePayloadState(detail);
       } else {
-        cacheRef.current = { location: null, catchment: {} };
+        cacheRef.current = { location: null, catchment: {}, nearby: {} };
         const payload = getLandIdentificationPayload();
         setCity(payload.city);
         setVillageName(payload.villageName);
@@ -127,6 +127,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
   // Fetch YoY sales analysis whenever dependencies change
   useEffect(() => {
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
+    const cacheKey = selectedProjectId || selectedProject;
 
     if (viewMode === "catchment") {
       if (!lat || !lng) {
@@ -134,8 +135,20 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
         setSalesData([]);
         return;
       }
-      if (cacheRef.current.catchment[catchmentRadius]) {
+      if (cacheRef.current?.catchment?.[catchmentRadius]) {
         setSalesData(cacheRef.current.catchment[catchmentRadius]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    } else if (viewMode === "nearby") {
+      if (!lat || !lng) {
+        setSalesData([]);
+        setLoading(false);
+        return;
+      }
+      if (cacheRef.current?.nearby?.[cacheKey]) {
+        setSalesData(cacheRef.current.nearby[cacheKey]);
         setError(null);
         setLoading(false);
         return;
@@ -145,7 +158,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
         setSalesData([]);
         return;
       }
-      if (cacheRef.current.location) {
+      if (cacheRef.current?.location) {
         setSalesData(cacheRef.current.location);
         setError(null);
         setLoading(false);
@@ -157,9 +170,12 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
       setLoading(true);
       setError(null);
 
-      const requestBody = viewMode === "catchment"
-        ? { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" }
-        : { city_name: city, location_name: villageName, mode: "location" };
+      let requestBody = { city_name: city, location_name: villageName, mode: "location" };
+      if (viewMode === "catchment") {
+        requestBody = { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" };
+      } else if (viewMode === "nearby") {
+        requestBody = { city_name: city, location_name: villageName, latitude: lat, longitude: lng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
+      }
 
       try {
         const response = await fetch(
@@ -187,6 +203,8 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
         const fetchedData = json.data || [];
         if (viewMode === "catchment") {
           cacheRef.current.catchment[catchmentRadius] = fetchedData;
+        } else if (viewMode === "nearby") {
+          cacheRef.current.nearby[cacheKey] = fetchedData;
         } else {
           cacheRef.current.location = fetchedData;
         }
@@ -199,7 +217,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
     };
 
     fetchSalesData();
-  }, [city, villageName, lat, lng, viewMode, catchmentRadius]);
+  }, [city, villageName, lat, lng, viewMode, catchmentRadius, selectedProject, selectedProjectId]);
 
   // Determine country/city context
   const isDubai = useMemo(() => {
@@ -345,9 +363,22 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
                     fontWeight: 600,
                   }}
                 >
-                  🎯 1km Catchment ({lat.toFixed(4)}, {lng.toFixed(4)})
+                  🎯 {catchmentRadius >= 1000 ? `${(catchmentRadius / 1000).toFixed(1)}km` : `${catchmentRadius}m`} Catchment
                 </span>
               )
+            ) : viewMode === "nearby" && selectedProject && selectedProject !== "all" ? (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.08)",
+                  color: "#22c55e",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                🏢 {selectedProject}
+              </span>
             ) : (
               (city || villageName) && (
                 <span
@@ -407,7 +438,20 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
               </button>
             </div>
 
-            {(city || villageName) && (
+            {viewMode === "nearby" && selectedProject && selectedProject !== "all" ? (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.08)",
+                  color: "#22c55e",
+                  padding: "4px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                🏢 {selectedProject}
+              </span>
+            ) : (city || villageName) ? (
               <span
                 style={{
                   fontSize: "11px",
@@ -420,7 +464,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
               >
                 {villageName}{city ? `, ${city}` : ""}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
         <p
@@ -474,7 +518,17 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
+            <div
+              className="d-flex align-items-center justify-content-center rounded-circle mb-3"
+              style={{
+                width: 72,
+                height: 72,
+                background: isDark ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.07)",
+                color: "#22c55e",
+              }}
+            >
+              <FaChartArea size={30} />
+            </div>
             <p
               className="text-center mb-1"
               style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

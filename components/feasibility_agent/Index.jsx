@@ -577,7 +577,7 @@ import {
   FaScaleBalanced,
   FaDatabase,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import Header from "./Header";
 import LandDetailsForm from "./LandDetailsForm";
@@ -606,6 +606,7 @@ import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
 import LandIdentification from "./LandIdentification";
 import RegulatoryIntelligence from "./RegulatoryIntelligence";
+import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
   { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
@@ -666,17 +667,87 @@ const Index = () => {
   });
 
   const [inputRadius, setInputRadius] = useState(() => appliedRadius);
+  const [selectedProject, setSelectedProject] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    try {
+      const saved = localStorage.getItem("market research");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.selectedProject) return parsed.selectedProject;
+      }
+    } catch (e) {
+      console.error("Error reading selectedProject payload:", e);
+    }
+    return "all";
+  });
+
+  const [nearbyProjects, setNearbyProjects] = useState([]);
+  const [nearbyLimit, setNearbyLimit] = useState(5);
+  const [loadingNearbyProjects, setLoadingNearbyProjects] = useState(false);
 
   useEffect(() => {
     try {
       const existingRaw = localStorage.getItem("market research");
       const existing = existingRaw ? JSON.parse(existingRaw) : {};
-      const updated = { ...existing, viewMode: marketViewMode, radius: appliedRadius };
+      const updated = { ...existing, viewMode: marketViewMode, radius: appliedRadius, selectedProject };
       localStorage.setItem("market research", JSON.stringify(updated));
     } catch (e) {
       console.error("Error saving market research payload:", e);
     }
-  }, [marketViewMode, appliedRadius]);
+  }, [marketViewMode, appliedRadius, selectedProject]);
+
+  useEffect(() => {
+    if (marketViewMode !== "nearby") return;
+
+    let lat = null;
+    let lng = null;
+    let city = "";
+
+    try {
+      const landRaw = localStorage.getItem("Land Identification");
+      if (landRaw) {
+        const parsed = JSON.parse(landRaw);
+        lat = parsed?.polygonCenterLat || parsed?.latitude || null;
+        lng = parsed?.polygonCenterLng || parsed?.longitude || null;
+        city = parsed?.location || parsed?.city || "";
+      }
+    } catch (e) {
+      console.error("Error parsing Land Identification for nearby projects:", e);
+    }
+
+    if (!lat || !lng) return;
+
+    const fetchNearby = async () => {
+      setLoadingNearbyProjects(true);
+      try {
+        const response = await fetch(apiUrl("/new_rate_simulator/simulator/nearby-projects/"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ city_name: city, latitude: lat, longitude: lng, limit: nearbyLimit })
+        });
+        const data = await response.json();
+        if (data.success && Array.isArray(data.projects)) {
+          setNearbyProjects(data.projects);
+          if (data.projects.length > 0) {
+            setSelectedProject((prev) => {
+              if (!prev || prev === "all") {
+                const first = data.projects[0];
+                return first.project_id ? `id:${first.project_id}:${first.project_name}` : first.project_name;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching nearby projects:", err);
+      } finally {
+        setLoadingNearbyProjects(false);
+      }
+    };
+
+    fetchNearby();
+  }, [marketViewMode, nearbyLimit]);
+
   const [excelLogicSelected, setExcelLogicSelected] = useState(true);
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
     useState(true);
@@ -1464,7 +1535,9 @@ const Index = () => {
                       <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
                         {marketViewMode === "location"
                           ? "Showing overall city/location statistics"
-                          : `Showing ${appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`} radius catchment around project`}
+                          : marketViewMode === "catchment"
+                          ? `Showing ${appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`} radius catchment around project`
+                          : `Showing statistics for selected project: ${selectedProject && selectedProject.startsWith("id:") ? selectedProject.split(":").slice(2).join(":") : selectedProject}`}
                       </div>
                     </div>
                   </div>
@@ -1506,6 +1579,22 @@ const Index = () => {
                       >
                         <FaCrosshairs size={14} style={{ color: marketViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
                         <span>Catchment ({appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm rounded-pill px-3.5 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                        style={{
+                          fontSize: "13px",
+                          backgroundColor: marketViewMode === "nearby" ? "#448C74" : "transparent",
+                          borderColor: "transparent",
+                          color: marketViewMode === "nearby" ? "#ffffff" : "#475569",
+                          boxShadow: marketViewMode === "nearby" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                        }}
+                        onClick={() => setMarketViewMode("nearby")}
+                      >
+                        <FaBuilding size={14} style={{ color: marketViewMode === "nearby" ? "#ffffff" : "#448C74" }} />
+                        <span>Nearby Projects</span>
                       </button>
                     </div>
 
@@ -1596,23 +1685,98 @@ const Index = () => {
                         </button>
                       </div>
                     )}
+
+                    {/* Nearby Projects Selector */}
+                    {marketViewMode === "nearby" && (
+                      <div
+                        className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                        style={{ borderColor: "#cbd5e1" }}
+                      >
+                        <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
+                          <FaBuilding size={13} style={{ color: "#448C74" }} />
+                          <span className="fw-bold text-dark ms-1" style={{ fontSize: "13px" }}>Select Project:</span>
+                        </div>
+
+                        <select
+                          value={selectedProject}
+                          onChange={(e) => setSelectedProject(e.target.value)}
+                          className="form-select form-select-sm px-3 py-1 fw-bold rounded-2 border"
+                          style={{
+                            fontSize: "13px",
+                            color: "#1e293b",
+                            backgroundColor: "#ffffff",
+                            borderColor: "#cbd5e1",
+                            cursor: "pointer",
+                            minWidth: "220px"
+                          }}
+                        >
+                          {nearbyProjects.map((p, idx) => (
+                            <option key={p.project_id || idx} value={p.project_id ? `id:${p.project_id}:${p.project_name}` : p.project_name}>
+                              🏢 #{idx + 1} {p.project_name} ({p.distance_formatted} away • {p.total_transactions} sales)
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1.5 shadow-xs transition-all ms-1"
+                          style={{
+                            fontSize: "12px",
+                            backgroundColor: "#eef7f4",
+                            color: "#448C74",
+                            borderColor: "#a3d9c9"
+                          }}
+                          disabled={loadingNearbyProjects}
+                          onClick={() => setNearbyLimit((prev) => prev + 5)}
+                          title="Load the next 5 nearest competitor projects"
+                        >
+                          <FaPlus size={10} />
+                          <span>Show More (+5)</span>
+                        </button>
+
+                        {loadingNearbyProjects && (
+                          <span className="spinner-border spinner-border-sm text-success ms-1" role="status" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              <div className="row g-4">
-                <div className="col-lg-6">
-                  <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-              </div>
+              {(() => {
+                let pId = null;
+                let pName = "all";
+                if (selectedProject && selectedProject !== "all") {
+                  if (String(selectedProject).startsWith("id:")) {
+                    const parts = selectedProject.split(":");
+                    pId = parts[1];
+                    pName = parts.slice(2).join(":");
+                  } else {
+                    const found = nearbyProjects.find(p => String(p.project_id) === String(selectedProject) || p.project_name === selectedProject);
+                    if (found) {
+                      pId = found.project_id;
+                      pName = found.project_name;
+                    } else {
+                      pName = selectedProject;
+                    }
+                  }
+                }
+                return (
+                  <div className="row g-4">
+                    <div className="col-lg-6">
+                      <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Section 1.4: Unit Design */}
