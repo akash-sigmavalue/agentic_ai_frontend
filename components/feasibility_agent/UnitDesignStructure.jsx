@@ -8,7 +8,6 @@ import {
   FaSave,
   FaSyncAlt,
 } from "react-icons/fa";
-import { useGlobalState } from "@/components/GlobalContext";
 
 const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) => {
     // const [calculationMode, setCalculationMode] = useState('carpet'); // Lifted to parent
@@ -25,8 +24,7 @@ const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) =>
         factorCar: 1.0,
         visitorPct: 5.0
     });
-    const [gstate] = useGlobalState();
-    const theme = gstate?.theme || "light"
+    const theme = "light";
 
     const MAX_VARIATIONS = 10;
 

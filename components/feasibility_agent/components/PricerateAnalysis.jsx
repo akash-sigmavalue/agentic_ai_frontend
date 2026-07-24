@@ -1,7 +1,8 @@
+import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaChartBar } from "react-icons/fa";
-import { useGlobalState } from "@/components/GlobalContext";
+
 
 /**
  * PricerateAnalysis
@@ -14,8 +15,8 @@ import { useGlobalState } from "@/components/GlobalContext";
  *   { villageName: "Al-Aweer", villageId: 119, city: "Dubai" }
  *
  * Mapping:
- *   city       → city_name (SQL WHERE)
- *   villageName → location_name (SQL WHERE)
+ *   city       ΓåÆ city_name (SQL WHERE)
+ *   villageName ΓåÆ location_name (SQL WHERE)
  */
 
 const formatRate = (val, city) => {
@@ -42,8 +43,7 @@ const getMarketPayload = () => {
 };
 
 const PricerateAnalysis = () => {
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light";
+  const theme = "light";
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
@@ -89,7 +89,7 @@ const PricerateAnalysis = () => {
 
       try {
         const response = await fetch(
-          "/new_rate_simulator/simulator/yoy-weighted-rate/",
+          apiUrl("/new_rate_simulator/simulator/yoy-weighted-rate/"),
           {
             method: "POST",
             headers: {
@@ -302,7 +302,7 @@ const PricerateAnalysis = () => {
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
             <p
               className="text-center"
               style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
@@ -318,7 +318,7 @@ const PricerateAnalysis = () => {
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
             <p
               className="text-center mb-1"
               style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

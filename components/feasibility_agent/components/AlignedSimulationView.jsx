@@ -3,64 +3,65 @@ import { SimulationTable } from './TicketSizeSimulation';
 import { BayesianOptimizerCard } from '../BayesianOptimizer';
 import useTicketSizeSimulation, { UNIT_TYPES } from '../hooks/useTicketSizeSimulation';
 import useBayesianOptimizer from '../hooks/useBayesianOptimizer';
-import { FaSearchDollar, FaPlay, FaSave, FaUndo, FaCheckCircle, FaRegCircle, FaBrain ,FaDatabase} from 'react-icons/fa';
+import { FaSearchDollar, FaPlay, FaSave, FaUndo, FaCheckCircle, FaRegCircle, FaBrain, FaDatabase } from 'react-icons/fa';
+import { apiUrl } from '@/lib/api-client';
 
 
 // Map TSS unit types to BO bhk types
 const TSS_TO_BO_MAP = {
-    '1 BHK': '1Bhk',
-    '2 BHK': '2Bhk',
-    '3 BHK': '3Bhk',
-    '>3BHK': '>3Bhk',
-    'Shop': 'Shop',
-    'Office': 'Office',
+  '1 BHK': '1Bhk',
+  '2 BHK': '2Bhk',
+  '3 BHK': '3Bhk',
+  '>3BHK': '>3Bhk',
+  'Shop': 'Shop',
+  'Office': 'Office',
 };
 
 const readLandDetailsForm = () => {
-    try {
-        const raw = localStorage.getItem('landDetailsForm');
-        if (!raw) return null;
-        return JSON.parse(raw);
-    } catch { return null; }
+  try {
+    const raw = localStorage.getItem('landDetailsForm');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
 };
 
 const AlignedSimulationView = ({ showTicketSizeSimulation = true, showBayesianOptimization = true }) => {
-    // Resolve villageId from village name (same pattern as RevSimulation)
-    const [villageId, setVillageId] = useState(null);
+  // Resolve villageId from village name (same pattern as RevSimulation)
+  const [villageId, setVillageId] = useState(null);
 
-    useEffect(() => {
-        const resolveVillageId = async () => {
-            const village = readLandDetailsForm()?.village || '';
-            const name = (village || '').trim();
-            if (!name) { setVillageId(null); return; }
-            try {
-                const params = new URLSearchParams({ name });
-                const resp = await fetch(`/data_db/get_village_id_by_name/?${params.toString()}`, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' },
-                });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data?.ok && data?.village?.id != null) {
-                        setVillageId(data.village.id);
-                    }
-                }
-            } catch (err) {
-                console.error('AlignedSimulationView: Failed to resolve village ID:', err);
-            }
-        };
+  useEffect(() => {
+    const resolveVillageId = async () => {
+      const village = readLandDetailsForm()?.village || '';
+      const name = (village || '').trim();
+      if (!name) { setVillageId(null); return; }
+      try {
+        const params = new URLSearchParams({ name });
+        const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.ok && data?.village?.id != null) {
+            setVillageId(data.village.id);
+          }
+        }
+      } catch (err) {
+        console.error('AlignedSimulationView: Failed to resolve village ID:', err);
+      }
+    };
 
-        resolveVillageId();
+    resolveVillageId();
 
-        const sync = () => resolveVillageId();
-        window.addEventListener('landDetailsUpdated', sync);
-        return () => window.removeEventListener('landDetailsUpdated', sync);
-    }, []);
+    const sync = () => resolveVillageId();
+    window.addEventListener('landDetailsUpdated', sync);
+    return () => window.removeEventListener('landDetailsUpdated', sync);
+  }, []);
 
-    const tss = useTicketSizeSimulation(villageId);
-    const bo = useBayesianOptimizer();
+  const tss = useTicketSizeSimulation(villageId);
+  const bo = useBayesianOptimizer();
 
-    const css = `
+  const css = `
       .tss-container { 
         max-width: 100%; 
         width: 100%;
@@ -295,210 +296,210 @@ const AlignedSimulationView = ({ showTicketSizeSimulation = true, showBayesianOp
       }
   `;
 
-    return (
-        <div className="tss-container mt-2 fade-in-up">
-            <style>{css}</style>
+  return (
+    <div className="tss-container mt-2 fade-in-up">
+      <style>{css}</style>
 
-            {/* ═══════════════ ROW 0: Controls & Inputs ═══════════════ */}
-            <div className="row g-4 mb-4">
-                {/* LEFT: Ticket Size Simulation Controls */}
-                {showTicketSizeSimulation && (
-                    <div className="col-lg-6 aligned-section-col">
-                        <div className="sim-selected-panel">
-                            <div className="sim-selected-header">
-                                <div className="sim-selected-eyebrow">Selected Section</div>
-                                <h2 className="sim-selected-title">Ticket Size Simulation</h2>
-                                <p className="sim-selected-copy">
-                                    Simulate transaction volume based on average ticket size. Green cells are calculated automatically.
-                                </p>
-                            </div>
-                            <div className="sim-selected-body">
-                                {/* Buttons */}
-                                <div className="card border-0 shadow-sm rounded-4 mb-3 sim-tool-card">
-                                    <div className="card-body p-3 d-flex flex-wrap gap-3 align-items-center">
-                                        <button className="btn btn-info rounded-pill px-4 shadow-sm tss-btn text-white" onClick={tss.handleSave}>
-                                            <FaSave className="me-2" />Save All
-                                        </button>
-                                        <button className="btn btn-warning rounded-pill px-4 shadow-sm tss-btn text-dark fw-bold" onClick={tss.handleSimulate}>
-                                            <FaPlay className="me-2" />Simulate
-                                        </button>
-                                        <button className="btn btn-primary rounded-pill px-4 shadow-sm tss-btn" onClick={tss.resetToDefault}>
-                                            <FaUndo className="me-2" />Reset All
-                                        </button>
-                                        <div className="ms-auto text-muted small">
-                                           <FaDatabase className="me-1" />Data Simulation Removed
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Unit Type Selection */}
-                                <div className="card border-0 shadow-sm rounded-4 bg-white flex-grow-1 sim-tool-card">
-                                    <div className="card-body p-3">
-                                        <label className="small text-uppercase fw-bold text-muted mb-2 d-block ls-1">Select Unit Types to Simulate</label>
-                                        <div className="d-flex flex-wrap gap-2">
-                                            {UNIT_TYPES.map(type => (
-                                                <button
-                                                    key={type}
-                                                    className={`btn rounded-pill px-3 py-2 text-sm fw-medium transition-all shadow-sm ${tss.selectedUnitTypes.includes(type) ? 'btn-primary text-white border-0' : 'btn-light text-secondary bg-white border'}`}
-                                                    style={{ fontSize: '0.85rem' }}
-                                                    onClick={() => tss.toggleUnitType(type)}
-                                                >
-                                                    {tss.selectedUnitTypes.includes(type) ?
-                                                        <FaCheckCircle className="me-2" /> :
-                                                        <FaRegCircle className="me-2 text-muted opacity-50" />
-                                                    }
-                                                    {type}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+      {/* ═══════════════ ROW 0: Controls & Inputs ═══════════════ */}
+      <div className="row g-4 mb-4">
+        {/* LEFT: Ticket Size Simulation Controls */}
+        {showTicketSizeSimulation && (
+          <div className="col-lg-6 aligned-section-col">
+            <div className="sim-selected-panel">
+              <div className="sim-selected-header">
+                <div className="sim-selected-eyebrow">Selected Section</div>
+                <h2 className="sim-selected-title">Ticket Size Simulation</h2>
+                <p className="sim-selected-copy">
+                  Simulate transaction volume based on average ticket size. Green cells are calculated automatically.
+                </p>
+              </div>
+              <div className="sim-selected-body">
+                {/* Buttons */}
+                <div className="card border-0 shadow-sm rounded-4 mb-3 sim-tool-card">
+                  <div className="card-body p-3 d-flex flex-wrap gap-3 align-items-center">
+                    <button className="btn btn-info rounded-pill px-4 shadow-sm tss-btn text-white" onClick={tss.handleSave}>
+                      <FaSave className="me-2" />Save All
+                    </button>
+                    <button className="btn btn-warning rounded-pill px-4 shadow-sm tss-btn text-dark fw-bold" onClick={tss.handleSimulate}>
+                      <FaPlay className="me-2" />Simulate
+                    </button>
+                    <button className="btn btn-primary rounded-pill px-4 shadow-sm tss-btn" onClick={tss.resetToDefault}>
+                      <FaUndo className="me-2" />Reset All
+                    </button>
+                    <div className="ms-auto text-muted small">
+                      <FaDatabase className="me-1" />Data Simulation Removed
                     </div>
-                )}
-
-                {/* RIGHT: Bayesian Optimizer Controls */}
-                {showBayesianOptimization && (
-                    <div className="col-lg-6 aligned-section-col">
-                        <div className="sim-selected-panel">
-                            <div className="sim-selected-header">
-                                <div className="sim-selected-eyebrow">Selected Section</div>
-                                <h2 className="sim-selected-title">Bayesian Optimization</h2>
-                                <p className="sim-selected-copy">
-                                    Find the price range (±10%) that maximizes transaction volume for each unit type.
-                                </p>
-                            </div>
-                            <div className="sim-selected-body">
-                                <div className="card border-0 shadow-sm rounded-4 bg-white sim-tool-card">
-                                    <div className="card-body p-4">
-                                        <div className="d-flex align-items-center mb-4">
-                                            <div
-                                                className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3"
-                                                style={{ width: "40px", height: "40px" }}
-                                            >
-                                                <FaBrain />
-                                            </div>
-                                            <div>
-                                                <h4 className="fw-bold mb-0 text-dark">
-                                                    Transaction Optimizer
-                                                </h4>
-                                                <small className="text-muted">
-                                                    Configure optimizer inputs for each selected unit type.
-                                                </small>
-                                            </div>
-                                        </div>
-
-                                        {/* Global Controls Row */}
-                                        <div className="row g-3 mb-3 align-items-end">
-                                            <div className="col-md-4">
-                                                <label className="form-label fw-semibold small text-uppercase text-muted">Select Village</label>
-                                                <select
-                                                    className="form-select"
-                                                    value={bo.selectedVillageId || ""}
-                                                    onChange={(e) => {
-                                                        const vid = parseInt(e.target.value);
-                                                        const village = bo.villages.find((v) => v.id === vid);
-                                                        if (village) {
-                                                            bo.setSelectedVillageId(village.id);
-                                                            bo.setSelectedVillageName(village.name);
-                                                        }
-                                                    }}
-                                                >
-                                                    <option value="" disabled>Select a village</option>
-                                                    {bo.villages.map((v) => (
-                                                        <option key={v.id} value={v.id}>
-                                                            {v.name} (ID: {v.id})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="col-md-4">
-                                                <label className="form-label fw-semibold small text-uppercase text-muted">Number of Trials</label>
-                                                <input
-                                                    type="number"
-                                                    className="form-control"
-                                                    min={10} max={500} step={5}
-                                                    value={bo.nTrials}
-                                                    onChange={(e) => bo.setNTrials(Number(e.target.value || 10))}
-                                                    placeholder="e.g. 100"
-                                                />
-                                            </div>
-                                            <div className="col-md-4">
-                                                <label className="form-label fw-semibold small text-uppercase text-muted">Random Seed</label>
-                                                <input
-                                                    type="number"
-                                                    className="form-control"
-                                                    min={0} max={1000}
-                                                    value={bo.randomSeed}
-                                                    onChange={(e) => bo.setRandomSeed(Number(e.target.value || 0))}
-                                                    placeholder="e.g. 42"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {bo.metaError && (
-                                            <div className="alert alert-danger mb-0">{bo.metaError}</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* ═══════════════ ROWS 1-6: Per Unit Type Cards ═══════════════ */}
-            {UNIT_TYPES.map(tssType => {
-                const boType = TSS_TO_BO_MAP[tssType];
-                const isSelected = tss.selectedUnitTypes.includes(tssType);
-
-                if (!isSelected) return null;
-
-                return (
-                    <div className="row g-4 mb-4" key={tssType}>
-                        {/* LEFT: SimulationTable */}
-                        {showTicketSizeSimulation && (
-                            <div className="col-lg-6">
-                                <SimulationTable
-                                    type={tssType}
-                                    avgTicketSize={tss.avgTicketSizes[tssType]}
-                                    onAvgTicketSizeChange={(val) => tss.handleAvgTicketSizeChange(tssType, val)}
-                                    velocityData={tss.simulationResults[tssType] || {}}
-                                    onSimulate={() => tss.handleSimulateSingle(tssType)}
-                                    noOfUnits={tss.getUnitCount(tssType)}
-                                />
-                            </div>
-                        )}
-
-                        {/* RIGHT: BayesianOptimizerCard */}
-                        {showBayesianOptimization && (
-                            <div className="col-lg-6">
-                                <BayesianOptimizerCard
-                                    villageId={bo.selectedVillageId}
-                                    villageName={bo.selectedVillageName}
-                                    bhk={boType}
-                                    nTrials={bo.nTrials}
-                                    randomSeed={bo.randomSeed}
-                                    unitCount={bo.getUnitCount(boType)}
-                                />
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-
-            {tss.selectedUnitTypes.length === 0 && (
-                <div className="text-center py-5 text-muted bg-white rounded-4 shadow-sm border border-dashed">
-                    <div className="py-5">
-                        <FaLayerGroup className="fa-3x mb-3 text-muted opacity-25" />
-                        <h6 className="fw-bold text-secondary">No Unit Types Selected</h6>
-                        <p className="small mb-0">Select at least one unit type above to view and edit simulation parameters.</p>
-                    </div>
+                  </div>
                 </div>
+
+                {/* Unit Type Selection */}
+                <div className="card border-0 shadow-sm rounded-4 bg-white flex-grow-1 sim-tool-card">
+                  <div className="card-body p-3">
+                    <label className="small text-uppercase fw-bold text-muted mb-2 d-block ls-1">Select Unit Types to Simulate</label>
+                    <div className="d-flex flex-wrap gap-2">
+                      {UNIT_TYPES.map(type => (
+                        <button
+                          key={type}
+                          className={`btn rounded-pill px-3 py-2 text-sm fw-medium transition-all shadow-sm ${tss.selectedUnitTypes.includes(type) ? 'btn-primary text-white border-0' : 'btn-light text-secondary bg-white border'}`}
+                          style={{ fontSize: '0.85rem' }}
+                          onClick={() => tss.toggleUnitType(type)}
+                        >
+                          {tss.selectedUnitTypes.includes(type) ?
+                            <FaCheckCircle className="me-2" /> :
+                            <FaRegCircle className="me-2 text-muted opacity-50" />
+                          }
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RIGHT: Bayesian Optimizer Controls */}
+        {showBayesianOptimization && (
+          <div className="col-lg-6 aligned-section-col">
+            <div className="sim-selected-panel">
+              <div className="sim-selected-header">
+                <div className="sim-selected-eyebrow">Selected Section</div>
+                <h2 className="sim-selected-title">Bayesian Optimization</h2>
+                <p className="sim-selected-copy">
+                  Find the price range (±10%) that maximizes transaction volume for each unit type.
+                </p>
+              </div>
+              <div className="sim-selected-body">
+                <div className="card border-0 shadow-sm rounded-4 bg-white sim-tool-card">
+                  <div className="card-body p-4">
+                    <div className="d-flex align-items-center mb-4">
+                      <div
+                        className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3"
+                        style={{ width: "40px", height: "40px" }}
+                      >
+                        <FaBrain />
+                      </div>
+                      <div>
+                        <h4 className="fw-bold mb-0 text-dark">
+                          Transaction Optimizer
+                        </h4>
+                        <small className="text-muted">
+                          Configure optimizer inputs for each selected unit type.
+                        </small>
+                      </div>
+                    </div>
+
+                    {/* Global Controls Row */}
+                    <div className="row g-3 mb-3 align-items-end">
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-uppercase text-muted">Select Village</label>
+                        <select
+                          className="form-select"
+                          value={bo.selectedVillageId || ""}
+                          onChange={(e) => {
+                            const vid = parseInt(e.target.value);
+                            const village = bo.villages.find((v) => v.id === vid);
+                            if (village) {
+                              bo.setSelectedVillageId(village.id);
+                              bo.setSelectedVillageName(village.name);
+                            }
+                          }}
+                        >
+                          <option value="" disabled>Select a village</option>
+                          {bo.villages.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name} (ID: {v.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-uppercase text-muted">Number of Trials</label>
+                        <input
+                          type="number"
+                          className="form-control"
+                          min={10} max={500} step={5}
+                          value={bo.nTrials}
+                          onChange={(e) => bo.setNTrials(Number(e.target.value || 10))}
+                          placeholder="e.g. 100"
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small text-uppercase text-muted">Random Seed</label>
+                        <input
+                          type="number"
+                          className="form-control"
+                          min={0} max={1000}
+                          value={bo.randomSeed}
+                          onChange={(e) => bo.setRandomSeed(Number(e.target.value || 0))}
+                          placeholder="e.g. 42"
+                        />
+                      </div>
+                    </div>
+
+                    {bo.metaError && (
+                      <div className="alert alert-danger mb-0">{bo.metaError}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════════ ROWS 1-6: Per Unit Type Cards ═══════════════ */}
+      {UNIT_TYPES.map(tssType => {
+        const boType = TSS_TO_BO_MAP[tssType];
+        const isSelected = tss.selectedUnitTypes.includes(tssType);
+
+        if (!isSelected) return null;
+
+        return (
+          <div className="row g-4 mb-4" key={tssType}>
+            {/* LEFT: SimulationTable */}
+            {showTicketSizeSimulation && (
+              <div className="col-lg-6">
+                <SimulationTable
+                  type={tssType}
+                  avgTicketSize={tss.avgTicketSizes[tssType]}
+                  onAvgTicketSizeChange={(val) => tss.handleAvgTicketSizeChange(tssType, val)}
+                  velocityData={tss.simulationResults[tssType] || {}}
+                  onSimulate={() => tss.handleSimulateSingle(tssType)}
+                  noOfUnits={tss.getUnitCount(tssType)}
+                />
+              </div>
             )}
+
+            {/* RIGHT: BayesianOptimizerCard */}
+            {showBayesianOptimization && (
+              <div className="col-lg-6">
+                <BayesianOptimizerCard
+                  villageId={bo.selectedVillageId}
+                  villageName={bo.selectedVillageName}
+                  bhk={boType}
+                  nTrials={bo.nTrials}
+                  randomSeed={bo.randomSeed}
+                  unitCount={bo.getUnitCount(boType)}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {tss.selectedUnitTypes.length === 0 && (
+        <div className="text-center py-5 text-muted bg-white rounded-4 shadow-sm border border-dashed">
+          <div className="py-5">
+            <FaLayerGroup className="fa-3x mb-3 text-muted opacity-25" />
+            <h6 className="fw-bold text-secondary">No Unit Types Selected</h6>
+            <p className="small mb-0">Select at least one unit type above to view and edit simulation parameters.</p>
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 };
 
 export default AlignedSimulationView;

@@ -1086,6 +1086,7 @@ import {
     Tooltip,
     Legend
 } from 'chart.js';
+import { apiUrl } from '@/lib/api-client';
 
 // Register ChartJS components
 ChartJS.register(
@@ -1312,7 +1313,7 @@ const Marketanalysis = ({ calculationMode, setCalculationMode }) => {
             setChartError(null);
 
             try {
-                const response = await fetch('/new_rate_simulator/simulator/chart-rate/', {
+                const response = await fetch(apiUrl('/new_rate_simulator/simulator/chart-rate/'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1372,7 +1373,7 @@ const Marketanalysis = ({ calculationMode, setCalculationMode }) => {
             setAgreementChartError(null);
 
             try {
-                const response = await fetch('/new_rate_simulator/simulator/chart/agreement-price/', {
+                const response = await fetch(apiUrl('/new_rate_simulator/simulator/chart/agreement-price/'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1440,7 +1441,7 @@ const Marketanalysis = ({ calculationMode, setCalculationMode }) => {
 
                 console.log('DEBUG - Sending payload to supply-demand API:', JSON.stringify(apiPayload, null, 2));
 
-                const response = await fetch('/new_rate_simulator/simulator/supply-demand/', {
+                const response = await fetch(apiUrl('/new_rate_simulator/simulator/supply-demand/'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1527,7 +1528,7 @@ const Marketanalysis = ({ calculationMode, setCalculationMode }) => {
                     villageName: payload.villageName,
                 };
 
-                const response = await fetch('/new_rate_simulator/simulator/supply-analysis/', {
+                const response = await fetch(apiUrl('/new_rate_simulator/simulator/supply-analysis/'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

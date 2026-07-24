@@ -395,8 +395,9 @@
 
 // export default FSIProposalForm; 
 
+import { apiUrl } from "@/lib/api-client";
 import { useState, useEffect, useRef } from "react";
-import { useGlobalState } from "@/components/GlobalContext";
+
 import { FaGlobe, FaFilePdf, FaMinus, FaExpandAlt, FaCompressAlt, FaTimes } from "react-icons/fa";
 
 // Helper: read areaType from landDetailsForm in localStorage
@@ -539,7 +540,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
           formDataObj.append("file", file);
         });
 
-        const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/documents`, {
+        const uploadResponse = await fetch(apiUrl("/user-input/documents"), {
           method: "POST",
           body: formDataObj,
         });
@@ -553,7 +554,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
         setDocStatusLog((prev) => [...prev, "Upload successful.", "Sending query to Ask API..."]);
       }
 
-      const askResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-input/ask`, {
+      const askResponse = await fetch(apiUrl("/user-input/ask"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -673,7 +674,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       eventSourceRef.current.close();
     }
 
-    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/chat_stream?query=${encodedQuery}&no_cache=true`;
+    const url = apiUrl(`/api/chat_stream?query=${encodedQuery}&no_cache=true`);
 
     try {
       const source = new EventSource(url);
@@ -938,8 +939,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
     return elements;
   };
 
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light"
+  const theme = "light";
   const agenticPermissibleFsiValue = (() => {
     const value = parseFloat(landResults?.maxPermissibleArea);
     return Number.isFinite(value) && value > 0
@@ -2870,7 +2870,7 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
                     <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>Selected Files ({docFiles.length}):</div>
                     {docFiles.map((file, idx) => (
                       <div key={idx} style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        📄 {file.name}
+                        ≡ƒôä {file.name}
                       </div>
                     ))}
                   </div>

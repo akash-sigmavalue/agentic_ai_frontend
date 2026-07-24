@@ -13,6 +13,7 @@ import { mapSimulationToIrrForm } from "./utils/mapSimulationToIrrForm";
 import { formatMetricNumber } from "./utils/irrMetricUtils";
 import { runIrrCashflowSimulation, runSalesInflowSimulation } from "./services/irrSimulationService";
 import { FaArrowLeft, FaCalculator, FaChartBar, FaChevronDown, FaChevronUp, FaCopy, FaInfoCircle } from 'react-icons/fa';
+import { apiUrl } from "@/lib/api-client";
 
 const IRR_SCENARIOS = ["Optimistic", "Most Probable", "Pessimistic"];
 
@@ -70,11 +71,15 @@ const IRR = () => {
   const [activeSalesTab, setActiveSalesTab] = useState("upcoming");
   const [searchRadius, setSearchRadius] = useState(1);
   const [selectedSalesVelocityProjects, setSelectedSalesVelocityProjects] = useState(new Set());
-  
+
   const [cashInflowSimLoading, setCashInflowSimLoading] = useState(false);
   const [cashInflowSimResult, setCashInflowSimResult] = useState(null);
   const [cashInflowSimError, setCashInflowSimError] = useState(null);
   const [activeInflowScenario, setActiveInflowScenario] = useState("Most Probable");
+  const [userCashflowRows, setUserCashflowRows] = useState([
+    { year: "Year 0", percentage: "" },
+    { year: "Year 1", percentage: "" },
+  ]);
 
   const metricListSetters = {
     setSalesInfoMethod,
@@ -282,7 +287,7 @@ const IRR = () => {
     setIsSimulationModalOpen(false);
   };
 
-    const handleFindComparables = async () => {
+  const handleFindComparables = async () => {
     setComparableLoading(true);
     setComparableResult(null);
     setComparableError(null);
@@ -304,7 +309,7 @@ const IRR = () => {
     }
 
     try {
-      const response = await fetch("/new_rate_simulator/simulator/comparable-projects", {
+      const response = await fetch(apiUrl("/new_rate_simulator/simulator/comparable-projects"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
@@ -334,7 +339,7 @@ const IRR = () => {
 
   const handleFetchSalesVelocity = async () => {
     if (!comparableProjects || comparableProjects.length === 0) return;
-    
+
     setSalesVelocityLoading(true);
     setSalesVelocityError(null);
     setSalesVelocityData(null);
@@ -347,12 +352,12 @@ const IRR = () => {
           return { projectName: p.projectName, location: p.location, lat, lng };
         });
 
-      const response = await fetch("/new_rate_simulator/simulator/sales-velocity2", {
+      const response = await fetch(apiUrl("/new_rate_simulator/simulator/sales-velocity2"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ projects: payloadProjects }),
       });
-      
+
       const body = await response.json();
       if (!response.ok || body?.success === false) {
         setSalesVelocityError(body?.error || "Failed to fetch sales velocity.");
@@ -368,23 +373,23 @@ const IRR = () => {
 
   const handleRunCashInflowSimulation = async () => {
     if (!salesVelocityData || !salesVelocityData.velocity_data) return;
-    
+
     setCashInflowSimLoading(true);
     setCashInflowSimError(null);
     setCashInflowSimResult(null);
 
     try {
       const selectedVelocityData = salesVelocityData.velocity_data.filter(row => selectedSalesVelocityProjects.has(row.llmName));
-      
-      const response = await fetch("/new_rate_simulator/simulator/predict-cash-inflow", {
+
+      const response = await fetch(apiUrl("/new_rate_simulator/simulator/predict-cash-inflow"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           salesInfo: salesInfoRows.filter(r => !r.isTotal),
           velocityData: selectedVelocityData
         }),
       });
-      
+
       const body = await response.json();
       if (!response.ok || body?.success === false) {
         setCashInflowSimError(body?.error || "Failed to run simulation.");
@@ -400,7 +405,7 @@ const IRR = () => {
 
   const handleApplyInflowScenario = () => {
     if (!parsedInflowResult || !parsedInflowResult[activeInflowScenario]) return;
-    
+
     const scenarioData = parsedInflowResult[activeInflowScenario];
     if (scenarioData.length === 0) return;
 
@@ -412,7 +417,7 @@ const IRR = () => {
         const yearNum = parseInt(yearNumMatch[0], 10);
         if (yearNum > maxYear) maxYear = yearNum;
         if (yearNum > 0) {
-          newCashflow[yearNum] = row.percentage.replace('%', '').trim(); 
+          newCashflow[yearNum] = row.percentage.replace('%', '').trim();
         }
       }
     });
@@ -434,7 +439,7 @@ const IRR = () => {
 
     let currentDuration = 1;
     let currentFormData = { ...defaultFormData };
-    
+
     try {
       const savedFormStr = localStorage.getItem("irrForm");
       if (savedFormStr) {
@@ -456,6 +461,65 @@ const IRR = () => {
       formData: currentFormData,
       appliedAt: Date.now(),
       source: "cashflowSimulation",
+    });
+
+    setIsComparableModalOpen(false);
+  };
+
+  // ── User Cashflow: apply manually entered rows to the IRR form ──
+  const handleApplyUserCashflow = () => {
+    const newCashflow = {};
+    let maxYear = 1;
+    userCashflowRows.forEach(row => {
+      const yearNumMatch = row.year.match(/\d+/);
+      if (yearNumMatch) {
+        const yearNum = parseInt(yearNumMatch[0], 10);
+        if (yearNum > maxYear) maxYear = yearNum;
+        if (yearNum > 0) {
+          newCashflow[yearNum] = row.percentage.replace('%', '').trim();
+        }
+      }
+    });
+
+    const defaultFormData = {
+      cashflow: {},
+      landcost: {},
+      approvalcost: {},
+      constructioncost: {},
+      administrativecost: {},
+      ancillarycost: {},
+      tdrcost: {},
+      premiumcost: {},
+      marketingcost: {},
+      contingencycost: {},
+      financecost: {},
+      miscellaneouscost: {}
+    };
+
+    let currentDuration = 1;
+    let currentFormData = { ...defaultFormData };
+
+    try {
+      const savedFormStr = localStorage.getItem("irrForm");
+      if (savedFormStr) {
+        const parsed = JSON.parse(savedFormStr);
+        currentDuration = parseInt(parsed.projectDuration, 10) || 1;
+        if (parsed.formData) {
+          currentFormData = { ...defaultFormData, ...parsed.formData };
+        }
+      }
+    } catch (e) {
+      console.error("Could not parse irrForm from localStorage", e);
+    }
+
+    const finalDuration = Math.max(currentDuration, maxYear);
+    currentFormData.cashflow = newCashflow;
+
+    setIrrFormAutofill({
+      projectDuration: finalDuration,
+      formData: currentFormData,
+      appliedAt: Date.now(),
+      source: "userCashflow",
     });
 
     setIsComparableModalOpen(false);
@@ -550,19 +614,19 @@ const IRR = () => {
 
   const parsedSim2Data = useMemo(() => {
     if (!sim2Result) return null;
-    
+
     const sections = {
       "Optimistic": { data: {}, maxYear: 0 },
       "Most Probable": { data: {}, maxYear: 0 },
       "Pessimistic": { data: {}, maxYear: 0 }
     };
-    
+
     let currentSection = null;
     const lines = String(sim2Result).split('\n');
-    
+
     for (let line of lines) {
       line = line.replace(/\*/g, '').trim();
-      
+
       if (line.startsWith('Optimistic:')) {
         currentSection = 'Optimistic';
       } else if (line.startsWith('Most Probable:')) {
@@ -587,7 +651,7 @@ const IRR = () => {
 
   const handleAutoFill = () => {
     if (!parsedSim2Data) return;
-    
+
     if (Object.keys(parsedSim2Data["Optimistic"].data).length > 0) {
       localStorage.setItem("Inflow_Optimistic", JSON.stringify({
         ...parsedSim2Data["Optimistic"].data,
@@ -623,11 +687,11 @@ const IRR = () => {
 
       const savedFormStr = localStorage.getItem("irrForm");
       let currentFormData = {
-        cashflow: {}, landcost: {}, approvalcost: {}, constructioncost: {}, 
-        administrativecost: {}, ancillarycost: {}, tdrcost: {}, premiumcost: {}, 
+        cashflow: {}, landcost: {}, approvalcost: {}, constructioncost: {},
+        administrativecost: {}, ancillarycost: {}, tdrcost: {}, premiumcost: {},
         marketingcost: {}, contingencycost: {}, financecost: {}, miscellaneouscost: {}
       };
-      
+
       let existingDuration = null;
       if (savedFormStr) {
         try {
@@ -642,12 +706,12 @@ const IRR = () => {
           console.error("Failed to parse irrForm", e);
         }
       }
-      
+
       currentFormData.cashflow = cashflow;
-      
+
       let requiredYears = parsedSim2Data[selectedScenario]?.maxYear || 0;
-      let finalDuration = existingDuration !== null 
-        ? Math.max(existingDuration, requiredYears) 
+      let finalDuration = existingDuration !== null
+        ? Math.max(existingDuration, requiredYears)
         : (requiredYears > 0 ? requiredYears : 1);
 
       setIrrFormAutofill({
@@ -656,7 +720,7 @@ const IRR = () => {
         appliedAt: Date.now()
       });
     }
-    
+
     alert("Data saved to local storage successfully!");
   };
 
@@ -1272,7 +1336,7 @@ const IRR = () => {
               <div className="modal-body pt-3 pb-4">
                 <div className="d-flex justify-content-between align-items-center mb-4">
                   <p className="text-secondary mb-0">Run the second simulation analysis.</p>
-                  
+
                   {/* P1 / P2 Slider Toggle */}
                   <div className="d-flex align-items-center bg-light rounded-pill p-1 border shadow-sm" style={{ width: "fit-content" }}>
                     <button
@@ -1291,10 +1355,10 @@ const IRR = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="d-flex justify-content-end mb-4">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn btn-primary rounded-pill px-4"
                     onClick={handleRunSimulation2}
                     disabled={sim2Loading}
@@ -1302,7 +1366,7 @@ const IRR = () => {
                     {sim2Loading ? "Running..." : "Run"}
                   </button>
                 </div>
-                
+
                 {sim2Loading && (
                   <div className="text-center py-4">
                     <div className="spinner-border text-primary" role="status">
@@ -1310,13 +1374,13 @@ const IRR = () => {
                     </div>
                   </div>
                 )}
-                
+
                 {sim2Error && (
                   <div className="alert alert-danger" role="alert">
                     {sim2Error}
                   </div>
                 )}
-                
+
                 {sim2Result && (
                   <div className="bg-light p-3 rounded" style={{ maxHeight: "400px", overflowY: "auto" }}>
                     <div className="d-flex justify-content-between align-items-center mb-3">
@@ -1336,9 +1400,9 @@ const IRR = () => {
                         </pre>
                       </div>
                     )}
-                    
+
                     <hr className="my-4 text-muted" />
-                    
+
                     <div className="mb-4">
                       <p className="fw-bold text-dark mb-3">Select Scenario for AutoFill:</p>
                       <div className="btn-group w-100 shadow-sm" role="group">
@@ -1354,7 +1418,7 @@ const IRR = () => {
                         ))}
                       </div>
                     </div>
-                    
+
                     {parsedSim2Data && Object.keys(parsedSim2Data[selectedScenario]?.data || {}).length > 0 && (
                       <div className="mt-4 mb-4">
                         <h6 className="fw-bold text-dark mb-3">{selectedScenario} Cashflow Projection</h6>
@@ -1376,7 +1440,7 @@ const IRR = () => {
                             </tbody>
                           </table>
                         </div>
-                        
+
                         <div className="mt-3 text-start">
                           <span className="badge bg-secondary bg-opacity-10 text-dark border border-secondary border-opacity-25 px-3 py-2 fs-6 rounded-pill">
                             Total years required to sellout: <span className="fw-bold text-primary">{parsedSim2Data[selectedScenario].maxYear}</span>
@@ -1386,8 +1450,8 @@ const IRR = () => {
                     )}
 
                     <div className="mt-4 text-end">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="btn btn-success btn-lg rounded-pill px-5 shadow-sm fw-bold card-hover-lift"
                         onClick={handleAutoFill}
                       >
@@ -1471,689 +1535,803 @@ const IRR = () => {
                           Searches for under-construction real estate projects within a <strong>1km radius</strong> using your saved project coordinates.
                         </p>
 
-                {/* Coordinates preview */}
-                {(() => {
-                  const lfStr = typeof window !== 'undefined' ? localStorage.getItem("landDetailsForm") : null;
-                  const lf = lfStr ? JSON.parse(lfStr) : {};
-                  const latRaw = lf.latitude;
-                  const lngRaw = lf.longitude;
-                  const lat = parseFloat(latRaw);
-                  const lng = parseFloat(lngRaw);
-                  if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                    return (
-                      <div className="d-flex gap-3 mb-4">
-                        <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">
-                          📍 Lat: <strong>{latRaw}</strong>
-                        </span>
-                        <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">
-                          📍 Lng: <strong>{lngRaw}</strong>
-                        </span>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="alert alert-warning rounded-3 mb-4">
-                      ⚠️ No coordinates saved. Please fill in Latitude &amp; Longitude in the Land Details form first.
-                    </div>
-                  );
-                })()}
-
-                {/* Find button */}
-                <div className="d-flex justify-content-end mb-4 align-items-center">
-                  {comparableProjects && comparableProjects.length === 0 && (
-                    <div className="text-danger fw-semibold me-3 small bg-danger bg-opacity-10 px-3 py-1 rounded-pill border border-danger border-opacity-25 shadow-sm">
-                      ⚠️ No Comparable projects found. Please increase the area.
-                    </div>
-                  )}
-                  <select
-                    className="form-select form-select-sm rounded-pill me-3 shadow-sm border-secondary"
-                    style={{ width: "auto", minWidth: "90px" }}
-                    value={searchRadius}
-                    onChange={(e) => setSearchRadius(Number(e.target.value))}
-                    disabled={comparableLoading}
-                  >
-                    <option value={1}>1km</option>
-                    <option value={2}>2km</option>
-                    <option value={3}>3km</option>
-                    <option value={4}>4km</option>
-                    <option value={5}>5km</option>
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-primary rounded-pill px-5 fw-bold shadow-sm"
-                    onClick={handleFindComparables}
-                    disabled={comparableLoading}
-                    style={{ transition: "transform 0.15s", minWidth: 180 }}
-                  >
-                    {comparableLoading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                        Searching…
-                      </>
-                    ) : "Find Comparables"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-success btn-sm ms-2 rounded-pill shadow-sm"
-                    onClick={handleSaveComparableCache}
-                    disabled={!comparableProjects}
-                    title="Save to Cache"
-                  >
-                    💾 Save
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm ms-2 rounded-pill shadow-sm"
-                    onClick={handleClearComparableCache}
-                    title="Clear Cache"
-                  >
-                    🗑️ Clear
-                  </button>
-                </div>
-
-                {/* Error */}
-                {comparableError && (
-                  <div className="alert alert-danger rounded-3">
-                    ❌ {comparableError}
-                  </div>
-                )}
-
-                {/* Results */}
-                {(comparableResult || comparableProjects) && (
-                  <div className="mt-2">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="d-flex align-items-center">
-                        <h6 className="fw-bold text-dark mb-0 me-2">Comparable Projects</h6>
-                        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
-                          Web Search + Maps API
-                        </span>
-                      </div>
-                      
-                      {/* Project Filter Toggle */}
-                      {comparableProjects && comparableProjects.length > 0 && (
-                        <div className="btn-group shadow-sm" role="group" aria-label="Project filter">
-                          <input 
-                            type="radio" 
-                            className="btn-check" 
-                            name="btnradio" 
-                            id="btnradio1" 
-                            autoComplete="off" 
-                            checked={activeProjectTab === "under_construction"}
-                            onChange={() => setActiveProjectTab("under_construction")}
-                          />
-                          <label className={`btn btn-sm ${activeProjectTab === "under_construction" ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor="btnradio1">
-                            Under Construction
-                          </label>
-
-                          <input 
-                            type="radio" 
-                            className="btn-check" 
-                            name="btnradio" 
-                            id="btnradio2" 
-                            autoComplete="off" 
-                            checked={activeProjectTab === "other"}
-                            onChange={() => setActiveProjectTab("other")}
-                          />
-                          <label className={`btn btn-sm ${activeProjectTab === "other" ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor="btnradio2">
-                            Other Projects
-                          </label>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Structured table (when JSON parsed successfully) */}
-                    {comparableProjects && comparableProjects.length > 0 ? (() => {
-                      const filteredProjects = comparableProjects.filter(p => 
-                        activeProjectTab === "under_construction" 
-                          ? p.status?.toLowerCase().includes("under construction")
-                          : !p.status?.toLowerCase().includes("under construction")
-                      );
-                      return (
-                        <div>
-                          <div className="table-responsive rounded-3 border shadow-sm" style={{ maxHeight: 400, overflowY: "auto" }}>
-                            <table className="table table-hover table-striped align-middle mb-0" style={{ fontSize: "0.9rem" }}>
-                              <thead style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", color: "#e2e8f0", position: "sticky", top: 0 }}>
-                                <tr>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>#</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Project Name</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Status</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>BHK Type</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Location</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Expected Possession</th>
-                                  <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Coordinates</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {filteredProjects.length > 0 ? filteredProjects.map((p, i) => (
-                                  <tr key={i}>
-                                    <td className="px-4 py-3 text-muted fw-medium">{i + 1}</td>
-                                    <td className="px-4 py-3 fw-semibold text-dark">{p.projectName || "—"}</td>
-                                    <td className="px-4 py-3">
-                                      <span className={`badge ${p.status?.toLowerCase().includes("under construction") ? 'bg-info text-dark' : 'bg-secondary'} bg-opacity-10 border px-2 py-1 rounded-pill`}>
-                                        {p.status || "Unknown"}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2">
-                                        {p.bhkType || "—"}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-dark">{p.location || "—"}</td>
-                                    <td className="px-4 py-3">
-                                      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill px-2">
-                                        {p.expectedPossessionDate || "N/A"}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {p.coordinates && p.coordinates !== "Not specified" && !p.coordinates.includes("not configured") ? (() => {
-                                        const parts = p.coordinates.split(",").map(s => s.trim());
-                                        const mapsUrl = parts.length === 2
-                                          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.coordinates)}`
-                                          : null;
-                                        return mapsUrl ? (
-                                          <a
-                                            href={mapsUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title="Open in Google Maps"
-                                            style={{ textDecoration: "none" }}
-                                          >
-                                            <code style={{
-                                              fontSize: "0.78rem",
-                                              background: "#f0f4ff",
-                                              color: "#3730a3",
-                                              padding: "2px 6px",
-                                              borderRadius: 4,
-                                              whiteSpace: "nowrap",
-                                              cursor: "pointer",
-                                              borderBottom: "1px dashed #3730a3",
-                                              transition: "background 0.15s",
-                                            }}>
-                                              📍 {p.coordinates}
-                                            </code>
-                                          </a>
-                                        ) : (
-                                          <code style={{ fontSize: "0.78rem", background: "#f0f4ff", color: "#3730a3", padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap" }}>
-                                            {p.coordinates}
-                                          </code>
-                                        );
-                                      })() : (
-                                        <span className="text-muted" style={{ fontSize: "0.82rem" }}>—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                )) : (
-                                  <tr>
-                                    <td colSpan="7" className="text-center py-4 text-muted">
-                                      No projects match this category.
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                          {comparableProviderStats && (
-                            <div className="d-flex justify-content-end mt-2">
-                              <div
-                                style={{
-                                  fontSize: "0.72rem",
-                                  color: "#6b7280",
-                                  background: "#f9fafb",
-                                  border: "1px solid #e5e7eb",
-                                  borderRadius: 6,
-                                  padding: "4px 10px",
-                                  letterSpacing: "0.01em",
-                                }}
-                              >
-                                Data via:
-                                {comparableProviderStats["SerpApi"] > 0 && (
-                                  <span style={{ marginLeft: 6, color: "#1d4ed8", fontWeight: 600 }}>
-                                    SerpApi ({comparableProviderStats["SerpApi"]})
-                                  </span>
-                                )}
-                                {comparableProviderStats["Tavily"] > 0 && (
-                                  <span style={{ marginLeft: 6, color: "#059669", fontWeight: 600 }}>
-                                    Tavily ({comparableProviderStats["Tavily"]})
-                                  </span>
-                                )}
-                                {comparableProviderStats["AI-Memory"] > 0 && (
-                                  <span style={{ marginLeft: 6, color: "#9ca3af", fontWeight: 600 }}>
-                                    AI Memory ({comparableProviderStats["AI-Memory"]})
-                                  </span>
-                                )}
+                        {/* Coordinates preview */}
+                        {(() => {
+                          const lfStr = typeof window !== 'undefined' ? localStorage.getItem("landDetailsForm") : null;
+                          const lf = lfStr ? JSON.parse(lfStr) : {};
+                          const latRaw = lf.latitude;
+                          const lngRaw = lf.longitude;
+                          const lat = parseFloat(latRaw);
+                          const lng = parseFloat(lngRaw);
+                          if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                            return (
+                              <div className="d-flex gap-3 mb-4">
+                                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">
+                                  📍 Lat: <strong>{latRaw}</strong>
+                                </span>
+                                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">
+                                  📍 Lng: <strong>{lngRaw}</strong>
+                                </span>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })() : comparableResult ? (
-                      /* Fallback: markdown render when JSON parsing failed */
-                      <div
-                        className="p-4 rounded-3 border comparable-md-output"
-                        style={{
-                          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
-                          color: "#e2e8f0",
-                          fontFamily: "Inter, system-ui, sans-serif",
-                          fontSize: "0.92rem",
-                          lineHeight: "1.75",
-                          maxHeight: 420,
-                          overflowY: "auto",
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html: comparableResult
-                            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                            .replace(/__(.+?)__/g, '<strong>$1</strong>')
-                            .replace(/`([^`]+)`/g, '<code style="background:#2d3748;padding:1px 5px;border-radius:3px;font-size:0.85em">$1</code>')
-                            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#63b3ed;text-decoration:underline">$1</a>')
-                            .replace(/^### (.+)$/gm, '<h6 style="color:#90cdf4;font-weight:700;margin-top:12px">$1</h6>')
-                            .replace(/^## (.+)$/gm, '<h5 style="color:#90cdf4;font-weight:700;margin-top:14px">$1</h5>')
-                            .replace(/^# (.+)$/gm, '<h4 style="color:#bee3f8;font-weight:800;margin-top:16px">$1</h4>')
-                            .replace(/^[*-] (.+)$/gm, '<li style="margin-left:16px;list-style:disc">$1</li>')
-                            .replace(/^\d+\. (.+)$/gm, '<li style="margin-left:16px;list-style:decimal">$1</li>')
-                            .replace(/\n/g, '<br/>')
-                        }}
-                      />
-                    ) : null}
-
-                    {/* Token Ledger */}
-                    {comparableTokenUsage && (
-                      <div className="mt-3">
-                        <button
-                          className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 d-inline-flex align-items-center"
-                          onClick={() => setIsComparableLedgerOpen(!isComparableLedgerOpen)}
-                          style={{ fontSize: "0.8rem", transition: "all 0.2s" }}
-                        >
-                          Token Ledger
-                          <span style={{
-                            display: "inline-block",
-                            marginLeft: "6px",
-                            transform: isComparableLedgerOpen ? "rotate(180deg)" : "rotate(0deg)",
-                            transition: "transform 0.2s"
-                          }}>
-                            ▼
-                          </span>
-                        </button>
-                        
-                        <div style={{
-                          maxHeight: isComparableLedgerOpen ? "200px" : "0",
-                          overflow: "hidden",
-                          transition: "max-height 0.3s ease-in-out",
-                          opacity: isComparableLedgerOpen ? 1 : 0,
-                        }}>
-                          <div className="card card-body bg-light border-0 shadow-sm rounded-4 mt-2 p-3">
-                            <h6 className="fw-bold text-secondary mb-3 pb-2 border-bottom border-secondary border-opacity-25" style={{ fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                              Usage Statistics
-                            </h6>
-                            <div className="d-flex justify-content-between align-items-center">
-                              <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-light">
-                                <span className="text-muted fw-semibold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Prompt</span>
-                                <span className="fw-bold text-dark fs-6">{comparableTokenUsage.input_tokens || 0}</span>
-                              </div>
-                              <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-light">
-                                <span className="text-muted fw-semibold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Completion</span>
-                                <span className="fw-bold text-dark fs-6">{comparableTokenUsage.output_tokens || 0}</span>
-                              </div>
-                              <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-primary border-opacity-25" style={{ backgroundColor: "#f0f4ff" }}>
-                                <span className="text-primary fw-bold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Total</span>
-                                <span className="fw-bold text-primary fs-5">{comparableTokenUsage.total_tokens || 0}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                  </div>
-                )}
-
-                {activeComparableTab === "Sales velocity" && (
-                  <div className="w-100">
-                    {!comparableProjects || comparableProjects.length === 0 ? (
-                      <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style={{ minHeight: "300px" }}>
-                        <div className="fs-1 mb-3">📊</div>
-                        <h5 className="fw-bold text-secondary">Complete Comparable Search First</h5>
-                        <p className="text-center w-75">Please complete the Comparable Projects search first to enable Sales Velocity analysis.</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="d-flex justify-content-between align-items-center mb-4">
-                          <h6 className="fw-bold text-dark m-0">Sales Velocity Analysis</h6>
-                          <div className="d-flex align-items-center">
-                            <button
-                              className="btn btn-primary btn-sm px-4 fw-bold shadow-sm"
-                              onClick={handleFetchSalesVelocity}
-                              disabled={salesVelocityLoading}
-                            >
-                              {salesVelocityLoading ? (
-                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching...</>
-                              ) : (
-                                <><i className="bi bi-cloud-download me-2"></i>Fetch Velocity</>
-                              )}
-                            </button>
-                            <button
-                              className="btn btn-outline-success btn-sm ms-2 shadow-sm rounded-pill"
-                              onClick={handleSaveSalesVelocityCache}
-                              disabled={!salesVelocityData}
-                              title="Save to Cache"
-                            >
-                              💾 Save
-                            </button>
-                            <button
-                              className="btn btn-outline-danger btn-sm ms-2 shadow-sm rounded-pill"
-                              onClick={handleClearSalesVelocityCache}
-                              title="Clear Cache"
-                            >
-                              🗑️ Clear
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {salesVelocityError && (
-                          <div className="alert alert-danger bg-danger bg-opacity-10 border-danger border-opacity-25 py-2 px-3 d-flex align-items-center mb-3">
-                            <i className="bi bi-exclamation-circle-fill text-danger me-2"></i>
-                            <span className="text-danger" style={{ fontSize: "0.9rem" }}>{salesVelocityError}</span>
-                          </div>
-                        )}
-                        
-                        {salesVelocityData && salesVelocityData.velocity_data && (() => {
-                          // Build a quick status lookup from comparableProjects by project name
-                          const statusLookup = {};
-                          if (comparableProjects) {
-                            comparableProjects.forEach(p => {
-                              statusLookup[(p.projectName || "").toLowerCase()] = (p.status || "").toLowerCase();
-                            });
+                            );
                           }
-
-                          const allRows = salesVelocityData.velocity_data;
-                          const filteredRows = allRows.filter(row => {
-                            const status = statusLookup[(row.llmName || "").toLowerCase()] || "";
-                            if (activeSalesTab === "upcoming") {
-                              return status.includes("under construction");
-                            } else {
-                              return !status.includes("under construction");
-                            }
-                          });
-
-                          const activeYears = salesVelocityData.years
-                            ? salesVelocityData.years.filter(year =>
-                                filteredRows.some(row => row.transactions && row.transactions[year])
-                              )
-                            : [];
-
-                          const activeBhkTypesPerYear = {};
-                          activeYears.forEach(year => {
-                            const activeBhksInFilteredRows = new Set();
-                            filteredRows.forEach(row => {
-                              if (row.transactions && row.transactions[year] && row.transactions[year].breakdown) {
-                                Object.keys(row.transactions[year].breakdown).forEach(bhk => {
-                                  if (row.transactions[year].breakdown[bhk] > 0) {
-                                    activeBhksInFilteredRows.add(bhk);
-                                  }
-                                });
-                              }
-                            });
-                            const allBhkTypesForYear = salesVelocityData.bhk_types_per_year?.[year] || [];
-                            activeBhkTypesPerYear[year] = allBhkTypesForYear.filter(bhk => activeBhksInFilteredRows.has(bhk));
-                          });
-
                           return (
-                            <div>
-                              <div className="d-flex align-items-center justify-content-between mb-3">
-                                <div className="d-flex flex-column">
-                                  <span className="text-muted" style={{ fontSize: "0.82rem" }}>
-                                    Showing {filteredRows.length} of {allRows.length} projects
-                                  </span>
-                                  <span className="badge mt-1 px-2 py-1" style={{ fontSize: "0.75rem", alignSelf: "flex-start", backgroundColor: "rgba(253, 126, 20, 0.1)", color: "#d9534f", border: "1px solid rgba(253, 126, 20, 0.5)" }}>
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    Reminder: Please select/deselect the projects based on your requirement for future process.
-                                  </span>
-                                </div>
-                                <div className="btn-group shadow-sm" role="group" aria-label="Sales velocity filter">
-                                  <input
-                                    type="radio"
-                                    className="btn-check"
-                                    name="salesTabRadio"
-                                    id="salesTab1"
-                                    autoComplete="off"
-                                    checked={activeSalesTab === "upcoming"}
-                                    onChange={() => setActiveSalesTab("upcoming")}
-                                  />
-                                  <label className={`btn btn-sm ${activeSalesTab === "upcoming" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab1">
-                                    Upcoming Projects
-                                  </label>
-                                  <input
-                                    type="radio"
-                                    className="btn-check"
-                                    name="salesTabRadio"
-                                    id="salesTab2"
-                                    autoComplete="off"
-                                    checked={activeSalesTab === "other"}
-                                    onChange={() => setActiveSalesTab("other")}
-                                  />
-                                  <label className={`btn btn-sm ${activeSalesTab === "other" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab2">
-                                    Other Projects
-                                  </label>
-                                </div>
-                              </div>
-                              <div className="table-responsive bg-white rounded-3 border border-secondary border-opacity-25 shadow-sm">
-                                <table className="table table-hover table-bordered mb-0 align-middle text-center" style={{ fontSize: "0.85rem" }}>
-                                  <thead className="table-dark" style={{ position: "sticky", top: 0, zIndex: 1 }}>
-                                    <tr>
-                                      <th rowSpan={2} className="py-3 px-2 align-middle text-center" style={{ width: "40px" }}>
-                                        <i className="bi bi-check2-square"></i>
-                                      </th>
-                                      <th rowSpan={2} className="text-start py-3 px-3 align-middle">Project Name</th>
-                                      <th rowSpan={2} className="text-start py-3 px-3 align-middle">DB Match</th>
-                                      <th rowSpan={2} className="py-3 px-2 align-middle">Score</th>
-                                      {activeYears.map(year => {
-                                        const bhkTypes = activeBhkTypesPerYear[year] || [];
-                                        return (
-                                          <th key={year} colSpan={1 + bhkTypes.length} className="py-2 px-2 border-bottom">
-                                            {year}
-                                          </th>
-                                        );
-                                      })}
-                                      <th rowSpan={2} className="py-3 px-3 bg-secondary align-middle">Total</th>
-                                    </tr>
-                                    <tr>
-                                      {activeYears.map(year => {
-                                        const bhkTypes = activeBhkTypesPerYear[year] || [];
-                                        return (
-                                          <React.Fragment key={`sub-${year}`}>
-                                            <th className="py-2 px-2" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#e2e8f0" }}>Total</th>
-                                            {bhkTypes.map(bhk => (
-                                              <th key={bhk} className="py-2 px-2 fw-normal" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#9ca3af" }}>
-                                                {bhk}
-                                              </th>
-                                            ))}
-                                          </React.Fragment>
-                                        );
-                                      })}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {filteredRows.length > 0 ? filteredRows.map((row, idx) => {
-                                      let rowTotal = 0;
-                                      return (
-                                        <tr key={idx}>
-                                          <td className="text-center align-middle">
-                                            <input
-                                              type="checkbox"
-                                              className="form-check-input"
-                                              checked={selectedSalesVelocityProjects.has(row.llmName)}
-                                              onChange={() => {
-                                                setSelectedSalesVelocityProjects(prev => {
-                                                  const next = new Set(prev);
-                                                  if (next.has(row.llmName)) next.delete(row.llmName);
-                                                  else next.add(row.llmName);
-                                                  return next;
-                                                });
-                                              }}
-                                            />
-                                          </td>
-                                          <td className="text-start fw-bold text-dark px-3">{row.llmName}</td>
-                                          <td className="text-start px-3 text-muted">
-                                            {row.dbName ? row.dbName : <span className="fst-italic text-danger">No match</span>}
-                                          </td>
-                                          <td>
-                                            {row.matchScore !== null ? (
-                                              <span className={`badge ${row.matchScore >= 80 ? "bg-success" : row.matchScore >= 60 ? "bg-warning text-dark" : "bg-danger"}`}>
-                                                {row.matchScore}%
-                                              </span>
-                                            ) : "-"}
-                                          </td>
-                                          {activeYears.map(year => {
-                                            const yearData = row.transactions && row.transactions[year] ? row.transactions[year] : null;
-                                            const count = yearData ? yearData.total : null;
-                                            if (count) rowTotal += count;
-                                            
-                                            const bhkTypes = activeBhkTypesPerYear[year] || [];
-                                            
-                                            return (
-                                              <React.Fragment key={year}>
-                                                <td className="fw-semibold bg-light bg-opacity-10">{count !== null ? count : "-"}</td>
-                                                {bhkTypes.map(bhk => {
-                                                  const bhkCount = yearData?.breakdown?.[bhk];
-                                                  return (
-                                                    <td key={bhk} className="text-muted" style={{ fontSize: "0.8rem" }}>
-                                                      {bhkCount ? bhkCount : "-"}
-                                                    </td>
-                                                  );
-                                                })}
-                                              </React.Fragment>
-                                            );
-                                          })}
-                                          <td className="fw-bold text-primary bg-light">{rowTotal > 0 ? rowTotal : "-"}</td>
-                                        </tr>
-                                      );
-                                    }) : (() => {
-                                      let totalCols = 4 + 1; // Base columns (checkbox + 3) + total
-                                      activeYears.forEach(year => {
-                                        const bhkTypes = activeBhkTypesPerYear[year] || [];
-                                        totalCols += (1 + bhkTypes.length);
-                                      });
-                                      return (
-                                        <tr>
-                                          <td colSpan={totalCols} className="text-center py-4 text-muted">
-                                            No projects found for this category.
-                                          </td>
-                                        </tr>
-                                      );
-                                    })()}
-                                  </tbody>
-                                </table>
-                              </div>
+                            <div className="alert alert-warning rounded-3 mb-4">
+                              ⚠️ No coordinates saved. Please fill in Latitude &amp; Longitude in the Land Details form first.
                             </div>
                           );
                         })()}
-                      </>
-                    )}
-                  </div>
-                )}
 
-                {activeComparableTab === "Cash Inflow Simulation" && (
-                  <div className="h-100 d-flex flex-column" style={{ minHeight: "400px" }}>
-                    {!cashInflowSimResult ? (
-                      <div className="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-muted">
-                        <div className="fs-1 mb-3">💸</div>
-                        <h5 className="fw-bold text-secondary">Cash Inflow Simulation</h5>
-                        <p className="text-center w-75 mb-4">
-                          Ready to predict the cash inflow schedule for your subject project using the {selectedSalesVelocityProjects.size} selected comparable projects.
-                        </p>
-                        
-                        {cashInflowSimError && (
-                          <div className="alert alert-danger w-75 mb-4" role="alert">
-                            {cashInflowSimError}
-                          </div>
-                        )}
-                        
-                        <button
-                          className="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold"
-                          onClick={handleRunCashInflowSimulation}
-                          disabled={cashInflowSimLoading || selectedSalesVelocityProjects.size === 0}
-                        >
-                          {cashInflowSimLoading ? (
-                            <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Simulating...</>
-                          ) : (
-                            <><i className="bi bi-play-fill me-2"></i>Run Simulation</>
+                        {/* Find button */}
+                        <div className="d-flex justify-content-end mb-4 align-items-center">
+                          {comparableProjects && comparableProjects.length === 0 && (
+                            <div className="text-danger fw-semibold me-3 small bg-danger bg-opacity-10 px-3 py-1 rounded-pill border border-danger border-opacity-25 shadow-sm">
+                              ⚠️ No Comparable projects found. Please increase the area.
+                            </div>
                           )}
-                        </button>
-                        {selectedSalesVelocityProjects.size === 0 && (
-                          <small className="text-danger mt-2">Please select at least one comparable project in the Sales Velocity tab.</small>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="d-flex flex-column h-100">
-                        <div className="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                          <h5 className="fw-bold text-dark m-0">Simulation Results</h5>
-                          <button className="btn btn-sm btn-outline-secondary rounded-pill" onClick={() => setCashInflowSimResult(null)}>
-                            <i className="bi bi-arrow-counterclockwise me-1"></i>Reset
+                          <select
+                            className="form-select form-select-sm rounded-pill me-3 shadow-sm border-secondary"
+                            style={{ width: "auto", minWidth: "90px" }}
+                            value={searchRadius}
+                            onChange={(e) => setSearchRadius(Number(e.target.value))}
+                            disabled={comparableLoading}
+                          >
+                            <option value={1}>1km</option>
+                            <option value={2}>2km</option>
+                            <option value={3}>3km</option>
+                            <option value={4}>4km</option>
+                            <option value={5}>5km</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="btn btn-primary rounded-pill px-5 fw-bold shadow-sm"
+                            onClick={handleFindComparables}
+                            disabled={comparableLoading}
+                            style={{ transition: "transform 0.15s", minWidth: 180 }}
+                          >
+                            {comparableLoading ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                                Searching…
+                              </>
+                            ) : "Find Comparables"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-success btn-sm ms-2 rounded-pill shadow-sm"
+                            onClick={handleSaveComparableCache}
+                            disabled={!comparableProjects}
+                            title="Save to Cache"
+                          >
+                            💾 Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger btn-sm ms-2 rounded-pill shadow-sm"
+                            onClick={handleClearComparableCache}
+                            title="Clear Cache"
+                          >
+                            🗑️ Clear
                           </button>
                         </div>
-                        
-                        <div className="btn-group w-100 shadow-sm mb-4" role="group">
-                          {["Optimistic", "Most Probable", "Pessimistic", "Raw Output"].map((scen) => (
-                            <button
-                              key={scen}
-                              type="button"
-                              className={`btn ${activeInflowScenario === scen ? 'btn-primary fw-bold' : 'btn-outline-primary'}`}
-                              onClick={() => setActiveInflowScenario(scen)}
-                            >
-                              {scen}
-                            </button>
-                          ))}
-                        </div>
-                        
-                        {activeInflowScenario === "Raw Output" ? (
-                          <div className="bg-dark p-3 rounded border" style={{ maxHeight: "400px", overflowY: "auto" }}>
-                            <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "0.85rem", margin: 0, color: "#f8f9fa" }}>
-                              {cashInflowSimResult}
-                            </pre>
-                          </div>
-                        ) : (
-                          <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight: "400px" }}>
-                            <table className="table table-hover table-bordered mb-0 align-middle text-center">
-                              <thead className="table-dark" style={{ position: "sticky", top: 0 }}>
-                                <tr>
-                                  <th className="py-3">Year</th>
-                                  <th className="py-3">Projected Sales Percentage</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {parsedInflowResult?.[activeInflowScenario]?.length > 0 ? (
-                                  parsedInflowResult[activeInflowScenario].map((row, idx) => (
-                                    <tr key={idx}>
-                                      <td className="fw-bold">{row.year}</td>
-                                      <td className="text-primary fw-semibold">{row.percentage}</td>
-                                    </tr>
-                                  ))
-                                ) : (
-                                  <tr>
-                                    <td colSpan="2" className="py-4 text-muted">Failed to parse table data. Please view Raw Output.</td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
+
+                        {/* Error */}
+                        {comparableError && (
+                          <div className="alert alert-danger rounded-3">
+                            ❌ {comparableError}
                           </div>
                         )}
-                        
-                        {activeInflowScenario !== "Raw Output" && (
-                          <div className="mt-3 text-end">
-                            <button 
-                              className="btn btn-success fw-bold px-4"
-                              onClick={handleApplyInflowScenario}
-                              disabled={!parsedInflowResult?.[activeInflowScenario] || parsedInflowResult[activeInflowScenario].length === 0}
-                            >
-                              <i className="bi bi-check2-circle me-2"></i>
-                              Apply {activeInflowScenario} Scenario
-                            </button>
+
+                        {/* Results */}
+                        {(comparableResult || comparableProjects) && (
+                          <div className="mt-2">
+                            <div className="d-flex align-items-center justify-content-between mb-3">
+                              <div className="d-flex align-items-center">
+                                <h6 className="fw-bold text-dark mb-0 me-2">Comparable Projects</h6>
+                                <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                  Web Search + Maps API
+                                </span>
+                              </div>
+
+                              {/* Project Filter Toggle */}
+                              {comparableProjects && comparableProjects.length > 0 && (
+                                <div className="btn-group shadow-sm" role="group" aria-label="Project filter">
+                                  <input
+                                    type="radio"
+                                    className="btn-check"
+                                    name="btnradio"
+                                    id="btnradio1"
+                                    autoComplete="off"
+                                    checked={activeProjectTab === "under_construction"}
+                                    onChange={() => setActiveProjectTab("under_construction")}
+                                  />
+                                  <label className={`btn btn-sm ${activeProjectTab === "under_construction" ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor="btnradio1">
+                                    Under Construction
+                                  </label>
+
+                                  <input
+                                    type="radio"
+                                    className="btn-check"
+                                    name="btnradio"
+                                    id="btnradio2"
+                                    autoComplete="off"
+                                    checked={activeProjectTab === "other"}
+                                    onChange={() => setActiveProjectTab("other")}
+                                  />
+                                  <label className={`btn btn-sm ${activeProjectTab === "other" ? 'btn-primary' : 'btn-outline-primary'}`} htmlFor="btnradio2">
+                                    Other Projects
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Structured table (when JSON parsed successfully) */}
+                            {comparableProjects && comparableProjects.length > 0 ? (() => {
+                              const filteredProjects = comparableProjects.filter(p =>
+                                activeProjectTab === "under_construction"
+                                  ? p.status?.toLowerCase().includes("under construction")
+                                  : !p.status?.toLowerCase().includes("under construction")
+                              );
+                              return (
+                                <div>
+                                  <div className="table-responsive rounded-3 border shadow-sm" style={{ maxHeight: 400, overflowY: "auto" }}>
+                                    <table className="table table-hover table-striped align-middle mb-0" style={{ fontSize: "0.9rem" }}>
+                                      <thead style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", color: "#e2e8f0", position: "sticky", top: 0 }}>
+                                        <tr>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>#</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Project Name</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Status</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>BHK Type</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Location</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Expected Possession</th>
+                                          <th className="px-4 py-3" style={{ fontWeight: 700, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>Coordinates</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {filteredProjects.length > 0 ? filteredProjects.map((p, i) => (
+                                          <tr key={i}>
+                                            <td className="px-4 py-3 text-muted fw-medium">{i + 1}</td>
+                                            <td className="px-4 py-3 fw-semibold text-dark">{p.projectName || "—"}</td>
+                                            <td className="px-4 py-3">
+                                              <span className={`badge ${p.status?.toLowerCase().includes("under construction") ? 'bg-info text-dark' : 'bg-secondary'} bg-opacity-10 border px-2 py-1 rounded-pill`}>
+                                                {p.status || "Unknown"}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2">
+                                                {p.bhkType || "—"}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-dark">{p.location || "—"}</td>
+                                            <td className="px-4 py-3">
+                                              <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill px-2">
+                                                {p.expectedPossessionDate || "N/A"}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              {p.coordinates && p.coordinates !== "Not specified" && !p.coordinates.includes("not configured") ? (() => {
+                                                const parts = p.coordinates.split(",").map(s => s.trim());
+                                                const mapsUrl = parts.length === 2
+                                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.coordinates)}`
+                                                  : null;
+                                                return mapsUrl ? (
+                                                  <a
+                                                    href={mapsUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="Open in Google Maps"
+                                                    style={{ textDecoration: "none" }}
+                                                  >
+                                                    <code style={{
+                                                      fontSize: "0.78rem",
+                                                      background: "#f0f4ff",
+                                                      color: "#3730a3",
+                                                      padding: "2px 6px",
+                                                      borderRadius: 4,
+                                                      whiteSpace: "nowrap",
+                                                      cursor: "pointer",
+                                                      borderBottom: "1px dashed #3730a3",
+                                                      transition: "background 0.15s",
+                                                    }}>
+                                                      📍 {p.coordinates}
+                                                    </code>
+                                                  </a>
+                                                ) : (
+                                                  <code style={{ fontSize: "0.78rem", background: "#f0f4ff", color: "#3730a3", padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap" }}>
+                                                    {p.coordinates}
+                                                  </code>
+                                                );
+                                              })() : (
+                                                <span className="text-muted" style={{ fontSize: "0.82rem" }}>—</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        )) : (
+                                          <tr>
+                                            <td colSpan="7" className="text-center py-4 text-muted">
+                                              No projects match this category.
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  {comparableProviderStats && (
+                                    <div className="d-flex justify-content-end mt-2">
+                                      <div
+                                        style={{
+                                          fontSize: "0.72rem",
+                                          color: "#6b7280",
+                                          background: "#f9fafb",
+                                          border: "1px solid #e5e7eb",
+                                          borderRadius: 6,
+                                          padding: "4px 10px",
+                                          letterSpacing: "0.01em",
+                                        }}
+                                      >
+                                        Data via:
+                                        {comparableProviderStats["SerpApi"] > 0 && (
+                                          <span style={{ marginLeft: 6, color: "#1d4ed8", fontWeight: 600 }}>
+                                            SerpApi ({comparableProviderStats["SerpApi"]})
+                                          </span>
+                                        )}
+                                        {comparableProviderStats["Tavily"] > 0 && (
+                                          <span style={{ marginLeft: 6, color: "#059669", fontWeight: 600 }}>
+                                            Tavily ({comparableProviderStats["Tavily"]})
+                                          </span>
+                                        )}
+                                        {comparableProviderStats["AI-Memory"] > 0 && (
+                                          <span style={{ marginLeft: 6, color: "#9ca3af", fontWeight: 600 }}>
+                                            AI Memory ({comparableProviderStats["AI-Memory"]})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })() : comparableResult ? (
+                              /* Fallback: markdown render when JSON parsing failed */
+                              <div
+                                className="p-4 rounded-3 border comparable-md-output"
+                                style={{
+                                  background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+                                  color: "#e2e8f0",
+                                  fontFamily: "Inter, system-ui, sans-serif",
+                                  fontSize: "0.92rem",
+                                  lineHeight: "1.75",
+                                  maxHeight: 420,
+                                  overflowY: "auto",
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: comparableResult
+                                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                                    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+                                    .replace(/`([^`]+)`/g, '<code style="background:#2d3748;padding:1px 5px;border-radius:3px;font-size:0.85em">$1</code>')
+                                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#63b3ed;text-decoration:underline">$1</a>')
+                                    .replace(/^### (.+)$/gm, '<h6 style="color:#90cdf4;font-weight:700;margin-top:12px">$1</h6>')
+                                    .replace(/^## (.+)$/gm, '<h5 style="color:#90cdf4;font-weight:700;margin-top:14px">$1</h5>')
+                                    .replace(/^# (.+)$/gm, '<h4 style="color:#bee3f8;font-weight:800;margin-top:16px">$1</h4>')
+                                    .replace(/^[*-] (.+)$/gm, '<li style="margin-left:16px;list-style:disc">$1</li>')
+                                    .replace(/^\d+\. (.+)$/gm, '<li style="margin-left:16px;list-style:decimal">$1</li>')
+                                    .replace(/\n/g, '<br/>')
+                                }}
+                              />
+                            ) : null}
+
+                            {/* Token Ledger */}
+                            {comparableTokenUsage && (
+                              <div className="mt-3">
+                                <button
+                                  className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 d-inline-flex align-items-center"
+                                  onClick={() => setIsComparableLedgerOpen(!isComparableLedgerOpen)}
+                                  style={{ fontSize: "0.8rem", transition: "all 0.2s" }}
+                                >
+                                  Token Ledger
+                                  <span style={{
+                                    display: "inline-block",
+                                    marginLeft: "6px",
+                                    transform: isComparableLedgerOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "transform 0.2s"
+                                  }}>
+                                    ▼
+                                  </span>
+                                </button>
+
+                                <div style={{
+                                  maxHeight: isComparableLedgerOpen ? "200px" : "0",
+                                  overflow: "hidden",
+                                  transition: "max-height 0.3s ease-in-out",
+                                  opacity: isComparableLedgerOpen ? 1 : 0,
+                                }}>
+                                  <div className="card card-body bg-light border-0 shadow-sm rounded-4 mt-2 p-3">
+                                    <h6 className="fw-bold text-secondary mb-3 pb-2 border-bottom border-secondary border-opacity-25" style={{ fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                      Usage Statistics
+                                    </h6>
+                                    <div className="d-flex justify-content-between align-items-center">
+                                      <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-light">
+                                        <span className="text-muted fw-semibold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Prompt</span>
+                                        <span className="fw-bold text-dark fs-6">{comparableTokenUsage.input_tokens || 0}</span>
+                                      </div>
+                                      <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-light">
+                                        <span className="text-muted fw-semibold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Completion</span>
+                                        <span className="fw-bold text-dark fs-6">{comparableTokenUsage.output_tokens || 0}</span>
+                                      </div>
+                                      <div className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 mx-1 border border-primary border-opacity-25" style={{ backgroundColor: "#f0f4ff" }}>
+                                        <span className="text-primary fw-bold" style={{ fontSize: "0.7rem", textTransform: "uppercase" }}>Total</span>
+                                        <span className="fw-bold text-primary fs-5">{comparableTokenUsage.total_tokens || 0}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     )}
-                  </div>
-                )}
+
+                    {activeComparableTab === "Sales velocity" && (
+                      <div className="w-100">
+                        {!comparableProjects || comparableProjects.length === 0 ? (
+                          <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style={{ minHeight: "300px" }}>
+                            <div className="fs-1 mb-3">📊</div>
+                            <h5 className="fw-bold text-secondary">Complete Comparable Search First</h5>
+                            <p className="text-center w-75">Please complete the Comparable Projects search first to enable Sales Velocity analysis.</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="d-flex justify-content-between align-items-center mb-4">
+                              <h6 className="fw-bold text-dark m-0">Sales Velocity Analysis</h6>
+                              <div className="d-flex align-items-center">
+                                <button
+                                  className="btn btn-primary btn-sm px-4 fw-bold shadow-sm"
+                                  onClick={handleFetchSalesVelocity}
+                                  disabled={salesVelocityLoading}
+                                >
+                                  {salesVelocityLoading ? (
+                                    <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching...</>
+                                  ) : (
+                                    <><i className="bi bi-cloud-download me-2"></i>Fetch Velocity</>
+                                  )}
+                                </button>
+                                <button
+                                  className="btn btn-outline-success btn-sm ms-2 shadow-sm rounded-pill"
+                                  onClick={handleSaveSalesVelocityCache}
+                                  disabled={!salesVelocityData}
+                                  title="Save to Cache"
+                                >
+                                  💾 Save
+                                </button>
+                                <button
+                                  className="btn btn-outline-danger btn-sm ms-2 shadow-sm rounded-pill"
+                                  onClick={handleClearSalesVelocityCache}
+                                  title="Clear Cache"
+                                >
+                                  🗑️ Clear
+                                </button>
+                              </div>
+                            </div>
+
+                            {salesVelocityError && (
+                              <div className="alert alert-danger bg-danger bg-opacity-10 border-danger border-opacity-25 py-2 px-3 d-flex align-items-center mb-3">
+                                <i className="bi bi-exclamation-circle-fill text-danger me-2"></i>
+                                <span className="text-danger" style={{ fontSize: "0.9rem" }}>{salesVelocityError}</span>
+                              </div>
+                            )}
+
+                            {salesVelocityData && salesVelocityData.velocity_data && (() => {
+                              // Build a quick status lookup from comparableProjects by project name
+                              const statusLookup = {};
+                              if (comparableProjects) {
+                                comparableProjects.forEach(p => {
+                                  statusLookup[(p.projectName || "").toLowerCase()] = (p.status || "").toLowerCase();
+                                });
+                              }
+
+                              const allRows = salesVelocityData.velocity_data;
+                              const filteredRows = allRows.filter(row => {
+                                const status = statusLookup[(row.llmName || "").toLowerCase()] || "";
+                                if (activeSalesTab === "upcoming") {
+                                  return status.includes("under construction");
+                                } else {
+                                  return !status.includes("under construction");
+                                }
+                              });
+
+                              const activeYears = salesVelocityData.years
+                                ? salesVelocityData.years.filter(year =>
+                                  filteredRows.some(row => row.transactions && row.transactions[year])
+                                )
+                                : [];
+
+                              const activeBhkTypesPerYear = {};
+                              activeYears.forEach(year => {
+                                const activeBhksInFilteredRows = new Set();
+                                filteredRows.forEach(row => {
+                                  if (row.transactions && row.transactions[year] && row.transactions[year].breakdown) {
+                                    Object.keys(row.transactions[year].breakdown).forEach(bhk => {
+                                      if (row.transactions[year].breakdown[bhk] > 0) {
+                                        activeBhksInFilteredRows.add(bhk);
+                                      }
+                                    });
+                                  }
+                                });
+                                const allBhkTypesForYear = salesVelocityData.bhk_types_per_year?.[year] || [];
+                                activeBhkTypesPerYear[year] = allBhkTypesForYear.filter(bhk => activeBhksInFilteredRows.has(bhk));
+                              });
+
+                              return (
+                                <div>
+                                  <div className="d-flex align-items-center justify-content-between mb-3">
+                                    <div className="d-flex flex-column">
+                                      <span className="text-muted" style={{ fontSize: "0.82rem" }}>
+                                        Showing {filteredRows.length} of {allRows.length} projects
+                                      </span>
+                                      <span className="badge mt-1 px-2 py-1" style={{ fontSize: "0.75rem", alignSelf: "flex-start", backgroundColor: "rgba(253, 126, 20, 0.1)", color: "#d9534f", border: "1px solid rgba(253, 126, 20, 0.5)" }}>
+                                        <i className="bi bi-info-circle me-1"></i>
+                                        Reminder: Please select/deselect the projects based on your requirement for future process.
+                                      </span>
+                                    </div>
+                                    <div className="btn-group shadow-sm" role="group" aria-label="Sales velocity filter">
+                                      <input
+                                        type="radio"
+                                        className="btn-check"
+                                        name="salesTabRadio"
+                                        id="salesTab1"
+                                        autoComplete="off"
+                                        checked={activeSalesTab === "upcoming"}
+                                        onChange={() => setActiveSalesTab("upcoming")}
+                                      />
+                                      <label className={`btn btn-sm ${activeSalesTab === "upcoming" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab1">
+                                        Upcoming Projects
+                                      </label>
+                                      <input
+                                        type="radio"
+                                        className="btn-check"
+                                        name="salesTabRadio"
+                                        id="salesTab2"
+                                        autoComplete="off"
+                                        checked={activeSalesTab === "other"}
+                                        onChange={() => setActiveSalesTab("other")}
+                                      />
+                                      <label className={`btn btn-sm ${activeSalesTab === "other" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab2">
+                                        Other Projects
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <div className="table-responsive bg-white rounded-3 border border-secondary border-opacity-25 shadow-sm">
+                                    <table className="table table-hover table-bordered mb-0 align-middle text-center" style={{ fontSize: "0.85rem" }}>
+                                      <thead className="table-dark" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                                        <tr>
+                                          <th rowSpan={2} className="py-3 px-2 align-middle text-center" style={{ width: "40px" }}>
+                                            <i className="bi bi-check2-square"></i>
+                                          </th>
+                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle">Project Name</th>
+                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle">DB Match</th>
+                                          <th rowSpan={2} className="py-3 px-2 align-middle">Score</th>
+                                          {activeYears.map(year => {
+                                            const bhkTypes = activeBhkTypesPerYear[year] || [];
+                                            return (
+                                              <th key={year} colSpan={1 + bhkTypes.length} className="py-2 px-2 border-bottom">
+                                                {year}
+                                              </th>
+                                            );
+                                          })}
+                                          <th rowSpan={2} className="py-3 px-3 bg-secondary align-middle">Total</th>
+                                        </tr>
+                                        <tr>
+                                          {activeYears.map(year => {
+                                            const bhkTypes = activeBhkTypesPerYear[year] || [];
+                                            return (
+                                              <React.Fragment key={`sub-${year}`}>
+                                                <th className="py-2 px-2" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#e2e8f0" }}>Total</th>
+                                                {bhkTypes.map(bhk => (
+                                                  <th key={bhk} className="py-2 px-2 fw-normal" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#9ca3af" }}>
+                                                    {bhk}
+                                                  </th>
+                                                ))}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {filteredRows.length > 0 ? filteredRows.map((row, idx) => {
+                                          let rowTotal = 0;
+                                          return (
+                                            <tr key={idx}>
+                                              <td className="text-center align-middle">
+                                                <input
+                                                  type="checkbox"
+                                                  className="form-check-input"
+                                                  checked={selectedSalesVelocityProjects.has(row.llmName)}
+                                                  onChange={() => {
+                                                    setSelectedSalesVelocityProjects(prev => {
+                                                      const next = new Set(prev);
+                                                      if (next.has(row.llmName)) next.delete(row.llmName);
+                                                      else next.add(row.llmName);
+                                                      return next;
+                                                    });
+                                                  }}
+                                                />
+                                              </td>
+                                              <td className="text-start fw-bold text-dark px-3">{row.llmName}</td>
+                                              <td className="text-start px-3 text-muted">
+                                                {row.dbName ? row.dbName : <span className="fst-italic text-danger">No match</span>}
+                                              </td>
+                                              <td>
+                                                {row.matchScore !== null ? (
+                                                  <span className={`badge ${row.matchScore >= 80 ? "bg-success" : row.matchScore >= 60 ? "bg-warning text-dark" : "bg-danger"}`}>
+                                                    {row.matchScore}%
+                                                  </span>
+                                                ) : "-"}
+                                              </td>
+                                              {activeYears.map(year => {
+                                                const yearData = row.transactions && row.transactions[year] ? row.transactions[year] : null;
+                                                const count = yearData ? yearData.total : null;
+                                                if (count) rowTotal += count;
+
+                                                const bhkTypes = activeBhkTypesPerYear[year] || [];
+
+                                                return (
+                                                  <React.Fragment key={year}>
+                                                    <td className="fw-semibold bg-light bg-opacity-10">{count !== null ? count : "-"}</td>
+                                                    {bhkTypes.map(bhk => {
+                                                      const bhkCount = yearData?.breakdown?.[bhk];
+                                                      return (
+                                                        <td key={bhk} className="text-muted" style={{ fontSize: "0.8rem" }}>
+                                                          {bhkCount ? bhkCount : "-"}
+                                                        </td>
+                                                      );
+                                                    })}
+                                                  </React.Fragment>
+                                                );
+                                              })}
+                                              <td className="fw-bold text-primary bg-light">{rowTotal > 0 ? rowTotal : "-"}</td>
+                                            </tr>
+                                          );
+                                        }) : (() => {
+                                          let totalCols = 4 + 1; // Base columns (checkbox + 3) + total
+                                          activeYears.forEach(year => {
+                                            const bhkTypes = activeBhkTypesPerYear[year] || [];
+                                            totalCols += (1 + bhkTypes.length);
+                                          });
+                                          return (
+                                            <tr>
+                                              <td colSpan={totalCols} className="text-center py-4 text-muted">
+                                                No projects found for this category.
+                                              </td>
+                                            </tr>
+                                          );
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {activeComparableTab === "Cash Inflow Simulation" && (
+                      <div className="h-100 d-flex flex-column" style={{ minHeight: "400px" }}>
+                        {!cashInflowSimResult ? (
+                          <div className="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-muted">
+                            <div className="fs-1 mb-3">💸</div>
+                            <h5 className="fw-bold text-secondary">Cash Inflow Simulation</h5>
+                            <p className="text-center w-75 mb-4">
+                              Ready to predict the cash inflow schedule for your subject project using the {selectedSalesVelocityProjects.size} selected comparable projects.
+                            </p>
+
+                            {cashInflowSimError && (
+                              <div className="alert alert-danger w-75 mb-4" role="alert">
+                                {cashInflowSimError}
+                              </div>
+                            )}
+
+                            <button
+                              className="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold"
+                              onClick={handleRunCashInflowSimulation}
+                              disabled={cashInflowSimLoading || selectedSalesVelocityProjects.size === 0}
+                            >
+                              {cashInflowSimLoading ? (
+                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Simulating...</>
+                              ) : (
+                                <><i className="bi bi-play-fill me-2"></i>Run Simulation</>
+                              )}
+                            </button>
+                            {selectedSalesVelocityProjects.size === 0 && (
+                              <small className="text-danger mt-2">Please select at least one comparable project in the Sales Velocity tab.</small>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="d-flex flex-column h-100">
+                            <div className="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                              <h5 className="fw-bold text-dark m-0">Simulation Results</h5>
+                              <button className="btn btn-sm btn-outline-secondary rounded-pill" onClick={() => setCashInflowSimResult(null)}>
+                                <i className="bi bi-arrow-counterclockwise me-1"></i>Reset
+                              </button>
+                            </div>
+
+                            <div className="btn-group w-100 shadow-sm mb-4" role="group">
+                              {["Optimistic", "Most Probable", "Pessimistic", "User Cashflow", "Raw Output"].map((scen) => (
+                                <button
+                                  key={scen}
+                                  type="button"
+                                  className={`btn ${activeInflowScenario === scen ? 'btn-primary fw-bold' : 'btn-outline-primary'}`}
+                                  onClick={() => setActiveInflowScenario(scen)}
+                                >
+                                  {scen}
+                                </button>
+                              ))}
+                            </div>
+
+                            {activeInflowScenario === "Raw Output" ? (
+                              <div className="bg-dark p-3 rounded border" style={{ maxHeight: "400px", overflowY: "auto" }}>
+                                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "0.85rem", margin: 0, color: "#f8f9fa" }}>
+                                  {cashInflowSimResult}
+                                </pre>
+                              </div>
+                            ) : activeInflowScenario === "User Cashflow" ? (
+                              (() => {
+                                const totalPct = userCashflowRows.reduce((sum, r) => {
+                                  const v = parseFloat(r.percentage);
+                                  return sum + (isNaN(v) ? 0 : v);
+                                }, 0);
+                                const totalDisplay = totalPct.toFixed(2);
+                                const isOver100 = totalPct > 100;
+                                const isUnder100 = totalPct < 100 && userCashflowRows.some(r => r.percentage !== "");
+                                const isExact100 = Math.abs(totalPct - 100) < 0.01;
+                                return (
+                                  <div>
+                                    <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight: "340px", overflowY: "auto" }}>
+                                      <table className="table table-hover table-bordered mb-0 align-middle text-center">
+                                        <thead className="table-dark" style={{ position: "sticky", top: 0 }}>
+                                          <tr>
+                                            <th className="py-3" style={{ width: "40%" }}>Year</th>
+                                            <th className="py-3">Projected Sales Percentage (%)</th>
+                                            <th className="py-3" style={{ width: "60px" }}></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {userCashflowRows.map((row, idx) => (
+                                            <tr key={idx}>
+                                              <td className="fw-bold text-dark">{row.year}</td>
+                                              <td>
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0"
+                                                  max="100"
+                                                  className="form-control form-control-sm text-center mx-auto"
+                                                  style={{ width: "110px", borderColor: "#dee2e6" }}
+                                                  placeholder="0.00"
+                                                  value={row.percentage}
+                                                  onChange={(e) => {
+                                                    const updated = [...userCashflowRows];
+                                                    updated[idx] = { ...updated[idx], percentage: e.target.value };
+                                                    setUserCashflowRows(updated);
+                                                  }}
+                                                />
+                                              </td>
+                                              <td>
+                                                {userCashflowRows.length > 1 && (
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-danger rounded-circle"
+                                                    style={{ width: 28, height: 28, padding: 0, lineHeight: "26px", fontSize: "1rem" }}
+                                                    onClick={() => {
+                                                      setUserCashflowRows(userCashflowRows.filter((_, i) => i !== idx));
+                                                    }}
+                                                    title="Remove row"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {/* Add row + Total */}
+                                    <div className="d-flex align-items-center justify-content-between mt-3">
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold"
+                                        onClick={() => {
+                                          const nextYear = userCashflowRows.length;
+                                          setUserCashflowRows([...userCashflowRows, { year: `Year ${nextYear}`, percentage: "" }]);
+                                        }}
+                                      >
+                                        + Add Year
+                                      </button>
+
+                                      <div className="d-flex align-items-center gap-2">
+                                        <span className="text-muted" style={{ fontSize: "0.85rem" }}>Total:</span>
+                                        <span
+                                          className={`fw-bold fs-6 ${isExact100 ? "text-success" : isOver100 ? "text-danger" : "text-warning"}`}
+                                        >
+                                          {totalDisplay}%
+                                        </span>
+                                        {isOver100 && (
+                                          <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ⚠️ Exceeds 100%
+                                          </span>
+                                        )}
+                                        {isUnder100 && (
+                                          <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ⚠️ Does not sum to 100%
+                                          </span>
+                                        )}
+                                        {isExact100 && (
+                                          <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>
+                                            ✓ Valid
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-3 text-end">
+                                      <button
+                                        className="btn btn-success fw-bold px-4"
+                                        onClick={handleApplyUserCashflow}
+                                        disabled={userCashflowRows.every(r => r.percentage === "")}
+                                      >
+                                        <i className="bi bi-check2-circle me-2"></i>
+                                        Apply User Cashflow
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                            ) : (
+                              <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight: "400px" }}>
+                                <table className="table table-hover table-bordered mb-0 align-middle text-center">
+                                  <thead className="table-dark" style={{ position: "sticky", top: 0 }}>
+                                    <tr>
+                                      <th className="py-3">Year</th>
+                                      <th className="py-3">Projected Sales Percentage</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {parsedInflowResult?.[activeInflowScenario]?.length > 0 ? (
+                                      parsedInflowResult[activeInflowScenario].map((row, idx) => (
+                                        <tr key={idx}>
+                                          <td className="fw-bold">{row.year}</td>
+                                          <td className="text-primary fw-semibold">{row.percentage}</td>
+                                        </tr>
+                                      ))
+                                    ) : (
+                                      <tr>
+                                        <td colSpan="2" className="py-4 text-muted">Failed to parse table data. Please view Raw Output.</td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {activeInflowScenario !== "Raw Output" && activeInflowScenario !== "User Cashflow" && (
+                              <div className="mt-3 text-end">
+                                <button
+                                  className="btn btn-success fw-bold px-4"
+                                  onClick={handleApplyInflowScenario}
+                                  disabled={!parsedInflowResult?.[activeInflowScenario] || parsedInflowResult[activeInflowScenario].length === 0}
+                                >
+                                  <i className="bi bi-check2-circle me-2"></i>
+                                  Apply {activeInflowScenario} Scenario
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

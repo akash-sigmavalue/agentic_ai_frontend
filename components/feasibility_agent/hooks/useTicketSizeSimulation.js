@@ -1,3 +1,4 @@
+import { apiUrl } from '@/lib/api-client';
 import { useState, useEffect, useCallback } from 'react';
 
 const UNIT_TYPES = ['1 BHK', '2 BHK', '3 BHK', '>3BHK', 'Shop', 'Office'];
@@ -96,7 +97,7 @@ const useTicketSizeSimulation = (villageId) => {
             try {
                 const payload = UNIT_TYPES.map(type => ({ BHK_Type: type }));
                 const params = new URLSearchParams({ igr_village_id: String(villageId) });
-                const response = await fetch(`/new_rate_simulator/simulator/average-ticket-size?${params.toString()}`, {
+                const response = await fetch(apiUrl(`/new_rate_simulator/simulator/average-ticket-size?${params.toString()}`), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify(payload),
@@ -152,7 +153,7 @@ const useTicketSizeSimulation = (villageId) => {
             if (combinedPayload.length === 0) { console.warn("No simulation data found."); return; }
 
             const params = new URLSearchParams({ igr_village_id: String(villageId) });
-            const response = await fetch(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`, {
+            const response = await fetch(apiUrl(`/new_rate_simulator/simulator/simulation-transaction-counts-detailed?${params.toString()}`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(combinedPayload),

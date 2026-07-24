@@ -382,99 +382,99 @@ const MeansOfFinance = () => {
 
       <div className="row g-4">
         <div className="col-lg-8">
-        <div className="mean-finance-panel h-100">
-          <div className="mean-finance-panel-header">
-            <div className="mean-finance-panel-eyebrow">Selected Section</div>
-            <h1 className="mean-finance-panel-title">Means Of Finance</h1>
+          <div className="mean-finance-panel h-100">
+            <div className="mean-finance-panel-header">
+              <div className="mean-finance-panel-eyebrow">Selected Section</div>
+              <h1 className="mean-finance-panel-title">Means Of Finance</h1>
+            </div>
+            <div className="mean-finance-panel-body">
+              <div className="d-grid gap-3">
+                {FINANCE_ROWS.map((row) => (
+                  <div className="mean-finance-field" key={row.key}>
+                    <label className="mean-finance-label">{row.label}</label>
+                    <div className="mean-finance-input-wrap">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        className="form-control mean-finance-input"
+                        value={formData[row.key]}
+                        onChange={(event) => handleInputChange(row.key, event.target.value)}
+                        placeholder="Enter percentage"
+                      />
+                      <span className="mean-finance-percent">%</span>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="mean-finance-total">
+                  <span>Total</span>
+                  <span>{getTotal().toFixed(2)}%</span>
+                </div>
+
+                {error && <div className="mean-finance-error">{error}</div>}
+
+                <div className="mean-finance-actions">
+                  <button
+                    type="button"
+                    className="mean-finance-btn mean-finance-btn-save"
+                    onClick={handleSave}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="mean-finance-btn mean-finance-btn-update"
+                    onClick={handleSave}
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mean-finance-panel-body">
-            <div className="d-grid gap-3">
-              {FINANCE_ROWS.map((row) => (
-                <div className="mean-finance-field" key={row.key}>
-                  <label className="mean-finance-label">{row.label}</label>
-                  <div className="mean-finance-input-wrap">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className="form-control mean-finance-input"
-                      value={formData[row.key]}
-                      onChange={(event) => handleInputChange(row.key, event.target.value)}
-                      placeholder="Enter percentage"
-                    />
-                    <span className="mean-finance-percent">%</span>
+        </div>
+
+        <div className="col-lg-4">
+          <div className="mean-finance-panel h-100">
+            <div className="mean-finance-panel-header">
+              <div className="mean-finance-panel-eyebrow">Selected Section</div>
+              <h1 className="mean-finance-panel-title">Means of Finance Values</h1>
+            </div>
+            <div className="mean-finance-panel-body">
+              {savedData && displayValues ? (
+                <div className="mean-finance-values-list">
+                  <div className="mean-finance-value-row mean-finance-value-header">
+                    <span>Source</span>
+                    <span className="text-end">Proposed</span>
+                  </div>
+                  {displayValues.rows.map((row) => (
+                    <div className="mean-finance-value-row" key={row.key}>
+                      <span className="mean-finance-value-label">{row.label}</span>
+                      <span className="mean-finance-value">
+                        ₹ {formatNumber(row.proposed)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mean-finance-value-row mean-finance-value-total">
+                    <span className="mean-finance-value-label">Total Cost of Project</span>
+                    <span className="mean-finance-value">
+                      ₹ {formatNumber(displayValues.totalCostOfProject.proposed)}
+                    </span>
                   </div>
                 </div>
-              ))}
-
-              <div className="mean-finance-total">
-                <span>Total</span>
-                <span>{getTotal().toFixed(2)}%</span>
-              </div>
-
-              {error && <div className="mean-finance-error">{error}</div>}
-
-              <div className="mean-finance-actions">
-                <button
-                  type="button"
-                  className="mean-finance-btn mean-finance-btn-save"
-                  onClick={handleSave}
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  className="mean-finance-btn mean-finance-btn-update"
-                  onClick={handleSave}
-                >
-                  Update
-                </button>
-              </div>
+              ) : (
+                <div className="mean-finance-panel-placeholder">
+                  {savedData
+                    ? "Save Cost Details to calculate Means of Finance values."
+                    : "No means of finance values saved."}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-
-        <div className="col-lg-4">
-            <div className="mean-finance-panel h-100">
-              <div className="mean-finance-panel-header">
-                <div className="mean-finance-panel-eyebrow">Selected Section</div>
-                <h1 className="mean-finance-panel-title">Means of Finance Values</h1>
-              </div>
-              <div className="mean-finance-panel-body">
-                {savedData && displayValues ? (
-                  <div className="mean-finance-values-list">
-                    <div className="mean-finance-value-row mean-finance-value-header">
-                      <span>Source</span>
-                      <span className="text-end">Proposed</span>
-                    </div>
-                    {displayValues.rows.map((row) => (
-                      <div className="mean-finance-value-row" key={row.key}>
-                        <span className="mean-finance-value-label">{row.label}</span>
-                        <span className="mean-finance-value">
-                          Rs {formatNumber(row.proposed)}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="mean-finance-value-row mean-finance-value-total">
-                      <span className="mean-finance-value-label">Total Cost of Project</span>
-                      <span className="mean-finance-value">
-                        Rs {formatNumber(displayValues.totalCostOfProject.proposed)}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mean-finance-panel-placeholder">
-                    {savedData
-                      ? "Save Cost Details to calculate Means of Finance values."
-                      : "No means of finance values saved."}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
     </div>
   );
 };

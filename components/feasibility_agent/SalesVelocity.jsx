@@ -18,7 +18,7 @@ import {
   Filler,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
-import { get_data, refreshToken } from "@/components/AppUtils";
+import { apiUrl } from "@/lib/api-client";
 import {
   FaArrowLeft,
   FaBolt,
@@ -315,14 +315,13 @@ const SalesVelocity = () => {
     };
 
     try {
-      const data = await get_data(
-        "/new_rate_simulator/simulator/sales-velocity/filter",
-        {
-          ...refreshToken(),
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/sales-velocity/filter"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
 
       if (data?.error) {
         setFilterError(data.error);
@@ -362,14 +361,13 @@ const SalesVelocity = () => {
     };
 
     try {
-      const data = await get_data(
-        "/new_rate_simulator/simulator/sales-velocity/comparison",
-        {
-          ...refreshToken(),
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/sales-velocity/comparison"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
 
       if (data?.error) {
         setComparisonError(data.error);
@@ -408,14 +406,13 @@ const SalesVelocity = () => {
     };
 
     try {
-      const data = await get_data(
-        "/new_rate_simulator/simulator/sales-velocity/projection",
-        {
-          ...refreshToken(),
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(apiUrl("/new_rate_simulator/simulator/sales-velocity/projection"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
 
       if (data?.error) {
         setProjectionError(data.error);

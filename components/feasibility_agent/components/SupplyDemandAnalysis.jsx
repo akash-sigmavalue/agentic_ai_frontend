@@ -1,7 +1,8 @@
+import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
-import { useGlobalState } from "@/components/GlobalContext";
+
 
 const getMarketPayload = () => {
   try {
@@ -33,9 +34,8 @@ const formatNumberRaw = (val, country = "India") => {
 };
 
 const SupplyDemandAnalysis = ({ option }) => {
-  const [gstate] = useGlobalState();
-  const theme = gstate?.theme || "light";
-  const isDark = theme === "dark";
+  const theme = "light";
+  const isDark = false;
 
   // Common UI states
   const [loading, setLoading] = useState(false);
@@ -109,7 +109,7 @@ const SupplyDemandAnalysis = ({ option }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/new_rate_simulator/simulator/yoy-demand/", {
+        const response = await fetch(apiUrl("/new_rate_simulator/simulator/yoy-demand/"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -320,7 +320,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
                 <p
                   className="text-center"
                   style={{ color: "#ef4444", fontSize: "13px", maxWidth: 340 }}
@@ -336,7 +336,7 @@ const SupplyDemandAnalysis = ({ option }) => {
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
                 <p
                   className="text-center mb-1"
                   style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

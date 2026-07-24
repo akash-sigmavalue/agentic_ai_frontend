@@ -1757,6 +1757,7 @@ import PricerateAnalysis from "./components/PricerateAnalysis";
 import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
 import { useLegacyNavigate as useNavigate } from "@/components/feasibility_agent/useLegacyNavigate";
+import { apiUrl } from "@/lib/api-client";
 
 const colLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
@@ -2458,7 +2459,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       try {
         setVillageMeta(prev => ({ ...prev, loading: true, error: '' }));
         const params = new URLSearchParams({ name });
-        const resp = await fetch(`/data_db/get_village_id_by_name/?${params.toString()}`, {
+        const resp = await fetch(apiUrl(`/data_db/get_village_id_by_name/?${params.toString()}`), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -2517,7 +2518,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       const params = new URLSearchParams({ igr_village_id: String(villageId) });
 
       // 1. fetchBhkMonthlyAverage (GET)
-      const bhkMonthlyAvgResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average/?${params.toString()}`);
+      const bhkMonthlyAvgResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average/?${params.toString()}`));
       if (bhkMonthlyAvgResp.ok) {
         const data = await bhkMonthlyAvgResp.json();
         if (data?.success && Array.isArray(data?.data)) {
@@ -2575,7 +2576,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         }
       }
       if (ticketSizeRange.length > 0) {
-        const transCountResp = await fetch(`/new_rate_simulator/simulator/transaction-counts-detailed?${params.toString()}`, {
+        const transCountResp = await fetch(apiUrl(`/new_rate_simulator/simulator/transaction-counts-detailed?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ticketSizeRange),
@@ -2614,12 +2615,12 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       let areaCalcForm = {};
       try {
         areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
-      } catch(e) {}
-      
+      } catch (e) { }
+
       const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
       const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
       const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
-      
+
       const unitDesign = readUnitDesignStructure();
       const calcMode = unitDesign?.calculationMode || 'carpet';
 
@@ -2642,7 +2643,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         }
       }
       if (areaPayload.length > 0) {
-        const areaResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average-by-area?${params.toString()}`, {
+        const areaResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average-by-area?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(areaPayload),
@@ -2693,17 +2694,17 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             else loadingFactor = resLoading;
             searchRate = userRate * loadingFactor;
           }
-          
-          ratePayload.push({ 
-            BHK_type: bhkType, 
-            UserRate: searchRate, 
-            Lowrange: searchRate * 0.9, 
-            Highrange: searchRate * 1.1 
+
+          ratePayload.push({
+            BHK_type: bhkType,
+            UserRate: searchRate,
+            Lowrange: searchRate * 0.9,
+            Highrange: searchRate * 1.1
           });
         }
       }
       if (ratePayload.length > 0) {
-        const rateResp = await fetch(`/new_rate_simulator/simulator/average-rate/?${params.toString()}`, {
+        const rateResp = await fetch(apiUrl(`/new_rate_simulator/simulator/average-rate/?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ratePayload),
@@ -2717,7 +2718,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
               const apiBhkType = String(item?.BHK_type || '').trim();
               let avgRate = item?.average_rate_per_sqft_on_sa;
               if (!apiBhkType || avgRate == null) return;
-              
+
               if (calcMode === 'saleable') {
                 const normalizedBhk = normalizeUnitTypeKey(apiBhkType);
                 let loadingFactor = 1.0;
@@ -2746,7 +2747,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
 
       // 5. fetchBhkMonthlyAverageByRate (POST)
       if (ratePayload.length > 0) {
-        const rateAvgResp = await fetch(`/new_rate_simulator/simulator/bhk-monthly-average-by-rate?${params.toString()}`, {
+        const rateAvgResp = await fetch(apiUrl(`/new_rate_simulator/simulator/bhk-monthly-average-by-rate?${params.toString()}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(ratePayload),
@@ -2836,7 +2837,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
     let areaCalcForm = {};
     try {
       areaCalcForm = JSON.parse(localStorage.getItem('areaCalculationForm')) || {};
-    } catch(e) {}
+    } catch (e) { }
     const resLoading = parseFloat(areaCalcForm.resLoadingRatio) || 1.35;
     const shopLoading = parseFloat(areaCalcForm.shopLoading) || 1.50;
     const officeLoading = parseFloat(areaCalcForm.officeLoading) || 1.45;
@@ -2845,17 +2846,17 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
       const rowIndex = 4 + i; // 4-9 (0-indexed) = A5-A10 (1-indexed)
       const bhkType = String(grid?.[rowIndex]?.[0]?.value ?? '').trim(); // A column (index 0)
       let avgUnitArea = toNumber(grid?.[rowIndex]?.[2]?.value); // C column (index 2) - Avg Unit Area
-      
+
       if (avgUnitArea != null && calcMode === 'saleable') {
         const normalizedBhk = normalizeUnitTypeKey(bhkType);
         let loadingFactor = 1.0;
         if (normalizedBhk === 'shop') loadingFactor = shopLoading;
         else if (normalizedBhk === 'office') loadingFactor = officeLoading;
         else loadingFactor = resLoading;
-        
+
         avgUnitArea = avgUnitArea / loadingFactor;
       }
-      
+
       const lowrange = avgUnitArea != null ? avgUnitArea - 25 : null;
       const highrange = avgUnitArea != null ? avgUnitArea + 25 : null;
 
@@ -3656,59 +3657,59 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
               </div>
               <div className="card-body p-3" style={{ overflowX: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
                 <div className="rp2-grid-shell">
-                <div className="excel-grid excel-grid-first" id="excelGridFirst" style={{ width: 'fit-content', maxWidth: '100%' }}>
-                  {grid.slice(0, 13).map((row, rowIndex) =>
-                    row.map((cellData, colIndex) => {
-                      if (rowIndex >= 11) return null; // Hide A12:J13 (cosmetic only)
-                      if (colIndex === 10) return null; // Hide K1:K13 (cosmetic only)
-                      if (colIndex === 3 || colIndex === 4) return null; // Hide D and E (they are empty in Unit Mix table)
-                      const cellId = `${colLetters[colIndex]}${rowIndex + 1}`;
+                  <div className="excel-grid excel-grid-first" id="excelGridFirst" style={{ width: 'fit-content', maxWidth: '100%' }}>
+                    {grid.slice(0, 13).map((row, rowIndex) =>
+                      row.map((cellData, colIndex) => {
+                        if (rowIndex >= 11) return null; // Hide A12:J13 (cosmetic only)
+                        if (colIndex === 10) return null; // Hide K1:K13 (cosmetic only)
+                        if (colIndex === 3 || colIndex === 4) return null; // Hide D and E (they are empty in Unit Mix table)
+                        const cellId = `${colLetters[colIndex]}${rowIndex + 1}`;
 
-                      const classList = ['cell'];
-                      if (rowIndex < 4) classList.push('header');
-                      if (rowIndex === 10) classList.push('total-row');
-                      if (cellData.formula) classList.push('formula-cell');
-                      if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
+                        const classList = ['cell'];
+                        if (rowIndex < 4) classList.push('header');
+                        if (rowIndex === 10) classList.push('total-row');
+                        if (cellData.formula) classList.push('formula-cell');
+                        if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
 
-                      // Cosmetic-only visibility rules:
-                      // - Hide C1:J1 (row 1, cols C-J)
-                      // - Hide row 2 (A2:K2) and use it as a small spacer gap
-                      const hideRow2 = rowIndex === 1;
-                      const hideC1ToJ1 = rowIndex === 0 && colIndex >= 2 && colIndex <= 9;
-                      if (hideC1ToJ1) classList.push('cell-hidden');
-                      if (hideRow2) classList.push('cell-gap', 'cell-hidden');
+                        // Cosmetic-only visibility rules:
+                        // - Hide C1:J1 (row 1, cols C-J)
+                        // - Hide row 2 (A2:K2) and use it as a small spacer gap
+                        const hideRow2 = rowIndex === 1;
+                        const hideC1ToJ1 = rowIndex === 0 && colIndex >= 2 && colIndex <= 9;
+                        if (hideC1ToJ1) classList.push('cell-hidden');
+                        if (hideRow2) classList.push('cell-gap', 'cell-hidden');
 
-                      // Hide I3:J11 (row indices 2-10, col indices 8-9)
-                      const hideI3ToJ11 = rowIndex >= 2 && rowIndex <= 10 && colIndex >= 8 && colIndex <= 9;
-                      if (hideI3ToJ11) classList.push('cell-hidden');
+                        // Hide I3:J11 (row indices 2-10, col indices 8-9)
+                        const hideI3ToJ11 = rowIndex >= 2 && rowIndex <= 10 && colIndex >= 8 && colIndex <= 9;
+                        if (hideI3ToJ11) classList.push('cell-hidden');
 
-                      // Border only around A1:B1
-                      if (rowIndex === 0 && colIndex === 0) classList.push('a1-border-cell');
-                      if (rowIndex === 0 && colIndex === 1) classList.push('b1-border-cell');
+                        // Border only around A1:B1
+                        if (rowIndex === 0 && colIndex === 0) classList.push('a1-border-cell');
+                        if (rowIndex === 0 && colIndex === 1) classList.push('b1-border-cell');
 
-                      // Cosmetic-only subtable styling for A3:J11 (rows 3-11, cols A-J)
-                      const inUnitMixSubtable = rowIndex >= 2 && rowIndex <= 10 && colIndex >= 0 && colIndex <= 9;
-                      if (inUnitMixSubtable) {
-                        classList.push('unitmix-subtable-cell');
-                        if (rowIndex === 2) classList.push('unitmix-edge-top');
-                        if (rowIndex === 10) classList.push('unitmix-edge-bottom');
-                        if (colIndex === 0) classList.push('unitmix-edge-left');
-                        if (colIndex === 9) classList.push('unitmix-edge-right');
-                        // Add right border to H3:H11 (col index 7) since I3:J11 are hidden
-                        if (colIndex === 7 && rowIndex >= 2 && rowIndex <= 10) classList.push('unitmix-edge-right');
-                      }
+                        // Cosmetic-only subtable styling for A3:J11 (rows 3-11, cols A-J)
+                        const inUnitMixSubtable = rowIndex >= 2 && rowIndex <= 10 && colIndex >= 0 && colIndex <= 9;
+                        if (inUnitMixSubtable) {
+                          classList.push('unitmix-subtable-cell');
+                          if (rowIndex === 2) classList.push('unitmix-edge-top');
+                          if (rowIndex === 10) classList.push('unitmix-edge-bottom');
+                          if (colIndex === 0) classList.push('unitmix-edge-left');
+                          if (colIndex === 9) classList.push('unitmix-edge-right');
+                          // Add right border to H3:H11 (col index 7) since I3:J11 are hidden
+                          if (colIndex === 7 && rowIndex >= 2 && rowIndex <= 10) classList.push('unitmix-edge-right');
+                        }
 
-                      return (
-                        <div key={`first-${rowIndex}-${colIndex}`} className={classList.join(' ')}>
-                          <div className="cell-container">
-                            <div className="cell-id">{cellId}</div>
-                            <div className="cell-content">{formatCellContent(rowIndex, colIndex, cellData)}</div>
+                        return (
+                          <div key={`first-${rowIndex}-${colIndex}`} className={classList.join(' ')}>
+                            <div className="cell-container">
+                              <div className="cell-id">{cellId}</div>
+                              <div className="cell-content">{formatCellContent(rowIndex, colIndex, cellData)}</div>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3794,106 +3795,106 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             <h2 className="rp2-selected-title">Finalize Product Mix Summary</h2>
           </div>
           <div className="rp2-selected-body">
-        <div className="card border-0 rounded-4 mb-0 overflow-hidden interactive-card fade-in-up rp2-table-card">
-          <div className="card-header p-3">
-            <h6 className="fw-bold mb-0"><FaCubes className="me-2" />Product Mix Summary</h6>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-bordered table-hover mb-0" style={{ fontSize: '13px' }}>
-                <thead>
-                  <tr>
-                    <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '120px' }}>Unit Type</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '160px' }}>Total Area Allotted (sqft)</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '160px' }}>Area per Unit (sqft)</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '140px' }}>Number of Units</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[4, 5, 6, 7, 8, 9].map((rowIdx) => {
-                    const unitType = String(grid?.[rowIdx]?.[0]?.value ?? '').trim();
-                    const totalArea = grid?.[rowIdx]?.[5]?.value;      // Col F â€“ Carpet Area (Unit Mix)
-                    const areaPerUnit = grid?.[rowIdx]?.[2]?.value;    // Col C â€“ Avg Unit Area (Unit Mix)
-                    const numUnits = grid?.[rowIdx + 11]?.[1]?.value; // Col B â€“ No. of Units (Revenue table)
-
-                    // Only show rows where Total Area Allotted is a positive number
-                    if (!(Number.isFinite(Number(totalArea)) && Number(totalArea) > 0)) return null;
-
-                    const fmtNum = (v) =>
-                      v != null && Number.isFinite(Number(v))
-                        ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                        : 'â€”';
-                    const fmtUnits = (v) =>
-                      v != null && Number.isFinite(Number(v))
-                        ? Math.round(Number(v)).toLocaleString()
-                        : 'â€”';
-
-                    return (
-                      <tr key={`pmix-${rowIdx}`} style={{ transition: 'background 0.15s' }}>
-                        <td className="text-center fw-semibold py-2 px-4" style={{ color: '#495057' }}>{unitType || 'â€”'}</td>
-                        <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(totalArea)}</td>
-                        <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(areaPerUnit)}</td>
-                        <td className="text-center py-2 px-4 fw-bold" style={{ color: '#009255ff' }}>{fmtUnits(numUnits)}</td>
+            <div className="card border-0 rounded-4 mb-0 overflow-hidden interactive-card fade-in-up rp2-table-card">
+              <div className="card-header p-3">
+                <h6 className="fw-bold mb-0"><FaCubes className="me-2" />Product Mix Summary</h6>
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-bordered table-hover mb-0" style={{ fontSize: '13px' }}>
+                    <thead>
+                      <tr>
+                        <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '120px' }}>Unit Type</th>
+                        <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '160px' }}>Total Area Allotted (sqft)</th>
+                        <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '160px' }}>Area per Unit (sqft)</th>
+                        <th className="text-center fw-bold py-3 px-4" style={{ minWidth: '140px' }}>Number of Units</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {[4, 5, 6, 7, 8, 9].map((rowIdx) => {
+                        const unitType = String(grid?.[rowIdx]?.[0]?.value ?? '').trim();
+                        const totalArea = grid?.[rowIdx]?.[5]?.value;      // Col F â€“ Carpet Area (Unit Mix)
+                        const areaPerUnit = grid?.[rowIdx]?.[2]?.value;    // Col C â€“ Avg Unit Area (Unit Mix)
+                        const numUnits = grid?.[rowIdx + 11]?.[1]?.value; // Col B â€“ No. of Units (Revenue table)
+
+                        // Only show rows where Total Area Allotted is a positive number
+                        if (!(Number.isFinite(Number(totalArea)) && Number(totalArea) > 0)) return null;
+
+                        const fmtNum = (v) =>
+                          v != null && Number.isFinite(Number(v))
+                            ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                            : 'â€”';
+                        const fmtUnits = (v) =>
+                          v != null && Number.isFinite(Number(v))
+                            ? Math.round(Number(v)).toLocaleString()
+                            : 'â€”';
+
+                        return (
+                          <tr key={`pmix-${rowIdx}`} style={{ transition: 'background 0.15s' }}>
+                            <td className="text-center fw-semibold py-2 px-4" style={{ color: '#495057' }}>{unitType || 'â€”'}</td>
+                            <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(totalArea)}</td>
+                            <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(areaPerUnit)}</td>
+                            <td className="text-center py-2 px-4 fw-bold" style={{ color: '#009255ff' }}>{fmtUnits(numUnits)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
           </div>
         </div>
 
         {false && (
-        <div className="d-none card border-0 shadow-lg rounded-4 mb-5 overflow-hidden interactive-card fade-in-up" style={{ background: 'white' }}>
-          <div className="card-header text-white p-3" style={{ background: 'linear-gradient(135deg, #00d660ff 0%, #00d660ff 100%)' }}>
-            <h6 className="fw-bold mb-0"><FaCubes className="me-2" />Product Mix Summary</h6>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-bordered table-hover mb-0" style={{ fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', color: '#2c3e50' }}>
-                    <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '120px' }}>Unit Type</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '160px' }}>Total Area Allotted (sqft)</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '160px' }}>Area per Unit (sqft)</th>
-                    <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '140px' }}>Number of Units</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[4, 5, 6, 7, 8, 9].map((rowIdx) => {
-                    const unitType = String(grid?.[rowIdx]?.[0]?.value ?? '').trim();
-                    const totalArea = grid?.[rowIdx]?.[5]?.value;      // Col F – Carpet Area (Unit Mix)
-                    const areaPerUnit = grid?.[rowIdx]?.[2]?.value;    // Col C – Avg Unit Area (Unit Mix)
-                    const numUnits = grid?.[rowIdx + 11]?.[1]?.value; // Col B – No. of Units (Revenue table)
+          <div className="d-none card border-0 shadow-lg rounded-4 mb-5 overflow-hidden interactive-card fade-in-up" style={{ background: 'white' }}>
+            <div className="card-header text-white p-3" style={{ background: 'linear-gradient(135deg, #00d660ff 0%, #00d660ff 100%)' }}>
+              <h6 className="fw-bold mb-0"><FaCubes className="me-2" />Product Mix Summary</h6>
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-bordered table-hover mb-0" style={{ fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', color: '#2c3e50' }}>
+                      <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '120px' }}>Unit Type</th>
+                      <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '160px' }}>Total Area Allotted (sqft)</th>
+                      <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '160px' }}>Area per Unit (sqft)</th>
+                      <th className="text-center fw-bold py-3 px-4" style={{ borderBottom: '2px solid #7bff91ff', minWidth: '140px' }}>Number of Units</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[4, 5, 6, 7, 8, 9].map((rowIdx) => {
+                      const unitType = String(grid?.[rowIdx]?.[0]?.value ?? '').trim();
+                      const totalArea = grid?.[rowIdx]?.[5]?.value;      // Col F – Carpet Area (Unit Mix)
+                      const areaPerUnit = grid?.[rowIdx]?.[2]?.value;    // Col C – Avg Unit Area (Unit Mix)
+                      const numUnits = grid?.[rowIdx + 11]?.[1]?.value; // Col B – No. of Units (Revenue table)
 
-                    // Only show rows where Total Area Allotted is a positive number
-                    if (!(Number.isFinite(Number(totalArea)) && Number(totalArea) > 0)) return null;
+                      // Only show rows where Total Area Allotted is a positive number
+                      if (!(Number.isFinite(Number(totalArea)) && Number(totalArea) > 0)) return null;
 
-                    const fmtNum = (v) =>
-                      v != null && Number.isFinite(Number(v))
-                        ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                        : '—';
-                    const fmtUnits = (v) =>
-                      v != null && Number.isFinite(Number(v))
-                        ? Math.round(Number(v)).toLocaleString()
-                        : '—';
+                      const fmtNum = (v) =>
+                        v != null && Number.isFinite(Number(v))
+                          ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                          : '—';
+                      const fmtUnits = (v) =>
+                        v != null && Number.isFinite(Number(v))
+                          ? Math.round(Number(v)).toLocaleString()
+                          : '—';
 
-                    return (
-                      <tr key={`pmix-${rowIdx}`} style={{ transition: 'background 0.15s' }}>
-                        <td className="text-center fw-semibold py-2 px-4" style={{ color: '#495057' }}>{unitType || '—'}</td>
-                        <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(totalArea)}</td>
-                        <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(areaPerUnit)}</td>
-                        <td className="text-center py-2 px-4 fw-bold" style={{ color: '#009255ff' }}>{fmtUnits(numUnits)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                      return (
+                        <tr key={`pmix-${rowIdx}`} style={{ transition: 'background 0.15s' }}>
+                          <td className="text-center fw-semibold py-2 px-4" style={{ color: '#495057' }}>{unitType || '—'}</td>
+                          <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(totalArea)}</td>
+                          <td className="text-center py-2 px-4" style={{ color: '#2c3e50' }}>{fmtNum(areaPerUnit)}</td>
+                          <td className="text-center py-2 px-4 fw-bold" style={{ color: '#009255ff' }}>{fmtUnits(numUnits)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
 
         )}
 
@@ -3908,135 +3909,135 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             <h2 className="rp2-selected-title">Ticket Size Calculation</h2>
           </div>
           <div className="rp2-selected-body">
-        <div className="card border-0 rounded-4 mb-4 overflow-hidden interactive-card fade-in-up rp2-table-card rp2-grid-card">
-          <div className="card-header p-3">
-            <h6 className="fw-bold mb-0"><FaMoneyBillWave className="me-2" />Ticket Size Calculation Table</h6>
-          </div>
-          <div className="card-body p-3" style={{ overflowX: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
-            <div className="rp2-grid-shell">
-            <div className="excel-grid excel-grid-second" id="excelGridSecond" style={{ width: 'fit-content', maxWidth: '100%' }}>
-              {grid.slice(13).map((row, rowIndex) => {
-                const actualRowIndex = rowIndex + 13; // Actual row index in the grid
-                return row.map((cellData, colIndex) => {
-                  if (colIndex === 10) return null; // Hide K column (cosmetic only)
-                  if (colIndex === 6) return null;  // Hide G column (G14:G22)
-                  if (colIndex === 1) return null;  // Hide B column (B14:B21)
-                  if (colIndex === 5) return null;  // Hide F column (F14:F21)
-                  if (actualRowIndex === 21) return null; // Hide row 22 (A22:J22 TOTAL row)
-                  const cellId = `${colLetters[colIndex]}${actualRowIndex + 1}`;
+            <div className="card border-0 rounded-4 mb-4 overflow-hidden interactive-card fade-in-up rp2-table-card rp2-grid-card">
+              <div className="card-header p-3">
+                <h6 className="fw-bold mb-0"><FaMoneyBillWave className="me-2" />Ticket Size Calculation Table</h6>
+              </div>
+              <div className="card-body p-3" style={{ overflowX: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <div className="rp2-grid-shell">
+                  <div className="excel-grid excel-grid-second" id="excelGridSecond" style={{ width: 'fit-content', maxWidth: '100%' }}>
+                    {grid.slice(13).map((row, rowIndex) => {
+                      const actualRowIndex = rowIndex + 13; // Actual row index in the grid
+                      return row.map((cellData, colIndex) => {
+                        if (colIndex === 10) return null; // Hide K column (cosmetic only)
+                        if (colIndex === 6) return null;  // Hide G column (G14:G22)
+                        if (colIndex === 1) return null;  // Hide B column (B14:B21)
+                        if (colIndex === 5) return null;  // Hide F column (F14:F21)
+                        if (actualRowIndex === 21) return null; // Hide row 22 (A22:J22 TOTAL row)
+                        const cellId = `${colLetters[colIndex]}${actualRowIndex + 1}`;
 
-                  const classList = ['cell'];
-                  if (actualRowIndex === 14) classList.push('header');
-                  if (actualRowIndex === 22) classList.push('total-row');
-                  if (cellData.formula) classList.push('formula-cell');
-                  if (actualRowIndex >= 15 && actualRowIndex <= 20 && (colIndex === 2 || colIndex === 4)) {
-                    classList.push('rp2-value-look-cell');
-                  }
-                  if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
+                        const classList = ['cell'];
+                        if (actualRowIndex === 14) classList.push('header');
+                        if (actualRowIndex === 22) classList.push('total-row');
+                        if (cellData.formula) classList.push('formula-cell');
+                        if (actualRowIndex >= 15 && actualRowIndex <= 20 && (colIndex === 2 || colIndex === 4)) {
+                          classList.push('rp2-value-look-cell');
+                        }
+                        if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
 
-                  return (
-                    <div key={`second-${actualRowIndex}-${colIndex}`} className={classList.join(' ')}>
-                      <div className="cell-container">
-                        <div className="cell-id">{cellId}</div>
-                        <div className="cell-content">{formatCellContent(actualRowIndex, colIndex, cellData)}</div>
-                      </div>
-                    </div>
-                  );
-                });
-              })}
-            </div>
-            </div>
-          </div>
-        </div>
-
-        {false && (
-        <div className="d-none card border-0 shadow-lg rounded-4 mb-4 overflow-hidden interactive-card fade-in-up" style={{ background: 'white' }}>
-          <div className="card-header bg-gradient text-white p-3" style={{ background: 'linear-gradient(135deg, #28a745 0%, #34ce57 100%)' }}>
-            <h6 className="fw-bold mb-0"><FaMoneyBillWave className="me-2" />Ticket Size Calculation Table</h6>
-          </div>
-          <div className="card-body p-3" style={{ overflowX: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
-            <div className="excel-grid excel-grid-second" id="excelGridSecond" style={{ width: 'fit-content', maxWidth: '100%' }}>
-              {grid.slice(13).map((row, rowIndex) => {
-                const actualRowIndex = rowIndex + 13; // Actual row index in the grid
-                return row.map((cellData, colIndex) => {
-                  if (colIndex === 10) return null; // Hide K column (cosmetic only)
-                  if (colIndex === 6) return null;  // Hide G column (G14:G22)
-                  if (colIndex === 1) return null;  // Hide B column (B14:B21)
-                  if (colIndex === 5) return null;  // Hide F column (F14:F21)
-                  if (actualRowIndex === 21) return null; // Hide row 22 (A22:J22 TOTAL row)
-                  const cellId = `${colLetters[colIndex]}${actualRowIndex + 1}`;
-
-                  const classList = ['cell'];
-                  if (actualRowIndex === 14 || actualRowIndex === 15) classList.push('header');
-                  if (actualRowIndex === 22) classList.push('total-row');
-                  if (cellData.formula) classList.push('formula-cell');
-                  if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
-
-                  return (
-                    <div key={`second-${actualRowIndex}-${colIndex}`} className={classList.join(' ')}>
-                      <div className="cell-container">
-                        <div className="cell-id">{cellId}</div>
-                        <div className="cell-content">{formatCellContent(actualRowIndex, colIndex, cellData)}</div>
-                      </div>
-                    </div>
-                  );
-                });
-              })}
-            </div>
-          </div>
-        </div>
-
-        )}
-
-        {/* Action Buttons */}
-        <div className="card border-0 shadow-sm rounded-4 my-4 interactive-card fade-in-up">
-          <div className="card-body p-4">
-            <div className="d-flex flex-wrap align-items-center gap-3">
-              <button
-                className="btn btn-success rounded-pill px-4 py-2 shadow-sm interactive-btn"
-                onClick={async () => {
-                  saveUnitMixToLocal();
-                  await updateMarketAnalysis();
-                }}
-                disabled={isUpdatingAnalysis}
-              >
-                {isUpdatingAnalysis ? (
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                ) : (
-                  <FaSave className="me-2" />
-                )}
-                {isUpdatingAnalysis ? 'Updating Analysis...' : 'Save and Update Analysis'}
-              </button>
-
-              <button
-                className="btn btn-primary rounded-pill px-4 py-2 shadow-sm interactive-btn"
-                onClick={resetToDefaults}
-              >
-                <FaUndo className="me-2" />Reset to Default Values
-              </button>
-              <button
-                className="btn btn-outline-primary rounded-pill px-4 py-2 shadow-sm interactive-btn"
-                onClick={async () => {
-                  setGrid((prev) => recalculateAll(prev));
-                  await updateMarketAnalysis();
-                }}
-                disabled={isUpdatingAnalysis}
-              >
-                {isUpdatingAnalysis ? (
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                ) : (
-                  <FaSyncAlt className="me-2" />
-                )}
-                {isUpdatingAnalysis ? 'Recalculating...' : 'Recalculate and Update Market Data'}
-              </button>
-
-              <div className="d-flex align-items-center ms-md-auto">
-                <i className="fas fa-info-circle text-primary me-2"></i>
-                <span className="text-muted small">All calculations update automatically</span>
+                        return (
+                          <div key={`second-${actualRowIndex}-${colIndex}`} className={classList.join(' ')}>
+                            <div className="cell-container">
+                              <div className="cell-id">{cellId}</div>
+                              <div className="cell-content">{formatCellContent(actualRowIndex, colIndex, cellData)}</div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+
+            {false && (
+              <div className="d-none card border-0 shadow-lg rounded-4 mb-4 overflow-hidden interactive-card fade-in-up" style={{ background: 'white' }}>
+                <div className="card-header bg-gradient text-white p-3" style={{ background: 'linear-gradient(135deg, #28a745 0%, #34ce57 100%)' }}>
+                  <h6 className="fw-bold mb-0"><FaMoneyBillWave className="me-2" />Ticket Size Calculation Table</h6>
+                </div>
+                <div className="card-body p-3" style={{ overflowX: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <div className="excel-grid excel-grid-second" id="excelGridSecond" style={{ width: 'fit-content', maxWidth: '100%' }}>
+                    {grid.slice(13).map((row, rowIndex) => {
+                      const actualRowIndex = rowIndex + 13; // Actual row index in the grid
+                      return row.map((cellData, colIndex) => {
+                        if (colIndex === 10) return null; // Hide K column (cosmetic only)
+                        if (colIndex === 6) return null;  // Hide G column (G14:G22)
+                        if (colIndex === 1) return null;  // Hide B column (B14:B21)
+                        if (colIndex === 5) return null;  // Hide F column (F14:F21)
+                        if (actualRowIndex === 21) return null; // Hide row 22 (A22:J22 TOTAL row)
+                        const cellId = `${colLetters[colIndex]}${actualRowIndex + 1}`;
+
+                        const classList = ['cell'];
+                        if (actualRowIndex === 14 || actualRowIndex === 15) classList.push('header');
+                        if (actualRowIndex === 22) classList.push('total-row');
+                        if (cellData.formula) classList.push('formula-cell');
+                        if (cellData.value === '' && !cellData.formula) classList.push('empty-cell');
+
+                        return (
+                          <div key={`second-${actualRowIndex}-${colIndex}`} className={classList.join(' ')}>
+                            <div className="cell-container">
+                              <div className="cell-id">{cellId}</div>
+                              <div className="cell-content">{formatCellContent(actualRowIndex, colIndex, cellData)}</div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })}
+                  </div>
+                </div>
+              </div>
+
+            )}
+
+            {/* Action Buttons */}
+            <div className="card border-0 shadow-sm rounded-4 my-4 interactive-card fade-in-up">
+              <div className="card-body p-4">
+                <div className="d-flex flex-wrap align-items-center gap-3">
+                  <button
+                    className="btn btn-success rounded-pill px-4 py-2 shadow-sm interactive-btn"
+                    onClick={async () => {
+                      saveUnitMixToLocal();
+                      await updateMarketAnalysis();
+                    }}
+                    disabled={isUpdatingAnalysis}
+                  >
+                    {isUpdatingAnalysis ? (
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    ) : (
+                      <FaSave className="me-2" />
+                    )}
+                    {isUpdatingAnalysis ? 'Updating Analysis...' : 'Save and Update Analysis'}
+                  </button>
+
+                  <button
+                    className="btn btn-primary rounded-pill px-4 py-2 shadow-sm interactive-btn"
+                    onClick={resetToDefaults}
+                  >
+                    <FaUndo className="me-2" />Reset to Default Values
+                  </button>
+                  <button
+                    className="btn btn-outline-primary rounded-pill px-4 py-2 shadow-sm interactive-btn"
+                    onClick={async () => {
+                      setGrid((prev) => recalculateAll(prev));
+                      await updateMarketAnalysis();
+                    }}
+                    disabled={isUpdatingAnalysis}
+                  >
+                    {isUpdatingAnalysis ? (
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    ) : (
+                      <FaSyncAlt className="me-2" />
+                    )}
+                    {isUpdatingAnalysis ? 'Recalculating...' : 'Recalculate and Update Market Data'}
+                  </button>
+
+                  <div className="d-flex align-items-center ms-md-auto">
+                    <i className="fas fa-info-circle text-primary me-2"></i>
+                    <span className="text-muted small">All calculations update automatically</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
