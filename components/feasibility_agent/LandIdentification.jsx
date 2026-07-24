@@ -4,6 +4,7 @@ import { FaSave, FaExpandAlt, FaList, FaDrawPolygon, FaEdit, FaTrash } from 'rea
 import { useJsApiLoader, Autocomplete, GoogleMap, DrawingManagerF, PolygonF, MarkerF } from '@react-google-maps/api';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
+import * as turf from '@turf/turf';
 
 const libraries = ['places', 'drawing', 'geometry'];
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -25,6 +26,7 @@ const LandIdentification = () => {
     roadCategory: '',
     roadWidening: '',
     netPlotAreaSqFt: '',
+    builtupDensity: '',
     isNetPlotAreaAutoDerived: true
   });
 
@@ -169,7 +171,7 @@ const LandIdentification = () => {
       const radiusDeg = radius / 111320;
       const bbox = `${lat - radiusDeg},${lng - radiusDeg},${lat + radiusDeg},${lng + radiusDeg}`;
       
-      const query = `[out:json][timeout:30];(way["highway"](${bbox}););out body;>;out skel qt;`;
+      const query = `[out:json][timeout:30];(way["highway"](${bbox});way["building"](${bbox});relation["building"](${bbox}););out body;>;out skel qt;`;
       
       const endpoints = [
         "https://overpass-api.de/api/interpreter",
@@ -349,8 +351,53 @@ const LandIdentification = () => {
 
       const matchedWidening = CATEGORY_TO_ROAD_WIDENING[highestCategory] || "below9";
       
-      setFormData(prev => ({ ...prev, roadWidening: matchedWidening }));
-      setSaveStatus(`Fetched OSM width successfully: ${highestCategory}`);
+      // Calculate Builtup Density
+      let totalBuildingAreaM2 = 0;
+      const centerPt = turf.point([lng, lat]);
+      const circlePoly = turf.circle(centerPt, radius, { units: 'meters' });
+      const circleAreaM2 = Math.PI * radius * radius;
+
+      elements.forEach(el => {
+        if ((el.type === "way" || el.type === "relation") && el.tags && el.tags.building && el.nodes) {
+          const coordinates = [];
+          el.nodes.forEach(nodeId => {
+            const node = nodes[nodeId];
+            if (node) coordinates.push([node.lng, node.lat]);
+          });
+          
+          if (coordinates.length >= 4) {
+            // Ensure polygon is closed
+            if (coordinates[0][0] !== coordinates[coordinates.length-1][0] || coordinates[0][1] !== coordinates[coordinates.length-1][1]) {
+              coordinates.push([...coordinates[0]]);
+            }
+            try {
+              const poly = turf.polygon([coordinates]);
+              // Handle potential turf.intersect issues gracefully
+              let clipped = null;
+              try {
+                clipped = turf.intersect(turf.featureCollection([poly, circlePoly])); // More robust intersect method
+              } catch (e) {
+                // Fallback direct intersection
+                clipped = turf.intersect(poly, circlePoly);
+              }
+              if (clipped) {
+                totalBuildingAreaM2 += turf.area(clipped);
+              }
+            } catch (e) {
+              console.warn("Intersection failed for building", el.id, e);
+            }
+          }
+        }
+      });
+
+      const calculatedDensity = circleAreaM2 > 0 ? Math.round((totalBuildingAreaM2 / circleAreaM2) * 10000) / 100 : 0;
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        roadWidening: matchedWidening,
+        builtupDensity: String(calculatedDensity)
+      }));
+      setSaveStatus(`Fetched OSM width and density successfully!`);
       setTimeout(() => setSaveStatus(''), 3000);
     } catch (err) {
       console.error("OSM road width fetch failed:", err);
@@ -1136,37 +1183,55 @@ const LandIdentification = () => {
             </div>
           </div>
 
-          <div className="col-md-6">
-            <div className="field-wrapper-card">
-              <div className="field-label-text d-flex justify-content-between align-items-center w-100">
-                <span>
-                  Road Width *
-                  {roadWidthLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
-                </span>
+          <div className="col-12">
+            <div className="field-wrapper-card" style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
                 <button 
-                  className="btn btn-sm btn-outline-primary py-0 px-2" 
+                  className="btn btn-sm btn-outline-primary py-0 px-2 d-flex align-items-center gap-1" 
                   style={{ fontSize: '11px', borderRadius: '12px' }}
                   onClick={fetchRoadWidthFromOSM}
                   disabled={roadWidthLoading}
                 >
-                  Fetch
+                  {roadWidthLoading && <span className="spinner-border spinner-border-sm" style={{width: '10px', height: '10px'}} role="status"></span>}
+                  Fetch Values
                 </button>
               </div>
-              <select
-                className="pill-input form-select"
-                style={{ border: 'none', background: '#f8f9fa' }}
-                name="roadWidening"
-                value={formData.roadWidening || ""}
-                onChange={handleInputChange}
-              >
-                <option value="">Select road widening</option>
-                <option value="below9">Below 9 m.</option>
-                <option value="9-12">9 m. and above but below 12 m.</option>
-                <option value="12-15">12 m. and above but below 15 m.</option>
-                <option value="15-24">15 m. and above but below 24 m.</option>
-                <option value="24-30">24 m. and above but below 30 m.</option>
-                <option value="30+">30 m. and above</option>
-              </select>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <div className="field-label-text">Road Width *</div>
+                  <select
+                    className="pill-input form-select"
+                    style={{ border: 'none', background: '#f8f9fa' }}
+                    name="roadWidening"
+                    value={formData.roadWidening || ""}
+                    onChange={handleInputChange}
+                  >
+                    <option value="">Select road widening</option>
+                    <option value="below9">Below 9 m.</option>
+                    <option value="9-12">9 m. and above but below 12 m.</option>
+                    <option value="12-15">12 m. and above but below 15 m.</option>
+                    <option value="15-24">15 m. and above but below 24 m.</option>
+                    <option value="24-30">24 m. and above but below 30 m.</option>
+                    <option value="30+">30 m. and above</option>
+                  </select>
+                </div>
+                
+                <div className="col-md-6">
+                  <div className="field-label-text">Builtup Density</div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      className="pill-input form-control"
+                      name="builtupDensity"
+                      style={{ border: 'none', background: '#f8f9fa', paddingRight: '25px' }}
+                      value={formData.builtupDensity || ""}
+                      onChange={handleInputChange}
+                      placeholder="Enter builtup density"
+                    />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6c757d', pointerEvents: 'none', fontSize: '13px', fontWeight: '500' }}>%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

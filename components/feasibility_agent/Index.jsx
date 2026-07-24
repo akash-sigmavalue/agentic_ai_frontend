@@ -581,9 +581,7 @@ import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight
 import { useState, useEffect } from "react";
 import Header from "./Header";
 import LandDetailsForm from "./LandDetailsForm";
-import LandDetailsOutput from "./LandDetailsOutput";
-import FSIProposalForm from "./FSIProposalForm";
-import FSIProposalOutput from "./FSIProposalOutput";
+
 import RevenueForm from "./LocationForm";
 import RevenueOutput from "./LocationOutput";
 import CostForm from "./CostForm";
@@ -591,8 +589,7 @@ import CostOutput from "./CostOutput";
 import MeansOfFinance from "./MeansOfFinance";
 import Dashboard from "./Dashboard";
 import { useLegacyNavigate as useNavigate, useLegacyLocation as useLocation } from "@/components/feasibility_agent/useLegacyNavigate"; import Link from "next/link";
-import AreaCalculationForm from "./AreaCalculationForm";
-import AreaCalculationResult from "./AreaCalculationResult";
+
 import UnitDesignStructure from "./UnitDesignStructure";
 import RateSim from "./ratesim";
 import RequiredParking from "./RequiredParking";
@@ -627,8 +624,7 @@ const Index = () => {
   const theme = "light";
   const navigate = useNavigate();
   const [landResults, setLandResults] = useState(null);
-  const [fsiProposalData, setFSIProposalData] = useState(null);
-  const [areaCalculationData, setAreaCalculationData] = useState(null);
+
   const [revenueData, setRevenueData] = useState(null);
   const [costData, setCostData] = useState(null);
   const [showDashboard, setShowDashboard] = useState(false);
@@ -649,8 +645,7 @@ const Index = () => {
     const savedLandResults = localStorage.getItem("landDetailsResults");
     const savedZoning = localStorage.getItem("zoningType");
     const savedLandForm = localStorage.getItem("landDetailsForm");
-    const savedFSI = localStorage.getItem("fsiProposalData");
-    const savedArea = localStorage.getItem("areaCalculationForm");
+
     const savedRevenue = localStorage.getItem("revenueForm");
     const savedCost = localStorage.getItem("costForm");
 
@@ -660,8 +655,7 @@ const Index = () => {
       const landForm = JSON.parse(savedLandForm);
       setLocation(landForm.location || "");
     }
-    if (savedFSI) setFSIProposalData(JSON.parse(savedFSI));
-    if (savedArea) setAreaCalculationData(JSON.parse(savedArea));
+
     if (savedRevenue) setRevenueData(JSON.parse(savedRevenue));
     if (savedCost) setCostData(JSON.parse(savedCost));
   }, []);
@@ -749,13 +743,7 @@ const Index = () => {
     if (loc) setLocation(loc);
   };
 
-  const handleFSIProposalSave = (data) => {
-    setFSIProposalData(data);
-  };
 
-  const handleAreaCalculationSave = (data) => {
-    setAreaCalculationData(data);
-  };
 
   const handleRevenueSave = (data) => {
     setRevenueData(data);
@@ -1280,7 +1268,7 @@ const Index = () => {
             {/* Section 1: Land Details */}
             <div className="col-12 fade-in-up stagger-1">
               <div className="row g-4">
-                <div className={isLandV2Active ? "col-lg-12" : "col-lg-8"}>
+                <div className="col-lg-12">
                   <LandDetailsForm
                     onCalculate={handleLandCalculation}
                     updateingUI={updateingUI}
@@ -1288,62 +1276,13 @@ const Index = () => {
                     onViewChange={(view) => setIsLandV2Active(view !== "V1")}
                   />
                 </div>
-                {!isLandV2Active && (
-                  <div className="col-lg-4">
-                    <LandDetailsOutput
-                      results={landResults}
-                      updateingUI={updateingUI}
-                    />
-                  </div>
-                )}
+
               </div>
             </div>
 
-            {/* Section 1.2: Permissible FSI and Proposed FSI */}
-            <div className="col-12 fade-in-up stagger-2">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <FSIProposalForm
-                    landResults={landResults}
-                    zoningType={zoningType}
-                    location={location}
-                    onSave={handleFSIProposalSave}
-                  />
-                </div>
-                <div className="col-lg-4">
-                  <FSIProposalOutput
-                    data={fsiProposalData}
-                    landResults={landResults}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* New Section 1.3: Area Calculation */}
-            <div className="col-12 fade-in-up stagger-3">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <AreaCalculationForm
-                    onSave={handleAreaCalculationSave}
-                    landResults={landResults}
-                    fsiProposalData={fsiProposalData}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-                <div className="col-lg-4">
-                  <AreaCalculationResult
-                    data={areaCalculationData}
-                    landResults={landResults}
-                    fsiProposalData={fsiProposalData}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-              </div>
-            </div>
+
+
 
             {/* Market Analysis Charts Section */}
             <div
