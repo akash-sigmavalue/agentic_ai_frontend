@@ -566,7 +566,7 @@ const LandIdentification = () => {
       isNetPlotAreaAutoDerived: dataToSave.isNetPlotAreaAutoDerived !== undefined ? dataToSave.isNetPlotAreaAutoDerived : prev.isNetPlotAreaAutoDerived
     }));
     localStorage.setItem('Land Identification', JSON.stringify(dataToSave));
-    window.dispatchEvent(new CustomEvent('landIdentificationSaved'));
+    window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: dataToSave }));
   };
 
   const deletePolygon = () => {
@@ -624,13 +624,8 @@ const LandIdentification = () => {
     isLoadedRef.current = true;
   }, []);
 
-  // Auto-sync formData to localStorage and notify sibling components in real-time
-  useEffect(() => {
-    if (isLoadedRef.current) {
-      localStorage.setItem('Land Identification', JSON.stringify(formData));
-      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: formData }));
-    }
-  }, [formData]);
+
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

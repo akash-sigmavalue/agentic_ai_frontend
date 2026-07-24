@@ -4,17 +4,21 @@ import Chart from "react-apexcharts";
 import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
 
 
-const getMarketPayload = () => {
+const getLandIdentificationPayload = () => {
   try {
-    const raw = localStorage.getItem("Market Analysis Payload");
-    if (!raw) return { city: "", villageName: "" };
+    const raw = localStorage.getItem("Land Identification");
+    if (!raw) return { city: "", villageName: "", lat: null, lng: null };
     const parsed = JSON.parse(raw);
+    const lat = parsed.polygonCenterLat || parsed.latitude || null;
+    const lng = parsed.polygonCenterLng || parsed.longitude || null;
     return {
-      city: parsed.city || "",
-      villageName: parsed.villageName || "",
+      city: parsed.location || "",
+      villageName: parsed.village || "",
+      lat: lat ? parseFloat(lat) : null,
+      lng: lng ? parseFloat(lng) : null,
     };
   } catch {
-    return { city: "", villageName: "" };
+    return { city: "", villageName: "", lat: null, lng: null };
   }
 };
 
@@ -33,7 +37,7 @@ const formatNumberRaw = (val, country = "India") => {
   return Math.round(Number(val)).toLocaleString(locale);
 };
 
-const SupplyDemandAnalysis = ({ option }) => {
+const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius = 1000 }) => {
   const theme = "light";
   const isDark = false;
 
@@ -49,65 +53,95 @@ const SupplyDemandAnalysis = ({ option }) => {
   const [demandData, setDemandData] = useState([]);
   const [demandCity, setDemandCity] = useState("");
   const [demandVillageName, setDemandVillageName] = useState("");
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
+  const cacheRef = React.useRef({ location: null, catchment: {} });
 
-  // Sync state from landDetailsForm on mount/change for Supply
+  // Sync state from Land Identification on mount/change
   useEffect(() => {
-    const handleLandFormSync = () => {
-      try {
-        const landForm = JSON.parse(localStorage.getItem("landDetailsForm"));
-        if (landForm) {
-          setVillage(landForm.village || "");
-          setCity(landForm.location || "");
-        }
-      } catch (e) {
-        console.error(e);
+    const updatePayloadState = (data) => {
+      cacheRef.current = { location: null, catchment: {} };
+      const c = data.location || data.city || "";
+      const v = data.village || data.villageName || "";
+      const latVal = data.polygonCenterLat || data.latitude || null;
+      const lngVal = data.polygonCenterLng || data.longitude || null;
+      setCity(c);
+      setVillage(v);
+      setDemandCity(c);
+      setDemandVillageName(v);
+      setLat(latVal ? parseFloat(latVal) : null);
+      setLng(lngVal ? parseFloat(lngVal) : null);
+    };
+
+    const initialPayload = getLandIdentificationPayload();
+    setCity(initialPayload.city);
+    setVillage(initialPayload.villageName);
+    setDemandCity(initialPayload.city);
+    setDemandVillageName(initialPayload.villageName);
+    setLat(initialPayload.lat);
+    setLng(initialPayload.lng);
+
+    const handleLandIdSync = (e) => {
+      const detail = e.detail;
+      if (detail) {
+        updatePayloadState(detail);
+      } else {
+        cacheRef.current = { location: null, catchment: {} };
+        const payload = getLandIdentificationPayload();
+        setCity(payload.city);
+        setVillage(payload.villageName);
+        setDemandCity(payload.city);
+        setDemandVillageName(payload.villageName);
+        setLat(payload.lat);
+        setLng(payload.lng);
       }
     };
 
-    handleLandFormSync();
-
-    window.addEventListener("landDetailsUpdated", handleLandFormSync);
+    window.addEventListener("landIdentificationSaved", handleLandIdSync);
     return () => {
-      window.removeEventListener("landDetailsUpdated", handleLandFormSync);
+      window.removeEventListener("landIdentificationSaved", handleLandIdSync);
     };
   }, []);
 
-  // Sync state from Market Analysis Payload on mount/change for Demand
+  // Load Demand data
   useEffect(() => {
     if (option !== "demand") return;
 
-    const handleMarketPayloadSync = (e) => {
-      const payload = e.detail || getMarketPayload();
-      setDemandCity(payload.city || "");
-      setDemandVillageName(payload.villageName || "");
-    };
+    const radiusKm = (catchmentRadius || 1000) / 1000.0;
 
-    const handleLandDetailsUpdate = () => {
-      const payload = getMarketPayload();
-      setDemandCity(payload.city || "");
-      setDemandVillageName(payload.villageName || "");
-    };
-
-    const { city: c, villageName: v } = getMarketPayload();
-    setDemandCity(c);
-    setDemandVillageName(v);
-
-    window.addEventListener("marketAnalysisUpdated", handleMarketPayloadSync);
-    window.addEventListener("landDetailsUpdated", handleLandDetailsUpdate);
-
-    return () => {
-      window.removeEventListener("marketAnalysisUpdated", handleMarketPayloadSync);
-      window.removeEventListener("landDetailsUpdated", handleLandDetailsUpdate);
-    };
-  }, [option]);
-
-  // Load Demand data
-  useEffect(() => {
-    if (option !== "demand" || !demandCity || !demandVillageName) return;
+    if (viewMode === "catchment") {
+      if (!lat || !lng) {
+        setError(`Coordinates missing. Please save a polygon or enter center coordinates in Land Identification to view ${catchmentRadius}m Catchment statistics.`);
+        setDemandData([]);
+        return;
+      }
+      if (cacheRef.current.catchment[catchmentRadius]) {
+        setDemandData(cacheRef.current.catchment[catchmentRadius]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    } else {
+      if (!demandCity || !demandVillageName) {
+        setDemandData([]);
+        return;
+      }
+      if (cacheRef.current.location) {
+        setDemandData(cacheRef.current.location);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    }
 
     const loadDemand = async () => {
       setLoading(true);
       setError(null);
+
+      const requestBody = viewMode === "catchment"
+        ? { city_name: demandCity, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" }
+        : { city_name: demandCity, location_name: demandVillageName, mode: "location" };
+
       try {
         const response = await fetch(apiUrl("/new_rate_simulator/simulator/yoy-demand/"), {
           method: "POST",
@@ -115,17 +149,20 @@ const SupplyDemandAnalysis = ({ option }) => {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify({
-            city_name: demandCity,
-            location_name: demandVillageName,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) throw new Error("Failed to fetch demand data");
         const data = await response.json();
 
         if (data && data.success) {
-          setDemandData(data.data || []);
+          const fetchedData = data.data || [];
+          if (viewMode === "catchment") {
+            cacheRef.current.catchment[catchmentRadius] = fetchedData;
+          } else {
+            cacheRef.current.location = fetchedData;
+          }
+          setDemandData(fetchedData);
         } else {
           throw new Error(data.error || "Failed to fetch demand data");
         }
@@ -137,7 +174,7 @@ const SupplyDemandAnalysis = ({ option }) => {
     };
 
     loadDemand();
-  }, [demandCity, demandVillageName, option]);
+  }, [demandCity, demandVillageName, lat, lng, option, viewMode, catchmentRadius]);
 
   // Determine country
   const currentCity = option === "supply" ? city : demandCity;
@@ -243,21 +280,40 @@ const SupplyDemandAnalysis = ({ option }) => {
             </div>
             {option === "supply" ? "Supply Analysis" : "Demand Analysis"}
           </h5>
-          {(currentCity || currentVillage) && (
-            <span
-              style={{
-                fontSize: "11px",
-                background: option === "supply"
-                  ? (isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)")
-                  : (isDark ? "rgba(245,158,11,0.15)" : "rgba(217,119,6,0.08)"),
-                color: option === "supply" ? (isDark ? "#67e8f9" : "#0891b2") : (isDark ? "#fde047" : "#d97706"),
-                padding: "3px 10px",
-                borderRadius: 20,
-                fontWeight: 600,
-              }}
-            >
-              {currentVillage}{currentCity ? `, ${currentCity}` : ""}
-            </span>
+          {viewMode === "catchment" ? (
+            lat && lng && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: option === "supply"
+                    ? (isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)")
+                    : (isDark ? "rgba(245,158,11,0.15)" : "rgba(217,119,6,0.08)"),
+                  color: option === "supply" ? (isDark ? "#67e8f9" : "#0891b2") : (isDark ? "#fde047" : "#d97706"),
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                🎯 1km Catchment ({lat.toFixed(4)}, {lng.toFixed(4)})
+              </span>
+            )
+          ) : (
+            (currentCity || currentVillage) && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: option === "supply"
+                    ? (isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)")
+                    : (isDark ? "rgba(245,158,11,0.15)" : "rgba(217,119,6,0.08)"),
+                  color: option === "supply" ? (isDark ? "#67e8f9" : "#0891b2") : (isDark ? "#fde047" : "#d97706"),
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                📍 {currentVillage}{currentCity ? `, ${currentCity}` : ""}
+              </span>
+            )
           )}
         </div>
       </div>
