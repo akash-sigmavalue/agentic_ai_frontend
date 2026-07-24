@@ -7,27 +7,40 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
 
+const THEME_STORAGE_KEY = 'sigmavalue_theme';
+const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+
+const getThemeSnapshot = () => localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+const getServerThemeSnapshot = () => false;
+
+const subscribeToTheme = (onStoreChange: () => void) => {
+  const handleChange = () => {
+    const isDark = getThemeSnapshot();
+    document.documentElement.classList.toggle('dark-mode', isDark);
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    onStoreChange();
+  };
+
+  window.addEventListener('storage', handleChange);
+  window.addEventListener(THEME_CHANGE_EVENT, handleChange);
+  return () => {
+    window.removeEventListener('storage', handleChange);
+    window.removeEventListener(THEME_CHANGE_EVENT, handleChange);
+  };
+};
+
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sigmavalue_theme') === 'dark';
-  });
+  const isDark = React.useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  React.useEffect(() => {
-    const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
-    setIsDark(theme);
-  }, []);
-
-  React.useEffect(() => {
-    document.documentElement.classList.toggle('dark-mode', isDark);
-    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-    localStorage.setItem('sigmavalue_theme', isDark ? 'dark' : 'light');
-  }, [isDark]);
-
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'light' : 'dark');
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   };
 
   const shellClass = isDark
