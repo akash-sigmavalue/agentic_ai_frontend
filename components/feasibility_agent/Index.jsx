@@ -577,7 +577,7 @@ import {
   FaScaleBalanced,
   FaDatabase,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import Header from "./Header";
 import LandDetailsForm from "./LandDetailsForm";
@@ -637,6 +637,46 @@ const Index = () => {
   const [updateingUI, setUpdateUI] = useState(false);
   const [activeSection, setActiveSection] = useState("land-identification");
   const [calculationMode, setCalculationMode] = useState("carpet"); // Lifted state: 'carpet' or 'saleable'
+  const [marketViewMode, setMarketViewMode] = useState(() => {
+    if (typeof window === "undefined") return "location";
+    try {
+      const saved = localStorage.getItem("market research");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.viewMode) return parsed.viewMode;
+      }
+    } catch (e) {
+      console.error("Error reading market research payload:", e);
+    }
+    return "location";
+  });
+
+  const [appliedRadius, setAppliedRadius] = useState(() => {
+    if (typeof window === "undefined") return 1000;
+    try {
+      const saved = localStorage.getItem("market research");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.radius) return Number(parsed.radius) || 1000;
+      }
+    } catch (e) {
+      console.error("Error reading catchment radius payload:", e);
+    }
+    return 1000;
+  });
+
+  const [inputRadius, setInputRadius] = useState(() => appliedRadius);
+
+  useEffect(() => {
+    try {
+      const existingRaw = localStorage.getItem("market research");
+      const existing = existingRaw ? JSON.parse(existingRaw) : {};
+      const updated = { ...existing, viewMode: marketViewMode, radius: appliedRadius };
+      localStorage.setItem("market research", JSON.stringify(updated));
+    } catch (e) {
+      console.error("Error saving market research payload:", e);
+    }
+  }, [marketViewMode, appliedRadius]);
   const [excelLogicSelected, setExcelLogicSelected] = useState(true);
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
     useState(true);
@@ -1399,18 +1439,178 @@ const Index = () => {
                   </a>
                 </div>
               </div>
+              {/* Market Research Scope Filter Card */}
+              <div
+                className="card border-0 shadow-sm rounded-4 mb-4"
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div className="card-body p-3.5 d-flex align-items-center justify-content-between flex-wrap gap-3">
+                  {/* Scope Info Label */}
+                  <div className="d-flex align-items-center gap-3">
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-3 px-3 py-2.5"
+                      style={{ backgroundColor: "#eef7f4", color: "#448C74" }}
+                    >
+                      <FaFilter size={16} />
+                    </div>
+                    <div>
+                      <div className="fw-bold text-dark" style={{ fontSize: "15px", lineHeight: "1.2" }}>
+                        Market Research Filter
+                      </div>
+                      <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
+                        {marketViewMode === "location"
+                          ? "Showing overall city/location statistics"
+                          : `Showing ${appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`} radius catchment around project`}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter Controls Container */}
+                  <div className="d-flex align-items-center gap-3 flex-wrap">
+                    {/* View Mode Toggle Pill Container */}
+                    <div
+                      className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
+                      style={{ borderColor: "#cbd5e1" }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-sm rounded-pill px-3.5 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                        style={{
+                          fontSize: "13px",
+                          backgroundColor: marketViewMode === "location" ? "#448C74" : "transparent",
+                          borderColor: "transparent",
+                          color: marketViewMode === "location" ? "#ffffff" : "#475569",
+                          boxShadow: marketViewMode === "location" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                        }}
+                        onClick={() => setMarketViewMode("location")}
+                      >
+                        <FaMapMarkerAlt size={14} style={{ color: marketViewMode === "location" ? "#ffffff" : "#448C74" }} />
+                        <span>Location</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm rounded-pill px-3.5 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                        style={{
+                          fontSize: "13px",
+                          backgroundColor: marketViewMode === "catchment" ? "#448C74" : "transparent",
+                          borderColor: "transparent",
+                          color: marketViewMode === "catchment" ? "#ffffff" : "#475569",
+                          boxShadow: marketViewMode === "catchment" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                        }}
+                        onClick={() => setMarketViewMode("catchment")}
+                      >
+                        <FaCrosshairs size={14} style={{ color: marketViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
+                        <span>Catchment ({appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`})</span>
+                      </button>
+                    </div>
+
+                    {/* Catchment Radius Settings */}
+                    {marketViewMode === "catchment" && (
+                      <div
+                        className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                        style={{ borderColor: "#cbd5e1" }}
+                      >
+                        <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
+                          <FaRulerCombined size={13} style={{ color: "#448C74" }} />
+                          <span className="fw-bold text-dark ms-1" style={{ fontSize: "13px" }}>Radius:</span>
+                        </div>
+
+                        <select
+                          value={[500, 1000, 2000, 3000, 5000].includes(Number(inputRadius)) ? inputRadius : "custom"}
+                          onChange={(e) => {
+                            if (e.target.value !== "custom") {
+                              const val = Number(e.target.value);
+                              setInputRadius(val);
+                              setAppliedRadius(val);
+                            }
+                          }}
+                          className="form-select form-select-sm px-2.5 py-1 fw-bold rounded-2 border"
+                          style={{
+                            fontSize: "13px",
+                            color: "#1e293b",
+                            backgroundColor: "#ffffff",
+                            borderColor: "#cbd5e1",
+                            cursor: "pointer",
+                            width: "auto"
+                          }}
+                        >
+                          <option value="500">500m (0.5km)</option>
+                          <option value="1000">1000m (1.0km)</option>
+                          <option value="2000">2000m (2.0km)</option>
+                          <option value="3000">3000m (3.0km)</option>
+                          <option value="5000">5000m (5.0km)</option>
+                          <option value="custom">Custom Value...</option>
+                        </select>
+
+                        <div className="d-flex align-items-center ms-1">
+                          <input
+                            type="number"
+                            min="100"
+                            max="20000"
+                            step="100"
+                            value={inputRadius}
+                            onChange={(e) => setInputRadius(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const val = Math.max(100, Number(inputRadius) || 1000);
+                                setInputRadius(val);
+                                setAppliedRadius(val);
+                              }
+                            }}
+                            className="form-control form-control-sm px-2.5 py-1 text-center fw-bold rounded-2 border shadow-inner"
+                            style={{
+                              width: "80px",
+                              backgroundColor: "#ffffff",
+                              fontSize: "13px",
+                              color: "#1e293b",
+                              borderColor: "#cbd5e1",
+                              outline: "none"
+                            }}
+                            placeholder="Meters"
+                          />
+                          <span className="text-muted fw-bold ms-1" style={{ fontSize: "12px" }}>mtrs</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm rounded-pill px-3.5 py-1 fw-bold text-white d-flex align-items-center gap-1.5 shadow-sm transition-all ms-1"
+                          style={{
+                            backgroundColor: "#448C74",
+                            borderColor: "#448C74",
+                            fontSize: "13px",
+                            boxShadow: "0 2px 6px rgba(68,140,116,0.3)"
+                          }}
+                          onClick={() => {
+                            const val = Math.max(100, Number(inputRadius) || 1000);
+                            setInputRadius(val);
+                            setAppliedRadius(val);
+                          }}
+                        >
+                          <FaCheck size={11} />
+                          <span>Apply</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="row g-4">
                 <div className="col-lg-6">
-                  <PricerateAnalysis />
+                  <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
                 </div>
                 <div className="col-lg-6">
-                  <SaleAnalysis />
+                  <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
                 </div>
                 <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="demand" />
+                  <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
                 </div>
                 <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="supply" />
+                  <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
                 </div>
               </div>
             </div>

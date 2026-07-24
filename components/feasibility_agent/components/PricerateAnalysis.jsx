@@ -7,16 +7,16 @@ import { FaChartBar } from "react-icons/fa";
 /**
  * PricerateAnalysis
  *
- * Reads city + villageName from localStorage['Market Analysis Payload']
+ * Reads city (location) + villageName (village) from localStorage['Land Identification']
  * and fetches year-on-year weighted average rate per sqft from
  * POST /new_rate_simulator/simulator/yoy-weighted-rate/
  *
- * localStorage payload shape:
- *   { villageName: "Al-Aweer", villageId: 119, city: "Dubai" }
+ * localStorage payload shape (Land Identification):
+ *   { location: "Pune", village: "Wakad", ... }
  *
  * Mapping:
- *   city       ΓåÆ city_name (SQL WHERE)
- *   villageName ΓåÆ location_name (SQL WHERE)
+ *   location    → city_name (SQL WHERE)
+ *   village     → location_name (SQL WHERE)
  */
 
 const formatRate = (val, city) => {
@@ -28,64 +28,113 @@ const formatRate = (val, city) => {
   return `${symbol}${Math.round(Number(val)).toLocaleString(locale)}`;
 };
 
-const getMarketPayload = () => {
+const getLandIdentificationPayload = () => {
   try {
-    const raw = localStorage.getItem("Market Analysis Payload");
-    if (!raw) return { city: "", villageName: "" };
+    const raw = localStorage.getItem("Land Identification");
+    if (!raw) return { city: "", villageName: "", lat: null, lng: null };
     const parsed = JSON.parse(raw);
+    const lat = parsed.polygonCenterLat || parsed.latitude || null;
+    const lng = parsed.polygonCenterLng || parsed.longitude || null;
     return {
-      city: parsed.city || "",
-      villageName: parsed.villageName || "",
+      city: parsed.location || "",
+      villageName: parsed.village || "",
+      lat: lat ? parseFloat(lat) : null,
+      lng: lng ? parseFloat(lng) : null,
     };
   } catch {
-    return { city: "", villageName: "" };
+    return { city: "", villageName: "", lat: null, lng: null };
   }
 };
 
-const PricerateAnalysis = () => {
+const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
   const theme = "light";
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const cacheRef = React.useRef({ location: null, catchment: {} });
 
-  // Read from localStorage on mount and listen for updates
+  // Read from Land Identification localStorage on mount and listen for updates
   useEffect(() => {
-    const { city: c, villageName: v } = getMarketPayload();
-    setCity(c);
-    setVillageName(v);
-
-    const handleUpdate = (e) => {
-      const payload = e.detail || getMarketPayload();
-      setCity(payload.city || "");
-      setVillageName(payload.villageName || "");
+    const updatePayloadState = (data) => {
+      cacheRef.current = { location: null, catchment: {} };
+      const c = data.location || data.city || "";
+      const v = data.village || data.villageName || "";
+      const latVal = data.polygonCenterLat || data.latitude || null;
+      const lngVal = data.polygonCenterLng || data.longitude || null;
+      setCity(c);
+      setVillageName(v);
+      setLat(latVal ? parseFloat(latVal) : null);
+      setLng(lngVal ? parseFloat(lngVal) : null);
     };
 
-    const handleLandDetailsUpdate = () => {
-      const payload = getMarketPayload();
-      setCity(payload.city || "");
-      setVillageName(payload.villageName || "");
+    const initialPayload = getLandIdentificationPayload();
+    setCity(initialPayload.city);
+    setVillageName(initialPayload.villageName);
+    setLat(initialPayload.lat);
+    setLng(initialPayload.lng);
+
+    const handleLandIdUpdate = (e) => {
+      const detail = e.detail;
+      if (detail) {
+        updatePayloadState(detail);
+      } else {
+        cacheRef.current = { location: null, catchment: {} };
+        const payload = getLandIdentificationPayload();
+        setCity(payload.city);
+        setVillageName(payload.villageName);
+        setLat(payload.lat);
+        setLng(payload.lng);
+      }
     };
 
-    window.addEventListener("marketAnalysisUpdated", handleUpdate);
-    window.addEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+    window.addEventListener("landIdentificationSaved", handleLandIdUpdate);
 
     return () => {
-      window.removeEventListener("marketAnalysisUpdated", handleUpdate);
-      window.removeEventListener("landDetailsUpdated", handleLandDetailsUpdate);
+      window.removeEventListener("landIdentificationSaved", handleLandIdUpdate);
     };
   }, []);
 
-  // Fetch YoY data whenever city or villageName changes
+  // Fetch YoY data whenever dependencies change
   useEffect(() => {
-    if (!city || !villageName) return;
+    const radiusKm = (catchmentRadius || 1000) / 1000.0;
+
+    if (viewMode === "catchment") {
+      if (!lat || !lng) {
+        setError(`Coordinates missing. Please save a polygon or enter center coordinates in Land Identification to view ${catchmentRadius}m Catchment statistics.`);
+        setChartData([]);
+        return;
+      }
+      if (cacheRef.current.catchment[catchmentRadius]) {
+        setChartData(cacheRef.current.catchment[catchmentRadius]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    } else {
+      if (!city || !villageName) {
+        setChartData([]);
+        return;
+      }
+      if (cacheRef.current.location) {
+        setChartData(cacheRef.current.location);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    }
 
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      setChartData([]);
+
+      const requestBody = viewMode === "catchment"
+        ? { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" }
+        : { city_name: city, location_name: villageName, mode: "location" };
 
       try {
         const response = await fetch(
@@ -96,10 +145,7 @@ const PricerateAnalysis = () => {
               "Content-Type": "application/json",
               Accept: "application/json",
             },
-            body: JSON.stringify({
-              city_name: city,
-              location_name: villageName,
-            }),
+            body: JSON.stringify(requestBody),
           }
         );
 
@@ -113,7 +159,13 @@ const PricerateAnalysis = () => {
           throw new Error(json.error || "Failed to fetch data");
         }
 
-        setChartData(json.data || []);
+        const fetchedData = json.data || [];
+        if (viewMode === "catchment") {
+          cacheRef.current.catchment[catchmentRadius] = fetchedData;
+        } else {
+          cacheRef.current.location = fetchedData;
+        }
+        setChartData(fetchedData);
       } catch (err) {
         setError(err.message || "An error occurred while fetching data");
       } finally {
@@ -122,7 +174,7 @@ const PricerateAnalysis = () => {
     };
 
     fetchData();
-  }, [city, villageName]);
+  }, [city, villageName, lat, lng, viewMode, catchmentRadius]);
 
   const years = useMemo(() => {
     const allYears = chartData.map((d) => d.year);
@@ -131,7 +183,9 @@ const PricerateAnalysis = () => {
 
   const propertyTypes = useMemo(() => {
     const allTypes = chartData.map((d) => d.property_type);
-    return Array.from(new Set(allTypes)).filter(Boolean).sort();
+    return Array.from(new Set(allTypes))
+      .filter((type) => Boolean(type) && !String(type).toLowerCase().startsWith("other"))
+      .sort();
   }, [chartData]);
 
   // Generate dynamic series per property type
@@ -254,19 +308,36 @@ const PricerateAnalysis = () => {
             </div>
             Weighted Average Rate
           </h5>
-          {(city || villageName) && (
-            <span
-              style={{
-                fontSize: "11px",
-                background: isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)",
-                color: isDark ? "#a5b4fc" : "#4f46e5",
-                padding: "3px 10px",
-                borderRadius: 20,
-                fontWeight: 600,
-              }}
-            >
-              {villageName}{city ? `, ${city}` : ""}
-            </span>
+          {viewMode === "catchment" ? (
+            lat && lng && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)",
+                  color: isDark ? "#a5b4fc" : "#4f46e5",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                🎯 1km Catchment ({lat.toFixed(4)}, {lng.toFixed(4)})
+              </span>
+            )
+          ) : (
+            (city || villageName) && (
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)",
+                  color: isDark ? "#a5b4fc" : "#4f46e5",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  fontWeight: 600,
+                }}
+              >
+                📍 {villageName}{city ? `, ${city}` : ""}
+              </span>
+            )
           )}
         </div>
         <p
