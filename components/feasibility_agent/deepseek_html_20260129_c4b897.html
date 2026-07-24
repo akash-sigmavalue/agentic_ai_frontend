@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Simulation - sim2.xlsx</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        body {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        
+        .spreadsheet-container {
+            overflow-x: auto;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 1000px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+            min-width: 100px;
+            height: 36px;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+            text-align: center;
+        }
+        
+        .column-header {
+            background-color: #e8e8e8;
+            text-align: center;
+            font-weight: bold;
+            color: #555;
+            font-size: 12px;
+        }
+        
+        .row-header {
+            background-color: #e8e8e8;
+            text-align: center;
+            font-weight: bold;
+            color: #555;
+            font-size: 12px;
+            width: 40px;
+        }
+        
+        .empty-cell {
+            background-color: #fafafa;
+        }
+        
+        .input-cell {
+            background-color: white;
+        }
+        
+        .input-cell input {
+            width: 100%;
+            border: 1px solid #4CAF50;
+            outline: none;
+            background: #fff;
+            font-size: 14px;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+        
+        .formula-cell {
+            background-color: #e8f5e9 !important; /* Light green for formula cells */
+            color: #1b5e20;
+            font-weight: 500;
+        }
+        
+        .header-cell {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .section-header {
+            background-color: #e0f2f1;
+            font-weight: bold;
+        }
+        
+        .value-display {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .controls h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .simulate-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        
+        .simulate-btn:hover {
+            background-color: #388e3c;
+        }
+        
+        .reset-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        .reset-btn:hover {
+            background-color: #d32f2f;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #1565c0;
+        }
+        
+        .formula-display {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            display: none;
+            border: 1px dashed #ccc;
+        }
+        
+        .help-text {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff8e1;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #5d4037;
+            border-left: 3px solid #ffb300;
+        }
+        
+        .number-format {
+            text-align: right;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            th, td {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel Simulation: sim2.xlsx - Sheet1 (Range A1:G19)</h1>
+        
+        <div class="controls">
+            <h3>Simulation Controls</h3>
+            <button class="simulate-btn" onclick="simulateData()">Generate New Transaction Data</button>
+            <button class="reset-btn" onclick="resetSpreadsheet()">Reset to Default Values</button>
+            <div class="help-text">
+                <strong>How it works:</strong> Change the "Average Ticket Size" in cell C6 (currently 7,500,000) and see all calculations update automatically. Formula cells have green background.
+            </div>
+            <div class="status" id="status">Ready. All calculations are based on formulas. Change C6 value to see updates.</div>
+        </div>
+        
+        <div class="spreadsheet-container">
+            <table id="spreadsheet">
+                <!-- Table will be generated by JavaScript -->
+            </table>
+        </div>
+        
+        <div class="formula-display" id="formulaDisplay">
+            <strong>Formula:</strong> <span id="formulaText"></span><br>
+            <strong>Value:</strong> <span id="formulaValue"></span>
+        </div>
+    </div>
+
+    <script>
+        // Define the spreadsheet data structure
+        let spreadsheetData = [];
+        const rows = 19;
+        const cols = 7; // A to G
+        
+        // Track formulas and calculated values separately
+        let formulas = Array(rows).fill().map(() => Array(cols).fill(null));
+        let calculatedValues = Array(rows).fill().map(() => Array(cols).fill(''));
+        
+        // Simulated transaction data for COUNTIFS
+        let transactionData = [];
+        const transactionDataSize = 28062;
+        
+        // Initialize the spreadsheet with formulas and initial values
+        function initSpreadsheet() {
+            // Clear all data
+            spreadsheetData = Array(rows).fill().map(() => Array(cols).fill(''));
+            formulas = Array(rows).fill().map(() => Array(cols).fill(null));
+            calculatedValues = Array(rows).fill().map(() => Array(cols).fill(''));
+            
+            // Set static values based on the Excel provided
+            // Row 1 (A1:G1)
+            spreadsheetData[0][1] = "Simulation"; // B1
+            
+            // Row 3 (A3:G3)
+            spreadsheetData[2][1] = "1Bhk"; // B3
+            
+            // Row 5 - Headers (A5:G5)
+            spreadsheetData[4][2] = "Average Ticket Size"; // C5
+            spreadsheetData[4][3] = "Lower range"; // D5
+            spreadsheetData[4][4] = "Higher range"; // E5
+            spreadsheetData[4][5] = "Per simulation"; // F5
+            
+            // Row 6 - Simulation parameters (A6:G6)
+            spreadsheetData[5][2] = 7500000; // C6 - Initial value
+            formulas[5][3] = "=C6*0.9"; // D6 formula
+            formulas[5][4] = "=C6*1.1"; // E6 formula
+            formulas[5][5] = "=E6-D6"; // F6 formula
+            
+            // Row 8 - Transaction headers (A8:G8)
+            spreadsheetData[7][1] = "Bhk"; // B8
+            spreadsheetData[7][2] = "Ticket size"; // C8
+            spreadsheetData[7][3] = "low"; // D8
+            spreadsheetData[7][4] = "high"; // E8
+            spreadsheetData[7][5] = "Total transactions"; // F8
+            spreadsheetData[7][6] = "Per month"; // G8
+            
+            // Rows 9-19 - Transaction data with formulas
+            for (let i = 8; i <= 18; i++) {
+                const rowNum = i + 1; // Excel row number
+                
+                // B column - Bhk type
+                spreadsheetData[i][1] = "1Bhk"; // B9:B19
+                
+                // C column - Ticket size formulas
+                if (i === 8) {
+                    formulas[i][2] = "=D6"; // C9 = D6 (6750000)
+                } else {
+                    formulas[i][2] = `=C${rowNum-1}+$F$6`; // C10:C19 = Previous C + $F$6
+                }
+                
+                // D column - Low formulas (90% of ticket size)
+                formulas[i][3] = `=C${rowNum}*0.9`; // D9:D19 = C * 0.9
+                
+                // E column - High formulas (110% of ticket size)
+                formulas[i][4] = `=C${rowNum}*1.1`; // E9:E19 = C * 1.1
+                
+                // F column - COUNTIFS formulas
+                formulas[i][5] = `=COUNTIFS(B${rowNum},C${rowNum}*0.9,C${rowNum}*1.1)`;
+                
+                // G column - Per month formulas
+                formulas[i][6] = `=F${rowNum}/36`; // G9:G19 = F/36
+            }
+            
+            // Generate initial transaction data
+            generateTransactionData();
+            
+            // Calculate all formulas
+            calculateAllFormulas();
+        }
+        
+        // Generate simulated transaction data
+        function generateTransactionData() {
+            transactionData = [];
+            const baseTicketSize = getCellValue(5, 2); // C6 value
+            
+            // Generate transaction data
+            for (let i = 0; i < transactionDataSize; i++) {
+                const bhk = "1Bhk";
+                
+                // Create normal distribution of ticket sizes
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                let ticketSize = baseTicketSize + z0 * (baseTicketSize * 0.2);
+                
+                // Ensure reasonable values
+                ticketSize = Math.max(baseTicketSize * 0.5, Math.min(baseTicketSize * 1.5, ticketSize));
+                
+                transactionData.push({
+                    bhk: bhk,
+                    ticketSize: ticketSize
+                });
+            }
+            
+            // Sort by ticket size for better distribution in ranges
+            transactionData.sort((a, b) => a.ticketSize - b.ticketSize);
+        }
+        
+        // Get cell value (either from spreadsheetData or calculated)
+        function getCellValue(row, col) {
+            // If there's a formula, return the calculated value
+            if (calculatedValues[row][col] !== '' && calculatedValues[row][col] !== null) {
+                return calculatedValues[row][col];
+            }
+            
+            // Otherwise return the static value
+            const value = spreadsheetData[row][col];
+            
+            // Try to convert to number if it looks like a number
+            if (typeof value === 'string' && !isNaN(value) && value.trim() !== '') {
+                return parseFloat(value);
+            }
+            
+            return value;
+        }
+        
+        // Parse and calculate a formula
+        function calculateFormula(formula, row, col) {
+            if (!formula || !formula.startsWith('=')) {
+                return formula;
+            }
+            
+            try {
+                let expression = formula.substring(1);
+                const originalExpression = expression;
+                
+                // Replace absolute and relative cell references
+                expression = expression.replace(/\$?([A-Z])\$?(\d+)/g, function(match, colLetter, rowNum) {
+                    const colIndex = colLetter.charCodeAt(0) - 65;
+                    const rowIndex = parseInt(rowNum) - 1;
+                    
+                    if (rowIndex >= 0 && rowIndex < rows && colIndex >= 0 && colIndex < cols) {
+                        const value = getCellValue(rowIndex, colIndex);
+                        return typeof value === 'number' ? value : 0;
+                    }
+                    
+                    return 0;
+                });
+                
+                // Handle COUNTIFS function
+                if (originalExpression.includes('COUNTIFS')) {
+                    return calculateCOUNTIFS(row, col, originalExpression);
+                }
+                
+                // Evaluate the expression
+                const result = eval(expression);
+                
+                // Return formatted result - maximum 2 decimal places, no rounding to "M"
+                if (typeof result === 'number') {
+                    // Round to maximum 2 decimal places
+                    return Math.round(result * 100) / 100;
+                }
+                
+                return result;
+            } catch (error) {
+                console.error(`Error calculating formula: ${formula}`, error);
+                return `#ERROR`;
+            }
+        }
+        
+        // Calculate COUNTIFS based on the transaction data
+        function calculateCOUNTIFS(row, col, expression) {
+            // Extract parameters from expression like =COUNTIFS(B9,C9*0.9,C9*1.1)
+            // In original Excel: =COUNTIFS([1]o2!$G$2:$G$28063, B9,[1]o2!$H$2:$H$28063, ">"&D9,[1]o2!$H$2:$H$28063, "<"&E9)
+            
+            const rowNum = row + 1;
+            const bhkCriteria = "1Bhk"; // Always "1Bhk" in this simulation
+            
+            // Calculate low and high range values
+            const ticketSize = getCellValue(row, 2); // C column value
+            const lowValue = ticketSize * 0.9;
+            const highValue = ticketSize * 1.1;
+            
+            // Count transactions that match criteria
+            let count = 0;
+            
+            // Optimize: Only check a subset for performance
+            const sampleSize = Math.min(5000, transactionData.length);
+            const step = Math.max(1, Math.floor(transactionData.length / sampleSize));
+            
+            for (let i = 0; i < transactionData.length; i += step) {
+                const transaction = transactionData[i];
+                
+                if (transaction.bhk === bhkCriteria && 
+                    transaction.ticketSize > lowValue && 
+                    transaction.ticketSize < highValue) {
+                    count++;
+                }
+            }
+            
+            // Scale up to approximate the full dataset
+            const scalingFactor = transactionData.length / (sampleSize * step);
+            return Math.round(count * scalingFactor);
+        }
+        
+        // Calculate all formulas in the spreadsheet
+        function calculateAllFormulas() {
+            // First pass: Calculate simple formulas
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    if (formulas[row][col]) {
+                        calculatedValues[row][col] = calculateFormula(formulas[row][col], row, col);
+                    }
+                }
+            }
+            
+            // Second pass: Ensure dependencies are resolved (for chained formulas like C10 = C9 + $F$6)
+            let changed = true;
+            let iterations = 0;
+            const maxIterations = 10;
+            
+            while (changed && iterations < maxIterations) {
+                changed = false;
+                iterations++;
+                
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        if (formulas[row][col]) {
+                            const oldValue = calculatedValues[row][col];
+                            const newValue = calculateFormula(formulas[row][col], row, col);
+                            
+                            if (oldValue !== newValue) {
+                                calculatedValues[row][col] = newValue;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Update the display
+            updateDisplay();
+        }
+        
+        // Format a number for display - NO MORE "M" FORMATTING
+        function formatNumber(value) {
+            if (typeof value !== 'number') return value;
+            
+            // Format with commas for thousands and maximum 2 decimal places
+            if (value % 1 === 0) {
+                // Integer - just add commas
+                return value.toLocaleString('en-US');
+            } else {
+                // Decimal - round to 2 decimal places and add commas
+                const rounded = Math.round(value * 100) / 100;
+                return rounded.toLocaleString('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                });
+            }
+        }
+        
+        // Update the spreadsheet display
+        function updateDisplay() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (!cell) continue;
+                    
+                    let displayValue = '';
+                    
+                    // Determine what to display
+                    if (formulas[row][col]) {
+                        // Show calculated value for formula cells
+                        displayValue = formatNumber(calculatedValues[row][col]);
+                        cell.classList.add('formula-cell');
+                        cell.classList.add('number-format');
+                        
+                        // Set tooltip with formula and exact value
+                        const exactValue = calculatedValues[row][col];
+                        const exactDisplay = typeof exactValue === 'number' ? 
+                            exactValue.toLocaleString('en-US', {maximumFractionDigits: 10}) : 
+                            exactValue;
+                        cell.title = `${formulas[row][col]} = ${exactDisplay}`;
+                    } else if (spreadsheetData[row][col] !== '') {
+                        // Show static value
+                        displayValue = spreadsheetData[row][col];
+                        cell.classList.remove('formula-cell');
+                        
+                        // Format numbers
+                        if (typeof spreadsheetData[row][col] === 'number' || 
+                            (typeof spreadsheetData[row][col] === 'string' && !isNaN(spreadsheetData[row][col]) && spreadsheetData[row][col].trim() !== '')) {
+                            const numValue = parseFloat(spreadsheetData[row][col]);
+                            displayValue = formatNumber(numValue);
+                            cell.classList.add('number-format');
+                        }
+                    }
+                    
+                    // Update cell content
+                    if (cell.classList.contains('input-cell')) {
+                        const input = cell.querySelector('input');
+                        if (input) {
+                            input.value = displayValue;
+                        }
+                    } else {
+                        cell.textContent = displayValue;
+                    }
+                }
+            }
+        }
+        
+        // Handle cell value changes
+        function onCellChange(row, col, newValue) {
+            // Remove commas from input for parsing
+            const cleanValue = newValue.replace(/,/g, '');
+            
+            // Convert to number if it's a numeric value
+            let processedValue = cleanValue;
+            if (!isNaN(cleanValue) && cleanValue.trim() !== '') {
+                processedValue = parseFloat(cleanValue);
+            }
+            
+            // Update the data
+            spreadsheetData[row][col] = processedValue;
+            
+            // Recalculate all formulas
+            calculateAllFormulas();
+            
+            // Update status
+            const cellRef = `${String.fromCharCode(65 + col)}${row + 1}`;
+            const formattedValue = formatNumber(processedValue);
+            document.getElementById('status').textContent = `Cell ${cellRef} updated to ${formattedValue}. All dependent formulas recalculated.`;
+            document.getElementById('status').style.backgroundColor = '#e8f5e9';
+            document.getElementById('status').style.color = '#1b5e20';
+            
+            // Reset status color after 3 seconds
+            setTimeout(() => {
+                document.getElementById('status').style.backgroundColor = '#e3f2fd';
+                document.getElementById('status').style.color = '#1565c0';
+            }, 3000);
+        }
+        
+        // Render the spreadsheet
+        function renderSpreadsheet() {
+            const table = document.getElementById('spreadsheet');
+            table.innerHTML = '';
+            
+            // Create table header with column letters
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            
+            // Empty top-left cell
+            const emptyHeader = document.createElement('th');
+            emptyHeader.className = 'column-header';
+            headerRow.appendChild(emptyHeader);
+            
+            // Column headers (A, B, C, ...)
+            for (let col = 0; col < cols; col++) {
+                const th = document.createElement('th');
+                th.className = 'column-header';
+                th.textContent = String.fromCharCode(65 + col);
+                headerRow.appendChild(th);
+            }
+            
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            
+            // Create table body
+            const tbody = document.createElement('tbody');
+            
+            for (let row = 0; row < rows; row++) {
+                const tr = document.createElement('tr');
+                
+                // Row header (row number)
+                const rowHeader = document.createElement('td');
+                rowHeader.className = 'row-header';
+                rowHeader.textContent = row + 1;
+                tr.appendChild(rowHeader);
+                
+                for (let col = 0; col < cols; col++) {
+                    const td = document.createElement('td');
+                    td.setAttribute('data-row', row);
+                    td.setAttribute('data-col', col);
+                    
+                    // Check if cell should be empty
+                    if (spreadsheetData[row][col] === '' && !formulas[row][col]) {
+                        td.className = 'empty-cell';
+                        td.textContent = '';
+                    } 
+                    // Check if cell should be editable (C6 - Average Ticket Size)
+                    else if (row === 5 && col === 2) {
+                        td.className = 'input-cell';
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = spreadsheetData[row][col];
+                        
+                        input.addEventListener('change', function() {
+                            onCellChange(row, col, this.value);
+                        });
+                        
+                        input.addEventListener('keyup', function(e) {
+                            if (e.key === 'Enter') {
+                                onCellChange(row, col, this.value);
+                            }
+                        });
+                        
+                        input.addEventListener('focus', function() {
+                            // Select all text when focused for easy editing
+                            this.select();
+                        });
+                        
+                        td.appendChild(input);
+                    } 
+                    else {
+                        // Just display the value (will be updated by updateDisplay)
+                        td.textContent = '';
+                        
+                        // Add hover effect for formula cells
+                        if (formulas[row][col]) {
+                            td.addEventListener('mouseenter', function() {
+                                document.getElementById('formulaText').textContent = formulas[row][col];
+                                const exactValue = calculatedValues[row][col];
+                                const exactDisplay = typeof exactValue === 'number' ? 
+                                    exactValue.toLocaleString('en-US', {maximumFractionDigits: 10}) : 
+                                    exactValue;
+                                document.getElementById('formulaValue').textContent = exactDisplay;
+                                document.getElementById('formulaDisplay').style.display = 'block';
+                            });
+                            
+                            td.addEventListener('mouseleave', function() {
+                                document.getElementById('formulaDisplay').style.display = 'none';
+                            });
+                        }
+                    }
+                    
+                    // Apply special styling
+                    if (row === 0 || row === 2 || row === 4 || row === 7) {
+                        td.classList.add('header-cell');
+                    } else if (row === 5) {
+                        td.classList.add('section-header');
+                    }
+                    
+                    tr.appendChild(td);
+                }
+                
+                tbody.appendChild(tr);
+            }
+            
+            table.appendChild(tbody);
+            
+            // Initial display update
+            updateDisplay();
+        }
+        
+        // Simulate new transaction data
+        function simulateData() {
+            generateTransactionData();
+            calculateAllFormulas();
+            document.getElementById('status').textContent = `New transaction data generated (${transactionData.length.toLocaleString()} records). All formulas recalculated.`;
+        }
+        
+        // Reset spreadsheet to default values
+        function resetSpreadsheet() {
+            initSpreadsheet();
+            renderSpreadsheet();
+            document.getElementById('status').textContent = "Spreadsheet reset to default values. C6 = 7,500,000";
+        }
+        
+        // Initialize the application
+        function init() {
+            initSpreadsheet();
+            renderSpreadsheet();
+            
+            // Show initial calculations
+            const c6Value = getCellValue(5, 2);
+            const d6Value = getCellValue(5, 3);
+            const e6Value = getCellValue(5, 4);
+            const f6Value = getCellValue(5, 5);
+            
+            document.getElementById('status').innerHTML = 
+                `<strong>Initial Calculations Complete:</strong><br>` +
+                `C6 (Average Ticket Size) = ${formatNumber(c6Value)}<br>` +
+                `D6 = ${formatNumber(d6Value)} (C6 × 0.9)<br>` +
+                `E6 = ${formatNumber(e6Value)} (C6 × 1.1)<br>` +
+                `F6 = ${formatNumber(f6Value)} (E6 - D6)<br>` +
+                `Change C6 value to see all dependent formulas update automatically.`;
+        }
+        
+        // Start the application when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

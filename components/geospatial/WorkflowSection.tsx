@@ -106,7 +106,7 @@ const agentLayers: AgentLayer[] = [
       { name: 'Valuation', icon: BarChart3, href: '/valuation' },
       { name: 'Market Research', icon: Search },
       { name: 'Physical AI', icon: Bot },
-      { name: 'Feasibility', icon: ClipboardCheck },
+      { name: 'Feasibility', icon: ClipboardCheck, href: '/feasibility' },
     ],
   },
   {

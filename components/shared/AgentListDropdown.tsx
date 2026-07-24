@@ -70,12 +70,12 @@ const agentLayers: AgentLayer[] = [
     accent: "text-blue-600 border-blue-100 bg-blue-50",
     soft: "from-blue-500/10 to-cyan-500/10",
     agents: [
-      { name: "Land/GIS", icon: MapPinned, href: '/visualization_agent', key: 'gis' },
+      { name: "Land/GIS", icon: MapPinned, href: '/visualization_agent', key: 'visualization_agent' },
       { name: "Elevation Agent", icon: MapPinned, href: '/elevation', key: 'elevation' },  
       { name: "Valuation", icon: BarChart3, href: "/valuation", key: 'valuation' },
       { name: "Market Research", icon: Search, key: 'market_research' },
       { name: "Physical AI", icon: Bot, key: 'physical_ai' },
-      { name: "Feasibility", icon: ClipboardCheck, key: 'feasibility' },
+      { name: "Feasibility", icon: ClipboardCheck, href: "/feasibility", key: 'feasibility' },
     ],
   },
   {
@@ -150,11 +150,10 @@ export default function AgentListDropdown() {
       <button
         type="button"
         onClick={() => setIsAgentsOpen((open) => !open)}
-        className={`group inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[11px] font-extrabold uppercase tracking-[0.18em] shadow-sm transition-all duration-200 ${
-          isAgentsOpen
+        className={`group inline-flex h-10 items-center gap-2 rounded-full border px-4 text-[11px] font-extrabold uppercase tracking-[0.18em] shadow-sm transition-all duration-200 ${isAgentsOpen
             ? "border-violet-200 bg-violet-600 text-white shadow-violet-200/70"
             : "border-slate-200 bg-white text-slate-700 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
-        }`}
+          }`}
         aria-expanded={isAgentsOpen}
         aria-controls="top-nav-agent-layers"
       >
@@ -196,16 +195,14 @@ export default function AgentListDropdown() {
                     key={layer.id}
                     type="button"
                     onClick={() => setActiveAgentLayerId(layer.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 ${
-                      isActive
+                    className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 ${isActive
                         ? "border-violet-200 bg-violet-50 shadow-sm"
                         : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
-                        isActive ? layer.accent : "border-slate-200 bg-slate-50 text-slate-500"
-                      }`}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${isActive ? layer.accent : "border-slate-200 bg-slate-50 text-slate-500"
+                        }`}
                     >
                       <Icon className="h-5 w-5" />
                     </span>
@@ -262,13 +259,12 @@ export default function AgentListDropdown() {
                         router.push(agent.href!);
                       }}
                       title={!allowed && agent.key ? 'Access restricted for your role' : undefined}
-                      className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${
-                        clickable
+                      className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${clickable
                           ? 'hover:bg-violet-50/70 cursor-pointer'
                           : agent.href
-                          ? 'opacity-60 cursor-not-allowed'
-                          : 'opacity-40 cursor-default'
-                      }`}
+                            ? 'opacity-60 cursor-not-allowed'
+                            : 'opacity-40 cursor-default'
+                        }`}
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${activeAgentLayer.accent}`}>
                         <AgentIcon className="h-[18px] w-[18px]" />
