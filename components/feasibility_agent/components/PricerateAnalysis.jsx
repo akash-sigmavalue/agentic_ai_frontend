@@ -1,7 +1,7 @@
 import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
-import { FaChartBar } from "react-icons/fa";
+import { FaChartBar, FaChartArea } from "react-icons/fa";
 
 
 /**
@@ -19,13 +19,11 @@ import { FaChartBar } from "react-icons/fa";
  *   village     → location_name (SQL WHERE)
  */
 
-const formatRate = (val, city) => {
-  const c = String(city || "").toLowerCase();
-  const isDubai = c.includes("dubai") || c.includes("uae");
-  const symbol = isDubai ? "AED " : "₹";
-  if (val === null || val === undefined || isNaN(val)) return `${symbol}0`;
-  const locale = isDubai ? "en-US" : "en-IN";
-  return `${symbol}${Math.round(Number(val)).toLocaleString(locale)}`;
+const formatRate = (val, currencySymbol) => {
+  const symbol = (currencySymbol && currencySymbol.trim() !== '') ? currencySymbol : "₹";
+  if (val === null || val === undefined || isNaN(val)) return `${symbol} 0`;
+  const locale = symbol === "AED" ? "en-US" : "en-IN";
+  return `${symbol} ${Math.round(Number(val)).toLocaleString(locale)}`;
 };
 
 const getLandIdentificationPayload = () => {
@@ -38,36 +36,40 @@ const getLandIdentificationPayload = () => {
     return {
       city: parsed.location || "",
       villageName: parsed.village || "",
+      currency: parsed.currency || "₹",
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
     };
   } catch {
-    return { city: "", villageName: "", lat: null, lng: null };
+    return { city: "", villageName: "", currency: "₹", lat: null, lng: null };
   }
 };
 
-const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) => {
+const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
   const theme = "light";
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
+  const [currency, setCurrency] = useState("₹");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const cacheRef = React.useRef({ location: null, catchment: {} });
+  const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
 
   // Read from Land Identification localStorage on mount and listen for updates
   useEffect(() => {
     const updatePayloadState = (data) => {
-      cacheRef.current = { location: null, catchment: {} };
+      cacheRef.current = { location: null, catchment: {}, nearby: {} };
       const c = data.location || data.city || "";
       const v = data.village || data.villageName || "";
+      const curr = data.currency || "₹";
       const latVal = data.polygonCenterLat || data.latitude || null;
       const lngVal = data.polygonCenterLng || data.longitude || null;
       setCity(c);
       setVillageName(v);
+      setCurrency(curr);
       setLat(latVal ? parseFloat(latVal) : null);
       setLng(lngVal ? parseFloat(lngVal) : null);
     };
@@ -75,6 +77,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
     const initialPayload = getLandIdentificationPayload();
     setCity(initialPayload.city);
     setVillageName(initialPayload.villageName);
+    setCurrency(initialPayload.currency);
     setLat(initialPayload.lat);
     setLng(initialPayload.lng);
 
@@ -83,10 +86,11 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
       if (detail) {
         updatePayloadState(detail);
       } else {
-        cacheRef.current = { location: null, catchment: {} };
+        cacheRef.current = { location: null, catchment: {}, nearby: {} };
         const payload = getLandIdentificationPayload();
         setCity(payload.city);
         setVillageName(payload.villageName);
+        setCurrency(payload.currency);
         setLat(payload.lat);
         setLng(payload.lng);
       }
@@ -101,16 +105,27 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
 
   // Fetch YoY data whenever dependencies change
   useEffect(() => {
-    const radiusKm = (catchmentRadius || 1000) / 1000.0;
-
+    const cacheKey = selectedProjectId || selectedProject;
     if (viewMode === "catchment") {
       if (!lat || !lng) {
-        setError(`Coordinates missing. Please save a polygon or enter center coordinates in Land Identification to view ${catchmentRadius}m Catchment statistics.`);
         setChartData([]);
+        setLoading(false);
         return;
       }
-      if (cacheRef.current.catchment[catchmentRadius]) {
+      if (cacheRef.current?.catchment?.[catchmentRadius]) {
         setChartData(cacheRef.current.catchment[catchmentRadius]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    } else if (viewMode === "nearby") {
+      if (!lat || !lng) {
+        setChartData([]);
+        setLoading(false);
+        return;
+      }
+      if (cacheRef.current?.nearby?.[cacheKey]) {
+        setChartData(cacheRef.current.nearby[cacheKey]);
         setError(null);
         setLoading(false);
         return;
@@ -118,9 +133,10 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
     } else {
       if (!city || !villageName) {
         setChartData([]);
+        setLoading(false);
         return;
       }
-      if (cacheRef.current.location) {
+      if (cacheRef.current?.location) {
         setChartData(cacheRef.current.location);
         setError(null);
         setLoading(false);
@@ -132,9 +148,14 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
       setLoading(true);
       setError(null);
 
-      const requestBody = viewMode === "catchment"
-        ? { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" }
-        : { city_name: city, location_name: villageName, mode: "location" };
+    const radiusKm = (catchmentRadius || 1000) / 1000.0;
+
+    let requestBody = { city_name: city, location_name: villageName, mode: "location" };
+    if (viewMode === "catchment") {
+      requestBody = { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" };
+    } else if (viewMode === "nearby") {
+      requestBody = { city_name: city, location_name: villageName, latitude: lat, longitude: lng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
+    }
 
       try {
         const response = await fetch(
@@ -162,6 +183,8 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
         const fetchedData = json.data || [];
         if (viewMode === "catchment") {
           cacheRef.current.catchment[catchmentRadius] = fetchedData;
+        } else if (viewMode === "nearby") {
+          cacheRef.current.nearby[cacheKey] = fetchedData;
         } else {
           cacheRef.current.location = fetchedData;
         }
@@ -174,7 +197,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
     };
 
     fetchData();
-  }, [city, villageName, lat, lng, viewMode, catchmentRadius]);
+  }, [city, villageName, lat, lng, viewMode, catchmentRadius, selectedProject, selectedProjectId]);
 
   const years = useMemo(() => {
     const allYears = chartData.map((d) => d.year);
@@ -206,8 +229,6 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
   const isDark = theme === "dark";
   const textColor = isDark ? "#e2e8f0" : "#1e293b";
   const gridColor = isDark ? "#334155" : "#e2e8f0";
-  const cLower = String(city || "").toLowerCase();
-  const isDubai = cLower.includes("dubai") || cLower.includes("uae");
 
   const chartOptions = useMemo(
     () => ({
@@ -246,11 +267,11 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
       },
       yaxis: {
         title: {
-          text: isDubai ? "Avg Rate (AED/sqft)" : "Avg Rate (₹/sqft)",
+          text: `Avg Rate (${currency}/sqft)`,
           style: { color: textColor, fontSize: "12px", fontWeight: 600 },
         },
         labels: {
-          formatter: (val) => formatRate(val, city),
+          formatter: (val) => formatRate(val, currency),
           style: { colors: [textColor], fontSize: "11px" },
         },
       },
@@ -268,11 +289,11 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
         intersect: false,
         theme: isDark ? "dark" : "light",
         y: {
-          formatter: (val) => formatRate(val, city),
+          formatter: (val) => formatRate(val, currency),
         },
       },
     }),
-    [years, textColor, gridColor, isDark, city, isDubai]
+    [years, textColor, gridColor, isDark, currency]
   );
 
   return (
@@ -320,9 +341,22 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
                   fontWeight: 600,
                 }}
               >
-                🎯 1km Catchment ({lat.toFixed(4)}, {lng.toFixed(4)})
+                🎯 {catchmentRadius >= 1000 ? `${(catchmentRadius / 1000).toFixed(1)}km` : `${catchmentRadius}m`} Catchment
               </span>
             )
+          ) : viewMode === "nearby" && selectedProject && selectedProject !== "all" ? (
+            <span
+              style={{
+                fontSize: "11px",
+                background: isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)",
+                color: isDark ? "#a5b4fc" : "#4f46e5",
+                padding: "3px 10px",
+                borderRadius: 20,
+                fontWeight: 600,
+              }}
+            >
+              🏢 {selectedProject}
+            </span>
           ) : (
             (city || villageName) && (
               <span
@@ -344,7 +378,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
           className="mb-0 mt-1"
           style={{ fontSize: "12px", color: isDark ? "#94a3b8" : "#64748b" }}
         >
-          Year-on-year average transaction rate ({isDubai ? "AED" : "₹"}/sqft) on carpet area grouped by property type
+          Year-on-year average transaction rate ({currency}/sqft) on carpet area grouped by property type
         </p>
       </div>
 
@@ -389,7 +423,17 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000 }) =>
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
+            <div
+              className="d-flex align-items-center justify-content-center rounded-circle mb-3"
+              style={{
+                width: 72,
+                height: 72,
+                background: isDark ? "rgba(99,102,241,0.12)" : "rgba(79,70,229,0.07)",
+                color: isDark ? "#818cf8" : "#4f46e5",
+              }}
+            >
+              <FaChartArea size={30} />
+            </div>
             <p
               className="text-center mb-1"
               style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}

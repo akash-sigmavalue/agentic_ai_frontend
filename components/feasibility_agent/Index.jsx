@@ -577,9 +577,90 @@ import {
   FaScaleBalanced,
   FaDatabase,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding } from "react-icons/fa";
+import Select from "react-select";
 import { useState, useEffect } from "react";
 import Header from "./Header";
+
+const formatProjectOption = ({ project, index }, { context }) => {
+  if (context === "value") {
+    return (
+      <div className="d-flex align-items-center gap-2">
+        <FaRegBuilding size={13} className="text-secondary" />
+        <span className="fw-bold text-dark" style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+          {project.project_name}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="d-flex align-items-center justify-content-between w-100">
+      <div className="d-flex align-items-center gap-2">
+        <div className="bg-light rounded p-1 d-flex align-items-center justify-content-center text-secondary">
+          <FaRegBuilding size={14} />
+        </div>
+        <div className="d-flex flex-column">
+          <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+            <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+            {project.project_name}
+          </span>
+          <span className="text-muted" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+            {project.distance_formatted} away
+          </span>
+        </div>
+      </div>
+      <div className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 ms-2" style={{ fontSize: "10px" }}>
+        {project.total_transactions} sales
+      </div>
+    </div>
+  );
+};
+
+const customSelectStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "34px",
+    height: "34px",
+    fontSize: "13px",
+    fontWeight: "bold",
+    borderRadius: "0.375rem",
+    borderColor: "#cbd5e1",
+    minWidth: "250px",
+    boxShadow: "none",
+    "&:hover": { borderColor: "#94a3b8" }
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    padding: "0 8px",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "#1e293b",
+  }),
+  option: (base, state) => ({
+    ...base,
+    backgroundColor: state.isSelected ? "#eef7f4" : state.isFocused ? "#f8fafc" : "transparent",
+    color: "#1e293b",
+    cursor: "pointer",
+    padding: "8px 12px",
+    "&:active": { backgroundColor: "#d1fae5" }
+  }),
+  menu: (base) => ({
+    ...base,
+    zIndex: 9999,
+    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    minWidth: "300px"
+  }),
+  menuList: (base) => ({
+    ...base,
+    maxHeight: "300px",
+    paddingRight: "2px"
+  }),
+};
 import LandDetailsForm from "./LandDetailsForm";
 
 import RevenueForm from "./LocationForm";
@@ -603,6 +684,7 @@ import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
 import LandIdentification from "./LandIdentification";
 import RegulatoryIntelligence from "./RegulatoryIntelligence";
+import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
   { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
@@ -662,17 +744,87 @@ const Index = () => {
   });
 
   const [inputRadius, setInputRadius] = useState(() => appliedRadius);
+  const [selectedProject, setSelectedProject] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    try {
+      const saved = localStorage.getItem("market research");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.selectedProject) return parsed.selectedProject;
+      }
+    } catch (e) {
+      console.error("Error reading selectedProject payload:", e);
+    }
+    return "all";
+  });
+
+  const [nearbyProjects, setNearbyProjects] = useState([]);
+  const [nearbyLimit, setNearbyLimit] = useState(5);
+  const [loadingNearbyProjects, setLoadingNearbyProjects] = useState(false);
 
   useEffect(() => {
     try {
       const existingRaw = localStorage.getItem("market research");
       const existing = existingRaw ? JSON.parse(existingRaw) : {};
-      const updated = { ...existing, viewMode: marketViewMode, radius: appliedRadius };
+      const updated = { ...existing, viewMode: marketViewMode, radius: appliedRadius, selectedProject };
       localStorage.setItem("market research", JSON.stringify(updated));
     } catch (e) {
       console.error("Error saving market research payload:", e);
     }
-  }, [marketViewMode, appliedRadius]);
+  }, [marketViewMode, appliedRadius, selectedProject]);
+
+  useEffect(() => {
+    if (marketViewMode !== "nearby") return;
+
+    let lat = null;
+    let lng = null;
+    let city = "";
+
+    try {
+      const landRaw = localStorage.getItem("Land Identification");
+      if (landRaw) {
+        const parsed = JSON.parse(landRaw);
+        lat = parsed?.polygonCenterLat || parsed?.latitude || null;
+        lng = parsed?.polygonCenterLng || parsed?.longitude || null;
+        city = parsed?.location || parsed?.city || "";
+      }
+    } catch (e) {
+      console.error("Error parsing Land Identification for nearby projects:", e);
+    }
+
+    if (!lat || !lng) return;
+
+    const fetchNearby = async () => {
+      setLoadingNearbyProjects(true);
+      try {
+        const response = await fetch(apiUrl("/new_rate_simulator/simulator/nearby-projects/"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ city_name: city, latitude: lat, longitude: lng, limit: nearbyLimit })
+        });
+        const data = await response.json();
+        if (data.success && Array.isArray(data.projects)) {
+          setNearbyProjects(data.projects);
+          if (data.projects.length > 0) {
+            setSelectedProject((prev) => {
+              if (!prev || prev === "all") {
+                const first = data.projects[0];
+                return first.project_id ? `id:${first.project_id}:${first.project_name}` : first.project_name;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching nearby projects:", err);
+      } finally {
+        setLoadingNearbyProjects(false);
+      }
+    };
+
+    fetchNearby();
+  }, [marketViewMode, nearbyLimit]);
+
   const [excelLogicSelected, setExcelLogicSelected] = useState(true);
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
     useState(true);
@@ -991,6 +1143,28 @@ const Index = () => {
           </div>
 
           <style>{`
+          /* Custom Select Scrollbar */
+          .custom-select__menu-list {
+            scrollbar-width: thin !important;
+            scrollbar-color: #94a3b8 #f1f5f9 !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar {
+            width: 8px !important;
+            height: 8px !important;
+            display: block !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-track {
+            background: #f1f5f9 !important;
+            border-radius: 4px !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-thumb {
+            background-color: #94a3b8 !important;
+            border-radius: 4px !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b !important;
+          }
+
           /* Text Colors - Explicitly Defined */
           .text-dark { color: #212529 !important; }
           .text-secondary { color: #6c757d !important; }
@@ -1387,9 +1561,9 @@ const Index = () => {
                   boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
                 }}
               >
-                <div className="card-body p-3.5 d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div className="card-body p-3.5 d-flex align-items-center flex-wrap gap-3">
                   {/* Scope Info Label */}
-                  <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ flexBasis: "0", minWidth: "250px" }}>
                     <div
                       className="d-flex align-items-center justify-content-center rounded-3 px-3 py-2.5"
                       style={{ backgroundColor: "#eef7f4", color: "#448C74" }}
@@ -1403,14 +1577,15 @@ const Index = () => {
                       <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
                         {marketViewMode === "location"
                           ? "Showing overall city/location statistics"
-                          : `Showing ${appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`} radius catchment around project`}
+                          : marketViewMode === "catchment"
+                          ? `Showing ${appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`} radius catchment around project`
+                          : `Showing statistics for selected project: ${selectedProject && selectedProject.startsWith("id:") ? selectedProject.split(":").slice(2).join(":") : selectedProject}`}
                       </div>
                     </div>
                   </div>
 
-                  {/* Filter Controls Container */}
-                  <div className="d-flex align-items-center gap-3 flex-wrap">
-                    {/* View Mode Toggle Pill Container */}
+                  {/* View Mode Toggle Pill Container (Center) */}
+                  <div className="d-flex justify-content-center">
                     <div
                       className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
                       style={{ borderColor: "#cbd5e1" }}
@@ -1446,8 +1621,27 @@ const Index = () => {
                         <FaCrosshairs size={14} style={{ color: marketViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
                         <span>Catchment ({appliedRadius >= 1000 ? `${appliedRadius / 1000}km` : `${appliedRadius}m`})</span>
                       </button>
-                    </div>
 
+                      <button
+                        type="button"
+                        className="btn btn-sm rounded-pill px-3.5 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                        style={{
+                          fontSize: "13px",
+                          backgroundColor: marketViewMode === "nearby" ? "#448C74" : "transparent",
+                          borderColor: "transparent",
+                          color: marketViewMode === "nearby" ? "#ffffff" : "#475569",
+                          boxShadow: marketViewMode === "nearby" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                        }}
+                        onClick={() => setMarketViewMode("nearby")}
+                      >
+                        <FaBuilding size={14} style={{ color: marketViewMode === "nearby" ? "#ffffff" : "#448C74" }} />
+                        <span>Nearby Projects</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Settings Container (Right) */}
+                  <div className="d-flex align-items-center justify-content-end gap-3 flex-grow-1 flex-wrap" style={{ flexBasis: "0", minWidth: "250px" }}>
                     {/* Catchment Radius Settings */}
                     {marketViewMode === "catchment" && (
                       <div
@@ -1535,23 +1729,99 @@ const Index = () => {
                         </button>
                       </div>
                     )}
+
+                    {/* Nearby Projects Selector */}
+                    {marketViewMode === "nearby" && (
+                      <div
+                        className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                        style={{ borderColor: "#cbd5e1" }}
+                      >
+                        <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
+                          <FaBuilding size={13} style={{ color: "#448C74" }} />
+                          <span className="fw-bold text-dark ms-1" style={{ fontSize: "13px" }}>Select Project:</span>
+                        </div>
+
+                        {(() => {
+                          const projectOptions = nearbyProjects.map((p, idx) => ({
+                            value: p.project_id ? `id:${p.project_id}:${p.project_name}` : p.project_name,
+                            label: `${p.project_name} (${p.distance_formatted} away • ${p.total_transactions} sales)`,
+                            project: p,
+                            index: idx + 1
+                          }));
+                          return (
+                            <Select
+                              options={projectOptions}
+                              value={projectOptions.find(opt => opt.value === selectedProject) || null}
+                              onChange={(selectedOption) => setSelectedProject(selectedOption ? selectedOption.value : "all")}
+                              formatOptionLabel={formatProjectOption}
+                              styles={customSelectStyles}
+                              placeholder="Select a project..."
+                              isSearchable={true}
+                              classNamePrefix="custom-select"
+                            />
+                          );
+                        })()}
+
+                        <button
+                          type="button"
+                          className="btn btn-sm rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1.5 shadow-xs transition-all ms-1"
+                          style={{
+                            fontSize: "12px",
+                            backgroundColor: "#eef7f4",
+                            color: "#448C74",
+                            borderColor: "#a3d9c9"
+                          }}
+                          disabled={loadingNearbyProjects}
+                          onClick={() => setNearbyLimit((prev) => prev + 5)}
+                          title="Load the next 5 nearest competitor projects"
+                        >
+                          <FaPlus size={10} />
+                          <span>Show More (+5)</span>
+                        </button>
+
+                        {loadingNearbyProjects && (
+                          <span className="spinner-border spinner-border-sm text-success ms-1" role="status" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              <div className="row g-4">
-                <div className="col-lg-6">
-                  <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-                <div className="col-lg-6">
-                  <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} />
-                </div>
-              </div>
+              {(() => {
+                let pId = null;
+                let pName = "all";
+                if (selectedProject && selectedProject !== "all") {
+                  if (String(selectedProject).startsWith("id:")) {
+                    const parts = selectedProject.split(":");
+                    pId = parts[1];
+                    pName = parts.slice(2).join(":");
+                  } else {
+                    const found = nearbyProjects.find(p => String(p.project_id) === String(selectedProject) || p.project_name === selectedProject);
+                    if (found) {
+                      pId = found.project_id;
+                      pName = found.project_name;
+                    } else {
+                      pName = selectedProject;
+                    }
+                  }
+                }
+                return (
+                  <div className="row g-4">
+                    <div className="col-lg-6">
+                      <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                    <div className="col-lg-6">
+                      <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Section 1.4: Unit Design */}

@@ -13,6 +13,7 @@ const DEFAULT_CENTER = { lat: 18.52461645, lng: 73.7805654 }; // Pune
 const LandIdentification = () => {
   const [formData, setFormData] = useState({
     country: '',
+    currency: '',
     location: '',
     village: '',
     planningAuthority: '',
@@ -50,6 +51,22 @@ const LandIdentification = () => {
   const [villages, setVillages] = useState([]);
   const [villagesLoading, setVillagesLoading] = useState(false);
   const [villagesError, setVillagesError] = useState("");
+  const [countries, setCountries] = useState([]);
+
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await fetch(apiUrl("/data_db/get_countries/"));
+        const data = await res.json();
+        if (data.ok) {
+          setCountries(data.countries || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch countries:", err);
+      }
+    };
+    fetchCountries();
+  }, []);
   const [selectedVillageCoords, setSelectedVillageCoords] = useState(null);
   const [planningAdvisoryLoading, setPlanningAdvisoryLoading] = useState(false);
   const [roadWidthLoading, setRoadWidthLoading] = useState(false);
@@ -629,11 +646,17 @@ const LandIdentification = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-      ...(name === 'netPlotAreaSqFt' ? { isNetPlotAreaAutoDerived: false } : {})
-    }));
+    setFormData(prev => {
+      const updates = { [name]: value };
+      if (name === 'netPlotAreaSqFt') {
+        updates.isNetPlotAreaAutoDerived = false;
+      }
+      if (name === 'country') {
+        const selected = countries.find(c => c.name === value);
+        updates.currency = selected ? selected.currency : '';
+      }
+      return { ...prev, ...updates };
+    });
   };
 
   const handleSaveForm = () => {
@@ -920,14 +943,18 @@ const LandIdentification = () => {
           <div className="col-md-6">
             <div className="field-wrapper-card">
               <div className="field-label-text">Country</div>
-              <input 
-                type="text" 
-                className="pill-input" 
+              <select
+                className="pill-input form-select"
+                style={{ border: 'none', background: '#f8f9fa' }}
                 name="country"
                 value={formData.country}
                 onChange={handleInputChange}
-                placeholder="Enter Country" 
-              />
+              >
+                <option value="">Select Country</option>
+                {countries.map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

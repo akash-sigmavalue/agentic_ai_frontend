@@ -1,7 +1,7 @@
 import { apiUrl } from "@/lib/api-client";
 import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
-import { FaWarehouse, FaArrowTrendUp } from "react-icons/fa6";
+import { FaWarehouse, FaArrowTrendUp, FaChartBar } from "react-icons/fa6";
 
 
 const getLandIdentificationPayload = () => {
@@ -37,7 +37,7 @@ const formatNumberRaw = (val, country = "India") => {
   return Math.round(Number(val)).toLocaleString(locale);
 };
 
-const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius = 1000 }) => {
+const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
   const theme = "light";
   const isDark = false;
 
@@ -55,12 +55,12 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
   const [demandVillageName, setDemandVillageName] = useState("");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
-  const cacheRef = React.useRef({ location: null, catchment: {} });
+  const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
 
   // Sync state from Land Identification on mount/change
   useEffect(() => {
     const updatePayloadState = (data) => {
-      cacheRef.current = { location: null, catchment: {} };
+      cacheRef.current = { location: null, catchment: {}, nearby: {} };
       const c = data.location || data.city || "";
       const v = data.village || data.villageName || "";
       const latVal = data.polygonCenterLat || data.latitude || null;
@@ -73,50 +73,48 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
       setLng(lngVal ? parseFloat(lngVal) : null);
     };
 
-    const initialPayload = getLandIdentificationPayload();
-    setCity(initialPayload.city);
-    setVillage(initialPayload.villageName);
-    setDemandCity(initialPayload.city);
-    setDemandVillageName(initialPayload.villageName);
-    setLat(initialPayload.lat);
-    setLng(initialPayload.lng);
+    updatePayloadState(getLandIdentificationPayload());
 
-    const handleLandIdSync = (e) => {
-      const detail = e.detail;
-      if (detail) {
-        updatePayloadState(detail);
+    const handleSave = (e) => {
+      if (e.detail) {
+        updatePayloadState(e.detail);
       } else {
-        cacheRef.current = { location: null, catchment: {} };
-        const payload = getLandIdentificationPayload();
-        setCity(payload.city);
-        setVillage(payload.villageName);
-        setDemandCity(payload.city);
-        setDemandVillageName(payload.villageName);
-        setLat(payload.lat);
-        setLng(payload.lng);
+        updatePayloadState(getLandIdentificationPayload());
       }
     };
 
-    window.addEventListener("landIdentificationSaved", handleLandIdSync);
+    window.addEventListener("landIdentificationSaved", handleSave);
     return () => {
-      window.removeEventListener("landIdentificationSaved", handleLandIdSync);
+      window.removeEventListener("landIdentificationSaved", handleSave);
     };
   }, []);
 
-  // Load Demand data
+  // Fetch demand data when option === "demand"
   useEffect(() => {
     if (option !== "demand") return;
-
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
+    const cacheKey = selectedProjectId || selectedProject;
 
     if (viewMode === "catchment") {
       if (!lat || !lng) {
-        setError(`Coordinates missing. Please save a polygon or enter center coordinates in Land Identification to view ${catchmentRadius}m Catchment statistics.`);
         setDemandData([]);
+        setLoading(false);
         return;
       }
-      if (cacheRef.current.catchment[catchmentRadius]) {
+      if (cacheRef.current?.catchment?.[catchmentRadius]) {
         setDemandData(cacheRef.current.catchment[catchmentRadius]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    } else if (viewMode === "nearby") {
+      if (!lat || !lng) {
+        setDemandData([]);
+        setLoading(false);
+        return;
+      }
+      if (cacheRef.current?.nearby?.[cacheKey]) {
+        setDemandData(cacheRef.current.nearby[cacheKey]);
         setError(null);
         setLoading(false);
         return;
@@ -124,9 +122,10 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
     } else {
       if (!demandCity || !demandVillageName) {
         setDemandData([]);
+        setLoading(false);
         return;
       }
-      if (cacheRef.current.location) {
+      if (cacheRef.current?.location) {
         setDemandData(cacheRef.current.location);
         setError(null);
         setLoading(false);
@@ -138,9 +137,12 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
       setLoading(true);
       setError(null);
 
-      const requestBody = viewMode === "catchment"
-        ? { city_name: demandCity, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" }
-        : { city_name: demandCity, location_name: demandVillageName, mode: "location" };
+      let requestBody = { city_name: demandCity, location_name: demandVillageName, mode: "location" };
+      if (viewMode === "catchment") {
+        requestBody = { city_name: demandCity, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" };
+      } else if (viewMode === "nearby") {
+        requestBody = { city_name: demandCity, location_name: demandVillageName, latitude: lat, longitude: lng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
+      }
 
       try {
         const response = await fetch(apiUrl("/new_rate_simulator/simulator/yoy-demand/"), {
@@ -159,6 +161,8 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
           const fetchedData = data.data || [];
           if (viewMode === "catchment") {
             cacheRef.current.catchment[catchmentRadius] = fetchedData;
+          } else if (viewMode === "nearby") {
+            cacheRef.current.nearby[cacheKey] = fetchedData;
           } else {
             cacheRef.current.location = fetchedData;
           }
@@ -174,7 +178,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
     };
 
     loadDemand();
-  }, [demandCity, demandVillageName, lat, lng, option, viewMode, catchmentRadius]);
+  }, [demandCity, demandVillageName, lat, lng, option, viewMode, catchmentRadius, selectedProject, selectedProjectId]);
 
   // Determine country
   const currentCity = option === "supply" ? city : demandCity;
@@ -294,9 +298,24 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
                   fontWeight: 600,
                 }}
               >
-                🎯 1km Catchment ({lat.toFixed(4)}, {lng.toFixed(4)})
+                🎯 {catchmentRadius >= 1000 ? `${(catchmentRadius / 1000).toFixed(1)}km` : `${catchmentRadius}m`} Catchment
               </span>
             )
+          ) : viewMode === "nearby" && selectedProject && selectedProject !== "all" ? (
+            <span
+              style={{
+                fontSize: "11px",
+                background: option === "supply"
+                  ? (isDark ? "rgba(6,182,212,0.15)" : "rgba(8,145,178,0.08)")
+                  : (isDark ? "rgba(245,158,11,0.15)" : "rgba(217,119,6,0.08)"),
+                color: option === "supply" ? (isDark ? "#67e8f9" : "#0891b2") : (isDark ? "#fde047" : "#d97706"),
+                padding: "3px 10px",
+                borderRadius: 20,
+                fontWeight: 600,
+              }}
+            >
+              🏢 {selectedProject}
+            </span>
           ) : (
             (currentCity || currentVillage) && (
               <span
@@ -392,7 +411,17 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
               >
-                <div style={{ fontSize: 40, marginBottom: 12 }}>≡ƒôè</div>
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-circle mb-3"
+                  style={{
+                    width: 72,
+                    height: 72,
+                    background: isDark ? "rgba(245,158,11,0.12)" : "rgba(217,119,6,0.07)",
+                    color: isDark ? "#fbbf24" : "#d97706",
+                  }}
+                >
+                  <FaChartBar size={30} />
+                </div>
                 <p
                   className="text-center mb-1"
                   style={{ color: textColor, fontWeight: 600, fontSize: "14px" }}
