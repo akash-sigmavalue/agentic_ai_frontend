@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
+import Link from 'next/link';
 import { apiUrl } from '@/lib/api-client';
 import "./web_search.css"
 
@@ -173,8 +174,24 @@ export default function Home() {
               Nexus Search
             </h1>
           </div>
-          <div className="text-xs font-medium px-3 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700/50">
-            High Accuracy Agent
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-medium px-3 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700/50">
+              High Accuracy Agent
+            </div>
+            <button
+              type="button"
+              disabled
+              aria-current="page"
+              className="cursor-not-allowed rounded-lg border border-cyan-300 bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30"
+            >
+              Web Agent V1
+            </button>
+            <Link
+              href="/web_search_v2"
+              className="rounded-lg border border-slate-600 bg-slate-800/70 px-4 py-2 text-sm font-semibold text-slate-200 transition-all duration-200 hover:border-cyan-300 hover:bg-cyan-500 hover:text-white hover:shadow-lg hover:shadow-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+            >
+              Web Agent V2
+            </Link>
           </div>
         </div>
       </header>
