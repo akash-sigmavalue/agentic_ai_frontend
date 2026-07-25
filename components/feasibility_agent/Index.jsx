@@ -576,6 +576,7 @@ import {
   FaUsers,
   FaScaleBalanced,
   FaDatabase,
+  FaMapLocationDot,
 } from "react-icons/fa6";
 import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding } from "react-icons/fa";
 import Select from "react-select";
@@ -1511,9 +1512,9 @@ const Index = () => {
                 </h3>
               </div>
               <div className="row g-3 mb-4">
-                <div className="col-md-6">
+                <div className="col-md-4">
                   <a
-                    href="https://os.sigmavalue.ai/valuation"
+                    href="/valuation"
                     target="_blank"
                     rel="noreferrer"
                     className="d-flex align-items-center gap-3 text-decoration-none border rounded-4 p-3 h-100 bg-white shadow-sm card-hover-lift"
@@ -1531,9 +1532,9 @@ const Index = () => {
                     </div>
                   </a>
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-4">
                   <a
-                    href="https://os.sigmavalue.ai/data_retrieval"
+                    href="/data_retrieval"
                     target="_blank"
                     rel="noreferrer"
                     className="d-flex align-items-center gap-3 text-decoration-none border rounded-4 p-3 h-100 bg-white shadow-sm card-hover-lift"
@@ -1546,8 +1547,28 @@ const Index = () => {
                       <FaDatabase size={18} />
                     </div>
                     <div>
-                      <div className="fw-bold text-dark">Data Retrival Agent</div>
+                      <div className="fw-bold text-dark">Data Retrieval Agent</div>
                       <div className="small text-secondary">Open the data retrieval workspace</div>
+                    </div>
+                  </a>
+                </div>
+                <div className="col-md-4">
+                  <a
+                    href="/visualization_agent"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="d-flex align-items-center gap-3 text-decoration-none border rounded-4 p-3 h-100 bg-white shadow-sm card-hover-lift"
+                    style={{ borderColor: "#d8e1ec" }}
+                  >
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+                      style={{ width: 46, height: 46, background: "#eef2ff", color: "#4f46e5" }}
+                    >
+                      <FaMapLocationDot size={18} />
+                    </div>
+                    <div>
+                      <div className="fw-bold text-dark">Land/GIS Agent</div>
+                      <div className="small text-secondary">Open the Land/GIS workspace</div>
                     </div>
                   </a>
                 </div>
