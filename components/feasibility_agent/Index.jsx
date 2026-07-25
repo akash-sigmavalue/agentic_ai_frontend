@@ -578,13 +578,92 @@ import {
   FaDatabase,
   FaMapLocationDot,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding } from "react-icons/fa";
+import Select from "react-select";
 import { useState, useEffect } from "react";
 import Header from "./Header";
+
+const formatProjectOption = ({ project, index }, { context }) => {
+  if (context === "value") {
+    return (
+      <div className="d-flex align-items-center gap-2">
+        <FaRegBuilding size={13} className="text-secondary" />
+        <span className="fw-bold text-dark" style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+          {project.project_name}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="d-flex align-items-center justify-content-between w-100">
+      <div className="d-flex align-items-center gap-2">
+        <div className="bg-light rounded p-1 d-flex align-items-center justify-content-center text-secondary">
+          <FaRegBuilding size={14} />
+        </div>
+        <div className="d-flex flex-column">
+          <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+            <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+            {project.project_name}
+          </span>
+          <span className="text-muted" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+            {project.distance_formatted} away
+          </span>
+        </div>
+      </div>
+      <div className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 ms-2" style={{ fontSize: "10px" }}>
+        {project.total_transactions} sales
+      </div>
+    </div>
+  );
+};
+
+const customSelectStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: "34px",
+    height: "34px",
+    fontSize: "13px",
+    fontWeight: "bold",
+    borderRadius: "0.375rem",
+    borderColor: "#cbd5e1",
+    minWidth: "250px",
+    boxShadow: "none",
+    "&:hover": { borderColor: "#94a3b8" }
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    padding: "0 8px",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "#1e293b",
+  }),
+  option: (base, state) => ({
+    ...base,
+    backgroundColor: state.isSelected ? "#eef7f4" : state.isFocused ? "#f8fafc" : "transparent",
+    color: "#1e293b",
+    cursor: "pointer",
+    padding: "8px 12px",
+    "&:active": { backgroundColor: "#d1fae5" }
+  }),
+  menu: (base) => ({
+    ...base,
+    zIndex: 9999,
+    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    minWidth: "300px"
+  }),
+  menuList: (base) => ({
+    ...base,
+    maxHeight: "300px",
+    paddingRight: "2px"
+  }),
+};
 import LandDetailsForm from "./LandDetailsForm";
-import LandDetailsOutput from "./LandDetailsOutput";
-import FSIProposalForm from "./FSIProposalForm";
-import FSIProposalOutput from "./FSIProposalOutput";
+
 import RevenueForm from "./LocationForm";
 import RevenueOutput from "./LocationOutput";
 import CostForm from "./CostForm";
@@ -592,8 +671,7 @@ import CostOutput from "./CostOutput";
 import MeansOfFinance from "./MeansOfFinance";
 import Dashboard from "./Dashboard";
 import { useLegacyNavigate as useNavigate, useLegacyLocation as useLocation } from "@/components/feasibility_agent/useLegacyNavigate"; import Link from "next/link";
-import AreaCalculationForm from "./AreaCalculationForm";
-import AreaCalculationResult from "./AreaCalculationResult";
+
 import UnitDesignStructure from "./UnitDesignStructure";
 import RateSim from "./ratesim";
 import RequiredParking from "./RequiredParking";
@@ -629,8 +707,7 @@ const Index = () => {
   const theme = "light";
   const navigate = useNavigate();
   const [landResults, setLandResults] = useState(null);
-  const [fsiProposalData, setFSIProposalData] = useState(null);
-  const [areaCalculationData, setAreaCalculationData] = useState(null);
+
   const [revenueData, setRevenueData] = useState(null);
   const [costData, setCostData] = useState(null);
   const [showDashboard, setShowDashboard] = useState(false);
@@ -761,8 +838,7 @@ const Index = () => {
     const savedLandResults = localStorage.getItem("landDetailsResults");
     const savedZoning = localStorage.getItem("zoningType");
     const savedLandForm = localStorage.getItem("landDetailsForm");
-    const savedFSI = localStorage.getItem("fsiProposalData");
-    const savedArea = localStorage.getItem("areaCalculationForm");
+
     const savedRevenue = localStorage.getItem("revenueForm");
     const savedCost = localStorage.getItem("costForm");
 
@@ -772,8 +848,7 @@ const Index = () => {
       const landForm = JSON.parse(savedLandForm);
       setLocation(landForm.location || "");
     }
-    if (savedFSI) setFSIProposalData(JSON.parse(savedFSI));
-    if (savedArea) setAreaCalculationData(JSON.parse(savedArea));
+
     if (savedRevenue) setRevenueData(JSON.parse(savedRevenue));
     if (savedCost) setCostData(JSON.parse(savedCost));
   }, []);
@@ -861,13 +936,7 @@ const Index = () => {
     if (loc) setLocation(loc);
   };
 
-  const handleFSIProposalSave = (data) => {
-    setFSIProposalData(data);
-  };
 
-  const handleAreaCalculationSave = (data) => {
-    setAreaCalculationData(data);
-  };
 
   const handleRevenueSave = (data) => {
     setRevenueData(data);
@@ -1075,6 +1144,28 @@ const Index = () => {
           </div>
 
           <style>{`
+          /* Custom Select Scrollbar */
+          .custom-select__menu-list {
+            scrollbar-width: thin !important;
+            scrollbar-color: #94a3b8 #f1f5f9 !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar {
+            width: 8px !important;
+            height: 8px !important;
+            display: block !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-track {
+            background: #f1f5f9 !important;
+            border-radius: 4px !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-thumb {
+            background-color: #94a3b8 !important;
+            border-radius: 4px !important;
+          }
+          .custom-select__menu-list::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b !important;
+          }
+
           /* Text Colors - Explicitly Defined */
           .text-dark { color: #212529 !important; }
           .text-secondary { color: #6c757d !important; }
@@ -1392,7 +1483,7 @@ const Index = () => {
             {/* Section 1: Land Details */}
             <div className="col-12 fade-in-up stagger-1">
               <div className="row g-4">
-                <div className={isLandV2Active ? "col-lg-12" : "col-lg-8"}>
+                <div className="col-lg-12">
                   <LandDetailsForm
                     onCalculate={handleLandCalculation}
                     updateingUI={updateingUI}
@@ -1400,62 +1491,13 @@ const Index = () => {
                     onViewChange={(view) => setIsLandV2Active(view !== "V1")}
                   />
                 </div>
-                {!isLandV2Active && (
-                  <div className="col-lg-4">
-                    <LandDetailsOutput
-                      results={landResults}
-                      updateingUI={updateingUI}
-                    />
-                  </div>
-                )}
+
               </div>
             </div>
 
-            {/* Section 1.2: Permissible FSI and Proposed FSI */}
-            <div className="col-12 fade-in-up stagger-2">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <FSIProposalForm
-                    landResults={landResults}
-                    zoningType={zoningType}
-                    location={location}
-                    onSave={handleFSIProposalSave}
-                  />
-                </div>
-                <div className="col-lg-4">
-                  <FSIProposalOutput
-                    data={fsiProposalData}
-                    landResults={landResults}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-              </div>
-            </div>
 
-            {/* New Section 1.3: Area Calculation */}
-            <div className="col-12 fade-in-up stagger-3">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <AreaCalculationForm
-                    onSave={handleAreaCalculationSave}
-                    landResults={landResults}
-                    fsiProposalData={fsiProposalData}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-                <div className="col-lg-4">
-                  <AreaCalculationResult
-                    data={areaCalculationData}
-                    landResults={landResults}
-                    fsiProposalData={fsiProposalData}
-                    zoningType={zoningType}
-                    location={location}
-                  />
-                </div>
-              </div>
-            </div>
+
+
 
             {/* Market Analysis Charts Section */}
             <div
@@ -1540,9 +1582,9 @@ const Index = () => {
                   boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
                 }}
               >
-                <div className="card-body p-3.5 d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div className="card-body p-3.5 d-flex align-items-center flex-wrap gap-3">
                   {/* Scope Info Label */}
-                  <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ flexBasis: "0", minWidth: "250px" }}>
                     <div
                       className="d-flex align-items-center justify-content-center rounded-3 px-3 py-2.5"
                       style={{ backgroundColor: "#eef7f4", color: "#448C74" }}
@@ -1563,9 +1605,8 @@ const Index = () => {
                     </div>
                   </div>
 
-                  {/* Filter Controls Container */}
-                  <div className="d-flex align-items-center gap-3 flex-wrap">
-                    {/* View Mode Toggle Pill Container */}
+                  {/* View Mode Toggle Pill Container (Center) */}
+                  <div className="d-flex justify-content-center">
                     <div
                       className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
                       style={{ borderColor: "#cbd5e1" }}
@@ -1618,7 +1659,10 @@ const Index = () => {
                         <span>Nearby Projects</span>
                       </button>
                     </div>
+                  </div>
 
+                  {/* Dynamic Settings Container (Right) */}
+                  <div className="d-flex align-items-center justify-content-end gap-3 flex-grow-1 flex-wrap" style={{ flexBasis: "0", minWidth: "250px" }}>
                     {/* Catchment Radius Settings */}
                     {marketViewMode === "catchment" && (
                       <div
@@ -1718,25 +1762,26 @@ const Index = () => {
                           <span className="fw-bold text-dark ms-1" style={{ fontSize: "13px" }}>Select Project:</span>
                         </div>
 
-                        <select
-                          value={selectedProject}
-                          onChange={(e) => setSelectedProject(e.target.value)}
-                          className="form-select form-select-sm px-3 py-1 fw-bold rounded-2 border"
-                          style={{
-                            fontSize: "13px",
-                            color: "#1e293b",
-                            backgroundColor: "#ffffff",
-                            borderColor: "#cbd5e1",
-                            cursor: "pointer",
-                            minWidth: "220px"
-                          }}
-                        >
-                          {nearbyProjects.map((p, idx) => (
-                            <option key={p.project_id || idx} value={p.project_id ? `id:${p.project_id}:${p.project_name}` : p.project_name}>
-                              🏢 #{idx + 1} {p.project_name} ({p.distance_formatted} away • {p.total_transactions} sales)
-                            </option>
-                          ))}
-                        </select>
+                        {(() => {
+                          const projectOptions = nearbyProjects.map((p, idx) => ({
+                            value: p.project_id ? `id:${p.project_id}:${p.project_name}` : p.project_name,
+                            label: `${p.project_name} (${p.distance_formatted} away • ${p.total_transactions} sales)`,
+                            project: p,
+                            index: idx + 1
+                          }));
+                          return (
+                            <Select
+                              options={projectOptions}
+                              value={projectOptions.find(opt => opt.value === selectedProject) || null}
+                              onChange={(selectedOption) => setSelectedProject(selectedOption ? selectedOption.value : "all")}
+                              formatOptionLabel={formatProjectOption}
+                              styles={customSelectStyles}
+                              placeholder="Select a project..."
+                              isSearchable={true}
+                              classNamePrefix="custom-select"
+                            />
+                          );
+                        })()}
 
                         <button
                           type="button"

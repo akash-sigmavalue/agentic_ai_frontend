@@ -3,49 +3,29 @@ import React, { useEffect, useState, useMemo } from "react";
 import Chart from "react-apexcharts";
 import { FaShoppingCart, FaChartArea } from "react-icons/fa";
 
-const formatPrice1 = (price) => {
-  price = Math.floor(price);
-  if (price >= 10000000) return `₹ ${Math.round(price / 10000000)} Cr`;
-  if (price >= 100000) return `₹ ${Math.round(price / 100000)} lakh`;
-  return `₹ ${price.toLocaleString("en-IN")}`;
-};
-
-/**
- * SaleAnalysis
- *
- * Reads city (location) + villageName (village) from localStorage['Land Identification']
- * and fetches year-on-year sales analysis from
- * POST /new_rate_simulator/simulator/yoy-sales-analysis/
- *
- * localStorage payload shape (Land Identification):
- *   { location: "Pune", village: "Wakad", ... }
- *
- * Mapping:
- *   location    → city_name (SQL WHERE)
- *   village     → location_name (SQL WHERE)
- */
-
-const formatValueDubai = (val) => {
+const formatCurrencyVal = (val, currency) => {
+  const symbol = (currency && currency.trim() !== '') ? currency : "₹";
   const v = Math.round(val);
-  if (v >= 1000000) {
-    return `AED ${(v / 1000000).toFixed(1)} M`;
-  } else if (v >= 1000) {
-    return `AED ${(v / 1000).toFixed(1)} K`;
+  
+  if (symbol === "AED" || symbol === "USD") {
+    if (v >= 1000000) return `${symbol} ${(v / 1000000).toFixed(1)} M`;
+    if (v >= 1000) return `${symbol} ${(v / 1000).toFixed(1)} K`;
+    return `${symbol} ${v.toLocaleString("en-US")}`;
+  } else {
+    if (v >= 10000000) return `${symbol} ${Math.round(v / 10000000)} Cr`;
+    if (v >= 100000) return `${symbol} ${Math.round(v / 100000)} lakh`;
+    return `${symbol} ${v.toLocaleString("en-IN")}`;
   }
-  return `AED ${v.toLocaleString("en-US")}`;
 };
 
-const formatNumberRaw = (val, isCurrency = false, isDubai = false) => {
+const formatNumberRaw = (val, isCurrency = false, currency = "₹") => {
   if (val === null || val === undefined || isNaN(val)) {
-    return isCurrency ? (isDubai ? "AED 0" : "Rs0") : "0";
+    return isCurrency ? `${currency} 0` : "0";
   }
   if (isCurrency) {
-    if (isDubai) {
-      return formatValueDubai(val);
-    }
-    return formatPrice1(val);
+    return formatCurrencyVal(val, currency);
   }
-  const locale = isDubai ? "en-US" : "en-IN";
+  const locale = (currency === "AED" || currency === "USD") ? "en-US" : "en-IN";
   return Math.round(Number(val)).toLocaleString(locale);
 };
 
@@ -59,11 +39,12 @@ const getLandIdentificationPayload = () => {
     return {
       city: parsed.location || "",
       villageName: parsed.village || "",
+      currency: parsed.currency || "₹",
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
     };
   } catch {
-    return { city: "", villageName: "", lat: null, lng: null };
+    return { city: "", villageName: "", currency: "₹", lat: null, lng: null };
   }
 };
 
@@ -73,6 +54,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
+  const [currency, setCurrency] = useState("₹");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [salesData, setSalesData] = useState([]);
@@ -89,10 +71,12 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
       cacheRef.current = { location: null, catchment: {}, nearby: {} };
       const c = data.location || data.city || "";
       const v = data.village || data.villageName || "";
+      const curr = data.currency || "₹";
       const latVal = data.polygonCenterLat || data.latitude || null;
       const lngVal = data.polygonCenterLng || data.longitude || null;
       setCity(c);
       setVillageName(v);
+      setCurrency(curr);
       setLat(latVal ? parseFloat(latVal) : null);
       setLng(lngVal ? parseFloat(lngVal) : null);
     };
@@ -100,6 +84,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
     const initialPayload = getLandIdentificationPayload();
     setCity(initialPayload.city);
     setVillageName(initialPayload.villageName);
+    setCurrency(initialPayload.currency);
     setLat(initialPayload.lat);
     setLng(initialPayload.lng);
 
@@ -112,6 +97,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         const payload = getLandIdentificationPayload();
         setCity(payload.city);
         setVillageName(payload.villageName);
+        setCurrency(payload.currency);
         setLat(payload.lat);
         setLng(payload.lng);
       }
@@ -220,10 +206,6 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
   }, [city, villageName, lat, lng, viewMode, catchmentRadius, selectedProject, selectedProjectId]);
 
   // Determine country/city context
-  const isDubai = useMemo(() => {
-    const c = String(city || "").toLowerCase();
-    return c.includes("dubai") || c.includes("uae");
-  }, [city]);
 
   // Compute unique years and property types dynamically for ApexCharts
   const years = useMemo(() => {
@@ -290,11 +272,11 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
       },
       yaxis: {
         title: {
-          text: isCurrency ? (isDubai ? "Total Value (AED)" : "Total Value (₹)") : "Total Transactions",
+          text: isCurrency ? `Total Value (${currency})` : "Total Transactions",
           style: { color: textColor, fontSize: "12px", fontWeight: 600 },
         },
         labels: {
-          formatter: (val) => formatNumberRaw(val, isCurrency, isDubai),
+          formatter: (val) => formatNumberRaw(val, isCurrency, currency),
           style: { colors: [textColor], fontSize: "11px" },
         },
       },
@@ -312,11 +294,11 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         intersect: false,
         theme: isDark ? "dark" : "light",
         y: {
-          formatter: (val) => formatNumberRaw(val, isCurrency, isDubai),
+          formatter: (val) => formatNumberRaw(val, isCurrency, currency),
         },
       },
     }),
-    [years, textColor, gridColor, isCurrency, isDark, isDubai]
+    [years, textColor, gridColor, isCurrency, isDark, currency]
   );
 
   return (
@@ -419,7 +401,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
                   transition: "all 0.2s ease",
                 }}
               >
-                Value ({isDubai ? "AED" : "₹"})
+                Value ({currency})
               </button>
               <button
                 type="button"
@@ -471,9 +453,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
           className="mb-0 mt-1"
           style={{ fontSize: "12px", color: isDark ? "#94a3b8" : "#64748b" }}
         >
-          {isDubai
-            ? "Total Agreement Price (AED) - Property Type Wise"
-            : "Total Agreement Price (₹) - Property Type Wise"}
+          Total Agreement Price ({currency}) - Property Type Wise
         </p>
       </div>
 

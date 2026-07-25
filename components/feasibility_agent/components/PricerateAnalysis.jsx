@@ -19,13 +19,11 @@ import { FaChartBar, FaChartArea } from "react-icons/fa";
  *   village     → location_name (SQL WHERE)
  */
 
-const formatRate = (val, city) => {
-  const c = String(city || "").toLowerCase();
-  const isDubai = c.includes("dubai") || c.includes("uae");
-  const symbol = isDubai ? "AED " : "₹";
-  if (val === null || val === undefined || isNaN(val)) return `${symbol}0`;
-  const locale = isDubai ? "en-US" : "en-IN";
-  return `${symbol}${Math.round(Number(val)).toLocaleString(locale)}`;
+const formatRate = (val, currencySymbol) => {
+  const symbol = (currencySymbol && currencySymbol.trim() !== '') ? currencySymbol : "₹";
+  if (val === null || val === undefined || isNaN(val)) return `${symbol} 0`;
+  const locale = symbol === "AED" ? "en-US" : "en-IN";
+  return `${symbol} ${Math.round(Number(val)).toLocaleString(locale)}`;
 };
 
 const getLandIdentificationPayload = () => {
@@ -38,11 +36,12 @@ const getLandIdentificationPayload = () => {
     return {
       city: parsed.location || "",
       villageName: parsed.village || "",
+      currency: parsed.currency || "₹",
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
     };
   } catch {
-    return { city: "", villageName: "", lat: null, lng: null };
+    return { city: "", villageName: "", currency: "₹", lat: null, lng: null };
   }
 };
 
@@ -51,6 +50,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
 
   const [city, setCity] = useState("");
   const [villageName, setVillageName] = useState("");
+  const [currency, setCurrency] = useState("₹");
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [chartData, setChartData] = useState([]);
@@ -64,10 +64,12 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
       cacheRef.current = { location: null, catchment: {}, nearby: {} };
       const c = data.location || data.city || "";
       const v = data.village || data.villageName || "";
+      const curr = data.currency || "₹";
       const latVal = data.polygonCenterLat || data.latitude || null;
       const lngVal = data.polygonCenterLng || data.longitude || null;
       setCity(c);
       setVillageName(v);
+      setCurrency(curr);
       setLat(latVal ? parseFloat(latVal) : null);
       setLng(lngVal ? parseFloat(lngVal) : null);
     };
@@ -75,6 +77,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
     const initialPayload = getLandIdentificationPayload();
     setCity(initialPayload.city);
     setVillageName(initialPayload.villageName);
+    setCurrency(initialPayload.currency);
     setLat(initialPayload.lat);
     setLng(initialPayload.lng);
 
@@ -87,6 +90,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
         const payload = getLandIdentificationPayload();
         setCity(payload.city);
         setVillageName(payload.villageName);
+        setCurrency(payload.currency);
         setLat(payload.lat);
         setLng(payload.lng);
       }
@@ -225,8 +229,6 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
   const isDark = theme === "dark";
   const textColor = isDark ? "#e2e8f0" : "#1e293b";
   const gridColor = isDark ? "#334155" : "#e2e8f0";
-  const cLower = String(city || "").toLowerCase();
-  const isDubai = cLower.includes("dubai") || cLower.includes("uae");
 
   const chartOptions = useMemo(
     () => ({
@@ -265,11 +267,11 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
       },
       yaxis: {
         title: {
-          text: isDubai ? "Avg Rate (AED/sqft)" : "Avg Rate (₹/sqft)",
+          text: `Avg Rate (${currency}/sqft)`,
           style: { color: textColor, fontSize: "12px", fontWeight: 600 },
         },
         labels: {
-          formatter: (val) => formatRate(val, city),
+          formatter: (val) => formatRate(val, currency),
           style: { colors: [textColor], fontSize: "11px" },
         },
       },
@@ -287,11 +289,11 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
         intersect: false,
         theme: isDark ? "dark" : "light",
         y: {
-          formatter: (val) => formatRate(val, city),
+          formatter: (val) => formatRate(val, currency),
         },
       },
     }),
-    [years, textColor, gridColor, isDark, city, isDubai]
+    [years, textColor, gridColor, isDark, currency]
   );
 
   return (
@@ -376,7 +378,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
           className="mb-0 mt-1"
           style={{ fontSize: "12px", color: isDark ? "#94a3b8" : "#64748b" }}
         >
-          Year-on-year average transaction rate ({isDubai ? "AED" : "₹"}/sqft) on carpet area grouped by property type
+          Year-on-year average transaction rate ({currency}/sqft) on carpet area grouped by property type
         </p>
       </div>
 
