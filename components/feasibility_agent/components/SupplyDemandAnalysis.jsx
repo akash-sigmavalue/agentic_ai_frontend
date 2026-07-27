@@ -12,8 +12,8 @@ const getLandIdentificationPayload = () => {
     const lat = parsed.polygonCenterLat || parsed.latitude || null;
     const lng = parsed.polygonCenterLng || parsed.longitude || null;
     return {
-      city: parsed.location || "",
-      villageName: parsed.village || "",
+      city: parsed.location || parsed.city || "",
+      villageName: parsed.village || parsed.villageName || "",
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
     };
@@ -46,15 +46,15 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
   const [error, setError] = useState(null);
 
   // States for Supply option (Reserved/WIP)
-  const [village, setVillage] = useState("");
-  const [city, setCity] = useState("");
+  const [village, setVillage] = useState(() => getLandIdentificationPayload().villageName);
+  const [city, setCity] = useState(() => getLandIdentificationPayload().city);
 
   // States for Demand option
   const [demandData, setDemandData] = useState([]);
-  const [demandCity, setDemandCity] = useState("");
-  const [demandVillageName, setDemandVillageName] = useState("");
-  const [lat, setLat] = useState(null);
-  const [lng, setLng] = useState(null);
+  const [demandCity, setDemandCity] = useState(() => getLandIdentificationPayload().city);
+  const [demandVillageName, setDemandVillageName] = useState(() => getLandIdentificationPayload().villageName);
+  const [lat, setLat] = useState(() => getLandIdentificationPayload().lat);
+  const [lng, setLng] = useState(() => getLandIdentificationPayload().lng);
   const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
 
   // Sync state from Land Identification on mount/change
@@ -95,37 +95,50 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
     const cacheKey = selectedProjectId || selectedProject;
 
+    let currentLat = lat;
+    let currentLng = lng;
+    let currentCity = demandCity;
+    let currentVillage = demandVillageName;
+
+    if (!currentLat || !currentLng || !currentCity || !currentVillage) {
+      const fresh = getLandIdentificationPayload();
+      if (!currentLat) currentLat = fresh.lat;
+      if (!currentLng) currentLng = fresh.lng;
+      if (!currentCity) currentCity = fresh.city;
+      if (!currentVillage) currentVillage = fresh.villageName;
+    }
+
     if (viewMode === "catchment") {
-      if (!lat || !lng) {
+      if (!currentLat || !currentLng) {
         setDemandData([]);
         setLoading(false);
         return;
       }
-      if (cacheRef.current?.catchment?.[catchmentRadius]) {
+      if (Array.isArray(cacheRef.current?.catchment?.[catchmentRadius]) && cacheRef.current.catchment[catchmentRadius].length > 0) {
         setDemandData(cacheRef.current.catchment[catchmentRadius]);
         setError(null);
         setLoading(false);
         return;
       }
     } else if (viewMode === "nearby") {
-      if (!lat || !lng) {
+      if (!currentLat || !currentLng) {
         setDemandData([]);
         setLoading(false);
         return;
       }
-      if (cacheRef.current?.nearby?.[cacheKey]) {
+      if (Array.isArray(cacheRef.current?.nearby?.[cacheKey]) && cacheRef.current.nearby[cacheKey].length > 0) {
         setDemandData(cacheRef.current.nearby[cacheKey]);
         setError(null);
         setLoading(false);
         return;
       }
     } else {
-      if (!demandCity || !demandVillageName) {
+      if (!currentCity && !currentVillage) {
         setDemandData([]);
         setLoading(false);
         return;
       }
-      if (cacheRef.current?.location) {
+      if (Array.isArray(cacheRef.current?.location) && cacheRef.current.location.length > 0) {
         setDemandData(cacheRef.current.location);
         setError(null);
         setLoading(false);
@@ -137,11 +150,11 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
       setLoading(true);
       setError(null);
 
-      let requestBody = { city_name: demandCity, location_name: demandVillageName, mode: "location" };
+      let requestBody = { city_name: currentCity, location_name: currentVillage, mode: "location" };
       if (viewMode === "catchment") {
-        requestBody = { city_name: demandCity, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" };
+        requestBody = { city_name: currentCity, latitude: currentLat, longitude: currentLng, radius_km: radiusKm, mode: "catchment" };
       } else if (viewMode === "nearby") {
-        requestBody = { city_name: demandCity, location_name: demandVillageName, latitude: lat, longitude: lng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
+        requestBody = { city_name: currentCity, location_name: currentVillage, latitude: currentLat, longitude: currentLng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
       }
 
       try {
@@ -159,12 +172,14 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
 
         if (data && data.success) {
           const fetchedData = data.data || [];
-          if (viewMode === "catchment") {
-            cacheRef.current.catchment[catchmentRadius] = fetchedData;
-          } else if (viewMode === "nearby") {
-            cacheRef.current.nearby[cacheKey] = fetchedData;
-          } else {
-            cacheRef.current.location = fetchedData;
+          if (Array.isArray(fetchedData) && fetchedData.length > 0) {
+            if (viewMode === "catchment") {
+              cacheRef.current.catchment[catchmentRadius] = fetchedData;
+            } else if (viewMode === "nearby") {
+              cacheRef.current.nearby[cacheKey] = fetchedData;
+            } else {
+              cacheRef.current.location = fetchedData;
+            }
           }
           setDemandData(fetchedData);
         } else {
@@ -432,7 +447,11 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
                   className="text-center"
                   style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "12px" }}
                 >
-                  {currentVillage
+                  {viewMode === "catchment"
+                    ? `No transactional data found within ${catchmentRadius >= 1000 ? `${(catchmentRadius / 1000).toFixed(1)}km` : `${catchmentRadius}m`} catchment.`
+                    : viewMode === "nearby"
+                    ? `No transactional data found for ${selectedProject && selectedProject !== "all" ? `project "${selectedProject}"` : "nearby projects"}.`
+                    : currentVillage
                     ? `No transactional data found for "${currentVillage}".`
                     : "Set a location in the Market Analysis section to load data."}
                 </p>

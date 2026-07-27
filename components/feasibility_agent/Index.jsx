@@ -716,35 +716,9 @@ const Index = () => {
   const [updateingUI, setUpdateUI] = useState(false);
   const [activeSection, setActiveSection] = useState("land-identification");
   const [calculationMode, setCalculationMode] = useState("carpet"); // Lifted state: 'carpet' or 'saleable'
-  const [marketViewMode, setMarketViewMode] = useState(() => {
-    if (typeof window === "undefined") return "location";
-    try {
-      const saved = localStorage.getItem("market research");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.viewMode) return parsed.viewMode;
-      }
-    } catch (e) {
-      console.error("Error reading market research payload:", e);
-    }
-    return "location";
-  });
-
-  const [appliedRadius, setAppliedRadius] = useState(() => {
-    if (typeof window === "undefined") return 1000;
-    try {
-      const saved = localStorage.getItem("market research");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.radius) return Number(parsed.radius) || 1000;
-      }
-    } catch (e) {
-      console.error("Error reading catchment radius payload:", e);
-    }
-    return 1000;
-  });
-
-  const [inputRadius, setInputRadius] = useState(() => appliedRadius);
+  const [marketViewMode, setMarketViewMode] = useState("location");
+  const [appliedRadius, setAppliedRadius] = useState(1000);
+  const [inputRadius, setInputRadius] = useState(1000);
   const [selectedProject, setSelectedProject] = useState(() => {
     if (typeof window === "undefined") return "all";
     try {
