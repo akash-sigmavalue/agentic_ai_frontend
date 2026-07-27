@@ -52,11 +52,11 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
   const theme = "light";
   const isDark = false;
 
-  const [city, setCity] = useState("");
-  const [villageName, setVillageName] = useState("");
-  const [currency, setCurrency] = useState("₹");
-  const [lat, setLat] = useState(null);
-  const [lng, setLng] = useState(null);
+  const [city, setCity] = useState(() => getLandIdentificationPayload().city);
+  const [villageName, setVillageName] = useState(() => getLandIdentificationPayload().villageName);
+  const [currency, setCurrency] = useState(() => getLandIdentificationPayload().currency || "₹");
+  const [lat, setLat] = useState(() => getLandIdentificationPayload().lat);
+  const [lng, setLng] = useState(() => getLandIdentificationPayload().lng);
   const [salesData, setSalesData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -84,7 +84,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
     const initialPayload = getLandIdentificationPayload();
     setCity(initialPayload.city);
     setVillageName(initialPayload.villageName);
-    setCurrency(initialPayload.currency);
+    setCurrency(initialPayload.currency || "₹");
     setLat(initialPayload.lat);
     setLng(initialPayload.lng);
 
@@ -97,7 +97,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         const payload = getLandIdentificationPayload();
         setCity(payload.city);
         setVillageName(payload.villageName);
-        setCurrency(payload.currency);
+        setCurrency(payload.currency || "₹");
         setLat(payload.lat);
         setLng(payload.lng);
       }
@@ -115,36 +115,49 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
     const cacheKey = selectedProjectId || selectedProject;
 
+    let currentLat = lat;
+    let currentLng = lng;
+    let currentCity = city;
+    let currentVillage = villageName;
+
+    if (!currentLat || !currentLng || !currentCity || !currentVillage) {
+      const fresh = getLandIdentificationPayload();
+      if (!currentLat) currentLat = fresh.lat;
+      if (!currentLng) currentLng = fresh.lng;
+      if (!currentCity) currentCity = fresh.city;
+      if (!currentVillage) currentVillage = fresh.villageName;
+    }
+
     if (viewMode === "catchment") {
-      if (!lat || !lng) {
+      if (!currentLat || !currentLng) {
         setError(`Coordinates missing. Please save a polygon or enter center coordinates in Land Identification to view ${catchmentRadius}m Catchment statistics.`);
         setSalesData([]);
         return;
       }
-      if (cacheRef.current?.catchment?.[catchmentRadius]) {
+      if (Array.isArray(cacheRef.current?.catchment?.[catchmentRadius]) && cacheRef.current.catchment[catchmentRadius].length > 0) {
         setSalesData(cacheRef.current.catchment[catchmentRadius]);
         setError(null);
         setLoading(false);
         return;
       }
     } else if (viewMode === "nearby") {
-      if (!lat || !lng) {
+      if (!currentLat || !currentLng) {
         setSalesData([]);
         setLoading(false);
         return;
       }
-      if (cacheRef.current?.nearby?.[cacheKey]) {
+      if (Array.isArray(cacheRef.current?.nearby?.[cacheKey]) && cacheRef.current.nearby[cacheKey].length > 0) {
         setSalesData(cacheRef.current.nearby[cacheKey]);
         setError(null);
         setLoading(false);
         return;
       }
     } else {
-      if (!city || !villageName) {
+      if (!currentCity && !currentVillage) {
         setSalesData([]);
         return;
       }
-      if (cacheRef.current?.location) {
+      if (Array.isArray(cacheRef.current?.location) && cacheRef.current.location.length > 0) {
         setSalesData(cacheRef.current.location);
         setError(null);
         setLoading(false);
@@ -156,11 +169,11 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
       setLoading(true);
       setError(null);
 
-      let requestBody = { city_name: city, location_name: villageName, mode: "location" };
+      let requestBody = { city_name: currentCity, location_name: currentVillage, mode: "location" };
       if (viewMode === "catchment") {
-        requestBody = { city_name: city, latitude: lat, longitude: lng, radius_km: radiusKm, mode: "catchment" };
+        requestBody = { city_name: currentCity, latitude: currentLat, longitude: currentLng, radius_km: radiusKm, mode: "catchment" };
       } else if (viewMode === "nearby") {
-        requestBody = { city_name: city, location_name: villageName, latitude: lat, longitude: lng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
+        requestBody = { city_name: currentCity, location_name: currentVillage, latitude: currentLat, longitude: currentLng, radius_km: 1.5, mode: "nearby", project_id: selectedProjectId, project_name: selectedProject };
       }
 
       try {
@@ -187,12 +200,14 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         }
 
         const fetchedData = json.data || [];
-        if (viewMode === "catchment") {
-          cacheRef.current.catchment[catchmentRadius] = fetchedData;
-        } else if (viewMode === "nearby") {
-          cacheRef.current.nearby[cacheKey] = fetchedData;
-        } else {
-          cacheRef.current.location = fetchedData;
+        if (Array.isArray(fetchedData) && fetchedData.length > 0) {
+          if (viewMode === "catchment") {
+            cacheRef.current.catchment[catchmentRadius] = fetchedData;
+          } else if (viewMode === "nearby") {
+            cacheRef.current.nearby[cacheKey] = fetchedData;
+          } else {
+            cacheRef.current.location = fetchedData;
+          }
         }
         setSalesData(fetchedData);
       } catch (err) {
