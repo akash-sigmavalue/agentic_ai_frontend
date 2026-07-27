@@ -1060,7 +1060,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
     let accumulatedResponse = "";
 
     try {
-      const streamUrl = apiUrl(`/api/chat_stream?query=${encodedQuery}&no_cache=true`);
+      const streamUrl = apiUrl(`/api/web_search_v2/chat_stream?query=${encodedQuery}&no_cache=true`);
       const source = new EventSource(streamUrl);
       webEventSourceRef.current = source;
 
@@ -1876,334 +1876,334 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
         <div>
           <div className="land-details-eyebrow">Selected Section</div>
           <h1 className="land-details-title">Land and FSI Details</h1>
-      </div>
+        </div>
       </div>
 
       <div className="land-details-body">
         <div className="land-details-grid row g-3 mt-3">
-            {/* Web Data Agent Accordion Section Card */}
-            <div className="col-12 mb-3">
+          {/* Web Data Agent Accordion Section Card */}
+          <div className="col-12 mb-3">
+            <div
+              style={{
+                borderRadius: "10px",
+                border: "1px solid #e8ecf0",
+                borderLeft: "4px solid #448C74",
+                overflow: "hidden",
+                transition: "all 0.3s ease",
+                boxShadow: isWebAgentExpanded ? "0 4px 16px rgba(0,0,0,0.08)" : "0 1px 4px rgba(0,0,0,0.04)",
+                background: "#ffffff"
+              }}
+            >
+              {/* Accordion Header Row */}
               <div
                 style={{
-                  borderRadius: "10px",
-                  border: "1px solid #e8ecf0",
-                  borderLeft: "4px solid #448C74",
-                  overflow: "hidden",
-                  transition: "all 0.3s ease",
-                  boxShadow: isWebAgentExpanded ? "0 4px 16px rgba(0,0,0,0.08)" : "0 1px 4px rgba(0,0,0,0.04)",
-                  background: "#ffffff"
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 20px",
+                  cursor: "pointer",
+                  background: "#ffffff",
+                  userSelect: "none"
                 }}
+                onClick={() => setIsWebAgentExpanded(!isWebAgentExpanded)}
               >
-                {/* Accordion Header Row */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "14px 20px",
-                    cursor: "pointer",
-                    background: "#ffffff",
-                    userSelect: "none"
-                  }}
-                  onClick={() => setIsWebAgentExpanded(!isWebAgentExpanded)}
-                >
-                  <div className="d-flex align-items-center gap-3 flex-grow-1">
-                    <div
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        background: "linear-gradient(135deg, #448C74 0%, #2d6b55 100%)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#fff",
-                        fontSize: "16px",
-                        flexShrink: 0
-                      }}
-                    >
-                      <FaEarthAmericas />
-                    </div>
-                    <div>
-                      <div className="d-flex align-items-center gap-2" style={{ fontWeight: 600, fontSize: "14px", color: "#222" }}>
-                        <span style={{ color: "#448C74", fontWeight: 700, fontSize: "12px" }}></span>
-                        Web Data Agent (Building Regulations & Rules)
-                      </div>
-                    </div>
+                <div className="d-flex align-items-center gap-3 flex-grow-1">
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "8px",
+                      background: "linear-gradient(135deg, #448C74 0%, #2d6b55 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fff",
+                      fontSize: "16px",
+                      flexShrink: 0
+                    }}
+                  >
+                    <FaEarthAmericas />
                   </div>
-
-                  <div className="d-flex align-items-center gap-2 flex-shrink-0">
-                    <button
-                      type="button"
-                      className="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm me-2"
-                      style={{ fontSize: "11px", borderColor: "#448C74", color: "#2d6b55", backgroundColor: "#ffffff" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer");
-                      }}
-                    >
-                      Open Web Search Agent <FaExternalLinkAlt size={10} />
-                    </button>
-
-                    {/* Status Badge */}
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        padding: "3px 10px",
-                        borderRadius: "12px",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        background: webAgentStatus === "completed" ? "#e8f5e9" : webAgentStatus === "loading" ? "#fff3e0" : webAgentStatus === "error" ? "#fce4ec" : "#f0f0f0",
-                        color: webAgentStatus === "completed" ? "#2e7d32" : webAgentStatus === "loading" ? "#e65100" : webAgentStatus === "error" ? "#c62828" : "#888",
-                      }}
-                    >
-                      {webAgentStatus === "completed" ? "Completed" : webAgentStatus === "loading" ? "Processing..." : webAgentStatus === "error" ? "Error" : "Pending"}
-                    </span>
-
-                    <button
-                      type="button"
-                      className="btn btn-sm text-secondary p-0 ms-1 border-0 bg-transparent"
-                    >
-                      {isWebAgentExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
-                    </button>
+                  <div>
+                    <div className="d-flex align-items-center gap-2" style={{ fontWeight: 600, fontSize: "14px", color: "#222" }}>
+                      <span style={{ color: "#448C74", fontWeight: 700, fontSize: "12px" }}></span>
+                      Web Data Agent (Building Regulations & Rules)
+                    </div>
                   </div>
                 </div>
 
-                {/* Accordion Body View */}
-                {isWebAgentExpanded && (
-                  <div
-                    style={{
-                      padding: "16px 20px 20px",
-                      background: "#fafbfc",
-                      borderTop: "1px solid #eef1f5"
+                <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm me-2"
+                    style={{ fontSize: "11px", borderColor: "#448C74", color: "#2d6b55", backgroundColor: "#ffffff" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer");
                     }}
                   >
-                    {/* Editable Search Query Section */}
-                    <div className="mb-3">
-                      <div className="d-flex align-items-center justify-content-between mb-2">
-                        <div className="d-flex align-items-center gap-2">
-                          <strong style={{ color: "#448C74", fontSize: "13px" }}>Q:</strong>
-                          <span style={{ fontSize: "12px", fontStyle: "italic", color: "#666" }}>
-                            Edit the query below before running analysis
-                          </span>
-                        </div>
+                    Open Web Search Agent <FaExternalLinkAlt size={10} />
+                  </button>
+
+                  {/* Status Badge */}
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "3px 10px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      background: webAgentStatus === "completed" ? "#e8f5e9" : webAgentStatus === "loading" ? "#fff3e0" : webAgentStatus === "error" ? "#fce4ec" : "#f0f0f0",
+                      color: webAgentStatus === "completed" ? "#2e7d32" : webAgentStatus === "loading" ? "#e65100" : webAgentStatus === "error" ? "#c62828" : "#888",
+                    }}
+                  >
+                    {webAgentStatus === "completed" ? "Completed" : webAgentStatus === "loading" ? "Processing..." : webAgentStatus === "error" ? "Error" : "Pending"}
+                  </span>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm text-secondary p-0 ms-1 border-0 bg-transparent"
+                  >
+                    {isWebAgentExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Accordion Body View */}
+              {isWebAgentExpanded && (
+                <div
+                  style={{
+                    padding: "16px 20px 20px",
+                    background: "#fafbfc",
+                    borderTop: "1px solid #eef1f5"
+                  }}
+                >
+                  {/* Editable Search Query Section */}
+                  <div className="mb-3">
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <strong style={{ color: "#448C74", fontSize: "13px" }}>Q:</strong>
+                        <span style={{ fontSize: "12px", fontStyle: "italic", color: "#666" }}>
+                          Edit the query below before running analysis
+                        </span>
                       </div>
-                      <textarea
-                        className="form-control"
-                        value={webAgentQuery}
-                        onChange={(e) => {
-                          setWebAgentQuery(e.target.value);
-                          userEditedQueryRef.current = true;
-                        }}
+                    </div>
+                    <textarea
+                      className="form-control"
+                      value={webAgentQuery}
+                      onChange={(e) => {
+                        setWebAgentQuery(e.target.value);
+                        userEditedQueryRef.current = true;
+                      }}
+                      disabled={webAgentStatus === "loading"}
+                      rows={3}
+                      style={{
+                        fontSize: "13px",
+                        borderRadius: "8px",
+                        borderColor: "#cbd5e1",
+                        borderLeft: "4px solid #448C74",
+                        background: webAgentStatus === "loading" ? "#f8fafc" : "#ffffff",
+                        lineHeight: "1.6",
+                        fontFamily: "inherit"
+                      }}
+                      placeholder="Enter query for Web data agent..."
+                    />
+                    <div className="d-flex justify-content-end mt-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm text-white rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                        onClick={runWebDataAgent}
                         disabled={webAgentStatus === "loading"}
-                        rows={3}
                         style={{
-                          fontSize: "13px",
-                          borderRadius: "8px",
-                          borderColor: "#cbd5e1",
-                          borderLeft: "4px solid #448C74",
-                          background: webAgentStatus === "loading" ? "#f8fafc" : "#ffffff",
-                          lineHeight: "1.6",
-                          fontFamily: "inherit"
+                          background: webAgentStatus === "loading" ? "#ccc" : "linear-gradient(135deg, #448C74, #55d19d)",
+                          border: "none"
                         }}
-                        placeholder="Enter query for Web data agent..."
-                      />
-                      <div className="d-flex justify-content-end mt-2">
+                      >
+                        {webAgentStatus === "loading" ? (
+                          <>
+                            <FaSpinner className="spinner-border spinner-border-sm me-1" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <FaWandSparkles size={12} />
+                            Run Web Agent
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Web Agent Output Response Loading State */}
+                  {webAgentStatus === "loading" && (
+                    <div className="mt-3 p-3 rounded-3 bg-white border shadow-sm">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <div className="d-flex align-items-center gap-2" style={{ fontSize: "13px", fontWeight: 600, color: "#2d6b55" }}>
+                          <FaSpinner className="spinner-border spinner-border-sm text-success me-1" style={{ width: "0.9rem", height: "0.9rem" }} />
+                          <span>{webAgentCurrentStatus || "Querying building regulation rules & authority documents..."}</span>
+                        </div>
+                        <span className="badge bg-success bg-opacity-10 text-success" style={{ fontSize: "10px", fontWeight: 600 }}>
+                          Live Web Search Stream
+                        </span>
+                      </div>
+
+                      {/* Live Animated Progress Bar */}
+                      <div className="progress mb-2" style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e9ecef" }}>
+                        <div
+                          className="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                          role="progressbar"
+                          style={{
+                            width: webAgentResponse ? "90%" : webAgentStatusLog.length > 2 ? "65%" : "35%",
+                            transition: "width 0.4s ease"
+                          }}
+                        />
+                      </div>
+
+                      {/* Real-time Status Log Trail */}
+                      {webAgentStatusLog.length > 0 && (
+                        <div className="pt-2 mt-2 border-top" style={{ fontSize: "11px", color: "#666", maxHeight: "90px", overflowY: "auto" }}>
+                          {webAgentStatusLog.map((logMsg, i) => (
+                            <div key={i} className="d-flex align-items-center gap-2 mb-1">
+                              <span className="text-success fw-bold" style={{ fontSize: "10px" }}>✓</span>
+                              <span>{logMsg}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {webAgentStatus === "completed" && webAgentResponse && (
+                    <div className="mt-3 rounded-3 border bg-white shadow-sm overflow-hidden">
+                      <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
+                        <div className="d-flex align-items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#2d6b55" }}>
+                          <span>Analysis Result</span>
+                          <span className="badge bg-success bg-opacity-10 text-success fw-normal" style={{ fontSize: "10px" }}>Web Agent</span>
+                        </div>
                         <button
                           type="button"
-                          className="btn btn-sm text-white rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
-                          onClick={runWebDataAgent}
-                          disabled={webAgentStatus === "loading"}
-                          style={{
-                            background: webAgentStatus === "loading" ? "#ccc" : "linear-gradient(135deg, #448C74, #55d19d)",
-                            border: "none"
-                          }}
+                          className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
+                          style={{ fontSize: "11px", fontWeight: 600 }}
+                          onClick={() => setIsWebAgentMaximized(!isWebAgentMaximized)}
                         >
-                          {webAgentStatus === "loading" ? (
+                          {isWebAgentMaximized ? (
                             <>
-                              <FaSpinner className="spinner-border spinner-border-sm me-1" />
-                              Processing...
+                              <FaCompress size={11} /> Minimize View
                             </>
                           ) : (
                             <>
-                              <FaWandSparkles size={12} />
-                              Run Web Agent
+                              <FaExpandAlt size={11} /> Maximize View
                             </>
                           )}
                         </button>
                       </div>
-                    </div>
-
-                    {/* Web Agent Output Response Loading State */}
-                    {webAgentStatus === "loading" && (
-                      <div className="mt-3 p-3 rounded-3 bg-white border shadow-sm">
-                        <div className="d-flex align-items-center justify-content-between mb-2">
-                          <div className="d-flex align-items-center gap-2" style={{ fontSize: "13px", fontWeight: 600, color: "#2d6b55" }}>
-                            <FaSpinner className="spinner-border spinner-border-sm text-success me-1" style={{ width: "0.9rem", height: "0.9rem" }} />
-                            <span>{webAgentCurrentStatus || "Querying building regulation rules & authority documents..."}</span>
-                          </div>
-                          <span className="badge bg-success bg-opacity-10 text-success" style={{ fontSize: "10px", fontWeight: 600 }}>
-                            Live Web Search Stream
-                          </span>
-                        </div>
-
-                        {/* Live Animated Progress Bar */}
-                        <div className="progress mb-2" style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e9ecef" }}>
-                          <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                            role="progressbar"
-                            style={{
-                              width: webAgentResponse ? "90%" : webAgentStatusLog.length > 2 ? "65%" : "35%",
-                              transition: "width 0.4s ease"
-                            }}
-                          />
-                        </div>
-
-                        {/* Real-time Status Log Trail */}
-                        {webAgentStatusLog.length > 0 && (
-                          <div className="pt-2 mt-2 border-top" style={{ fontSize: "11px", color: "#666", maxHeight: "90px", overflowY: "auto" }}>
-                            {webAgentStatusLog.map((logMsg, i) => (
-                              <div key={i} className="d-flex align-items-center gap-2 mb-1">
-                                <span className="text-success fw-bold" style={{ fontSize: "10px" }}>✓</span>
-                                <span>{logMsg}</span>
+                      <div
+                        className="p-3 regulatory-answer-md custom-scrollbar"
+                        style={{
+                          maxHeight: isWebAgentMaximized ? "750px" : "350px",
+                          overflowY: "scroll",
+                          fontSize: "13px",
+                          background: "#ffffff"
+                        }}
+                      >
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({ node, ...props }) => <h4 className="web-response-h1" {...props} />,
+                            h2: ({ node, ...props }) => <h5 className="web-response-h2" {...props} />,
+                            h3: ({ node, ...props }) => <h6 className="web-response-h3" {...props} />,
+                            a: ({ node, href, children, ...props }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="web-response-link"
+                                {...props}
+                              >
+                                {children} <FaExternalLinkAlt size={9} className="ms-1 inline-icon" />
+                              </a>
+                            ),
+                            blockquote: ({ node, ...props }) => (
+                              <blockquote className="web-response-blockquote" {...props} />
+                            ),
+                            table: ({ node, ...props }) => (
+                              <div className="table-responsive my-3">
+                                <table className="table table-sm table-hover table-bordered border-light-subtle web-response-table" {...props} />
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {webAgentStatus === "completed" && webAgentResponse && (
-                      <div className="mt-3 rounded-3 border bg-white shadow-sm overflow-hidden">
-                        <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
-                          <div className="d-flex align-items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#2d6b55" }}>
-                            <span>Analysis Result</span>
-                            <span className="badge bg-success bg-opacity-10 text-success fw-normal" style={{ fontSize: "10px" }}>Web Agent</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
-                            style={{ fontSize: "11px", fontWeight: 600 }}
-                            onClick={() => setIsWebAgentMaximized(!isWebAgentMaximized)}
-                          >
-                            {isWebAgentMaximized ? (
-                              <>
-                                <FaCompress size={11} /> Minimize View
-                              </>
-                            ) : (
-                              <>
-                                <FaExpandAlt size={11} /> Maximize View
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <div
-                          className="p-3 regulatory-answer-md custom-scrollbar"
-                          style={{
-                            maxHeight: isWebAgentMaximized ? "750px" : "350px",
-                            overflowY: "scroll",
-                            fontSize: "13px",
-                            background: "#ffffff"
+                            )
                           }}
                         >
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              h1: ({ node, ...props }) => <h4 className="web-response-h1" {...props} />,
-                              h2: ({ node, ...props }) => <h5 className="web-response-h2" {...props} />,
-                              h3: ({ node, ...props }) => <h6 className="web-response-h3" {...props} />,
-                              a: ({ node, href, children, ...props }) => (
-                                <a
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="web-response-link"
-                                  {...props}
-                                >
-                                  {children} <FaExternalLinkAlt size={9} className="ms-1 inline-icon" />
-                                </a>
-                              ),
-                              blockquote: ({ node, ...props }) => (
-                                <blockquote className="web-response-blockquote" {...props} />
-                              ),
-                              table: ({ node, ...props }) => (
-                                <div className="table-responsive my-3">
-                                  <table className="table table-sm table-hover table-bordered border-light-subtle web-response-table" {...props} />
-                                </div>
-                              )
-                            }}
-                          >
-                            {webAgentResponse}
-                          </ReactMarkdown>
-                        </div>
+                          {webAgentResponse}
+                        </ReactMarkdown>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {webAgentStatus === "error" && (
-                      <div className="mt-3 p-3 rounded-3 bg-danger bg-opacity-10 border border-danger text-danger small">
-                        {webAgentError}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                  {webAgentStatus === "error" && (
+                    <div className="mt-3 p-3 rounded-3 bg-danger bg-opacity-10 border border-danger text-danger small">
+                      {webAgentError}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
 
-            {/* Input 1: Permissible FSI / FAR (Sq ft) */}
-            <div className="col-md-6">
-              <div className="v2-field-wrapper-card">
-                <label className="v2-field-label-text d-block">
-                  Permissible FSI / FAR (Sq ft)
-                </label>
-                <input
-                  type="text"
-                  className="v2-pill-input"
-                  value={v3FormData.permissibleFSI_FAR || ""}
-                  onChange={(e) => handleV3InputChange("permissibleFSI_FAR", e.target.value)}
-                  placeholder="Enter Permissible FSI / FAR (Sq ft)"
-                />
-              </div>
+          {/* Input 1: Permissible FSI / FAR (Sq ft) */}
+          <div className="col-md-6">
+            <div className="v2-field-wrapper-card">
+              <label className="v2-field-label-text d-block">
+                Permissible FSI / FAR (Sq ft)
+              </label>
+              <input
+                type="text"
+                className="v2-pill-input"
+                value={v3FormData.permissibleFSI_FAR || ""}
+                onChange={(e) => handleV3InputChange("permissibleFSI_FAR", e.target.value)}
+                placeholder="Enter Permissible FSI / FAR (Sq ft)"
+              />
             </div>
+          </div>
 
-            {/* Input 2: Gross Floor area (Sq ft) */}
-            <div className="col-md-6">
-              <div className="v2-field-wrapper-card">
-                <label className="v2-field-label-text d-block">
-                  Gross Floor area (Sq ft) (Area to Build)
-                </label>
-                <input
-                  type="text"
-                  className="v2-pill-input"
-                  value={v3FormData.grossFloorArea || ""}
-                  onChange={(e) => handleV3InputChange("grossFloorArea", e.target.value)}
-                  placeholder="Enter Gross Floor area (Sq ft)"
-                />
-              </div>
+          {/* Input 2: Gross Floor area (Sq ft) */}
+          <div className="col-md-6">
+            <div className="v2-field-wrapper-card">
+              <label className="v2-field-label-text d-block">
+                Gross Floor area (Sq ft) (Area to Build)
+              </label>
+              <input
+                type="text"
+                className="v2-pill-input"
+                value={v3FormData.grossFloorArea || ""}
+                onChange={(e) => handleV3InputChange("grossFloorArea", e.target.value)}
+                placeholder="Enter Gross Floor area (Sq ft)"
+              />
             </div>
+          </div>
 
-            {/* Disclaimer Info Banner */}
-            <div className="col-12 mt-2">
-              <div className="p-3 rounded-4 border d-flex align-items-center gap-3 bg-white text-secondary" style={{ fontSize: "13px", borderColor: "#e2e8f0" }}>
-                <FaInfoCircle className="text-primary flex-shrink-0" size={16} />
-                <span>FSI/FAR values should be verified with applicable development control rules, zoning documents and planning authority records.</span>
-              </div>
+          {/* Disclaimer Info Banner */}
+          <div className="col-12 mt-2">
+            <div className="p-3 rounded-4 border d-flex align-items-center gap-3 bg-white text-secondary" style={{ fontSize: "13px", borderColor: "#e2e8f0" }}>
+              <FaInfoCircle className="text-primary flex-shrink-0" size={16} />
+              <span>FSI/FAR values should be verified with applicable development control rules, zoning documents and planning authority records.</span>
             </div>
+          </div>
 
-            {/* Action Save Button */}
-            <div className="col-12 mt-3 d-flex justify-content-end">
-              <button
-                className="v2-btn-dark-pill d-inline-flex align-items-center"
-                onClick={handleV3Save}
-              >
-                <FaSave className="me-2" />Save FSI Details
-              </button>
-            </div>
+          {/* Action Save Button */}
+          <div className="col-12 mt-3 d-flex justify-content-end">
+            <button
+              className="v2-btn-dark-pill d-inline-flex align-items-center"
+              onClick={handleV3Save}
+            >
+              <FaSave className="me-2" />Save FSI Details
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default LandDetailsForm;

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  continueMissingField,
   getGmailConnectionStatus,
   streamWorkflow,
   startGoogleOAuth,
@@ -249,7 +248,9 @@ export default function ConnectorPageClient() {
   const [prompt, setPrompt] = useState("Read my Gmail attachments and summarize them");
   const [isLoading, setIsLoading] = useState(false);
   const [connectorStatusLoading, setConnectorStatusLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Prompt workflow workspace ready.");
+  const [statusMessage, setStatusMessage] = useState(
+    "Prompt workflow workspace ready.",
+  );
   const [response, setResponse] = useState<WorkflowResponse | null>(null);
   const [needsGmail, setNeedsGmail] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -316,9 +317,10 @@ export default function ConnectorPageClient() {
     setConnectorStatusLoading(true);
     try {
       const status = await getGmailConnectionStatus();
-
+      setNeedsGmail(true);
       setGmailConnected(status.connected);
       setGmailEmail(status.email ?? null);
+      setPendingPrompt(promptToKeep);
 
       if (requireWorkflow || !status.connected) {
         setNeedsGmail(true);
@@ -765,3 +767,6 @@ export default function ConnectorPageClient() {
     </div>
   );
 }
+
+
+
