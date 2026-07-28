@@ -671,8 +671,8 @@ import CostOutput from "./CostOutput";
 import MeansOfFinance from "./MeansOfFinance";
 import Dashboard from "./Dashboard";
 import { useLegacyNavigate as useNavigate, useLegacyLocation as useLocation } from "@/components/feasibility_agent/useLegacyNavigate"; import Link from "next/link";
-
 import UnitDesignStructure from "./UnitDesignStructure";
+import ProductMixTicketSize from "./ProductMixTicketSize";
 import RateSim from "./ratesim";
 import RequiredParking from "./RequiredParking";
 import RevenueProjection2 from "./revenuep2";
@@ -1868,6 +1868,12 @@ const Index = () => {
                         calculationMode={calculationMode}
                         setCalculationMode={setCalculationMode}
                       />
+                    </div>
+                  </div>
+
+                  <div className="row g-4 align-items-stretch mt-4">
+                    <div className="col-12 d-flex">
+                      <ProductMixTicketSize />
                     </div>
                   </div>
                 </div>
