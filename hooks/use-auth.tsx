@@ -29,12 +29,13 @@ interface AuthContextType {
   logout: () => Promise<void>;
   checkUser: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /** Pages that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/auth', '/register'];
+const PUBLIC_PATHS = ['/login', '/auth', '/register', '/auth/reset-password'];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -104,7 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   /**
-   * Register a new account and auto-login (session cookie set by backend).
+   * Register a new account.
+   * Does NOT auto-login — user must verify email and sign in manually.
    */
   const register = async (username: string, email: string, password: string) => {
     setLoading(true);
@@ -119,14 +121,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Registration failed. Please try again.');
       }
-
-      // Fetch full profile after registration
-      await checkUser();
+      // Intentionally NOT calling checkUser() — user must login manually after email verification.
     } catch (err) {
       setUser(null);
       throw err;
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Send a forgot-password reset email.
+   */
+  const forgotPassword = async (email: string) => {
+    const response = await apiRequest(API_ROUTES.authForgotPassword, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Could not send reset email. Please try again.');
     }
   };
 
@@ -144,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, checkUser, refreshProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, checkUser, refreshProfile, forgotPassword }}>
       {children}
     </AuthContext.Provider>
   );

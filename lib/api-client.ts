@@ -9,6 +9,14 @@ export const API_ROUTES = {
   authLogin: '/auth/login',
   authLogout: '/auth/logout',
   authMe: '/auth/me',
+  // Password reset
+  authForgotPassword: '/auth/forgot-password',
+  authResetPassword: '/auth/reset-password',
+  // Google OAuth for authentication
+  authGoogleLogin: '/auth/google/login',
+  // Email verification
+  authVerifyEmail: '/auth/verify-email',
+  authResendVerification: '/auth/resend-verification',
   // Profile (full, includes role + token_balance)
   profileMe: '/profile/me',
   profileUpdate: '/profile/me',
