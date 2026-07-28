@@ -1496,9 +1496,9 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                     {comp.isDropped ? (
                       <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">Dropped</span>
                     ) : comp.data_source === "Internal DB" ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
+                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Web</span>
+                      <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Agent Web Search</span>
                     )}
                   </td>
                 </tr>
@@ -2063,7 +2063,7 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction</span>
+                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
             ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
@@ -2213,7 +2213,7 @@ function TransactionTable({ transactions }) {
               <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                  Transaction
+                  Transaction DB
                 </span>
               </td>
               <td className="px-3 py-2 text-right font-mono text-text-dim">{t.net_carpet_area_sq_m ?? "—"}</td>
@@ -2385,7 +2385,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <TableHeaderCell columnKey="cleaned_config" label="Config" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="raw_price" label="Raw Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_price_value" label="Standardized Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
-            <TableHeaderCell columnKey="exchange_rate_remark" label="Exchange Rate" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
+            <TableHeaderCell columnKey="exchange_rate_remark" label="Currency Exchange Rate" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="cleaned_area_sqft" label="Raw Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             <TableHeaderCell columnKey="final_super_builtup_area" label="Normalized Area (SBUA)" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
             {isPlotSubject && (
@@ -2588,7 +2588,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 </td>
                 <td className="px-3 py-2 text-center">
                   <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
-                    {lst.source === 'Internal DB' ? 'Transaction' : (lst.source || "Web")}
+                    {lst.source === 'Internal DB' ? 'Transaction DB' : (lst.source || "Agent Web Search")}
                   </span>
                 </td>
                 <td className="px-3 py-2">
@@ -3060,7 +3060,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       </span>
                     ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
                       <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
-                        Transaction
+                        Transaction DB
                       </span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
@@ -3096,7 +3096,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                       <td className="px-4 py-2 text-center">
                         {isSubDb ? (
                           <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
-                            Transaction
+                            Transaction DB
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
@@ -4657,7 +4657,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
                     ? "border-violet-400/30 bg-violet-400/10 text-violet-300"
                     : "border-border/40 bg-bg-card/60 text-text-dim";
                 const sourceIcon = isWeb ? "🌐" : isDb ? "🗄️" : "📁";
-                const sourceLabel = isWeb ? "Web" : isDb ? "Transaction" : (src || "Unknown");
+                const sourceLabel = isWeb ? "Agent Web Search" : isDb ? "Transaction DB" : (src || "Unknown");
                 const reason = comp.confidence_reasoning || comp.reason || "";
                 return (
                   <div
@@ -6453,7 +6453,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         role: "user",
         content: isIncremental
           ? `Adding ${newComps.length} new comparable(s). Skipping ${skipComps.length} already fetched (${skipComps.map(c => c.project_name).join(", ")}).`
-          : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Internal DB, ${webComps.length} from Web.`,
+          : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Transaction DB, ${webComps.length} from Web.`,
         meta: "Now",
       },
       {

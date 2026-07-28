@@ -1167,10 +1167,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 <Compass className="h-8 w-8 text-accent" />
               </div>
               <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
-                Waiting For Coordinates
+                Property Location Pending
               </h3>
               <p className="mt-3.5 text-sm leading-6 text-text-secondary">
-                This panel follows the legacy frontend behavior. Once the backend sends coordinates or a map confirmation event, the location map will render here.
+                Waiting for the property coordinates to be confirmed.The map will load automatically once the location is available.
               </p>
             </div>
           </div>

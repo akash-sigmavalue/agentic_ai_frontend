@@ -565,7 +565,7 @@ function SlideComparableGrid({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="mb-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · Agent Factoring Engine</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · Valuation Synthesis Engine</p>
         <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Per-Comparable Adjustment Grid</h3>
         <p className="text-[9px] text-text-dim mt-0.5">Each spatial factor capped at ±5% · Total adjustment capped at ±20%</p>
       </div>
