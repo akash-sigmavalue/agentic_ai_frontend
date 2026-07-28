@@ -1,5 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { FaChevronDown, FaChevronUp, FaPlus, FaTrash } from 'react-icons/fa';
+import { apiUrl } from "@/lib/api-client";
+
+const DEFAULT_PROPERTY_TYPES = [
+    "Apartment", "Flat", "Studio", "Villa", "Townhouse", 
+    "Retail Shop", "Showroom", "Office", "Serviced Apartment", 
+    "Hotel", "Industrial", "Warehouse", "Plot", "Other"
+];
+
+const DEFAULT_UNIT_TYPES = [
+    "Studio", "1 Bed", "2 Bed", "3 Bed", ">3 Bed", 
+    "Small Office", "Medium Office", "Large Office", 
+    "Retail Unit", "Mixed Unit", "Other"
+];
+
+const PropertyTypeSelect = ({ value, onChange, options = [], style }) => {
+    const list = (options && options.length > 0) ? options : DEFAULT_PROPERTY_TYPES;
+    return (
+        <select 
+            className="form-select pm-table-select shadow-none" 
+            value={value || list[0] || 'Apartment'} 
+            onChange={onChange} 
+            style={{ minWidth: '95px', ...style }}
+        >
+            {list.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+            ))}
+        </select>
+    );
+};
+
+const UnitTypeSelect = ({ value, onChange, options = [], style }) => {
+    const list = (options && options.length > 0) ? options : DEFAULT_UNIT_TYPES;
+    return (
+        <select 
+            className="form-select pm-table-select shadow-none" 
+            value={value || list[0] || 'Studio'} 
+            onChange={onChange} 
+            style={{ minWidth: '85px', ...style }}
+        >
+            {list.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+            ))}
+        </select>
+    );
+};
 
 const ProductMixTicketSize = () => {
     const theme = "light";
@@ -10,6 +55,9 @@ const ProductMixTicketSize = () => {
     const [areaUnit, setAreaUnit] = useState("sq ft");
 
     const [grossFloorArea, setGrossFloorArea] = useState(0);
+
+    const [dbPropertyTypes, setDbPropertyTypes] = useState(DEFAULT_PROPERTY_TYPES);
+    const [dbUnitTypes, setDbUnitTypes] = useState(DEFAULT_UNIT_TYPES);
 
     useEffect(() => {
         const savedData = localStorage.getItem("Land_and_fsi_details");
@@ -24,6 +72,8 @@ const ProductMixTicketSize = () => {
             }
         }
 
+        let cityName = "";
+        let locationName = "";
         const savedLandData = localStorage.getItem("Land Identification");
         if (savedLandData) {
             try {
@@ -31,15 +81,41 @@ const ProductMixTicketSize = () => {
                 if (parsedLand.currency) {
                     setCurrency(parsedLand.currency);
                 }
+                cityName = parsedLand.location || parsedLand.city || "";
+                locationName = parsedLand.village || parsedLand.villageName || "";
             } catch (e) {
                 console.error("Error parsing Land Identification", e);
             }
         }
+
+        const fetchTypes = async () => {
+            try {
+                const res = await fetch(apiUrl("/new_rate_simulator/simulator/property-and-unit-types/"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ city_name: cityName, location_name: locationName })
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success) {
+                        if (Array.isArray(json.property_types) && json.property_types.length > 0) {
+                            setDbPropertyTypes(json.property_types);
+                        }
+                        if (Array.isArray(json.unit_types) && json.unit_types.length > 0) {
+                            setDbUnitTypes(json.unit_types);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch property/unit types from DB", e);
+            }
+        };
+        fetchTypes();
     }, []);
 
-    const [areaRows, setAreaRows] = useState([{ id: 1, unitType: 'Studio', min: '', max: '', interval: '' }]);
-    const [rateRows, setRateRows] = useState([{ id: 1, unitType: 'Studio', min: '', max: '', interval: '' }]);
-    const [ticketRows, setTicketRows] = useState([{ id: 1, unitType: 'Studio', min: '', max: '', interval: '' }]);
+    const [areaRows, setAreaRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
+    const [rateRows, setRateRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
+    const [ticketRows, setTicketRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
 
     const [isAnalysisResultsOpen, setIsAnalysisResultsOpen] = useState(true);
     const [areaAnalysisResults, setAreaAnalysisResults] = useState([]);
@@ -68,7 +144,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    unitType: row.unitType || 'Studio',
+                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
+                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
 
@@ -114,7 +191,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    unitType: row.unitType || 'Studio',
+                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
+                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
 
@@ -160,7 +238,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    unitType: row.unitType || 'Studio',
+                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
+                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
 
@@ -197,7 +276,7 @@ const ProductMixTicketSize = () => {
     };
 
     const addRow = (setter) => {
-        setter(prev => [...prev, { id: Date.now() + Math.random() }]);
+        setter(prev => [...prev, { id: Date.now() + Math.random(), propertyType: dbPropertyTypes[0] || '', unitType: dbUnitTypes[0] || '', min: '', max: '', interval: '' }]);
     };
     const removeRow = (setter, id) => {
         setter(prev => prev.filter(row => row.id !== id));
@@ -486,39 +565,39 @@ const ProductMixTicketSize = () => {
                                             <table className="pm-table">
                                                 <thead>
                                                     <tr>
-                                                        <th rowSpan="2" className="align-middle" style={{ width: '25%' }}>Unit Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Property Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Unit Type</th>
                                                         <th colSpan="2" style={{ borderBottom: 'none', paddingBottom: '4px' }}>Area Range For Analysis</th>
-                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '25%' }}>Intervals for Area Range</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '20%' }}>Intervals for Area Range</th>
                                                         <th rowSpan="2" style={{ width: '30px' }}></th>
                                                     </tr>
                                                     <tr>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Min</th>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Max</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Min</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Max</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {areaRows.map((row, index) => (
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
-                                                                <select className="form-select pm-table-select shadow-none" value={row.unitType || 'Studio'} onChange={(e) => handleAreaRowChange(row.id, 'unitType', e.target.value)} style={{ minWidth: '90px' }}>
-                                                                    <option value="Studio">Studio</option>
-                                                                    <option value="1 Bed">1 Bed</option>
-                                                                    <option value="2 Bed">2 Bed</option>
-                                                                    <option value="3 Bed">3 Bed</option>
-                                                                    <option value=">3 Bed">&gt;3 Bed</option>
-                                                                    <option value="Small Office">Small Office</option>
-                                                                    <option value="Medium Office">Medium Office</option>
-                                                                    <option value="Large Office">Large Office</option>
-                                                                    <option value="Retail Unit">Retail Unit</option>
-                                                                    <option value="Mixed Unit">Mixed Unit</option>
-                                                                    <option value="Other">Other</option>
-                                                                </select>
+                                                                <PropertyTypeSelect
+                                                                    value={row.propertyType}
+                                                                    onChange={(e) => handleAreaRowChange(row.id, 'propertyType', e.target.value)}
+                                                                    options={dbPropertyTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleAreaRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <UnitTypeSelect
+                                                                    value={row.unitType}
+                                                                    onChange={(e) => handleAreaRowChange(row.id, 'unitType', e.target.value)}
+                                                                    options={dbUnitTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleAreaRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleAreaRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
+                                                            </td>
+                                                            <td className="align-middle">
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleAreaRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <input type="number" className="form-control pm-table-input shadow-none" placeholder="Interval" value={row.interval || ''} onChange={(e) => handleAreaRowChange(row.id, 'interval', e.target.value)} style={{ minWidth: '50px', width: '100%' }} />
@@ -537,7 +616,7 @@ const ProductMixTicketSize = () => {
                                                         </tr>
                                                     ))}
                                                     <tr>
-                                                        <td colSpan="5" className="text-center p-2" style={{ border: 'none' }}>
+                                                        <td colSpan="6" className="text-center p-2" style={{ border: 'none' }}>
                                                             <button 
                                                                 className="btn btn-sm btn-light border shadow-sm rounded-circle d-flex align-items-center justify-content-center mx-auto" 
                                                                 onClick={() => addRow(setAreaRows)}
@@ -565,39 +644,39 @@ const ProductMixTicketSize = () => {
                                             <table className="pm-table">
                                                 <thead>
                                                     <tr>
-                                                        <th rowSpan="2" className="align-middle" style={{ width: '25%' }}>Unit Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Property Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Unit Type</th>
                                                         <th colSpan="2" style={{ borderBottom: 'none', paddingBottom: '4px' }}>Rate Range</th>
-                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '25%' }}>Intervals for Rate Range</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '20%' }}>Intervals for Rate Range</th>
                                                         <th rowSpan="2" style={{ width: '30px' }}></th>
                                                     </tr>
                                                     <tr>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Min</th>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Max</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Min</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Max</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {rateRows.map((row, index) => (
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
-                                                                <select className="form-select pm-table-select shadow-none" value={row.unitType || 'Studio'} onChange={(e) => handleRateRowChange(row.id, 'unitType', e.target.value)} style={{ minWidth: '90px' }}>
-                                                                    <option value="Studio">Studio</option>
-                                                                    <option value="1 Bed">1 Bed</option>
-                                                                    <option value="2 Bed">2 Bed</option>
-                                                                    <option value="3 Bed">3 Bed</option>
-                                                                    <option value=">3 Bed">&gt;3 Bed</option>
-                                                                    <option value="Small Office">Small Office</option>
-                                                                    <option value="Medium Office">Medium Office</option>
-                                                                    <option value="Large Office">Large Office</option>
-                                                                    <option value="Retail Unit">Retail Unit</option>
-                                                                    <option value="Mixed Unit">Mixed Unit</option>
-                                                                    <option value="Other">Other</option>
-                                                                </select>
+                                                                <PropertyTypeSelect
+                                                                    value={row.propertyType}
+                                                                    onChange={(e) => handleRateRowChange(row.id, 'propertyType', e.target.value)}
+                                                                    options={dbPropertyTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleRateRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <UnitTypeSelect
+                                                                    value={row.unitType}
+                                                                    onChange={(e) => handleRateRowChange(row.id, 'unitType', e.target.value)}
+                                                                    options={dbUnitTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleRateRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleRateRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
+                                                            </td>
+                                                            <td className="align-middle">
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleRateRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <input type="number" className="form-control pm-table-input shadow-none" placeholder="Interval" value={row.interval || ''} onChange={(e) => handleRateRowChange(row.id, 'interval', e.target.value)} style={{ minWidth: '50px', width: '100%' }} />
@@ -616,7 +695,7 @@ const ProductMixTicketSize = () => {
                                                         </tr>
                                                     ))}
                                                     <tr>
-                                                        <td colSpan="5" className="text-center p-2" style={{ border: 'none' }}>
+                                                        <td colSpan="6" className="text-center p-2" style={{ border: 'none' }}>
                                                             <button 
                                                                 className="btn btn-sm btn-light border shadow-sm rounded-circle d-flex align-items-center justify-content-center mx-auto" 
                                                                 onClick={() => addRow(setRateRows)}
@@ -644,39 +723,39 @@ const ProductMixTicketSize = () => {
                                             <table className="pm-table">
                                                 <thead>
                                                     <tr>
-                                                        <th rowSpan="2" className="align-middle" style={{ width: '25%' }}>Unit Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Property Type</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Unit Type</th>
                                                         <th colSpan="2" style={{ borderBottom: 'none', paddingBottom: '4px' }}>Ticket Size Range</th>
-                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '25%' }}>Intervals for Ticket Size Range</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '20%' }}>Intervals for Ticket Size Range</th>
                                                         <th rowSpan="2" style={{ width: '30px' }}></th>
                                                     </tr>
                                                     <tr>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Min</th>
-                                                        <th style={{ paddingTop: 0, width: '25%' }}>Max</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Min</th>
+                                                        <th style={{ paddingTop: 0, width: '18%' }}>Max</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {ticketRows.map((row, index) => (
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
-                                                                <select className="form-select pm-table-select shadow-none" value={row.unitType || 'Studio'} onChange={(e) => handleTicketRowChange(row.id, 'unitType', e.target.value)} style={{ minWidth: '90px' }}>
-                                                                    <option value="Studio">Studio</option>
-                                                                    <option value="1 Bed">1 Bed</option>
-                                                                    <option value="2 Bed">2 Bed</option>
-                                                                    <option value="3 Bed">3 Bed</option>
-                                                                    <option value=">3 Bed">&gt;3 Bed</option>
-                                                                    <option value="Small Office">Small Office</option>
-                                                                    <option value="Medium Office">Medium Office</option>
-                                                                    <option value="Large Office">Large Office</option>
-                                                                    <option value="Retail Unit">Retail Unit</option>
-                                                                    <option value="Mixed Unit">Mixed Unit</option>
-                                                                    <option value="Other">Other</option>
-                                                                </select>
+                                                                <PropertyTypeSelect
+                                                                    value={row.propertyType}
+                                                                    onChange={(e) => handleTicketRowChange(row.id, 'propertyType', e.target.value)}
+                                                                    options={dbPropertyTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleTicketRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <UnitTypeSelect
+                                                                    value={row.unitType}
+                                                                    onChange={(e) => handleTicketRowChange(row.id, 'unitType', e.target.value)}
+                                                                    options={dbUnitTypes}
+                                                                />
                                                             </td>
                                                             <td className="align-middle">
-                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleTicketRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '80px', width: '100%' }} />
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.min || ''} onChange={(e) => handleTicketRowChange(row.id, 'min', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
+                                                            </td>
+                                                            <td className="align-middle">
+                                                                <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.max || ''} onChange={(e) => handleTicketRowChange(row.id, 'max', e.target.value)} style={{ minWidth: '70px', width: '100%' }} />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <input type="number" className="form-control pm-table-input shadow-none" placeholder="Interval" value={row.interval || ''} onChange={(e) => handleTicketRowChange(row.id, 'interval', e.target.value)} style={{ minWidth: '50px', width: '100%' }} />
@@ -695,7 +774,7 @@ const ProductMixTicketSize = () => {
                                                         </tr>
                                                     ))}
                                                     <tr>
-                                                        <td colSpan="5" className="text-center p-2" style={{ border: 'none' }}>
+                                                        <td colSpan="6" className="text-center p-2" style={{ border: 'none' }}>
                                                             <button 
                                                                 className="btn btn-sm btn-light border shadow-sm rounded-circle d-flex align-items-center justify-content-center mx-auto" 
                                                                 onClick={() => addRow(setTicketRows)}
@@ -738,12 +817,13 @@ const ProductMixTicketSize = () => {
                                         <div className="col-md-4" key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
-                                                    <span>Area Range Analysis ({result.unitType})</span>
+                                                    <span>Area Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
                                                 </div>
                                                 <div className="table-responsive">
                                                     <table className="pm-table">
                                                         <thead>
                                                             <tr>
+                                                                <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Area Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
                                                                 <th className="align-middle text-center">Transaction Count</th>
@@ -752,6 +832,7 @@ const ProductMixTicketSize = () => {
                                                         <tbody>
                                                             {result.rows.map(r => (
                                                                 <tr key={r.id}>
+                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
@@ -770,12 +851,13 @@ const ProductMixTicketSize = () => {
                                         <div className="col-md-4" key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
-                                                    <span>Rate Range Analysis ({result.unitType})</span>
+                                                    <span>Rate Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
                                                 </div>
                                                 <div className="table-responsive">
                                                     <table className="pm-table">
                                                         <thead>
                                                             <tr>
+                                                                <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Rate Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
                                                                 <th className="align-middle text-center">Transaction Count</th>
@@ -784,6 +866,7 @@ const ProductMixTicketSize = () => {
                                                         <tbody>
                                                             {result.rows.map(r => (
                                                                 <tr key={r.id}>
+                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
@@ -802,12 +885,13 @@ const ProductMixTicketSize = () => {
                                         <div className="col-md-4" key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
-                                                    <span>Ticket Size Analysis ({result.unitType})</span>
+                                                    <span>Ticket Size Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
                                                 </div>
                                                 <div className="table-responsive">
                                                     <table className="pm-table">
                                                         <thead>
                                                             <tr>
+                                                                <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Ticket Size Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
                                                                 <th className="align-middle text-center">Transaction Count</th>
@@ -816,6 +900,7 @@ const ProductMixTicketSize = () => {
                                                         <tbody>
                                                             {result.rows.map(r => (
                                                                 <tr key={r.id}>
+                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
@@ -909,37 +994,20 @@ const ProductMixTicketSize = () => {
                                                         </select>
                                                     </td>
                                                     <td className="align-middle">
-                                                        <select className="form-select pm-table-select shadow-none mx-auto" value={row.propertyType} onChange={(e) => handleProductMixChange(row.id, 'propertyType', e.target.value)} style={{ minWidth: '110px' }}>
-                                                            <option value="Apartment">Apartment</option>
-                                                            <option value="Flat">Flat</option>
-                                                            <option value="Studio">Studio</option>
-                                                            <option value="Villa">Villa</option>
-                                                            <option value="Townhouse">Townhouse</option>
-                                                            <option value="Retail Shop">Retail Shop</option>
-                                                            <option value="Showroom">Showroom</option>
-                                                            <option value="Office">Office</option>
-                                                            <option value="Serviced Apartment">Serviced Apartment</option>
-                                                            <option value="Hotel">Hotel</option>
-                                                            <option value="Industrial">Industrial</option>
-                                                            <option value="Warehouse">Warehouse</option>
-                                                            <option value="Plot">Plot</option>
-                                                            <option value="Other">Other</option>
-                                                        </select>
+                                                        <PropertyTypeSelect
+                                                            value={row.propertyType}
+                                                            onChange={(e) => handleProductMixChange(row.id, 'propertyType', e.target.value)}
+                                                            options={dbPropertyTypes}
+                                                            style={{ margin: '0 auto', minWidth: '110px' }}
+                                                        />
                                                     </td>
                                                     <td className="align-middle">
-                                                        <select className="form-select pm-table-select shadow-none mx-auto" value={row.unitMix} onChange={(e) => handleProductMixChange(row.id, 'unitMix', e.target.value)} style={{ minWidth: '90px' }}>
-                                                            <option value="Studio">Studio</option>
-                                                            <option value="1 Bed">1 Bed</option>
-                                                            <option value="2 Bed">2 Bed</option>
-                                                            <option value="3 Bed">3 Bed</option>
-                                                            <option value=">3 Bed">&gt;3 Bed</option>
-                                                            <option value="Small Office">Small Office</option>
-                                                            <option value="Medium Office">Medium Office</option>
-                                                            <option value="Large Office">Large Office</option>
-                                                            <option value="Retail Unit">Retail Unit</option>
-                                                            <option value="Mixed Unit">Mixed Unit</option>
-                                                            <option value="Other">Other</option>
-                                                        </select>
+                                                        <UnitTypeSelect
+                                                            value={row.unitMix}
+                                                            onChange={(e) => handleProductMixChange(row.id, 'unitMix', e.target.value)}
+                                                            options={dbUnitTypes}
+                                                            style={{ margin: '0 auto', minWidth: '90px' }}
+                                                        />
                                                     </td>
                                                     <td className="align-middle">
                                                         <div className="d-flex align-items-center justify-content-center gap-1">
