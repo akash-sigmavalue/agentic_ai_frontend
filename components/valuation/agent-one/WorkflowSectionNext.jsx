@@ -408,6 +408,7 @@ function StepDetails({ step }) {
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Total Found" value={content.total_found} />
+        <DetailRow label="Dropped" value={content.dropped_comparables?.length || 0} />
         <DetailRow label="Source" value={sourceLabel} />
         <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>

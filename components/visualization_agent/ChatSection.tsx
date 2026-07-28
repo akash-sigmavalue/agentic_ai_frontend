@@ -591,7 +591,10 @@ function retrievalFailureEvidence(retrieval: VisualizationRetrievalState) {
 }
 
 function shouldRunDataVisFallback(retrieval: VisualizationRetrievalState) {
-  if (retrieval.fallbackAttempted || retrieval.status !== 'error' || retrieval.resultSet?.rows?.length) {
+  const hasAnyRows =
+    retrieval.resultSets?.some((rs) => rs.rows?.length) ||
+    !!retrieval.resultSet?.rows?.length;
+  if (retrieval.fallbackAttempted || retrieval.status !== 'error' || hasAnyRows) {
     return false;
   }
   const evidence = retrievalFailureEvidence(retrieval);
@@ -951,6 +954,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
         error: undefined,
         sqlQuery: undefined,
         resultSet: undefined,
+        resultSets: undefined,
         clarification: undefined,
         tokenEvents: [],
         metrics: {
@@ -995,6 +999,7 @@ const ChatSection: React.FC<ChatSectionProps> = ({
       retrievalIntent: undefined,
       sqlQuery: undefined,
       resultSet: undefined,
+      resultSets: undefined,
       clarification: undefined,
       tokenEvents: [],
       metrics: undefined,
@@ -1066,9 +1071,14 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           break;
         }
         case 'result_set': {
-          updateRetrievalForMessage(messageId, {
-            resultSet: payload.content as VisualizationRetrievalResultSet,
-          });
+          const incomingResultSet = payload.content as VisualizationRetrievalResultSet;
+          updateRetrievalForMessage(messageId, (current) => ({
+            ...current,
+            // Accumulate all result sets (one per metric) into an array
+            resultSets: [...(current.resultSets || []), incomingResultSet],
+            // Keep legacy alias pointing to the first result set for backward compat
+            resultSet: current.resultSets?.length ? current.resultSet : incomingResultSet,
+          }));
           break;
         }
         case 'clarification_required': {
@@ -1119,6 +1129,9 @@ const ChatSection: React.FC<ChatSectionProps> = ({
           let shouldFallback = false;
           let fallbackState: VisualizationRetrievalState | null = null;
           updateRetrievalForMessage(messageId, (current) => {
+            const hasAnyRows =
+              current.resultSets?.some((rs) => rs.rows?.length) ||
+              !!current.resultSet?.rows?.length;
             const completedState: VisualizationRetrievalState = {
               ...current,
               status:
@@ -1126,13 +1139,13 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                   ? 'needs_clarification'
                   : current.error
                     ? 'error'
-                    : current.resultSet?.rows?.length
+                    : hasAnyRows
                       ? 'success'
                       : pipelineStatus === 'no_data'
                         ? 'no_data'
                         : 'error',
               metrics: payload.metrics,
-              error: current.status === 'needs_clarification' || current.resultSet?.rows?.length || pipelineStatus === 'no_data'
+              error: current.status === 'needs_clarification' || hasAnyRows || pipelineStatus === 'no_data'
                 ? current.error
                 : current.error || 'Data retrieval completed without a result set.',
             };
@@ -1764,13 +1777,21 @@ const ChatSection: React.FC<ChatSectionProps> = ({
                             </div>
                           )}
 
-                          {Boolean(m.retrieval?.resultSet?.rows?.length) && (
+                          {Boolean(
+                            m.retrieval?.resultSets?.some((rs) => rs.rows?.length) ||
+                            m.retrieval?.resultSet?.rows?.length
+                          ) && (
                             <button
                               onClick={() => openRetrievalModal(m.retrieval as VisualizationRetrievalState)}
                               className="flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest transition-all hover:bg-emerald-100 hover:shadow-sm"
                             >
                               <Database className="h-3 w-3" />
                               Display Retrieved Data
+                              {(m.retrieval?.resultSets?.filter((rs) => rs.rows?.length).length ?? 0) > 1 && (
+                                <span className="ml-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                                  {m.retrieval?.resultSets?.filter((rs) => rs.rows?.length).length}
+                                </span>
+                              )}
                             </button>
                           )}
 
@@ -2387,7 +2408,37 @@ const ChatSection: React.FC<ChatSectionProps> = ({
 
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/50">
               {activeRetrievalTab === 0 && (
-                <RetrievedDataTable resultSet={retrievalModalData.resultSet} />
+                <div className="space-y-6">
+                  {/* Render all result sets — one per metric returned by the retrieval agent */}
+                  {(retrievalModalData.resultSets && retrievalModalData.resultSets.length > 0
+                    ? retrievalModalData.resultSets
+                    : retrievalModalData.resultSet
+                      ? [retrievalModalData.resultSet]
+                      : []
+                  ).map((rs, idx) => (
+                    <div key={`result-set-${idx}`}>
+                      {(retrievalModalData.resultSets?.length ?? 0) > 1 && (
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+                            <Database className="h-3 w-3" />
+                            Table {idx + 1} of {retrievalModalData.resultSets?.length}
+                          </span>
+                          {rs.domain && (
+                            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                              {rs.domain}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <RetrievedDataTable resultSet={rs} />
+                    </div>
+                  ))}
+                  {!retrievalModalData.resultSets?.length && !retrievalModalData.resultSet && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm font-semibold text-slate-400">
+                      No retrieved data is available for this run.
+                    </div>
+                  )}
+                </div>
               )}
 
               {activeRetrievalTab === 1 && (
