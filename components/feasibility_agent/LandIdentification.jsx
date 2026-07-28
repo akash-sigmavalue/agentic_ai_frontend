@@ -53,6 +53,9 @@ const LandIdentification = () => {
   const [villagesError, setVillagesError] = useState("");
   const [countries, setCountries] = useState([]);
 
+  const [cities, setCities] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+
   useEffect(() => {
     const fetchCountries = async () => {
       try {
@@ -67,6 +70,29 @@ const LandIdentification = () => {
     };
     fetchCountries();
   }, []);
+
+  useEffect(() => {
+    if (!formData.country) {
+      setCities([]);
+      return;
+    }
+    
+    const fetchCities = async () => {
+      setCitiesLoading(true);
+      try {
+        const res = await fetch(apiUrl(`/data_db/get_cities/?country=${encodeURIComponent(formData.country)}`));
+        const data = await res.json();
+        if (data.ok) {
+          setCities(data.cities || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cities:", err);
+      } finally {
+        setCitiesLoading(false);
+      }
+    };
+    fetchCities();
+  }, [formData.country]);
   const [selectedVillageCoords, setSelectedVillageCoords] = useState(null);
   const [planningAdvisoryLoading, setPlanningAdvisoryLoading] = useState(false);
   const [roadWidthLoading, setRoadWidthLoading] = useState(false);
@@ -968,17 +994,10 @@ const LandIdentification = () => {
                 value={formData.location}
                 onChange={handleInputChange}
               >
-                <option value="">Select location</option>
-                <option value="Pune">Pune</option>
-                <option value="Thane">Thane</option>
-                <option value="Abu Dhabi">Abu Dhabi</option>
-                <option value="Dubai">Dubai</option>
-                <option value="Hyderabad">Hyderabad</option>
-                <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
-                <option value="Mumbai">Mumbai</option>
-                <option value="Rangareddy">Rangareddy</option>
-                <option value="Sangareddy">Sangareddy</option>
-                <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
+                <option value="">{citiesLoading ? "Loading cities..." : "Select location"}</option>
+                {cities.map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
                 <option value="Other Location">Other Location</option>
               </select>
             </div>
