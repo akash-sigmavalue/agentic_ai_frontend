@@ -9,6 +9,29 @@ const PDFJS_EXCLUDE = [/node_modules[\\/]pdfjs-dist/, /node_modules[\\/]react-pd
 
 const nextConfig: NextConfig = {
   /* config options here */
+  experimental: {
+    proxyTimeout: 180000, // 3 minutes in milliseconds (default is ~30-60s)
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/new_rate_simulator/simulator/:path*',
+        destination: 'http://localhost:8000/new_rate_simulator/simulator/:path*', 
+      },
+      {
+        source: '/simulator/:path*',
+        destination: 'http://localhost:8000/simulator/:path*', 
+      },
+      {
+        source: '/geospatial/:path*',
+        destination: 'http://localhost:8000/geospatial/:path*',
+      },
+      {
+        source: '/data_db/:path*',
+        destination: 'http://localhost:8000/data_db/:path*',
+      }
+    ]
+  },
   allowedDevOrigins: ['192.168.1.76'],
   typescript: {
     ignoreBuildErrors: true,
