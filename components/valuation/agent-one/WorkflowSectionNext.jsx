@@ -257,6 +257,20 @@ function DetailRow({ label, value }) {
 }
 
 // ── Per-event structured detail panels ────────────────────────────────────────
+function countVisibleDroppedComparables(droppedComparables) {
+  if (!Array.isArray(droppedComparables) || droppedComparables.length === 0) return 0;
+  const seen = new Set();
+  let count = 0;
+  for (const d of droppedComparables) {
+    if (String(d?.drop_stage || "").toLowerCase().trim() === "dedup") continue;
+    const name = String(d?.project_name || "").toLowerCase().trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    count += 1;
+  }
+  return count;
+}
+
 function StepDetails({ step }) {
   const { data } = step;
   const type = data.eventType;
@@ -400,15 +414,16 @@ function StepDetails({ step }) {
   if (type === "comparable_results" && content) {
     // Note: final_radius_km and iterations are always null in current backend
     // (s3_market_execution.py sets them to None). Only show total_found and source.
+    const shownCount = Array.isArray(content.comparables) ? content.comparables.length : (content.total_found || 0);
     const sourceLabel = {
       web: "Agent Web Search (gpt-4o-mini + web_search_preview × 2 passes)",
       db: "Internal Database",
-      both: "Agent Web Search + Internal Database",
+      both: "Agent Web Search + Transaction Database",
     }[content.comparable_source] || content.comparable_source || "Agent Web Search";
     return (
       <div className={`${boxClass} space-y-0.5`}>
-        <DetailRow label="Total Found" value={content.total_found} />
-        <DetailRow label="Dropped" value={content.dropped_comparables?.length || 0} />
+        <DetailRow label="Total Found" value={shownCount} />
+        <DetailRow label="Dropped" value={countVisibleDroppedComparables(content.dropped_comparables)} />
         <DetailRow label="Source" value={sourceLabel} />
         <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>

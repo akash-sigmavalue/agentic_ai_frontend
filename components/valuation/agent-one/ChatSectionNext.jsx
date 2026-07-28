@@ -5483,19 +5483,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setPipelineDone(true);
             onValuationResult?.(valuationPayload);
             updateQuickEstimateProgress("complete", "Quick estimate valuation complete.");
-            if (!comparables.length) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: "No comparable projects were found. Continue using subject-only data to match the original valuation flow.",
-                  meta: "info",
-                  db_no_results: true,
-                  web_comparable_search_done: true,
-                  comparables: null,
-                },
-              ]);
-            }
             setMessages((prev) => [
               ...prev,
               {
