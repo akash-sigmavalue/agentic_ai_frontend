@@ -15,7 +15,7 @@ interface CustomPdfViewerProps {
 
 export default function CustomPdfViewer({
   pdfUrl,
-  pageNumbers = "all",
+  pageNumbers = [1],
   searchText,
   highlightRects = [],
 }: CustomPdfViewerProps) {

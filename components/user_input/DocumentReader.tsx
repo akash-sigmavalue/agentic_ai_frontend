@@ -1021,10 +1021,10 @@ export default function DocumentReader() {
                     )}
                   </div>
                 ) : (
-                  <CustomPdfViewer
-                    key={`${activeChunkIndex ?? "none"}-${activeChunk ? parseChunkPages(activeChunk).join(",") : "all"}`}
-                    pdfUrl={activeFileUrl}
-                    pageNumbers={activeChunk ? parseChunkPages(activeChunk) : "all"}
+                    <CustomPdfViewer
+                      key={`${activeChunkIndex ?? "none"}-${activeChunk ? parseChunkPages(activeChunk).join(",") : "1"}`}
+                      pdfUrl={activeFileUrl}
+                      pageNumbers={activeChunk ? parseChunkPages(activeChunk) : [1]}
                     searchText={getSearchTerm(activeChunk?.content || activeChunk?.text)}
                     highlightRects={highlightRects}
                   />
