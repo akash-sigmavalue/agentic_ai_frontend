@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
+import Image from "next/image";
 import { Database, Globe2, RotateCcw, Server } from "lucide-react";
 import ActivityLog from "./ActivityLog";
 import AgentShell from "./AgentShell";
@@ -33,6 +34,9 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [plan, setPlan] = useState<unknown[] | null>(null);
   const [results, setResults] = useState<DataRow[]>([]);
+  const [captcha, setCaptcha] = useState<{ challengeId: string; image: string } | null>(null);
+  const [captchaValue, setCaptchaValue] = useState("");
+  const [captchaSubmitting, setCaptchaSubmitting] = useState(false);
   const activeSourceRef = useRef<EventSource | null>(null);
 
   const normalizedApiBaseUrl = useMemo(() => normalizeApiBase(apiBaseUrl), [apiBaseUrl]);
@@ -85,6 +89,8 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
     setBadges([]);
     setPlan(null);
     setResults([]);
+    setCaptcha(null);
+    setCaptchaValue("");
     setStatus("Ready");
     setBusy(false);
   }, [closeStream, setStatus]);
@@ -173,12 +179,41 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
             logLine(`+${message.record_count || 0} records extracted`, "data");
             setResults((current) => current.concat(message.data || []));
             break;
+          case "captcha_required":
+            setCaptcha({
+              challengeId: message.challenge_id || "",
+              image: message.image || "",
+            });
+            setCaptchaValue("");
+            setStatus("Action required", "busy");
+            logLine(message.message || "Enter the CAPTCHA to continue.", "step");
+            break;
+          case "captcha_resumed":
+            setCaptcha(null);
+            setCaptchaValue("");
+            setStatus("Running...", "busy");
+            logLine(message.message || "CAPTCHA accepted. Resuming.", "data");
+            break;
+          case "captcha_rejected":
+            setCaptchaValue("");
+            setStatus("CAPTCHA rejected", "busy");
+            logLine(message.message || "The portal rejected that CAPTCHA. Try again.", "error");
+            break;
           case "done":
             setStatus("Done", "done");
             setBusy(false);
             logLine(
               `Done. ${message.record_count || 0} total records, ${message.pages || 0} page(s), ${message.steps_executed || 0} steps, ${message.tokens_used || 0} tokens.`,
               "data",
+            );
+            closeStream();
+            break;
+          case "no_results":
+            setStatus("No results", "err");
+            setBusy(false);
+            logLine(
+              message.message || "The crawl completed, but no matching project details were extracted.",
+              "error",
             );
             closeStream();
             break;
@@ -192,6 +227,31 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
       },
     );
   }, [addBadge, clearOutput, closeStream, districtHint, logLine, query, setStatus, streamFrom, urlOverride]);
+
+  const submitCaptcha = useCallback(async () => {
+    if (!captcha || !captchaValue.trim()) return;
+    setCaptchaSubmitting(true);
+    try {
+      const response = await fetch(normalizedApiBaseUrl + "/captcha/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challenge_id: captcha.challengeId,
+          value: captchaValue.trim(),
+        }),
+      });
+      const payload = (await response.json()) as { status?: string; message?: string };
+      if (!response.ok || payload.status !== "ok") {
+        throw new Error(payload.message || "CAPTCHA submission failed.");
+      }
+      logLine("CAPTCHA answer sent; waiting for portal verification.", "step");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CAPTCHA submission failed.";
+      logLine(message, "error");
+    } finally {
+      setCaptchaSubmitting(false);
+    }
+  }, [captcha, captchaValue, logLine, normalizedApiBaseUrl]);
 
   const runPlan = useCallback(
     async (conversational: boolean) => {
@@ -313,6 +373,45 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
 
   return (
     <AgentShell>
+      {captcha ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-bg-panel p-5 shadow-2xl">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">Action required</p>
+            <h2 className="mt-2 text-lg font-bold text-text-primary">Enter portal CAPTCHA</h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              The browser session is paused. Enter the characters shown below to continue scraping.
+            </p>
+            {captcha.image ? (
+              <Image
+                src={captcha.image}
+                alt="CAPTCHA challenge"
+                width={800}
+                height={400}
+                unoptimized
+                className="mt-4 max-h-64 w-full rounded-xl border border-border bg-white object-contain"
+              />
+            ) : null}
+            <input
+              autoFocus
+              value={captchaValue}
+              onChange={(event) => setCaptchaValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void submitCaptcha();
+              }}
+              placeholder="Enter CAPTCHA"
+              className="mt-4 w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-text-primary outline-none focus:border-cyan-400"
+            />
+            <button
+              type="button"
+              disabled={!captchaValue.trim() || captchaSubmitting}
+              onClick={() => void submitCaptcha()}
+              className="mt-3 w-full rounded-xl bg-cyan-400 px-4 py-3 text-sm font-black uppercase tracking-[0.14em] text-slate-950 disabled:opacity-50"
+            >
+              {captchaSubmitting ? "Submitting..." : "Submit and continue"}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <section className="flex h-full min-h-0 flex-col">
         {/* <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <div className="rounded-2xl border border-border bg-bg-panel px-4 py-3 backdrop-blur-xl">

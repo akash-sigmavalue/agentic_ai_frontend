@@ -38,11 +38,31 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
   const legal = data.legal_compliance || {};
   const documents = data.documents || [];
   const additional = data.additional_fields || {};
-  const sourceUrl = data.source_url || data.SourceUrl || "";
+  const sourceUrl = data.source_url || data.SourceUrl || data["Source URL"] || "";
 
   // Grab deep scrape tables/sections
   const deepScrape = data.deep_scrape || {};
   const rawSections = deepScrape.sections || deepScrape.tables || {};
+
+  type TableSection = { title: string; rows: Record<string, unknown>[] };
+  const scrapedTableSections: TableSection[] = [];
+  const collectSections = (value: unknown, path: string[] = []) => {
+    if (Array.isArray(value)) {
+      scrapedTableSections.push({
+        title: path.filter(Boolean).join(" > ") || "Project Details",
+        rows: value.filter(
+          (row): row is Record<string, unknown> =>
+            Boolean(row) && typeof row === "object" && !Array.isArray(row)
+        ),
+      });
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    Object.entries(value).forEach(([key, child]) =>
+      collectSections(child, [...path, key])
+    );
+  };
+  collectSections(rawSections);
 
   // Normalize key names for checking
   const cleanKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -65,36 +85,36 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
       }
     }
     // 3. Check within sections
-    for (const secName of Object.keys(rawSections)) {
-      const rows = rawSections[secName];
-      if (Array.isArray(rows)) {
-        for (const row of rows) {
+    for (const section of scrapedTableSections) {
+      for (const row of section.rows) {
           if (row && typeof row === "object") {
             for (const key of Object.keys(row)) {
               const kClean = cleanKey(key);
               if (keywords.every(kw => kClean.includes(kw))) {
-                return row[key];
+                const value = row[key];
+                if (typeof value === "string" || typeof value === "number") {
+                  return value;
+                }
               }
             }
           }
-        }
       }
     }
     return null;
   };
 
   // Find highlights
-  const totalUnits = findMetric(["total", "unit"]) || findMetric(["number", "apartment"]) || findMetric(["total", "apartment"]) || "95";
-  const sanctionedUnits = findMetric(["sanctioned"]) || "84";
-  const notSanctionedUnits = findMetric(["notsanctioned"]) || findMetric(["mortgage"]) || "11";
-  const totalArea = findMetric(["total", "area"]) || findMetric(["phase", "area"]) || "18,588 sqm";
+  const totalUnits = findMetric(["total", "unit"]) || findMetric(["number", "apartment"]) || findMetric(["total", "apartment"]);
+  const sanctionedUnits = findMetric(["sanctioned"]);
+  const notSanctionedUnits = findMetric(["notsanctioned"]) || findMetric(["mortgage"]);
+  const totalArea = findMetric(["total", "area"]) || findMetric(["phase", "area"]);
 
   // Calculate sanction progress percentage
   const numSanctioned = parseFloat(String(sanctionedUnits).replace(/[^0-9.]/g, ""));
   const numTotal = parseFloat(String(totalUnits).replace(/[^0-9.]/g, ""));
   const sanctionProgress = !isNaN(numSanctioned) && !isNaN(numTotal) && numTotal > 0
     ? Math.min(100, Math.round((numSanctioned / numTotal) * 100))
-    : 88;
+    : null;
 
   // Filter sections into standard tabs or dynamic tabs
   const mappedSections: Record<string, { title: string; rows: any[] }[]> = {
@@ -108,13 +128,26 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
   };
   const dynamicTabs: Record<string, { title: string; rows: any[] }[]> = {};
 
-  Object.entries(rawSections).forEach(([sectionName, rows]) => {
-    if (!Array.isArray(rows)) return;
+  const portalTabNames = [
+    "Uploaded Documents",
+    "Enquired Documents",
+    "Quarterly Updates",
+    "Completion Details",
+  ];
+
+  scrapedTableSections.forEach(({ title: sectionName, rows }) => {
     const nameLow = sectionName.toLowerCase();
 
     const sectionData = { title: sectionName, rows };
+    const portalTab = portalTabNames.find((name) =>
+      nameLow.includes(name.toLowerCase())
+    );
 
-    if (nameLow.includes("complaint")) {
+    if (portalTab) {
+      const tabKey = cleanKey(portalTab);
+      if (!dynamicTabs[tabKey]) dynamicTabs[tabKey] = [];
+      dynamicTabs[tabKey].push(sectionData);
+    } else if (nameLow.includes("complaint")) {
       mappedSections.complaints.push(sectionData);
     } else if (nameLow.includes("agent")) {
       mappedSections.agents.push(sectionData);
@@ -161,10 +194,6 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
   const documentTableSections = documents.length > 0
     ? [{ title: "Documents", rows: documents }]
     : [];
-
-  const scrapedTableSections = Object.entries(rawSections)
-    .filter((entry): entry is [string, Record<string, unknown>[]] => Array.isArray(entry[1]))
-    .map(([title, rows]) => ({ title, rows }));
 
   const allTableSections = [
     ...structuredTableSections,
@@ -265,7 +294,8 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {findMetric(["district"]) && (
                   <span className="rounded-xl border border-border bg-bg-card/40 px-2.5 py-1 text-xs font-bold text-text-secondary">
-                    📍 {String(findMetric(["district"]))}, {String(findMetric(["state"]) || "Rajasthan")}
+                    📍 {String(findMetric(["district"]))}
+                    {(findMetric(["state"]) || data.state) ? `, ${String(findMetric(["state"]) || data.state)}` : ""}
                   </span>
                 )}
                 {findMetric(["project", "type"]) && (
@@ -312,12 +342,14 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
             <div className="col-span-2 rounded-2xl border border-border bg-bg-card/40 px-4 py-3 sm:col-span-2 md:col-span-1">
               <div className="flex items-center justify-between">
                 <p className="text-[9px] font-black uppercase tracking-[0.16em] text-text-dim">Sanction Progress</p>
-                <p className="font-mono text-xs font-bold text-success">{sanctionProgress}%</p>
+                <p className="font-mono text-xs font-bold text-success">
+                  {sanctionProgress === null ? "N/A" : `${sanctionProgress}%`}
+                </p>
               </div>
               <div className="mt-2.5 h-2 w-full rounded-full bg-bg-deep">
                 <div
                   className="h-full rounded-full bg-success transition-all duration-500"
-                  style={{ width: `${sanctionProgress}%` }}
+                  style={{ width: `${sanctionProgress || 0}%` }}
                 />
               </div>
             </div>
@@ -513,8 +545,8 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
     if (!rows.length) return <p className="p-4 text-xs italic text-text-dim">No records</p>;
 
     // Get all column keys
-    const cols = Array.from(
-      rows.reduce((acc, row) => {
+    const cols: string[] = Array.from(
+      rows.reduce<Set<string>>((acc, row) => {
         if (row && typeof row === "object") {
           Object.keys(row).forEach((k) => acc.add(k));
         }

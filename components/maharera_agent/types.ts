@@ -46,6 +46,10 @@ export type AgentEvent = {
   dropdowns?: number;
   inputs?: number;
   dropdown_details?: unknown[];
+  run_id?: string;
+  challenge_id?: string;
+  image?: string;
+  expires_in?: number;
 };
 
 export type PlanResponse = {
