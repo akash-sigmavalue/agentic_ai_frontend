@@ -1185,59 +1185,33 @@ const ProductMixTicketSize = () => {
                     </div>
                     {isAnalysisModeOpen && (
                         <div className="pm-section-body">
-                            {/* Global Inputs */}
-                            <div className="row mb-4 align-items-end g-3">
-                                <div className="col-md-2">
-                                    <div className="pm-global-label">Subject Location</div>
-                                    <input 
-                                        type="text" 
-                                        className="form-control pm-global-select shadow-none text-truncate" 
-                                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', cursor: 'not-allowed', fontWeight: 600 }} 
-                                        value={subjectLocation || "Not Specified"} 
-                                        disabled 
-                                        title={subjectLocation}
-                                    />
-                                </div>
-                                <div className="col-md-2">
-                                    <div className="pm-global-label">City</div>
-                                    <input 
-                                        type="text" 
-                                        className="form-control pm-global-select shadow-none text-truncate" 
-                                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', cursor: 'not-allowed', fontWeight: 600 }} 
-                                        value={subjectCity || "Not Specified"} 
-                                        disabled 
-                                        title={subjectCity}
-                                    />
-                                </div>
-                                <div className="col-md-2">
-                                    <div className="pm-global-label">Area Unit</div>
-                                    <input 
-                                        type="text" 
-                                        className="form-control pm-global-select shadow-none" 
-                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', fontWeight: 600 }} 
-                                        value="sq ft" 
-                                        disabled 
-                                    />
-                                </div>
-                                <div className="col-md-2">
-                                    <div className="pm-global-label">Currency</div>
-                                    <input 
-                                        type="text" 
-                                        className="form-control pm-global-select shadow-none" 
-                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', fontWeight: 600 }} 
-                                        value={currency} 
-                                        disabled 
-                                    />
-                                </div>
-                                <div className="col-md-4">
-                                    <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border h-100" style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534", fontSize: "11.5px" }}>
-                                        <FaInfoCircle size={15} style={{ color: "#15803d", flexShrink: 0 }} />
-                                        <span><strong>Remark:</strong> All Area and Rate calculations are on <strong>Carpet Area (sq ft)</strong>.</span>
+                            {/* Global Context Ribbon */}
+                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2.5 p-3 mb-4 rounded-4 border shadow-xs" style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}>
+                                <div className="d-flex align-items-center flex-wrap gap-2">
+                                    <div className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill border bg-white shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                                        <FaMapMarkerAlt size={12} style={{ color: "#ef4444" }} />
+                                        <span className="text-muted fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>LOCATION:</span>
+                                        <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>{subjectLocation ? `${subjectLocation}, ${subjectCity}` : subjectCity || "Not Specified"}</span>
                                     </div>
+
+                                    <div className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill border bg-white shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                                        <span className="text-muted fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>AREA UNIT:</span>
+                                        <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>sq ft</span>
+                                    </div>
+
+                                    <div className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill border bg-white shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                                        <span className="text-muted fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>CURRENCY:</span>
+                                        <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>{currency}</span>
+                                    </div>
+                                </div>
+
+                                <div className="d-inline-flex align-items-center gap-2 px-3.5 py-1.5 rounded-pill border ms-auto" style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534", fontSize: "11.5px" }}>
+                                    <FaInfoCircle size={14} style={{ color: "#15803d", flexShrink: 0 }} />
+                                    <span><strong>Remark:</strong> All Area and Rate calculations are on <strong>Carpet Area (sq ft)</strong>.</span>
                                 </div>
                             </div>
 
-                            {/* Market Research Scope & Duration Filter Bar */}
+                            {/* Unified Filter Console */}
                             <div
                                 className="card border-0 shadow-sm rounded-4 mb-4"
                                 style={{
@@ -1246,27 +1220,21 @@ const ProductMixTicketSize = () => {
                                     boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
                                 }}
                             >
-                                <div className="card-body p-3 d-flex flex-column gap-3">
-                                    {/* Scope Filter Row */}
-                                    <div className="d-flex align-items-center flex-wrap gap-3">
-                                        {/* Scope Info Label */}
-                                        <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ flexBasis: "0", minWidth: "250px" }}>
+                                <div className="card-body p-3.5 d-flex flex-column gap-3.5">
+                                    {/* Spatial Scope Row */}
+                                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                        <div className="d-flex align-items-center gap-2.5">
                                             <div
-                                                className="d-flex align-items-center justify-content-center rounded-3 px-3 py-2.5"
-                                                style={{ backgroundColor: "#eef7f4", color: "#448C74" }}
+                                                className="d-flex align-items-center justify-content-center rounded-3 p-2"
+                                                style={{ backgroundColor: "#eef7f4", color: "#448C74", width: "36px", height: "36px", flexShrink: 0 }}
                                             >
-                                                <FaFilter size={16} />
+                                                <FaFilter size={15} />
                                             </div>
                                             <div>
-                                                <div className="fw-bold text-dark d-flex align-items-center gap-2" style={{ fontSize: "14px", lineHeight: "1.2" }}>
-                                                    <span>Analysis Scope Filter</span>
-                                                    {(subjectLocation || subjectCity) && (
-                                                        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2.5 py-0.5 rounded-pill fw-semibold" style={{ fontSize: "11px" }}>
-                                                            📍 {subjectLocation ? `${subjectLocation}, ${subjectCity}` : subjectCity}
-                                                        </span>
-                                                    )}
+                                                <div className="fw-bold text-dark d-flex align-items-center gap-2" style={{ fontSize: "13.5px", lineHeight: "1.2" }}>
+                                                    <span>Spatial Scope Filter</span>
                                                 </div>
-                                                <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
+                                                <div className="text-secondary fw-medium" style={{ fontSize: "11.5px", marginTop: "2px" }}>
                                                     {analysisViewMode === "location"
                                                         ? `Showing overall ${subjectLocation ? `${subjectLocation} (${subjectCity})` : subjectCity || 'city/location'} statistics`
                                                         : analysisViewMode === "catchment"
@@ -1276,64 +1244,7 @@ const ProductMixTicketSize = () => {
                                             </div>
                                         </div>
 
-                                        {/* View Mode Toggle Pill Container */}
-                                        <div className="d-flex justify-content-center">
-                                            <div
-                                                className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
-                                                style={{ borderColor: "#cbd5e1" }}
-                                            >
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
-                                                    style={{
-                                                        fontSize: "12px",
-                                                        backgroundColor: analysisViewMode === "location" ? "#448C74" : "transparent",
-                                                        borderColor: "transparent",
-                                                        color: analysisViewMode === "location" ? "#ffffff" : "#475569",
-                                                        boxShadow: analysisViewMode === "location" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
-                                                    }}
-                                                    onClick={() => setAnalysisViewMode("location")}
-                                                >
-                                                    <FaMapMarkerAlt size={13} style={{ color: analysisViewMode === "location" ? "#ffffff" : "#448C74" }} />
-                                                    <span>Location</span>
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
-                                                    style={{
-                                                        fontSize: "12px",
-                                                        backgroundColor: analysisViewMode === "catchment" ? "#448C74" : "transparent",
-                                                        borderColor: "transparent",
-                                                        color: analysisViewMode === "catchment" ? "#ffffff" : "#475569",
-                                                        boxShadow: analysisViewMode === "catchment" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
-                                                    }}
-                                                    onClick={() => setAnalysisViewMode("catchment")}
-                                                >
-                                                    <FaCrosshairs size={13} style={{ color: analysisViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
-                                                    <span>Catchment ({analysisAppliedRadius >= 1000 ? `${analysisAppliedRadius / 1000}km` : `${analysisAppliedRadius}m`})</span>
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
-                                                    style={{
-                                                        fontSize: "12px",
-                                                        backgroundColor: analysisViewMode === "nearby" ? "#448C74" : "transparent",
-                                                        borderColor: "transparent",
-                                                        color: analysisViewMode === "nearby" ? "#ffffff" : "#475569",
-                                                        boxShadow: analysisViewMode === "nearby" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
-                                                    }}
-                                                    onClick={() => setAnalysisViewMode("nearby")}
-                                                >
-                                                    <FaBuilding size={13} style={{ color: analysisViewMode === "nearby" ? "#ffffff" : "#448C74" }} />
-                                                    <span>Nearby Projects</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                         {/* Dynamic Settings Container (Right) */}
-                                        <div className="d-flex align-items-center justify-content-end gap-3 flex-grow-1 flex-wrap" style={{ flexBasis: "0", minWidth: "250px" }}>
+                                        <div className="d-flex align-items-center flex-wrap gap-2 ms-auto">
                                             {/* Data Source / Fallback Remark Badge */}
                                             {typeDataSourceInfo.remark && (
                                                 <div
@@ -1349,15 +1260,69 @@ const ProductMixTicketSize = () => {
                                                     <span>{typeDataSourceInfo.remark}</span>
                                                 </div>
                                             )}
+
+                                            <div
+                                                className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
+                                                style={{ borderColor: "#cbd5e1" }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "location" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "location" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "location" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("location")}
+                                                >
+                                                    <FaMapMarkerAlt size={12} style={{ color: analysisViewMode === "location" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Location</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "catchment" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "catchment" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "catchment" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("catchment")}
+                                                >
+                                                    <FaCrosshairs size={12} style={{ color: analysisViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Catchment ({analysisAppliedRadius >= 1000 ? `${analysisAppliedRadius / 1000}km` : `${analysisAppliedRadius}m`})</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-1.5 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "nearby" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "nearby" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "nearby" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("nearby")}
+                                                >
+                                                    <FaBuilding size={12} style={{ color: analysisViewMode === "nearby" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Nearby Projects</span>
+                                                </button>
+                                            </div>
+
                                             {/* Catchment Radius Settings */}
                                             {analysisViewMode === "catchment" && (
                                                 <div
-                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border shadow-xs"
                                                     style={{ borderColor: "#cbd5e1" }}
                                                 >
                                                     <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
-                                                        <FaRulerCombined size={13} style={{ color: "#448C74" }} />
-                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>Radius:</span>
+                                                        <FaRulerCombined size={12} style={{ color: "#448C74" }} />
+                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "11.5px" }}>Radius:</span>
                                                     </div>
 
                                                     <select
@@ -1369,9 +1334,9 @@ const ProductMixTicketSize = () => {
                                                                 setAnalysisAppliedRadius(val);
                                                             }
                                                         }}
-                                                        className="form-select form-select-sm px-2.5 py-1 fw-bold rounded-2 border"
+                                                        className="form-select form-select-sm px-2 py-0.5 fw-bold rounded border"
                                                         style={{
-                                                            fontSize: "12px",
+                                                            fontSize: "11.5px",
                                                             color: "#1e293b",
                                                             backgroundColor: "#ffffff",
                                                             borderColor: "#cbd5e1",
@@ -1384,7 +1349,7 @@ const ProductMixTicketSize = () => {
                                                         <option value="2000">2000m (2.0km)</option>
                                                         <option value="3000">3000m (3.0km)</option>
                                                         <option value="5000">5000m (5.0km)</option>
-                                                        <option value="custom">Custom Value...</option>
+                                                        <option value="custom">Custom...</option>
                                                     </select>
 
                                                     <div className="d-flex align-items-center ms-1">
@@ -1402,27 +1367,27 @@ const ProductMixTicketSize = () => {
                                                                     setAnalysisAppliedRadius(val);
                                                                 }
                                                             }}
-                                                            className="form-control form-control-sm px-2.5 py-1 text-center fw-bold rounded-2 border shadow-inner"
+                                                            className="form-control form-control-sm px-2 py-0.5 text-center fw-bold rounded border shadow-inner"
                                                             style={{
-                                                                width: "80px",
+                                                                width: "75px",
                                                                 backgroundColor: "#ffffff",
-                                                                fontSize: "12px",
+                                                                fontSize: "11.5px",
                                                                 color: "#1e293b",
                                                                 borderColor: "#cbd5e1",
                                                                 outline: "none"
                                                             }}
                                                             placeholder="Meters"
                                                         />
-                                                        <span className="text-muted fw-bold ms-1" style={{ fontSize: "11px" }}>mtrs</span>
+                                                        <span className="text-muted fw-bold ms-1" style={{ fontSize: "11px" }}>m</span>
                                                     </div>
 
                                                     <button
                                                         type="button"
-                                                        className="btn btn-sm rounded-pill px-3 py-1 fw-bold text-white d-flex align-items-center gap-1.5 shadow-sm transition-all ms-1"
+                                                        className="btn btn-sm rounded-pill px-2.5 py-1 fw-bold text-white d-flex align-items-center gap-1 shadow-sm transition-all ms-1"
                                                         style={{
                                                             backgroundColor: "#448C74",
                                                             borderColor: "#448C74",
-                                                            fontSize: "12px",
+                                                            fontSize: "11.5px",
                                                             boxShadow: "0 2px 6px rgba(68,140,116,0.3)"
                                                         }}
                                                         onClick={() => {
@@ -1431,7 +1396,7 @@ const ProductMixTicketSize = () => {
                                                             setAnalysisAppliedRadius(val);
                                                         }}
                                                     >
-                                                        <FaCheck size={11} />
+                                                        <FaCheck size={10} />
                                                         <span>Apply</span>
                                                     </button>
                                                 </div>
@@ -1440,12 +1405,12 @@ const ProductMixTicketSize = () => {
                                             {/* Nearby Projects Selector */}
                                             {analysisViewMode === "nearby" && (
                                                 <div
-                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border shadow-xs"
                                                     style={{ borderColor: "#cbd5e1" }}
                                                 >
                                                     <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
-                                                        <FaBuilding size={13} style={{ color: "#448C74" }} />
-                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>Select Project:</span>
+                                                        <FaBuilding size={12} style={{ color: "#448C74" }} />
+                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "11.5px" }}>Project:</span>
                                                     </div>
 
                                                     {(() => {
@@ -1462,7 +1427,7 @@ const ProductMixTicketSize = () => {
                                                                 onChange={(selectedOption) => setAnalysisSelectedProject(selectedOption ? selectedOption.value : "all")}
                                                                 formatOptionLabel={formatProjectOption}
                                                                 styles={customSelectStyles}
-                                                                placeholder="Select a project..."
+                                                                placeholder="Select project..."
                                                                 isSearchable={true}
                                                                 classNamePrefix="custom-select"
                                                             />
@@ -1471,19 +1436,19 @@ const ProductMixTicketSize = () => {
 
                                                     <button
                                                         type="button"
-                                                        className="btn btn-sm rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1.5 shadow-xs transition-all ms-1"
+                                                        className="btn btn-sm rounded-pill px-2.5 py-1 fw-bold d-flex align-items-center gap-1 shadow-xs transition-all ms-1"
                                                         style={{
-                                                            fontSize: "12px",
+                                                            fontSize: "11.5px",
                                                             backgroundColor: "#eef7f4",
                                                             color: "#448C74",
                                                             borderColor: "#a3d9c9"
                                                         }}
                                                         disabled={loadingAnalysisNearbyProjects}
                                                         onClick={() => setAnalysisNearbyLimit((prev) => prev + 5)}
-                                                        title="Load the next 5 nearest competitor projects"
+                                                        title="Load next 5 nearest competitor projects"
                                                     >
                                                         <FaPlus size={10} />
-                                                        <span>Show More (+5)</span>
+                                                        <span>+5</span>
                                                     </button>
 
                                                     {loadingAnalysisNearbyProjects && (
@@ -1494,91 +1459,114 @@ const ProductMixTicketSize = () => {
                                         </div>
                                     </div>
 
-                                    {/* Universal Analysis View Tab Row */}
-                                    <div className="d-flex align-items-center flex-wrap gap-3 pt-2 border-top" style={{ borderColor: "#f1f5f9" }}>
-                                        <div className="d-flex align-items-center gap-2 text-secondary">
-                                            <FaClock size={14} style={{ color: "#448C74" }} />
-                                            <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>Analysis View:</span>
+                                    {/* Separator Divider */}
+                                    <div className="border-top" style={{ borderColor: "#f1f5f9" }} />
+
+                                    {/* Temporal View Row */}
+                                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                        <div className="d-flex align-items-center gap-2.5">
+                                            <div
+                                                className="d-flex align-items-center justify-content-center rounded-3 p-2"
+                                                style={{ backgroundColor: "#eef7f4", color: "#448C74", width: "36px", height: "36px", flexShrink: 0 }}
+                                            >
+                                                <FaClock size={15} />
+                                            </div>
+                                            <div>
+                                                <div className="fw-bold text-dark" style={{ fontSize: "13.5px", lineHeight: "1.2" }}>
+                                                    Time Period Filter
+                                                </div>
+                                                <div className="text-secondary fw-medium" style={{ fontSize: "11.5px", marginTop: "2px" }}>
+                                                    {analysisViewTab === 'yoy' 
+                                                        ? 'Breakdown across individual calendar years (2020-2026)' 
+                                                        : analysisViewTab === 'custom' 
+                                                        ? `Custom range from ${customStartDate} to ${customEndDate}` 
+                                                        : 'Cumulative aggregate data from 2020 to present'}
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        {/* Tab Buttons */}
-                                        <div className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
-                                                style={{
-                                                    fontSize: "12px",
-                                                    backgroundColor: analysisViewTab === "overall" ? "#448C74" : "transparent",
-                                                    borderColor: "transparent",
-                                                    color: analysisViewTab === "overall" ? "#ffffff" : "#475569",
-                                                    boxShadow: analysisViewTab === "overall" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
-                                                }}
-                                                onClick={() => handleTabChange("overall")}
+                                        <div className="d-flex align-items-center flex-wrap gap-2 ms-auto">
+                                            <div
+                                                className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
+                                                style={{ borderColor: "#cbd5e1" }}
                                             >
-                                                Overall (2020+)
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
-                                                style={{
-                                                    fontSize: "12px",
-                                                    backgroundColor: analysisViewTab === "yoy" ? "#448C74" : "transparent",
-                                                    borderColor: "transparent",
-                                                    color: analysisViewTab === "yoy" ? "#ffffff" : "#475569",
-                                                    boxShadow: analysisViewTab === "yoy" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
-                                                }}
-                                                onClick={() => handleTabChange("yoy")}
-                                            >
-                                                YoY Breakdown
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
-                                                style={{
-                                                    fontSize: "12px",
-                                                    backgroundColor: analysisViewTab === "custom" ? "#448C74" : "transparent",
-                                                    borderColor: "transparent",
-                                                    color: analysisViewTab === "custom" ? "#ffffff" : "#475569",
-                                                    boxShadow: analysisViewTab === "custom" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
-                                                }}
-                                                onClick={() => handleTabChange("custom")}
-                                            >
-                                                Custom Date Range
-                                            </button>
-                                        </div>
-
-                                        {/* Custom Date Pickers container */}
-                                        {analysisViewTab === "custom" && (
-                                            <div className="d-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border ms-auto" style={{ borderColor: "#cbd5e1" }}>
-                                                <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>From:</span>
-                                                <input
-                                                    type="date"
-                                                    value={customStartDate}
-                                                    onChange={(e) => setCustomStartDate(e.target.value)}
-                                                    className="form-control form-control-sm px-2 py-0.5 rounded border"
-                                                    style={{ fontSize: "12px", color: "#1e293b", backgroundColor: "#ffffff" }}
-                                                />
-                                                <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>To:</span>
-                                                <input
-                                                    type="date"
-                                                    value={customEndDate}
-                                                    onChange={(e) => setCustomEndDate(e.target.value)}
-                                                    className="form-control form-control-sm px-2 py-0.5 rounded border"
-                                                    style={{ fontSize: "12px", color: "#1e293b", backgroundColor: "#ffffff" }}
-                                                />
                                                 <button
                                                     type="button"
-                                                    className="btn btn-sm btn-success rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1 ms-1"
-                                                    style={{ fontSize: "12px", backgroundColor: "#448C74", borderColor: "#448C74" }}
-                                                    onClick={handleApplyCustomDates}
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewTab === "overall" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewTab === "overall" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewTab === "overall" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                    }}
+                                                    onClick={() => handleTabChange("overall")}
                                                 >
-                                                    <FaCheck size={11} />
-                                                    <span>Apply Dates</span>
+                                                    Overall (2020+)
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewTab === "yoy" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewTab === "yoy" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewTab === "yoy" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                    }}
+                                                    onClick={() => handleTabChange("yoy")}
+                                                >
+                                                    YoY Breakdown
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewTab === "custom" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewTab === "custom" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewTab === "custom" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                    }}
+                                                    onClick={() => handleTabChange("custom")}
+                                                >
+                                                    Custom Date Range
                                                 </button>
                                             </div>
-                                        )}
+
+                                            {/* Custom Date Pickers container */}
+                                            {analysisViewTab === "custom" && (
+                                                <div className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border" style={{ borderColor: "#cbd5e1" }}>
+                                                    <span className="fw-bold text-dark" style={{ fontSize: "11.5px" }}>From:</span>
+                                                    <input
+                                                        type="date"
+                                                        value={customStartDate}
+                                                        onChange={(e) => setCustomStartDate(e.target.value)}
+                                                        className="form-control form-control-sm px-2 py-0.5 rounded border"
+                                                        style={{ fontSize: "11.5px", color: "#1e293b", backgroundColor: "#ffffff" }}
+                                                    />
+                                                    <span className="fw-bold text-dark ms-1" style={{ fontSize: "11.5px" }}>To:</span>
+                                                    <input
+                                                        type="date"
+                                                        value={customEndDate}
+                                                        onChange={(e) => setCustomEndDate(e.target.value)}
+                                                        className="form-control form-control-sm px-2 py-0.5 rounded border"
+                                                        style={{ fontSize: "11.5px", color: "#1e293b", backgroundColor: "#ffffff" }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-success rounded-pill px-2.5 py-1 fw-bold d-flex align-items-center gap-1 ms-1"
+                                                        style={{ fontSize: "11.5px", backgroundColor: "#448C74", borderColor: "#448C74" }}
+                                                        onClick={handleApplyCustomDates}
+                                                    >
+                                                        <FaCheck size={10} />
+                                                        <span>Apply</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1988,16 +1976,32 @@ const ProductMixTicketSize = () => {
                                                                                         <td className="align-middle fw-medium">{result.unitType}</td>
                                                                                         <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                                         {analysisViewTab === 'yoy' ? (
-                                                                                            <>
-                                                                                                {yearsToRender.map(yr => (
-                                                                                                    <td key={yr} className="align-middle text-center">
-                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                            (isAnalyzingArea || r.countsByYear === null) ? (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="spinner-border spinner-border-sm text-success" role="status" style={{ width: '11px', height: '11px', borderWidth: '1.5px', color: '#0da19c' }} />
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '10.5px', fontWeight: 500 }}>
+                                                                                                            <span className="spinner-border spinner-border-sm me-1.5" role="status" aria-hidden="true" style={{ width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c' }}></span>
+                                                                                                            <span style={{ color: '#2ea868' }}>Loading...</span>
+                                                                                                        </span>
                                                                                                     </td>
-                                                                                                ))}
-                                                                                                <td className="align-middle text-center bg-light">
-                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                                                </td>
-                                                                                            </>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                    </td>
+                                                                                                </>
+                                                                                            )
                                                                                         ) : (
                                                                                             <td className="align-middle text-center">
                                                                                                 {r.count === null ? (
@@ -2057,16 +2061,32 @@ const ProductMixTicketSize = () => {
                                                                                         <td className="align-middle fw-medium">{result.unitType}</td>
                                                                                         <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                                         {analysisViewTab === 'yoy' ? (
-                                                                                            <>
-                                                                                                {yearsToRender.map(yr => (
-                                                                                                    <td key={yr} className="align-middle text-center">
-                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                            (isAnalyzingRate || r.countsByYear === null) ? (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="spinner-border spinner-border-sm text-success" role="status" style={{ width: '11px', height: '11px', borderWidth: '1.5px', color: '#0da19c' }} />
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '10.5px', fontWeight: 500 }}>
+                                                                                                            <span className="spinner-border spinner-border-sm me-1.5" role="status" aria-hidden="true" style={{ width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c' }}></span>
+                                                                                                            <span style={{ color: '#2ea868' }}>Loading...</span>
+                                                                                                        </span>
                                                                                                     </td>
-                                                                                                ))}
-                                                                                                <td className="align-middle text-center bg-light">
-                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                                                </td>
-                                                                                            </>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                    </td>
+                                                                                                </>
+                                                                                            )
                                                                                         ) : (
                                                                                             <td className="align-middle text-center">
                                                                                                 {r.count === null ? (
@@ -2126,16 +2146,32 @@ const ProductMixTicketSize = () => {
                                                                                         <td className="align-middle fw-medium">{result.unitType}</td>
                                                                                         <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                                         {analysisViewTab === 'yoy' ? (
-                                                                                            <>
-                                                                                                {yearsToRender.map(yr => (
-                                                                                                    <td key={yr} className="align-middle text-center">
-                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                            (isAnalyzingTicketSize || r.countsByYear === null) ? (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="spinner-border spinner-border-sm text-success" role="status" style={{ width: '11px', height: '11px', borderWidth: '1.5px', color: '#0da19c' }} />
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '10.5px', fontWeight: 500 }}>
+                                                                                                            <span className="spinner-border spinner-border-sm me-1.5" role="status" aria-hidden="true" style={{ width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c' }}></span>
+                                                                                                            <span style={{ color: '#2ea868' }}>Loading...</span>
+                                                                                                        </span>
                                                                                                     </td>
-                                                                                                ))}
-                                                                                                <td className="align-middle text-center bg-light">
-                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                                                </td>
-                                                                                            </>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    {yearsToRender.map(yr => (
+                                                                                                        <td key={yr} className="align-middle text-center">
+                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                        </td>
+                                                                                                    ))}
+                                                                                                    <td className="align-middle text-center bg-light">
+                                                                                                        <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                    </td>
+                                                                                                </>
+                                                                                            )
                                                                                         ) : (
                                                                                             <td className="align-middle text-center">
                                                                                                 {r.count === null ? (
