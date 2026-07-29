@@ -17,7 +17,6 @@ import {
   Handshake,
   LineChart,
   Lock,
-  MapIcon,
   MapPinned,
   MonitorCog,
   Plug,
@@ -89,6 +88,8 @@ const agentLayers: AgentLayer[] = [
     agents: [
       { name: "User Input (Docs/Images)", icon: FileText, href: "/user_input", key: 'user_input' },
       { name: "Web Data", icon: Globe2, href: "/web_search", key: 'web_search' },
+      { name: "RERA Automation", icon: Building2, href: "/maharera_agent", key: 'rera_automation' },
+      { name: "Web Automation", icon: Bot, href: "/web_automation", key: 'web_automation' },
       { name: "Data Retriever Agent", icon: Server, href: "/data_retrieval", key: 'data_retrieval' },
       { name: "Analytics", icon: LineChart, key: 'analytics' },
       { name: "Legal", icon: Scale, key: 'legal' },

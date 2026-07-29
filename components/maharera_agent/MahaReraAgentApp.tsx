@@ -17,9 +17,9 @@ type MahaReraAgentAppProps = {
 };
 
 const paths = {
-  crawlStreamPath: "/crawl/stream",
-  planPath: "/plan",
-  browserTestPath: "/browser/test",
+  crawlStreamPath: "/rera/crawl/stream",
+  planPath: "/rera/plan",
+  browserTestPath: "/rera/browser/test",
 };
 
 export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentAppProps) {
@@ -232,7 +232,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
     if (!captcha || !captchaValue.trim()) return;
     setCaptchaSubmitting(true);
     try {
-      const response = await fetch(normalizedApiBaseUrl + "/captcha/submit", {
+      const response = await fetch(normalizedApiBaseUrl + "/rera/captcha/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
