@@ -307,12 +307,9 @@ function summarizeEvent(event) {
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Wait for our Web Agent to find more comparables...`;
+    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects in db . Wait for our Web Agent to find more comparables...`;
     if (c?.web_error) {
       baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
-    }
-    if ((c?.total_found || 0) === 0) {
-      baseMsg = "[INFO] No comparable projects were found. Continuing with the original valuation flow using subject-only evidence.";
     }
     return baseMsg;
   }
@@ -7777,6 +7774,20 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "extraction_verification") {
             setExtractionVerification(event.content);
             const ents = event.content?.entities || {};
+            const sublocalityText = formatSublocalities(ents);
+            const sublocalityList = getSublocalityItems(ents);
+            if (Object.keys(ents).length > 0) {
+              const nextSubject = {
+                ...currentSubjectObj,
+                ...subjectDataRef.current,
+                ...ents,
+                sub_locality: sublocalityText || ents.sub_locality || null,
+                "sub-locality": sublocalityList.length > 0 ? sublocalityList : (ents["sub-locality"] || []),
+              };
+              setSubjectData(nextSubject);
+              subjectDataRef.current = nextSubject;
+              currentSubjectObj = nextSubject;
+            }
             const ignoreKeys = [
               "intent", "extraction_verified", "coordinates_confirmed",
               "user_requested_approach", "_original_query", "missing_mandatory",
@@ -7803,7 +7814,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
               if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
             }
-            const sublocalityText = formatSublocalities(ents);
             if (sublocalityText) {
               fields.push({ field: "sub-locality", label: "Sub-locality", type: "text", default: sublocalityText, required: false, readOnly: true });
               fields.push({ field: "sub-locality-list", label: "Sub-locality List", type: "text", default: getSublocalityItems(ents).join(", "), required: false, readOnly: true });
@@ -7823,6 +7833,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "comparable_results") {
             setIsComparableSearchActive(false);
             setComparableSearchStatus("");
+            setCurrentStage("Stage 3A: Comparable Identification");
+            setStreamingNote("Running comparable identification...");
             const comps = event.content?.comparables || [];
             const dropped = event.content?.dropped_comparables || [];
             // Only set comparableData when there are actual results
