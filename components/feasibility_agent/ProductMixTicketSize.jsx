@@ -216,6 +216,8 @@ const ProductMixTicketSize = () => {
     const [isAnalyzingArea, setIsAnalyzingArea] = useState(false);
     const [isAnalyzingRate, setIsAnalyzingRate] = useState(false);
     const [isAnalyzingTicketSize, setIsAnalyzingTicketSize] = useState(false);
+    const [subjectCity, setSubjectCity] = useState("");
+    const [subjectLocation, setSubjectLocation] = useState("");
 
     // Universal Scope & Tab Filter States
     const [analysisViewMode, setAnalysisViewMode] = useState("location");
@@ -228,9 +230,21 @@ const ProductMixTicketSize = () => {
 
     // Analysis View Tab: "overall" | "yoy" | "custom"
     const [analysisViewTab, setAnalysisViewTab] = useState("overall");
-    const [customStartDate, setCustomStartDate] = useState("");
-    const [customEndDate, setCustomEndDate] = useState("");
-    const [availableYears, setAvailableYears] = useState([]);
+    const [activeResultPropertyTab, setActiveResultPropertyTab] = useState("all");
+    
+    const getLastOneYearDates = () => {
+        const today = new Date();
+        const endStr = today.toISOString().split('T')[0];
+        const lastYear = new Date();
+        lastYear.setFullYear(today.getFullYear() - 1);
+        const startStr = lastYear.toISOString().split('T')[0];
+        return { startStr, endStr };
+    };
+
+    const [customStartDate, setCustomStartDate] = useState(() => getLastOneYearDates().startStr);
+    const [customEndDate, setCustomEndDate] = useState(() => getLastOneYearDates().endStr);
+    const DEFAULT_YOY_YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
+    const [availableYears, setAvailableYears] = useState(DEFAULT_YOY_YEARS);
 
     // Fetch nearby projects when nearby mode is active
     useEffect(() => {
@@ -342,17 +356,40 @@ const ProductMixTicketSize = () => {
     };
 
     useEffect(() => {
-        const savedData = localStorage.getItem("Land_and_fsi_details");
-        if (savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                if (parsed.grossFloorArea) {
-                    setGrossFloorArea(Number(parsed.grossFloorArea));
+        const syncFromStorage = () => {
+            const savedData = localStorage.getItem("Land_and_fsi_details");
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    if (parsed.grossFloorArea) {
+                        setGrossFloorArea(Number(parsed.grossFloorArea));
+                    }
+                } catch (e) {
+                    console.error("Error parsing Land_and_fsi_details", e);
                 }
-            } catch (e) {
-                console.error("Error parsing Land_and_fsi_details", e);
             }
-        }
+
+            const savedLandData = localStorage.getItem("Land Identification");
+            if (savedLandData) {
+                try {
+                    const parsedLand = JSON.parse(savedLandData);
+                    if (parsedLand.currency) {
+                        setCurrency(parsedLand.currency);
+                    }
+                    const cName = parsedLand.location || parsedLand.city || "";
+                    const vName = parsedLand.village || parsedLand.villageName || "";
+                    setSubjectCity(cName);
+                    setSubjectLocation(vName);
+                } catch (e) {
+                    console.error("Error parsing Land Identification", e);
+                }
+            }
+        };
+
+        syncFromStorage();
+        window.addEventListener("storage", syncFromStorage);
+        window.addEventListener("landIdentificationUpdated", syncFromStorage);
+        const intervalId = setInterval(syncFromStorage, 500);
 
         let cityName = "";
         let locationName = "";
@@ -360,9 +397,6 @@ const ProductMixTicketSize = () => {
         if (savedLandData) {
             try {
                 const parsedLand = JSON.parse(savedLandData);
-                if (parsedLand.currency) {
-                    setCurrency(parsedLand.currency);
-                }
                 cityName = parsedLand.location || parsedLand.city || "";
                 locationName = parsedLand.village || parsedLand.villageName || "";
             } catch (e) {
@@ -407,6 +441,12 @@ const ProductMixTicketSize = () => {
             }
         };
         fetchTypes();
+
+        return () => {
+            window.removeEventListener("storage", syncFromStorage);
+            window.removeEventListener("landIdentificationUpdated", syncFromStorage);
+            clearInterval(intervalId);
+        };
     }, []);
 
     const [areaRows, setAreaRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
@@ -468,7 +508,16 @@ const ProductMixTicketSize = () => {
 
     const handleTabChange = (newTab) => {
         setAnalysisViewTab(newTab);
-        if (newTab !== "custom") {
+        if (newTab === "custom") {
+            const sDate = customStartDate || getLastOneYearDates().startStr;
+            const eDate = customEndDate || getLastOneYearDates().endStr;
+            if (!customStartDate) setCustomStartDate(sDate);
+            if (!customEndDate) setCustomEndDate(eDate);
+
+            if (areaAnalysisResults.length > 0) handleAnalyzeArea("custom", sDate, eDate);
+            if (rateAnalysisResults.length > 0) handleAnalyzeRate("custom", sDate, eDate);
+            if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize("custom", sDate, eDate);
+        } else {
             if (areaAnalysisResults.length > 0) handleAnalyzeArea(newTab);
             if (rateAnalysisResults.length > 0) handleAnalyzeRate(newTab);
             if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize(newTab);
@@ -1060,49 +1109,131 @@ const ProductMixTicketSize = () => {
                     color: ${theme === "dark" ? "#60a5fa" : "#2563eb"};
                     font-size: 11px;
                 }
+                .table-responsive {
+                    overflow-x: auto !important;
+                    overflow-y: auto !important;
+                    max-width: 100%;
+                    scrollbar-width: thin;
+                    scrollbar-color: ${theme === "dark" ? "#4b5563 #1a1d24" : "#cbd5e1 #f8fafc"};
+                }
+                .table-responsive::-webkit-scrollbar {
+                    height: 6px;
+                    width: 6px;
+                }
+                .table-responsive::-webkit-scrollbar-track {
+                    background: ${theme === "dark" ? "#1a1d24" : "#f8fafc"};
+                    border-radius: 4px;
+                }
+                .table-responsive::-webkit-scrollbar-thumb {
+                    background-color: ${theme === "dark" ? "#4b5563" : "#cbd5e1"};
+                    border-radius: 4px;
+                }
+                .table-responsive::-webkit-scrollbar-thumb:hover {
+                    background-color: ${theme === "dark" ? "#6b7280" : "#94a3b8"};
+                }
+                .pm-results-scroll-container {
+                    overflow-x: auto !important;
+                    max-width: 100%;
+                    padding-bottom: 6px;
+                    scrollbar-width: thin;
+                    scrollbar-color: ${theme === "dark" ? "#4b5563 #1a1d24" : "#cbd5e1 #f8fafc"};
+                }
+                .pm-results-scroll-container::-webkit-scrollbar {
+                    height: 6px;
+                    width: 6px;
+                }
+                .pm-results-scroll-container::-webkit-scrollbar-track {
+                    background: ${theme === "dark" ? "#1a1d24" : "#f8fafc"};
+                    border-radius: 4px;
+                }
+                .pm-results-scroll-container::-webkit-scrollbar-thumb {
+                    background-color: ${theme === "dark" ? "#4b5563" : "#cbd5e1"};
+                    border-radius: 4px;
+                }
+                .pm-results-scroll-container::-webkit-scrollbar-thumb:hover {
+                    background-color: ${theme === "dark" ? "#6b7280" : "#94a3b8"};
+                }
             `}</style>
             <div className="unit-design-header">
                 <div className="unit-design-eyebrow">Selected Section</div>
                 <h2 className="unit-design-title">Product Mix - Ticket Size</h2>
             </div>
             <div className="unit-design-body">
-                {/* 1) Analysis Mode */}
-                <div className="pm-section-card">
+                {/* 1) Analysis Mode & Results */}
+                <div className="pm-section-card mb-4">
                     <div 
                         className="pm-section-header"
                         onClick={() => setIsAnalysisModeOpen(!isAnalysisModeOpen)}
                     >
                         <div>
                             <div className="pm-section-eyebrow">SUBSECTION 1</div>
-                            <div className="pm-section-maintitle">Analysis Mode</div>
+                            <div className="pm-section-maintitle">Analysis Mode & Results</div>
                         </div>
-                        <div className="pm-chevron-btn">
-                            {isAnalysisModeOpen ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
+                        <div className="d-flex align-items-center gap-3">
+                            <div className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border" style={{ borderColor: "#cbd5e1" }}>
+                                <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2.5 py-1 rounded-pill" style={{ fontSize: "11px" }}>
+                                    {analysisViewMode === "location" ? "Location Scope" : analysisViewMode === "catchment" ? "Catchment Scope" : "Nearby Projects"}
+                                </span>
+                                <span className="badge bg-primary bg-opacity-10 text-primary fw-bold px-2.5 py-1 rounded-pill" style={{ fontSize: "11px" }}>
+                                    {analysisViewTab === 'yoy' ? 'YoY View' : analysisViewTab === 'custom' ? 'Custom View' : 'Overall View'}
+                                </span>
+                            </div>
+                            <div className="pm-chevron-btn">
+                                {isAnalysisModeOpen ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
+                            </div>
                         </div>
                     </div>
                     {isAnalysisModeOpen && (
                         <div className="pm-section-body">
                             {/* Global Inputs */}
-                            <div className="row mb-4">
+                            <div className="row mb-4 align-items-end g-3">
+                                <div className="col-md-2">
+                                    <div className="pm-global-label">Subject Location</div>
+                                    <input 
+                                        type="text" 
+                                        className="form-control pm-global-select shadow-none text-truncate" 
+                                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', cursor: 'not-allowed', fontWeight: 600 }} 
+                                        value={subjectLocation || "Not Specified"} 
+                                        disabled 
+                                        title={subjectLocation}
+                                    />
+                                </div>
+                                <div className="col-md-2">
+                                    <div className="pm-global-label">City</div>
+                                    <input 
+                                        type="text" 
+                                        className="form-control pm-global-select shadow-none text-truncate" 
+                                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', cursor: 'not-allowed', fontWeight: 600 }} 
+                                        value={subjectCity || "Not Specified"} 
+                                        disabled 
+                                        title={subjectCity}
+                                    />
+                                </div>
                                 <div className="col-md-2">
                                     <div className="pm-global-label">Area Unit</div>
-                                    <select className="form-select pm-global-select shadow-none" value={areaUnit} onChange={(e) => setAreaUnit(e.target.value)}>
-                                        <option value="sq ft">sq ft</option>
-                                        <option value="sq m">sq m</option>
-                                        <option value="sq yd">sq yd</option>
-                                        <option value="acre">acre</option>
-                                        <option value="hectare">hectare</option>
-                                    </select>
+                                    <input 
+                                        type="text" 
+                                        className="form-control pm-global-select shadow-none" 
+                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', fontWeight: 600 }} 
+                                        value="sq ft" 
+                                        disabled 
+                                    />
                                 </div>
                                 <div className="col-md-2">
                                     <div className="pm-global-label">Currency</div>
                                     <input 
                                         type="text" 
                                         className="form-control pm-global-select shadow-none" 
-                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} 
+                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', fontWeight: 600 }} 
                                         value={currency} 
                                         disabled 
                                     />
+                                </div>
+                                <div className="col-md-4">
+                                    <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border h-100" style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534", fontSize: "11.5px" }}>
+                                        <FaInfoCircle size={15} style={{ color: "#15803d", flexShrink: 0 }} />
+                                        <span><strong>Remark:</strong> All Area and Rate calculations are on <strong>Carpet Area (sq ft)</strong>.</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1127,12 +1258,17 @@ const ProductMixTicketSize = () => {
                                                 <FaFilter size={16} />
                                             </div>
                                             <div>
-                                                <div className="fw-bold text-dark" style={{ fontSize: "14px", lineHeight: "1.2" }}>
-                                                    Analysis Scope Filter
+                                                <div className="fw-bold text-dark d-flex align-items-center gap-2" style={{ fontSize: "14px", lineHeight: "1.2" }}>
+                                                    <span>Analysis Scope Filter</span>
+                                                    {(subjectLocation || subjectCity) && (
+                                                        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2.5 py-0.5 rounded-pill fw-semibold" style={{ fontSize: "11px" }}>
+                                                            📍 {subjectLocation ? `${subjectLocation}, ${subjectCity}` : subjectCity}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
                                                     {analysisViewMode === "location"
-                                                        ? "Showing overall city/location statistics"
+                                                        ? `Showing overall ${subjectLocation ? `${subjectLocation} (${subjectCity})` : subjectCity || 'city/location'} statistics`
                                                         : analysisViewMode === "catchment"
                                                         ? `Showing ${analysisAppliedRadius >= 1000 ? `${analysisAppliedRadius / 1000}km` : `${analysisAppliedRadius}m`} radius catchment around project`
                                                         : `Showing statistics for selected project: ${analysisSelectedProject && analysisSelectedProject.startsWith("id:") ? analysisSelectedProject.split(":").slice(2).join(":") : analysisSelectedProject}`}
@@ -1447,7 +1583,8 @@ const ProductMixTicketSize = () => {
                                 </div>
                             </div>
 
-                            <div className="row g-4">
+                            {/* Configuration Input Tables */}
+                            <div className="row g-4 mb-4">
                                 {/* Table 1: Area Range Analysis */}
                                 <div className="col-md-4">
                                     <div className="pm-table-container h-100 mb-0">
@@ -1455,8 +1592,8 @@ const ProductMixTicketSize = () => {
                                             <span>Area Range Analysis</span>
                                             <button className="pm-action-btn" onClick={() => handleAnalyzeArea()} disabled={isAnalyzingArea}>
                                                 {isAnalyzingArea ? (
-                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
-                                                ) : "Analyze Area"}
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Simulating...</>
+                                                ) : "Simulate Area"}
                                             </button>
                                         </div>
                                         <div className="table-responsive">
@@ -1534,7 +1671,6 @@ const ProductMixTicketSize = () => {
                                         </div>
                                     </div>
                                 </div>
-
                                 {/* Table 2: Rate Range Analysis */}
                                 <div className="col-md-4">
                                     <div className="pm-table-container h-100 mb-0">
@@ -1542,8 +1678,8 @@ const ProductMixTicketSize = () => {
                                             <span>Rate Range Analysis</span>
                                             <button className="pm-action-btn" onClick={() => handleAnalyzeRate()} disabled={isAnalyzingRate}>
                                                 {isAnalyzingRate ? (
-                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
-                                                ) : "Analyze Rate"}
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Simulating...</>
+                                                ) : "Simulate Rate"}
                                             </button>
                                         </div>
                                         <div className="table-responsive">
@@ -1621,7 +1757,6 @@ const ProductMixTicketSize = () => {
                                         </div>
                                     </div>
                                 </div>
-
                                 {/* Table 3: Ticket Size Analysis */}
                                 <div className="col-md-4">
                                     <div className="pm-table-container h-100 mb-0">
@@ -1629,8 +1764,8 @@ const ProductMixTicketSize = () => {
                                             <span>Ticket Size Analysis</span>
                                             <button className="pm-action-btn" onClick={() => handleAnalyzeTicketSize()} disabled={isAnalyzingTicketSize}>
                                                 {isAnalyzingTicketSize ? (
-                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
-                                                ) : "Analyze Ticket Size"}
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Simulating...</>
+                                                ) : "Simulate Ticket Size"}
                                             </button>
                                         </div>
                                         <div className="table-responsive">
@@ -1709,226 +1844,334 @@ const ProductMixTicketSize = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Analysis Results Container */}
+                            <div className="mt-4 pt-3 border-top" style={{ borderColor: "#cbd5e1" }}>
+                                {(() => {
+                                    const distinctAnalyzedPropertyTypes = Array.from(
+                                        new Set([
+                                            ...areaAnalysisResults.map(r => r.propertyType),
+                                            ...rateAnalysisResults.map(r => r.propertyType),
+                                            ...ticketSizeAnalysisResults.map(r => r.propertyType)
+                                        ].filter(Boolean))
+                                    );
+
+                                    const displayAreaResults = activeResultPropertyTab === "all"
+                                        ? areaAnalysisResults
+                                        : areaAnalysisResults.filter(r => r.propertyType === activeResultPropertyTab);
+
+                                    const displayRateResults = activeResultPropertyTab === "all"
+                                        ? rateAnalysisResults
+                                        : rateAnalysisResults.filter(r => r.propertyType === activeResultPropertyTab);
+
+                                    const displayTicketResults = activeResultPropertyTab === "all"
+                                        ? ticketSizeAnalysisResults
+                                        : ticketSizeAnalysisResults.filter(r => r.propertyType === activeResultPropertyTab);
+
+                                    const hasAnyResults = areaAnalysisResults.length > 0 || rateAnalysisResults.length > 0 || ticketSizeAnalysisResults.length > 0;
+                                    const yearsToRender = (availableYears && availableYears.length > 0) ? availableYears : DEFAULT_YOY_YEARS;
+
+                                    return (
+                                        <>
+                                            <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <div className="rounded-2 p-1.5 d-flex align-items-center justify-content-center" style={{ backgroundColor: "#eef7f4", color: "#448C74" }}>
+                                                        <FaCheckCircle size={15} />
+                                                    </div>
+                                                    <div>
+                                                        <div className="fw-bold text-dark d-flex align-items-center gap-2" style={{ fontSize: "14px", lineHeight: "1.2" }}>
+                                                            <span>Transaction Analysis Results</span>
+                                                            {(subjectLocation || subjectCity) && (
+                                                                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2.5 py-0.5 rounded-pill fw-semibold" style={{ fontSize: "11px" }}>
+                                                                    📍 {subjectLocation ? `${subjectLocation}, ${subjectCity}` : subjectCity}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
+                                                            {analysisViewTab === 'yoy' 
+                                                                ? 'Showing Year-on-Year transaction distribution breakdown' 
+                                                                : analysisViewTab === 'custom' 
+                                                                ? `Showing transaction distribution for custom date range (${customStartDate || 'Start'} to ${customEndDate || 'End'})` 
+                                                                : 'Showing overall cumulative transaction distribution'}
+                                                        </div>
+                                                        <div className="mt-1" style={{ fontSize: "11px", color: "#166534", fontWeight: 600 }}>
+                                                            * Note: Area and Rate metrics are based on Carpet Area (sq ft).
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <span className="badge px-3 py-1.5 rounded-pill bg-light text-dark border fw-bold" style={{ fontSize: "11px" }}>
+                                                        {analysisViewTab === 'yoy' ? 'YoY Breakdown' : analysisViewTab === 'custom' ? 'Custom Date Range' : 'Overall (2020+)'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Property Type Sub-Tabs */}
+                                            {hasAnyResults && distinctAnalyzedPropertyTypes.length > 0 && (
+                                                <div className="d-flex align-items-center flex-wrap gap-2 mb-4 p-1.5 bg-light rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                                                    <span className="fw-bold text-dark px-2 ms-1" style={{ fontSize: "12px" }}>Filter Property Type:</span>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
+                                                        style={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: activeResultPropertyTab === "all" ? "#448C74" : "transparent",
+                                                            borderColor: "transparent",
+                                                            color: activeResultPropertyTab === "all" ? "#ffffff" : "#475569",
+                                                            boxShadow: activeResultPropertyTab === "all" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                        }}
+                                                        onClick={() => setActiveResultPropertyTab("all")}
+                                                    >
+                                                        All Property Types ({distinctAnalyzedPropertyTypes.length})
+                                                    </button>
+
+                                                    {distinctAnalyzedPropertyTypes.map((pt) => {
+                                                        const isSelected = activeResultPropertyTab === pt;
+                                                        return (
+                                                            <button
+                                                                key={pt}
+                                                                type="button"
+                                                                className="btn btn-sm rounded-pill px-3.5 py-1 fw-bold transition-all"
+                                                                style={{
+                                                                    fontSize: "12px",
+                                                                    backgroundColor: isSelected ? "#448C74" : "transparent",
+                                                                    borderColor: "transparent",
+                                                                    color: isSelected ? "#ffffff" : "#475569",
+                                                                    boxShadow: isSelected ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                                }}
+                                                                onClick={() => setActiveResultPropertyTab(pt)}
+                                                            >
+                                                                {pt} Results
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                            {hasAnyResults ? (
+                                                <div className="pm-results-scroll-container">
+                                                    <div className="row g-4 flex-nowrap flex-md-wrap">
+                                                        {/* Area Range Results */}
+                                                        {displayAreaResults.map((result) => (
+                                                            <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
+                                                                <div className="pm-table-container h-100 mb-0 shadow-xs border rounded-3" style={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
+                                                                    <div className="pm-table-title d-flex align-items-center justify-content-between py-2 px-3 bg-light border-bottom">
+                                                                        <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+                                                                            Area Range Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
+                                                                        </span>
+                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                            {result.unitType}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="table-responsive">
+                                                                        <table className="pm-table mb-0">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th className="align-middle">Property Type</th>
+                                                                                    <th className="align-middle">Unit Type</th>
+                                                                                    <th className="align-middle text-center">Area Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
+                                                                                    {analysisViewTab === 'yoy' ? (
+                                                                                        <>
+                                                                                            {yearsToRender.map(yr => (
+                                                                                                <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                                            ))}
+                                                                                            <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <th className="align-middle text-center">Transaction Count</th>
+                                                                                    )}
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {result.rows.map(r => (
+                                                                                    <tr key={r.id}>
+                                                                                        <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
+                                                                                        <td className="align-middle fw-medium">{result.unitType}</td>
+                                                                                        <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
+                                                                                        {analysisViewTab === 'yoy' ? (
+                                                                                            <>
+                                                                                                {yearsToRender.map(yr => (
+                                                                                                    <td key={yr} className="align-middle text-center">
+                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                    </td>
+                                                                                                ))}
+                                                                                                <td className="align-middle text-center bg-light">
+                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                </td>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <td className="align-middle text-center">
+                                                                                                {r.count === null ? (
+                                                                                                    <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                                        <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                                    </span>
+                                                                                                ) : (
+                                                                                                    <span className="badge bg-primary bg-opacity-10 text-primary px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "12px" }}>{r.count.toLocaleString()}</span>
+                                                                                                )}
+                                                                                            </td>
+                                                                                        )}
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Rate Range Results */}
+                                                        {displayRateResults.map((result) => (
+                                                            <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
+                                                                <div className="pm-table-container h-100 mb-0 shadow-xs border rounded-3" style={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
+                                                                    <div className="pm-table-title d-flex align-items-center justify-content-between py-2 px-3 bg-light border-bottom">
+                                                                        <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+                                                                            Rate Range Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
+                                                                        </span>
+                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                            {result.unitType}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="table-responsive">
+                                                                        <table className="pm-table mb-0">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th className="align-middle">Property Type</th>
+                                                                                    <th className="align-middle">Unit Type</th>
+                                                                                    <th className="align-middle text-center">Rate Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
+                                                                                    {analysisViewTab === 'yoy' ? (
+                                                                                        <>
+                                                                                            {yearsToRender.map(yr => (
+                                                                                                <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                                            ))}
+                                                                                            <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <th className="align-middle text-center">Transaction Count</th>
+                                                                                    )}
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {result.rows.map(r => (
+                                                                                    <tr key={r.id}>
+                                                                                        <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
+                                                                                        <td className="align-middle fw-medium">{result.unitType}</td>
+                                                                                        <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
+                                                                                        {analysisViewTab === 'yoy' ? (
+                                                                                            <>
+                                                                                                {yearsToRender.map(yr => (
+                                                                                                    <td key={yr} className="align-middle text-center">
+                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                    </td>
+                                                                                                ))}
+                                                                                                <td className="align-middle text-center bg-light">
+                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                </td>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <td className="align-middle text-center">
+                                                                                                {r.count === null ? (
+                                                                                                    <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                                        <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                                    </span>
+                                                                                                ) : (
+                                                                                                    <span className="badge bg-primary bg-opacity-10 text-primary px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "12px" }}>{r.count.toLocaleString()}</span>
+                                                                                                )}
+                                                                                            </td>
+                                                                                        )}
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Ticket Size Results */}
+                                                        {displayTicketResults.map((result) => (
+                                                            <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
+                                                                <div className="pm-table-container h-100 mb-0 shadow-xs border rounded-3" style={{ background: '#ffffff', borderColor: '#e2e8f0' }}>
+                                                                    <div className="pm-table-title d-flex align-items-center justify-content-between py-2 px-3 bg-light border-bottom">
+                                                                        <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+                                                                            Ticket Size Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
+                                                                        </span>
+                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                            {result.unitType}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="table-responsive">
+                                                                        <table className="pm-table mb-0">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th className="align-middle">Property Type</th>
+                                                                                    <th className="align-middle">Unit Type</th>
+                                                                                    <th className="align-middle text-center">Ticket Size Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
+                                                                                    {analysisViewTab === 'yoy' ? (
+                                                                                        <>
+                                                                                            {yearsToRender.map(yr => (
+                                                                                                <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                                            ))}
+                                                                                            <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <th className="align-middle text-center">Transaction Count</th>
+                                                                                    )}
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {result.rows.map(r => (
+                                                                                    <tr key={r.id}>
+                                                                                        <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
+                                                                                        <td className="align-middle fw-medium">{result.unitType}</td>
+                                                                                        <td className="align-middle text-center fw-semibold">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
+                                                                                        {analysisViewTab === 'yoy' ? (
+                                                                                            <>
+                                                                                                {yearsToRender.map(yr => (
+                                                                                                    <td key={yr} className="align-middle text-center">
+                                                                                                        <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                    </td>
+                                                                                                ))}
+                                                                                                <td className="align-middle text-center bg-light">
+                                                                                                    <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                                                </td>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <td className="align-middle text-center">
+                                                                                                {r.count === null ? (
+                                                                                                    <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                                        <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                                    </span>
+                                                                                                ) : (
+                                                                                                    <span className="badge bg-primary bg-opacity-10 text-primary px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "12px" }}>{r.count.toLocaleString()}</span>
+                                                                                                )}
+                                                                                            </td>
+                                                                                        )}
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center p-4 rounded-3 border border-dashed bg-light text-secondary" style={{ borderColor: "#cbd5e1" }}>
+                                                    <FaFilter size={18} className="mb-2 text-muted" />
+                                                    <div className="fw-semibold text-dark" style={{ fontSize: "13px" }}>No Simulation Results Generated Yet</div>
+                                                    <div className="small text-muted">Set your range parameters in the tables above and click <strong>Simulate Area</strong>, <strong>Simulate Rate</strong>, or <strong>Simulate Ticket Size</strong>.</div>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         </div>
                     )}
                 </div>
-
-                {/* 1.5) Analysis Results */}
-                {(areaAnalysisResults.length > 0 || rateAnalysisResults.length > 0 || ticketSizeAnalysisResults.length > 0) && (
-                    <div className="pm-section-card mb-4">
-                        <div 
-                            className="pm-section-header"
-                            onClick={() => setIsAnalysisResultsOpen(!isAnalysisResultsOpen)}
-                        >
-                            <div>
-                                <div className="pm-section-eyebrow">SUBSECTION 1.5</div>
-                                <div className="pm-section-maintitle">
-                                    Analysis Results {analysisViewTab === 'yoy' ? '(Year-on-Year View)' : analysisViewTab === 'custom' ? `(${customStartDate || 'Start'} to ${customEndDate || 'End'})` : '(Overall 2020+ View)'}
-                                </div>
-                            </div>
-                            <div className="pm-chevron-btn">
-                                {isAnalysisResultsOpen ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
-                            </div>
-                        </div>
-                        {isAnalysisResultsOpen && (
-                            <div className="pm-section-body">
-                                <div className="row g-4">
-                                    {/* Area Range Results */}
-                                    {areaAnalysisResults.map((result) => (
-                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
-                                            <div className="pm-table-container h-100 mb-0">
-                                                <div className="pm-table-title">
-                                                    <span>Area Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
-                                                </div>
-                                                <div className="table-responsive">
-                                                    <table className="pm-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th className="align-middle">Property Type</th>
-                                                                <th className="align-middle">Unit Type</th>
-                                                                <th className="align-middle text-center">Area Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                {analysisViewTab === 'yoy' ? (
-                                                                    <>
-                                                                        {availableYears.map(yr => (
-                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
-                                                                        ))}
-                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
-                                                                    </>
-                                                                ) : (
-                                                                    <th className="align-middle text-center">Transaction Count</th>
-                                                                )}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {result.rows.map(r => (
-                                                                <tr key={r.id}>
-                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
-                                                                    <td className="align-middle fw-medium">{result.unitType}</td>
-                                                                    <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    {analysisViewTab === 'yoy' ? (
-                                                                        <>
-                                                                            {availableYears.map(yr => (
-                                                                                <td key={yr} className="align-middle text-center">
-                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
-                                                                                </td>
-                                                                            ))}
-                                                                            <td className="align-middle text-center bg-light">
-                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                            </td>
-                                                                        </>
-                                                                    ) : (
-                                                                        <td className="align-middle text-center">
-                                                                            {r.count === null ? (
-                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                            )}
-                                                                        </td>
-                                                                    )}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Rate Range Results */}
-                                    {rateAnalysisResults.map((result) => (
-                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
-                                            <div className="pm-table-container h-100 mb-0">
-                                                <div className="pm-table-title">
-                                                    <span>Rate Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
-                                                </div>
-                                                <div className="table-responsive">
-                                                    <table className="pm-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th className="align-middle">Property Type</th>
-                                                                <th className="align-middle">Unit Type</th>
-                                                                <th className="align-middle text-center">Rate Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                {analysisViewTab === 'yoy' ? (
-                                                                    <>
-                                                                        {availableYears.map(yr => (
-                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
-                                                                        ))}
-                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
-                                                                    </>
-                                                                ) : (
-                                                                    <th className="align-middle text-center">Transaction Count</th>
-                                                                )}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {result.rows.map(r => (
-                                                                <tr key={r.id}>
-                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
-                                                                    <td className="align-middle fw-medium">{result.unitType}</td>
-                                                                    <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    {analysisViewTab === 'yoy' ? (
-                                                                        <>
-                                                                            {availableYears.map(yr => (
-                                                                                <td key={yr} className="align-middle text-center">
-                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
-                                                                                </td>
-                                                                            ))}
-                                                                            <td className="align-middle text-center bg-light">
-                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                            </td>
-                                                                        </>
-                                                                    ) : (
-                                                                        <td className="align-middle text-center">
-                                                                            {r.count === null ? (
-                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                            )}
-                                                                        </td>
-                                                                    )}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Ticket Size Results */}
-                                    {ticketSizeAnalysisResults.map((result) => (
-                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
-                                            <div className="pm-table-container h-100 mb-0">
-                                                <div className="pm-table-title">
-                                                    <span>Ticket Size Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
-                                                </div>
-                                                <div className="table-responsive">
-                                                    <table className="pm-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th className="align-middle">Property Type</th>
-                                                                <th className="align-middle">Unit Type</th>
-                                                                <th className="align-middle text-center">Ticket Size Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                {analysisViewTab === 'yoy' ? (
-                                                                    <>
-                                                                        {availableYears.map(yr => (
-                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
-                                                                        ))}
-                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
-                                                                    </>
-                                                                ) : (
-                                                                    <th className="align-middle text-center">Transaction Count</th>
-                                                                )}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {result.rows.map(r => (
-                                                                <tr key={r.id}>
-                                                                    <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
-                                                                    <td className="align-middle fw-medium">{result.unitType}</td>
-                                                                    <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    {analysisViewTab === 'yoy' ? (
-                                                                        <>
-                                                                            {availableYears.map(yr => (
-                                                                                <td key={yr} className="align-middle text-center">
-                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
-                                                                                </td>
-                                                                            ))}
-                                                                            <td className="align-middle text-center bg-light">
-                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
-                                                                            </td>
-                                                                        </>
-                                                                    ) : (
-                                                                        <td className="align-middle text-center">
-                                                                            {r.count === null ? (
-                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                            )}
-                                                                        </td>
-                                                                    )}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 {/* 2) Applied Product Mix */}
                 <div className="pm-section-card mb-2">
@@ -1959,13 +2202,13 @@ const ProductMixTicketSize = () => {
                             <div className="row mb-4">
                                 <div className="col-md-2">
                                     <div className="pm-global-label">Area Unit</div>
-                                    <select className="form-select pm-global-select shadow-none" value={areaUnit} onChange={(e) => setAreaUnit(e.target.value)}>
-                                        <option value="sq ft">sq ft</option>
-                                        <option value="sq m">sq m</option>
-                                        <option value="sq yd">sq yd</option>
-                                        <option value="acre">acre</option>
-                                        <option value="hectare">hectare</option>
-                                    </select>
+                                    <input 
+                                        type="text" 
+                                        className="form-control pm-global-select shadow-none" 
+                                        style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', fontWeight: 600 }} 
+                                        value="sq ft" 
+                                        disabled 
+                                    />
                                 </div>
                             </div>
                             <div className="table-responsive">
