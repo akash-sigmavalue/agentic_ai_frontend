@@ -307,7 +307,7 @@ function summarizeEvent(event) {
   }
   if (event.type === "comparable_results") {
     const c = event.content;
-    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Select comparables below and proceed to fetch listings.`;
+    let baseMsg = `[SUCCESS] Found ${c?.total_found || 0} comparable projects. Wait for our Web Agent to find more comparables...`;
     if (c?.web_error) {
       baseMsg += ` (Note: Web search failed due to a technical issue: ${c.web_error}. Sourced results from internal database instead.)`;
     }
@@ -4884,6 +4884,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   });
   const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
   const [streamingNote, setStreamingNote] = useState("");
+  const [listingStatusNote, setListingStatusNote] = useState("");
+  const [cleaningStatusNote, setCleaningStatusNote] = useState("");
+  const [factorialStatusNote, setFactorialStatusNote] = useState("");
+  const [analysisStatusNote, setAnalysisStatusNote] = useState("");
   // Streaming execution log terminal
   const [executionLogs, setExecutionLogs] = useState([]); // [{level, text, ts}]
   const addLog = (text, level = "info") => {
@@ -4967,12 +4971,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [droppedComparableData, setDroppedComparableData] = useState(null);
   const [selectedComps, setSelectedComps] = useState(new Set());
   const [dbNoResults, setDbNoResults] = useState(false);
+  const [isComparableSearchActive, setIsComparableSearchActive] = useState(false);
+  const [comparableSearchStatus, setComparableSearchStatus] = useState("");
   const [subjectData, setSubjectData] = useState(null);
   const [listingData, setListingData] = useState(null);
   const [dbTransactions, setDbTransactions] = useState([]); // transactions from Internal DB comparables
   const [isListingStreaming, setIsListingStreaming] = useState(false);
   const [cleanedData, setCleanedData] = useState(null);
   const [isCleaningStreaming, setIsCleaningStreaming] = useState(false);
+  const pendingCleaningResultRef = useRef(null);
   const [factorialData, setFactorialData] = useState(null);
   const [isFactorialStreaming, setIsFactorialStreaming] = useState(false);
   const [factorialAnalysisData, setFactorialAnalysisData] = useState(null);
@@ -5258,6 +5265,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setComparableData(null);
     setSelectedComps(new Set());
     setDbNoResults(false);
+    setIsComparableSearchActive(false);
+    setComparableSearchStatus("");
     setSubjectData(null);
     setListingData(null);
     setDbTransactions([]);
@@ -5610,6 +5619,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } finally {
       setIsListingStreaming(false);
       setStreamingNote("");
+      setListingStatusNote("");
     }
   };
 
@@ -6371,6 +6381,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const subjectDbProject = subjectData?.subject_db_project || null;
     const shouldFetchSubjectTx = subjectDbProject && !fetchedCompIds.has("__subject__");
     const shouldFetchWebListings = webComps.length > 0 || !fetchedCompIds.has("__subject_web__");
+    const subjectDisplayName = `Subject Project (${subjectData?.project_name || "Subject"})`;
 
     // Filter previous records from backup state
     const isPrevListingToKeep = (lst) => {
@@ -6423,11 +6434,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       ? `⏩ Skipping ${skipComps.length} already-fetched comparable(s). Fetching ${newComps.length} new one(s)...`
       : "Starting listing fetch pipeline...";
     setStreamingNote(initMsg);
+    setListingStatusNote(initMsg);
     addLog(initMsg);
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
     // Initialise per-project statuses
     const allFetchProjects = [
-      ...(shouldFetchSubjectTx ? [{ name: subjectData?.project_name || "Subject Property", type: "db" }] : []),
+      ...(shouldFetchSubjectTx ? [{ name: "DB Search", type: "db" }] : []),
+      ...(shouldFetchWebListings ? [{ name: "Web Listing Search", type: "web" }] : []),
       ...dbComps.map(c => ({ name: c.project_name, type: "db" })),
       ...webComps.map(c => ({ name: c.project_name, type: "web" })),
     ];
@@ -6443,13 +6456,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Transaction DB, ${webComps.length} from Web.`,
         meta: "Now",
       },
-      {
-        role: "assistant",
-        content: isIncremental ? "Fetching listings for new comparables only..." : "Running listing pipeline...",
-        meta: "Live",
-        listings: activePreviousListings,
-        db_transactions: activePreviousDbTransactions,
-      },
     ]);
 
     try {
@@ -6458,10 +6464,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         const projId = comp.project_id || comp.id || comp.project_name;
         const propType = comp.property_type || subjectData.property_type || "apartment";
         if (!projId) return [];
+        const statusName = isSubject ? subjectDisplayName : comp.project_name;
 
-        setStreamingNote(`🗄️ Fetching DB transactions for "${comp.project_name}"...`);
-        addLog(`Fetching DB transactions for "${comp.project_name}"...`, "info");
-        setProjectFetchStatuses(prev => ({ ...prev, [comp.project_name]: "fetching" }));
+        setStreamingNote(`🗄️ Searching transaction database for "${statusName}"...`);
+        addLog(`Searching transaction database for "${statusName}"...`, "info");
+        setProjectFetchStatuses(prev => ({ ...prev, [statusName]: "fetching" }));
         const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
@@ -6511,9 +6518,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   });
                 }
                 const txCount = ev.content?.total || 0;
-                setStreamingNote(`✅ Got ${txCount} ${isSubject ? "subject " : ""}transactions for "${comp.project_name}"`);
-                addLog(`Got ${txCount} transactions for "${comp.project_name}"`, txCount > 0 ? "success" : "warn");
-                setProjectFetchStatuses(prev => ({ ...prev, [comp.project_name]: txCount > 0 ? "done" : "error" }));
+                setStreamingNote(`✅ DB search complete for "${statusName}" (${txCount} transaction(s))`);
+                addLog(`DB search complete for "${statusName}" (${txCount} transaction(s))`, txCount > 0 ? "success" : "warn");
+                setProjectFetchStatuses(prev => ({ ...prev, [statusName]: txCount > 0 ? "done" : "error" }));
+                if (isSubject) {
+                  setProjectFetchStatuses(prev => ({ ...prev, "Subject DB Search": txCount > 0 ? "done" : "error" }));
+                }
               }
             }
           }
@@ -6525,10 +6535,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       const fetchWebListings = async () => {
         const webFetchNote = webComps.length > 0
-          ? `🌐 Fetching web listings for Subject Project & ${webComps.length} web comparable(s)...`
-          : `🌐 Fetching web listings for Subject Project...`;
+          ? `🌐 Searching web listings for Subject Project & ${webComps.length} web comparable(s)...`
+          : `🌐 Searching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
         addLog(webFetchNote, "info");
+        setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "fetching" }));
         webComps.forEach(c => setProjectFetchStatuses(prev => ({ ...prev, [c.project_name]: "fetching" })));
 
         try {
@@ -6619,37 +6630,51 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 });
                 setMessages((prev) => {
                   const next = [...prev];
-                  const lastIndex = next.length - 1;
-                  if (lastIndex >= 0) {
-                    next[lastIndex] = {
-                      ...next[lastIndex],
-                      role: "assistant",
-                      content: summary,
-                      meta: "listing results",
-                      listings: mergedListings,
-                      // Preserve any DB transactions stamped in the same message
-                      db_transactions: next[lastIndex].db_transactions || [],
+                  const targetIndex = next.findLastIndex((m) => m.meta === "Live" && String(m.content || "").startsWith("Running listing pipeline"));
+                  const payload = {
+                    role: "assistant",
+                    content: summary,
+                    meta: "listing results",
+                    listings: mergedListings,
+                    db_transactions: next[targetIndex]?.db_transactions || [],
+                  };
+                  if (targetIndex !== -1) {
+                    next[targetIndex] = {
+                      ...next[targetIndex],
+                      ...payload,
                     };
+                  } else {
+                    next.push(payload);
                   }
                   return next;
                 });
+                setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "done" }));
               }
 
               if (event.type === "listing_done" || event.type === "error") {
                 setMessages((prev) => {
                   const next = [...prev];
-                  const lastIndex = next.length - 1;
-                  if (lastIndex >= 0 && !next[lastIndex].listings) {
-                    next[lastIndex] = { ...next[lastIndex], role: "assistant", content: summary, meta: event.type === "error" ? "error" : "listing done" };
+                  const targetIndex = next.findLastIndex((m) => m.meta === "listing results");
+                  if (targetIndex !== -1) {
+                    next[targetIndex] = {
+                      ...next[targetIndex],
+                      role: "assistant",
+                      content: event.type === "error" ? summary : "Listing fetch completed.",
+                      meta: event.type === "error" ? "error" : "listing done",
+                    };
                   }
                   return next;
                 });
+                if (event.type === "error") {
+                  setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "error" }));
+                }
               }
             }
           }
           return listings;
         } catch (error) {
           console.warn("Web listing fetch failed", error);
+          setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "error" }));
           throw error;
         }
       };
@@ -6760,8 +6785,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const dbCount = dbTransactions.length;
 
     setIsCleaningStreaming(true);
+    pendingCleaningResultRef.current = null;
     setStreamingNote("Starting data cleaning pipeline...");
+    setCleaningStatusNote("Starting data cleaning pipeline...");
     setCurrentStage("Stage 3: Market Approach (Data Cleaning)");
+    setProjectFetchStatuses({});
 
     setMessages((prev) => [
       ...prev,
@@ -6821,6 +6849,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
+          setCleaningStatusNote(summary);
+          setListingStatusNote(summary);
 
           if (event.type === "cleaning_results") {
             const cleanedListings = event.content?.cleaned_listings || [];
@@ -6831,7 +6861,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             const total = newUsage.total_tokens || 0;
             const model = newUsage.model || "gpt-4o-mini";
 
-            setCleanedData(cleanedListings);
+            pendingCleaningResultRef.current = {
+              cleanedListings,
+              reviewListings,
+              droppedListings,
+              summary,
+              auditStats,
+              tokenUsage: newUsage,
+              total,
+              model,
+            };
             setTokenStats((prev) => {
               const nextModelBreakdown = { ...prev.model_breakdown };
               const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
@@ -6862,8 +6901,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 next[lastIndex] = {
                   ...next[lastIndex],
                   role: "assistant",
-                  content: summary,
-                  meta: "cleaning results",
+                  content: "Cleaning in progress... waiting for the final completion signal.",
+                  meta: "cleaning live",
                   cleaned_listings: cleanedListings,
                   review_listings: reviewListings,
                   dropped_listings: droppedListings,
@@ -6877,13 +6916,31 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: event.type === "error" ? "error" : "cleaning done",
-                };
+              if (lastIndex >= 0) {
+                const pending = pendingCleaningResultRef.current;
+                if (event.type === "cleaning_done" && pending?.cleanedListings) {
+                  setCleanedData(pending.cleanedListings);
+                  next[lastIndex] = {
+                    ...next[lastIndex],
+                    role: "assistant",
+                    content: pending.summary || summary,
+                    meta: "cleaning results",
+                    cleaned_listings: pending.cleanedListings,
+                    review_listings: pending.reviewListings,
+                    dropped_listings: pending.droppedListings,
+                  };
+                  pendingCleaningResultRef.current = null;
+                  return next;
+                }
+
+                if (!next[lastIndex].meta.includes("results")) {
+                  next[lastIndex] = {
+                    ...next[lastIndex],
+                    role: "assistant",
+                    content: summary,
+                    meta: event.type === "error" ? "error" : "cleaning done",
+                  };
+                }
               }
               return next;
             });
@@ -6904,8 +6961,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         return next;
       });
     } finally {
+      if (pendingCleaningResultRef.current?.cleanedListings && !cleanedData) {
+        setCleanedData(pendingCleaningResultRef.current.cleanedListings);
+      }
+      pendingCleaningResultRef.current = null;
       setIsCleaningStreaming(false);
       setStreamingNote("");
+      setCleaningStatusNote("");
     }
   };
 
@@ -7109,7 +7171,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     setIsFactorialStreaming(true);
     setStreamingNote("Computing factorial rate table...");
+    setFactorialStatusNote("Computing factorial rate table...");
     setCurrentStage("Stage 4: Factorial Rate Table");
+    setProjectFetchStatuses({});
 
     setMessages((prev) => [
       ...prev,
@@ -7160,6 +7224,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
+          setFactorialStatusNote(summary);
 
           if (event.type === "factorial_results") {
             setFactorialData(event.content);
@@ -7213,6 +7278,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } finally {
       setIsFactorialStreaming(false);
       setStreamingNote("");
+      setFactorialStatusNote("");
     }
   };
 
@@ -7221,26 +7287,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     setIsFactorialAnalysisStreaming(true);
     setStreamingNote("Sending factorial data to Agent for adjustment analysis...");
+    setAnalysisStatusNote("Sending factorial data to Agent for adjustment analysis...");
     setCurrentStage("Stage 5: Agent Factorial Analysis");
-
-    setMessages((prev) => {
-      const existingIndex = prev.findIndex(m =>
-        m.meta === "factorial analysis results" ||
-        m.meta === "factorial analysis done" ||
-        m.meta === "factorial analysis start" ||
-        m.content === "Running Agent Factoring..."
-      );
-
-      if (existingIndex !== -1) {
-        const next = [...prev];
-        next[existingIndex] = { role: "assistant", content: "Running Agent Factoring...", meta: "Live" };
-        return next;
-      }
-      return [
-        ...prev,
-        { role: "assistant", content: "Running Agent Factoring...", meta: "Live" }
-      ];
-    });
+    setProjectFetchStatuses({});
 
     try {
       const response = await fetch(apiUrl("/factorial_analysis_stream"), {
@@ -7256,7 +7305,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Agent Factoring request failed with status ${response.status}`);
+        throw new Error(`Valuation Synthesis request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -7277,14 +7326,30 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           onEvent?.(event);
           let summary = "Pipeline update received.";
-          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Agent factoring analysis...";
-          else if (event.type === "factorial_analysis_result") summary = `🤖 Agent Factoring ready.`;
-          else if (event.type === "factorial_analysis_done") summary = "Agent Factoring completed.";
+          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Valuation Synthesis...";
+          else if (event.type === "factorial_analysis_result" || event.type === "valuation_synthesis_result") summary = `🤖 Valuation Synthesis ready.`;
+          else if (event.type === "factorial_analysis_done") summary = "Valuation Synthesis completed.";
           else if (event.type === "error") summary = `Error: ${event.content}`;
 
           setStreamingNote(summary);
+          setAnalysisStatusNote(summary);
 
-          if (event.type === "factorial_analysis_result") {
+          if (event.type === "factorial_analysis_start") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const existingIndex = next.findIndex((m) =>
+                m.meta === "factorial analysis results" ||
+                m.meta === "factorial analysis done"
+              );
+              if (existingIndex !== -1) {
+                next[existingIndex] = { ...next[existingIndex], role: "assistant", content: summary, meta: "Live" };
+                return next;
+              }
+              return [...next, { role: "assistant", content: summary, meta: "Live" }];
+            });
+          }
+
+          if (event.type === "factorial_analysis_result" || event.type === "valuation_synthesis_result") {
             setFactorialAnalysisData(event.content);
             // Bubble valuation result up for the Report tab in Visual Layer
             onValuationResult?.({
@@ -7314,7 +7379,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 };
 
                 const nextStageBreakdown = { ...prev.stage_breakdown };
-                const stageName = "Agent Factoring (Stage 5)";
+                const stageName = "Valuation Synthesis (Stage 5)";
                 const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
                 nextStageBreakdown[stageName] = {
                   prompt: currentStageStats.prompt + promptDiff,
@@ -7331,7 +7396,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   stage_breakdown: nextStageBreakdown,
                   cost_usd: (prev.cost_usd || 0) + addedCost,
                   last_stage_tokens: total,
-                  last_stage_name: "Agent Factoring (Stage 5)"
+                  last_stage_name: "Valuation Synthesis (Stage 5)"
                 };
               });
             }
@@ -7377,7 +7442,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           next[targetIndex] = {
             ...next[targetIndex],
             role: "assistant",
-            content: `Agent Factoring error: ${error.message}`,
+            content: `Valuation Synthesis error: ${error.message}`,
             meta: "Error",
           };
         }
@@ -7386,6 +7451,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } finally {
       setIsFactorialAnalysisStreaming(false);
       setStreamingNote("");
+      setAnalysisStatusNote("");
     }
   };
 
@@ -7543,10 +7609,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       setOriginalQuestion(trimmed);
     }
 
+    setCurrentStage("Stage 1: Property Profiling");
     setMessages((prev) => [
       ...prev,
       { role: "user", content: uiDisplayOverride || trimmed, meta: "Now" },
-      { role: "assistant", content: "Running the valuation pipeline...", meta: "Live" },
+      { role: "assistant", content: "Running property profiling...", meta: "Live" },
     ]);
     setInput("");
     setStreamingNote("Connecting to backend stream...");
@@ -7754,6 +7821,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           }
 
           if (event.type === "comparable_results") {
+            setIsComparableSearchActive(false);
+            setComparableSearchStatus("");
             const comps = event.content?.comparables || [];
             const dropped = event.content?.dropped_comparables || [];
             // Only set comparableData when there are actual results
@@ -7794,7 +7863,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             }
           }
 
+          if (event.type === "comparable_search_progress") {
+            const progress = event.content || {};
+            setIsComparableSearchActive(true);
+            setComparableSearchStatus(
+              progress.message ||
+              `Searching radius ${progress.radius_km || "?"}km, iteration ${progress.iteration || "?"}...`
+            );
+          }
+
           if (event.type === "done") {
+            setIsComparableSearchActive(false);
+            setComparableSearchStatus("");
             setPipelineDone(true);
           }
 
@@ -8937,13 +9017,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   )}
                   {(message.comparables || message.dropped_comparables) && (
                     <div className="space-y-3">
-                      {pipelineDone && !isListingStreaming && !listingData && (
+                      {isComparableSearchActive && (
+                        <div className="rounded-xl border border-info/30 bg-info/8 px-3 py-2.5 flex items-start gap-2.5 shadow-[inset_0_1px_1px_rgba(56,189,248,0.08)] animate-in fade-in duration-200">
+                          <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-info" />
+                          <div>
+                            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-info">
+                              Comparable Search In Progress
+                            </span>
+                            <span className="text-[10px] leading-relaxed text-text-secondary">
+                              {comparableSearchStatus || "Searching for matching projects and preparing the comparable table."}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
                         <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
                           <div>
                             <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
                             <span className="text-[10px] text-text-secondary leading-relaxed">
-                              Please review and select comparable projects from the table below, then click "Proceed to Fetch Listings".
+                              Please review and select comparable projects from the table below, then click &quot;Proceed to Fetch Listings&quot;.
                             </span>
                           </div>
                         </div>
@@ -9094,63 +9187,110 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             ))}
 
             {/* ── Execution Terminal Log ─────────────────────────── */}
-            {(anyStreaming || streamingNote) && !isQuickEstimateStreaming && (() => {
-              return (
-                <div className="mr-2 animate-slide-in">
+            {(isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
+              <div className="mr-2 animate-slide-in space-y-2">
+                {isListingStreaming && (
                   <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
-                    {/* Terminal header */}
                     <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
                           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
                         </div>
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Execution Status</span>
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Listing Fetch Status</span>
                       </div>
-                      {anyStreaming && (
-                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
-                          Processing
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                        Processing
+                      </span>
                     </div>
-                    {/* Simplified Log Status */}
                     <div className="p-4 font-mono text-[11px] leading-relaxed">
                       <div className="flex items-center gap-2">
                         <span className="shrink-0 font-bold text-cyan-400">›</span>
-                        <span className="text-slate-300 font-semibold break-words">
-                          {streamingNote || "Waiting for execution..."}
-                        </span>
-                        {anyStreaming && <span className="animate-pulse text-emerald-400">█</span>}
+                        <span className="text-slate-300 font-semibold break-words">{listingStatusNote || streamingNote || "Waiting for listing fetch..."}</span>
+                        <span className="animate-pulse text-emerald-400">█</span>
+                      </div>
+                    </div>
+                    {Object.keys(projectFetchStatuses).length > 0 && (
+                      <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+                        <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center gap-2">
+                          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light">Live Fetch Status</span>
+                          <span className="text-[9px] text-text-dim">({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)</span>
+                        </div>
+                        <div className="p-2.5 grid grid-cols-1 gap-1">
+                          {Object.entries(projectFetchStatuses).map(([name, status]) => {
+                            const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                            const colors = { pending: "text-text-dim", fetching: "text-accent-light animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
+                            return (
+                              <div key={name} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                                <span className={`text-[10px] font-medium truncate flex-1 ${colors[status] || "text-text-dim"}`}>{name}</span>
+                                <span className={`text-[9px] uppercase font-bold tracking-wider ${colors[status] || "text-text-dim"}`}>{status}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isCleaningStreaming && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3 border-b border-emerald-500/10 bg-emerald-500/5 px-4 py-2.5">
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-emerald-300">Cleaning Status</span>
+                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 select-none">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse shadow-[0_0_6px_#86efac]" />
+                        Processing
+                      </span>
+                    </div>
+                    <div className="p-4 font-mono text-[11px] leading-relaxed text-emerald-100">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-bold text-emerald-300">›</span>
+                        <span className="font-semibold break-words">{cleaningStatusNote || streamingNote || "Cleaning listings..."}</span>
+                        <span className="animate-pulse text-emerald-300">█</span>
                       </div>
                     </div>
                   </div>
-                  {/* Live Project Fetch Status */}
-                  {Object.keys(projectFetchStatuses).length > 0 && (
-                    <div className="mt-2 rounded-xl border border-border/40 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
-                      <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center gap-2">
-                        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light">Live Fetch Status</span>
-                        <span className="text-[9px] text-text-dim">({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)</span>
-                      </div>
-                      <div className="p-2.5 grid grid-cols-1 gap-1">
-                        {Object.entries(projectFetchStatuses).map(([name, status]) => {
-                          const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                          const colors = { pending: "text-text-dim", fetching: "text-accent-light animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
-                          return (
-                            <div key={name} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
-                              <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                              <span className={`text-[10px] font-medium truncate flex-1 ${colors[status] || "text-text-dim"}`}>{name}</span>
-                              <span className={`text-[9px] uppercase font-bold tracking-wider ${colors[status] || "text-text-dim"}`}>{status}</span>
-                            </div>
-                          );
-                        })}
+                )}
+                {isFactorialStreaming && (
+                  <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3 border-b border-purple-500/10 bg-purple-500/5 px-4 py-2.5">
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-purple-300">Factorial Table Status</span>
+                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-300 select-none">
+                        <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse shadow-[0_0_6px_#c084fc]" />
+                        Processing
+                      </span>
+                    </div>
+                    <div className="p-4 font-mono text-[11px] leading-relaxed text-purple-100">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-bold text-purple-300">›</span>
+                        <span className="font-semibold break-words">{factorialStatusNote || streamingNote || "Building factorial table..."}</span>
+                        <span className="animate-pulse text-purple-300">█</span>
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })()}
+                  </div>
+                )}
+                {isFactorialAnalysisStreaming && (
+                  <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3 border-b border-pink-500/10 bg-pink-500/5 px-4 py-2.5">
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-pink-300">Factorial Analysis Status</span>
+                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-300 select-none">
+                        <span className="h-1.5 w-1.5 rounded-full bg-pink-300 animate-pulse shadow-[0_0_6px_#f9a8d4]" />
+                        Processing
+                      </span>
+                    </div>
+                    <div className="p-4 font-mono text-[11px] leading-relaxed text-pink-100">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 font-bold text-pink-300">›</span>
+                        <span className="font-semibold break-words">{analysisStatusNote || streamingNote || "Running valuation synthesis..."}</span>
+                        <span className="animate-pulse text-pink-300">█</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isQuickEstimateStreaming && (
               <QuickEstimateProgressPanel
@@ -9662,3 +9802,4 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     </>
   );
 }
+

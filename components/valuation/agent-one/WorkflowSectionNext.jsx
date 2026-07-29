@@ -555,7 +555,7 @@ function StepDetails({ step }) {
     );
   }
 
-  if (type === "factorial_analysis_result" && content) {
+  if ((type === "factorial_analysis_result" || type === "valuation_synthesis_result") && content) {
     const isPlotLand = content.rate_basis === "plot_land";
     const finalRate = isPlotLand
       ? (content.subject_final_plot_rate || content.subject_final_rate)
@@ -658,6 +658,7 @@ function getStepIcon(type) {
     recalculate_results:      SlidersHorizontal,
     factorial_results:        Table,
     factorial_analysis_result:Brain,
+    valuation_synthesis_result:Brain,
     cost_calculation_result:  ShieldCheck,
     done:                     Flag,
     error:                    AlertTriangle,
