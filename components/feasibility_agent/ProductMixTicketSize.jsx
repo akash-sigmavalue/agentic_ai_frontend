@@ -1,18 +1,146 @@
 import React, { useState, useEffect } from 'react';
-import { FaChevronDown, FaChevronUp, FaPlus, FaTrash } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle } from 'react-icons/fa';
+import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
 
+const formatProjectOption = ({ project, index }, { context }) => {
+    if (context === "value") {
+        return (
+            <div className="d-flex align-items-center gap-2">
+                <FaRegBuilding size={13} className="text-secondary" />
+                <span className="fw-bold text-dark" style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+                    {project.project_name}
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="d-flex align-items-center justify-content-between w-100">
+            <div className="d-flex align-items-center gap-2">
+                <div className="bg-light rounded p-1 d-flex align-items-center justify-content-center text-secondary">
+                    <FaRegBuilding size={14} />
+                </div>
+                <div className="d-flex flex-column">
+                    <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
+                        <span style={{ color: "#94a3b8", marginRight: "4px" }}>{index}.</span>
+                        {project.project_name}
+                    </span>
+                    <span className="text-muted" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+                        {project.distance_formatted} away
+                    </span>
+                </div>
+            </div>
+            <div className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1 ms-2" style={{ fontSize: "10px" }}>
+                {project.total_transactions} sales
+            </div>
+        </div>
+    );
+};
+
+const customSelectStyles = {
+    control: (base) => ({
+        ...base,
+        minHeight: "34px",
+        height: "34px",
+        fontSize: "13px",
+        fontWeight: "bold",
+        borderRadius: "0.375rem",
+        borderColor: "#cbd5e1",
+        minWidth: "250px",
+        boxShadow: "none",
+        "&:hover": { borderColor: "#94a3b8" }
+    }),
+    valueContainer: (base) => ({
+        ...base,
+        padding: "0 8px",
+    }),
+    singleValue: (base) => ({
+        ...base,
+        color: "#1e293b",
+    }),
+    option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isSelected ? "#eef7f4" : state.isFocused ? "#f8fafc" : "transparent",
+        color: "#1e293b",
+        cursor: "pointer",
+        padding: "8px 12px",
+        "&:active": { backgroundColor: "#d1fae5" }
+    }),
+    menu: (base) => ({
+        ...base,
+        zIndex: 9999,
+        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        borderRadius: "0.5rem",
+        overflow: "hidden",
+        minWidth: "300px"
+    }),
+    menuList: (base) => ({
+        ...base,
+        padding: 0
+    })
+};
+
+
+const ALL_UNITS_OPTION = "All Unit Configurations";
+
 const DEFAULT_PROPERTY_TYPES = [
-    "Apartment", "Flat", "Studio", "Villa", "Townhouse", 
+    "Flat", "Apartment", "Studio", "Villa", "Townhouse", 
     "Retail Shop", "Showroom", "Office", "Serviced Apartment", 
-    "Hotel", "Industrial", "Warehouse", "Plot", "Other"
+    "Hotel", "Industrial", "Warehouse", "Plot"
 ];
 
 const DEFAULT_UNIT_TYPES = [
+    ALL_UNITS_OPTION,
     "Studio", "1 Bed", "2 Bed", "3 Bed", ">3 Bed", 
+    "1Bhk", "2Bhk", "3Bhk", "4Bhk", "Penthouse",
     "Small Office", "Medium Office", "Large Office", 
-    "Retail Unit", "Mixed Unit", "Other"
+    "Retail Unit", "Showroom", "Mixed Unit"
 ];
+
+const RESIDENTIAL_UNITS = ["Studio", "1 Bed", "2 Bed", "3 Bed", ">3 Bed", "1Bhk", "2Bhk", "3Bhk", "4Bhk", "Penthouse", "Duplex"];
+const SHOP_UNITS = ["Retail Unit", "Showroom", "Shop", "Ground Floor Shop", "Kiosk"];
+const OFFICE_UNITS = ["Small Office", "Medium Office", "Large Office", "Office Unit", "Full Floor"];
+const GENERAL_UNITS = ["Studio", "1 Bed", "2 Bed", "3 Bed", ">3 Bed", "1Bhk", "2Bhk", "3Bhk", "Retail Unit", "Small Office", "Medium Office"];
+
+const getUnitTypesForProperty = (propType, dbMap = {}, globalUnitTypes = []) => {
+    let subList = [];
+    if (propType) {
+        const cleanProp = String(propType).trim();
+        if (dbMap && dbMap[cleanProp] && Array.isArray(dbMap[cleanProp]) && dbMap[cleanProp].length > 0) {
+            subList = dbMap[cleanProp];
+        } else {
+            const lower = cleanProp.toLowerCase();
+            if (lower.includes("flat") || lower.includes("apartment") || lower.includes("villa") || lower.includes("townhouse") || lower.includes("studio") || lower.includes("residen")) {
+                subList = (globalUnitTypes.length > 0 ? globalUnitTypes : DEFAULT_UNIT_TYPES).filter(u => {
+                    const l = u.toLowerCase();
+                    return !l.includes("office") && !l.includes("retail") && !l.includes("showroom") && !l.includes("warehouse") && !l.includes("industrial");
+                });
+                if (subList.length === 0) subList = RESIDENTIAL_UNITS;
+            } else if (lower.includes("shop") || lower.includes("retail") || lower.includes("showroom")) {
+                subList = (globalUnitTypes.length > 0 ? globalUnitTypes : DEFAULT_UNIT_TYPES).filter(u => {
+                    const l = u.toLowerCase();
+                    return l.includes("retail") || l.includes("shop") || l.includes("showroom") || l.includes("kiosk") || l.includes("commercial");
+                });
+                if (subList.length === 0) subList = SHOP_UNITS;
+            } else if (lower.includes("office") || lower.includes("commer")) {
+                subList = (globalUnitTypes.length > 0 ? globalUnitTypes : DEFAULT_UNIT_TYPES).filter(u => {
+                    const l = u.toLowerCase();
+                    return l.includes("office") || l.includes("commercial");
+                });
+                if (subList.length === 0) subList = OFFICE_UNITS;
+            } else {
+                subList = globalUnitTypes.length > 0 ? globalUnitTypes : GENERAL_UNITS;
+            }
+        }
+    } else {
+        subList = globalUnitTypes.length > 0 ? globalUnitTypes : GENERAL_UNITS;
+    }
+
+    const filteredSub = subList.filter(u => u !== ALL_UNITS_OPTION);
+    return [ALL_UNITS_OPTION, ...filteredSub];
+};
 
 const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading }) => {
     if (isLoading) {
@@ -25,11 +153,14 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
             </div>
         );
     }
-    const list = (options && options.length > 0) ? options : DEFAULT_PROPERTY_TYPES;
+    const filteredOptions = (options && options.length > 0 ? options : DEFAULT_PROPERTY_TYPES).filter(
+        opt => opt && !["other", "others"].includes(String(opt).trim().toLowerCase())
+    );
+    const list = filteredOptions.length > 0 ? filteredOptions : DEFAULT_PROPERTY_TYPES;
     return (
         <select 
             className="form-select pm-table-select shadow-none" 
-            value={value || list[0] || 'Apartment'} 
+            value={value || list[0] || 'Flat'} 
             onChange={onChange} 
             style={{ minWidth: '95px', ...style }}
         >
@@ -40,7 +171,7 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
     );
 };
 
-const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading }) => {
+const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading, propertyType, dbPropertyUnitMap }) => {
     if (isLoading) {
         return (
             <div className="d-flex align-items-center" style={{ minWidth: '85px', padding: '0.15rem 0', ...style }}>
@@ -51,11 +182,12 @@ const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading }) => 
             </div>
         );
     }
-    const list = (options && options.length > 0) ? options : DEFAULT_UNIT_TYPES;
+    const list = getUnitTypesForProperty(propertyType, dbPropertyUnitMap, options);
+    const currentValue = value && list.includes(value) ? value : list[0] || ALL_UNITS_OPTION;
     return (
         <select 
             className="form-select pm-table-select shadow-none" 
-            value={value || list[0] || 'Studio'} 
+            value={currentValue} 
             onChange={onChange} 
             style={{ minWidth: '85px', ...style }}
         >
@@ -78,13 +210,136 @@ const ProductMixTicketSize = () => {
 
     const [dbPropertyTypes, setDbPropertyTypes] = useState(DEFAULT_PROPERTY_TYPES);
     const [dbUnitTypes, setDbUnitTypes] = useState(DEFAULT_UNIT_TYPES);
+    const [dbPropertyUnitMap, setDbPropertyUnitMap] = useState({});
+    const [typeDataSourceInfo, setTypeDataSourceInfo] = useState({ isFallback: false, remark: '', dataSource: '' });
     const [typesLoading, setTypesLoading] = useState(false);
     const [isAnalyzingArea, setIsAnalyzingArea] = useState(false);
-    const [timeFilter, setTimeFilter] = useState("Last 1 year");
     const [isAnalyzingRate, setIsAnalyzingRate] = useState(false);
-    const [rateTimeFilter, setRateTimeFilter] = useState("Last 1 year");
     const [isAnalyzingTicketSize, setIsAnalyzingTicketSize] = useState(false);
-    const [ticketSizeTimeFilter, setTicketSizeTimeFilter] = useState("Last 1 year");
+
+    // Universal Scope & Tab Filter States
+    const [analysisViewMode, setAnalysisViewMode] = useState("location");
+    const [analysisAppliedRadius, setAnalysisAppliedRadius] = useState(1000);
+    const [analysisInputRadius, setAnalysisInputRadius] = useState(1000);
+    const [analysisSelectedProject, setAnalysisSelectedProject] = useState("all");
+    const [analysisNearbyProjects, setAnalysisNearbyProjects] = useState([]);
+    const [analysisNearbyLimit, setAnalysisNearbyLimit] = useState(5);
+    const [loadingAnalysisNearbyProjects, setLoadingAnalysisNearbyProjects] = useState(false);
+
+    // Analysis View Tab: "overall" | "yoy" | "custom"
+    const [analysisViewTab, setAnalysisViewTab] = useState("overall");
+    const [customStartDate, setCustomStartDate] = useState("");
+    const [customEndDate, setCustomEndDate] = useState("");
+    const [availableYears, setAvailableYears] = useState([]);
+
+    // Fetch nearby projects when nearby mode is active
+    useEffect(() => {
+        if (analysisViewMode !== "nearby") return;
+
+        let lat = null;
+        let lng = null;
+        let city = "";
+
+        try {
+            const landRaw = localStorage.getItem("Land Identification");
+            if (landRaw) {
+                const parsed = JSON.parse(landRaw);
+                lat = parsed?.polygonCenterLat || parsed?.latitude || null;
+                lng = parsed?.polygonCenterLng || parsed?.longitude || null;
+                city = parsed?.location || parsed?.city || "";
+            }
+        } catch (e) {
+            console.error("Error parsing Land Identification for nearby projects:", e);
+        }
+
+        if (!lat || !lng) return;
+
+        const fetchNearby = async () => {
+            setLoadingAnalysisNearbyProjects(true);
+            try {
+                const response = await fetch(apiUrl("/new_rate_simulator/simulator/nearby-projects/"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ city_name: city, latitude: lat, longitude: lng, limit: analysisNearbyLimit })
+                });
+                const data = await response.json();
+                if (data.success && Array.isArray(data.projects)) {
+                    setAnalysisNearbyProjects(data.projects);
+                    if (data.projects.length > 0) {
+                        setAnalysisSelectedProject((prev) => {
+                            if (!prev || prev === "all") {
+                                const first = data.projects[0];
+                                return first.project_id ? `id:${first.project_id}:${first.project_name}` : first.project_name;
+                            }
+                            return prev;
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching nearby projects:", err);
+            } finally {
+                setLoadingAnalysisNearbyProjects(false);
+            }
+        };
+
+        fetchNearby();
+    }, [analysisViewMode, analysisNearbyLimit]);
+
+    const getAnalysisParams = (overrideTab, overrideStart, overrideEnd) => {
+        let city = "";
+        let location = "";
+        let lat = null;
+        let lng = null;
+
+        const savedLandData = localStorage.getItem("Land Identification");
+        if (savedLandData) {
+            try {
+                const parsedLand = JSON.parse(savedLandData);
+                city = parsedLand.location || parsedLand.city || "";
+                location = parsedLand.village || parsedLand.villageName || "";
+                lat = parsedLand.polygonCenterLat || parsedLand.latitude || null;
+                lng = parsedLand.polygonCenterLng || parsedLand.longitude || null;
+            } catch (e) {
+                console.error("Error parsing Land Identification", e);
+            }
+        }
+
+        let pId = null;
+        let pName = "all";
+        if (analysisSelectedProject && analysisSelectedProject !== "all") {
+            if (String(analysisSelectedProject).startsWith("id:")) {
+                const parts = analysisSelectedProject.split(":");
+                pId = parts[1];
+                pName = parts.slice(2).join(":");
+            } else {
+                const found = analysisNearbyProjects.find(p => String(p.project_id) === String(analysisSelectedProject) || p.project_name === analysisSelectedProject);
+                if (found) {
+                    pId = found.project_id;
+                    pName = found.project_name;
+                } else {
+                    pName = analysisSelectedProject;
+                }
+            }
+        }
+
+        const vTab = overrideTab || analysisViewTab;
+        const sDate = overrideStart !== undefined ? overrideStart : customStartDate;
+        const eDate = overrideEnd !== undefined ? overrideEnd : customEndDate;
+
+        return {
+            city_name: city,
+            location_name: location,
+            mode: analysisViewMode,
+            latitude: lat ? parseFloat(lat) : null,
+            longitude: lng ? parseFloat(lng) : null,
+            radius_km: (analysisAppliedRadius || 1000) / 1000.0,
+            project_id: pId,
+            project_name: pName,
+            analysis_view: vTab,
+            start_date: sDate || null,
+            end_date: eDate || null
+        };
+    };
 
     useEffect(() => {
         const savedData = localStorage.getItem("Land_and_fsi_details");
@@ -126,8 +381,19 @@ const ProductMixTicketSize = () => {
                 if (res.ok) {
                     const json = await res.json();
                     if (json.success) {
+                        if (json.remark) {
+                            setTypeDataSourceInfo({
+                                isFallback: !!json.is_fallback,
+                                remark: json.remark,
+                                dataSource: json.data_source || ""
+                            });
+                        }
+                        if (json.property_type_units_map && typeof json.property_type_units_map === "object") {
+                            setDbPropertyUnitMap(json.property_type_units_map);
+                        }
                         if (Array.isArray(json.property_types) && json.property_types.length > 0) {
-                            setDbPropertyTypes(json.property_types);
+                            const cleaned = json.property_types.filter(pt => pt && !["other", "others"].includes(String(pt).trim().toLowerCase()));
+                            if (cleaned.length > 0) setDbPropertyTypes(cleaned);
                         }
                         if (Array.isArray(json.unit_types) && json.unit_types.length > 0) {
                             setDbUnitTypes(json.unit_types);
@@ -143,9 +409,9 @@ const ProductMixTicketSize = () => {
         fetchTypes();
     }, []);
 
-    const [areaRows, setAreaRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
-    const [rateRows, setRateRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
-    const [ticketRows, setTicketRows] = useState([{ id: 1, propertyType: '', unitType: '', min: '', max: '', interval: '' }]);
+    const [areaRows, setAreaRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    const [rateRows, setRateRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    const [ticketRows, setTicketRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
 
     const [isAnalysisResultsOpen, setIsAnalysisResultsOpen] = useState(true);
     const [areaAnalysisResults, setAreaAnalysisResults] = useState([]);
@@ -153,19 +419,77 @@ const ProductMixTicketSize = () => {
     const [ticketSizeAnalysisResults, setTicketSizeAnalysisResults] = useState([]);
 
     const handleAreaRowChange = (id, field, value) => {
-        setAreaRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setAreaRows(prev => prev.map(row => {
+            if (row.id === id) {
+                const updated = { ...row, [field]: value };
+                if (field === 'propertyType') {
+                    const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
+                    if (!validUnits.includes(updated.unitType)) {
+                        updated.unitType = validUnits[0] || '';
+                    }
+                }
+                return updated;
+            }
+            return row;
+        }));
     };
 
     const handleRateRowChange = (id, field, value) => {
-        setRateRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setRateRows(prev => prev.map(row => {
+            if (row.id === id) {
+                const updated = { ...row, [field]: value };
+                if (field === 'propertyType') {
+                    const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
+                    if (!validUnits.includes(updated.unitType)) {
+                        updated.unitType = validUnits[0] || '';
+                    }
+                }
+                return updated;
+            }
+            return row;
+        }));
     };
 
     const handleTicketRowChange = (id, field, value) => {
-        setTicketRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setTicketRows(prev => prev.map(row => {
+            if (row.id === id) {
+                const updated = { ...row, [field]: value };
+                if (field === 'propertyType') {
+                    const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
+                    if (!validUnits.includes(updated.unitType)) {
+                        updated.unitType = validUnits[0] || '';
+                    }
+                }
+                return updated;
+            }
+            return row;
+        }));
     };
 
-    const handleAnalyzeArea = async (overrideTimeFilter) => {
-        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : timeFilter;
+    const handleTabChange = (newTab) => {
+        setAnalysisViewTab(newTab);
+        if (newTab !== "custom") {
+            if (areaAnalysisResults.length > 0) handleAnalyzeArea(newTab);
+            if (rateAnalysisResults.length > 0) handleAnalyzeRate(newTab);
+            if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize(newTab);
+        }
+    };
+
+    const handleApplyCustomDates = () => {
+        if (!customStartDate || !customEndDate) {
+            alert("Please select both Start Date and End Date.");
+            return;
+        }
+        if (new Date(customStartDate) > new Date(customEndDate)) {
+            alert("Start Date must be before or equal to End Date.");
+            return;
+        }
+        if (areaAnalysisResults.length > 0) handleAnalyzeArea("custom", customStartDate, customEndDate);
+        if (rateAnalysisResults.length > 0) handleAnalyzeRate("custom", customStartDate, customEndDate);
+        if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize("custom", customStartDate, customEndDate);
+    };
+
+    const handleAnalyzeArea = async (overrideTab, overrideStart, overrideEnd) => {
         const results = [];
         const queries = [];
         
@@ -183,8 +507,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
-                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
+                    propertyType: row.propertyType || 'Flat',
+                    unitType: row.unitType || ALL_UNITS_OPTION,
                     rows: []
                 };
                 
@@ -206,7 +530,8 @@ const ProductMixTicketSize = () => {
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: null
+                        count: null,
+                        countsByYear: null
                     });
                     
                     queryData.ranges.push({
@@ -234,35 +559,31 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingArea(true);
 
         try {
-            const savedLandData = localStorage.getItem("Land Identification");
-            let reqCity = "";
-            let reqLoc = "";
-            if (savedLandData) {
-                const parsedLand = JSON.parse(savedLandData);
-                reqCity = parsedLand.location || parsedLand.city || "";
-                reqLoc = parsedLand.village || parsedLand.villageName || "";
-            }
-
+            const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/area-range-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    city_name: reqCity,
-                    location_name: reqLoc,
-                    queries: queries,
-                    time_filter: filterToUse
+                    ...params,
+                    queries: queries
                 })
             });
             
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
+                    if (Array.isArray(json.years) && json.years.length > 0) {
+                        setAvailableYears(json.years);
+                    }
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => r.id === apiData.id);
-                        if (targetResult && apiData.counts) {
+                        if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts[rRow.id] !== undefined) {
-                                    rRow.count = apiData.counts[rRow.id];
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
+                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
+                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
+                                } else if (apiData.counts) {
+                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
                                 } else {
                                     rRow.count = 0;
                                 }
@@ -282,24 +603,7 @@ const ProductMixTicketSize = () => {
         }
     };
 
-    const handleTimeFilterChange = (e) => {
-        const newFilter = e.target.value;
-        setTimeFilter(newFilter);
-        if (areaAnalysisResults.length > 0) {
-            handleAnalyzeArea(newFilter);
-        }
-    };
-
-    const handleRateTimeFilterChange = (e) => {
-        const newFilter = e.target.value;
-        setRateTimeFilter(newFilter);
-        if (rateAnalysisResults.length > 0) {
-            handleAnalyzeRate(newFilter);
-        }
-    };
-
-    const handleAnalyzeRate = async (overrideTimeFilter) => {
-        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : rateTimeFilter;
+    const handleAnalyzeRate = async (overrideTab, overrideStart, overrideEnd) => {
         const results = [];
         const queries = [];
         
@@ -317,8 +621,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
-                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
+                    propertyType: row.propertyType || 'Flat',
+                    unitType: row.unitType || ALL_UNITS_OPTION,
                     rows: []
                 };
                 
@@ -340,7 +644,8 @@ const ProductMixTicketSize = () => {
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: null
+                        count: null,
+                        countsByYear: null
                     });
                     
                     queryData.ranges.push({
@@ -368,23 +673,13 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingRate(true);
 
         try {
-            const savedLandData = localStorage.getItem("Land Identification");
-            let reqCity = "";
-            let reqLoc = "";
-            if (savedLandData) {
-                const parsedLand = JSON.parse(savedLandData);
-                reqCity = parsedLand.location || parsedLand.city || "";
-                reqLoc = parsedLand.village || parsedLand.villageName || "";
-            }
-
+            const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/rate-range-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    city_name: reqCity,
-                    location_name: reqLoc,
+                    ...params,
                     queries: queries,
-                    time_filter: filterToUse,
                     conversion_factor: conversionFactor
                 })
             });
@@ -392,12 +687,18 @@ const ProductMixTicketSize = () => {
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
+                    if (Array.isArray(json.years) && json.years.length > 0) {
+                        setAvailableYears(json.years);
+                    }
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => r.id === apiData.id);
-                        if (targetResult && apiData.counts) {
+                        if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts[rRow.id] !== undefined) {
-                                    rRow.count = apiData.counts[rRow.id];
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
+                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
+                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
+                                } else if (apiData.counts) {
+                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
                                 } else {
                                     rRow.count = 0;
                                 }
@@ -417,16 +718,7 @@ const ProductMixTicketSize = () => {
         }
     };
 
-    const handleTicketSizeTimeFilterChange = (e) => {
-        const newFilter = e.target.value;
-        setTicketSizeTimeFilter(newFilter);
-        if (ticketSizeAnalysisResults.length > 0) {
-            handleAnalyzeTicketSize(newFilter);
-        }
-    };
-
-    const handleAnalyzeTicketSize = async (overrideTimeFilter) => {
-        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : ticketSizeTimeFilter;
+    const handleAnalyzeTicketSize = async (overrideTab, overrideStart, overrideEnd) => {
         const results = [];
         const queries = [];
         
@@ -438,8 +730,8 @@ const ProductMixTicketSize = () => {
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
                 const tableData = {
                     id: row.id,
-                    propertyType: row.propertyType || dbPropertyTypes[0] || 'Flat',
-                    unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
+                    propertyType: row.propertyType || 'Flat',
+                    unitType: row.unitType || ALL_UNITS_OPTION,
                     rows: []
                 };
                 
@@ -461,7 +753,8 @@ const ProductMixTicketSize = () => {
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: null
+                        count: null,
+                        countsByYear: null
                     });
                     
                     queryData.ranges.push({
@@ -489,35 +782,31 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingTicketSize(true);
 
         try {
-            const savedLandData = localStorage.getItem("Land Identification");
-            let reqCity = "";
-            let reqLoc = "";
-            if (savedLandData) {
-                const parsedLand = JSON.parse(savedLandData);
-                reqCity = parsedLand.location || parsedLand.city || "";
-                reqLoc = parsedLand.village || parsedLand.villageName || "";
-            }
-
+            const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/ticket-size-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    city_name: reqCity,
-                    location_name: reqLoc,
-                    queries: queries,
-                    time_filter: filterToUse
+                    ...params,
+                    queries: queries
                 })
             });
             
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
+                    if (Array.isArray(json.years) && json.years.length > 0) {
+                        setAvailableYears(json.years);
+                    }
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => r.id === apiData.id);
-                        if (targetResult && apiData.counts) {
+                        if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts[rRow.id] !== undefined) {
-                                    rRow.count = apiData.counts[rRow.id];
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
+                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
+                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
+                                } else if (apiData.counts) {
+                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
                                 } else {
                                     rRow.count = 0;
                                 }
@@ -536,6 +825,8 @@ const ProductMixTicketSize = () => {
             setTicketSizeAnalysisResults([...results]);
         }
     };
+
+
 
     const addRow = (setter) => {
         setter(prev => [...prev, { id: Date.now() + Math.random(), propertyType: dbPropertyTypes[0] || '', unitType: dbUnitTypes[0] || '', min: '', max: '', interval: '' }]);
@@ -815,6 +1106,347 @@ const ProductMixTicketSize = () => {
                                 </div>
                             </div>
 
+                            {/* Market Research Scope & Duration Filter Bar */}
+                            <div
+                                className="card border-0 shadow-sm rounded-4 mb-4"
+                                style={{
+                                    background: "#ffffff",
+                                    border: "1px solid #e2e8f0",
+                                    boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
+                                }}
+                            >
+                                <div className="card-body p-3 d-flex flex-column gap-3">
+                                    {/* Scope Filter Row */}
+                                    <div className="d-flex align-items-center flex-wrap gap-3">
+                                        {/* Scope Info Label */}
+                                        <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ flexBasis: "0", minWidth: "250px" }}>
+                                            <div
+                                                className="d-flex align-items-center justify-content-center rounded-3 px-3 py-2.5"
+                                                style={{ backgroundColor: "#eef7f4", color: "#448C74" }}
+                                            >
+                                                <FaFilter size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="fw-bold text-dark" style={{ fontSize: "14px", lineHeight: "1.2" }}>
+                                                    Analysis Scope Filter
+                                                </div>
+                                                <div className="text-secondary fw-medium" style={{ fontSize: "12px" }}>
+                                                    {analysisViewMode === "location"
+                                                        ? "Showing overall city/location statistics"
+                                                        : analysisViewMode === "catchment"
+                                                        ? `Showing ${analysisAppliedRadius >= 1000 ? `${analysisAppliedRadius / 1000}km` : `${analysisAppliedRadius}m`} radius catchment around project`
+                                                        : `Showing statistics for selected project: ${analysisSelectedProject && analysisSelectedProject.startsWith("id:") ? analysisSelectedProject.split(":").slice(2).join(":") : analysisSelectedProject}`}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* View Mode Toggle Pill Container */}
+                                        <div className="d-flex justify-content-center">
+                                            <div
+                                                className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs"
+                                                style={{ borderColor: "#cbd5e1" }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "location" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "location" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "location" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("location")}
+                                                >
+                                                    <FaMapMarkerAlt size={13} style={{ color: analysisViewMode === "location" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Location</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "catchment" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "catchment" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "catchment" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("catchment")}
+                                                >
+                                                    <FaCrosshairs size={13} style={{ color: analysisViewMode === "catchment" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Catchment ({analysisAppliedRadius >= 1000 ? `${analysisAppliedRadius / 1000}km` : `${analysisAppliedRadius}m`})</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm rounded-pill px-3 py-1.5 fw-bold d-flex align-items-center gap-2 transition-all"
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        backgroundColor: analysisViewMode === "nearby" ? "#448C74" : "transparent",
+                                                        borderColor: "transparent",
+                                                        color: analysisViewMode === "nearby" ? "#ffffff" : "#475569",
+                                                        boxShadow: analysisViewMode === "nearby" ? "0 2px 8px rgba(68,140,116,0.35)" : "none"
+                                                    }}
+                                                    onClick={() => setAnalysisViewMode("nearby")}
+                                                >
+                                                    <FaBuilding size={13} style={{ color: analysisViewMode === "nearby" ? "#ffffff" : "#448C74" }} />
+                                                    <span>Nearby Projects</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                         {/* Dynamic Settings Container (Right) */}
+                                        <div className="d-flex align-items-center justify-content-end gap-3 flex-grow-1 flex-wrap" style={{ flexBasis: "0", minWidth: "250px" }}>
+                                            {/* Data Source / Fallback Remark Badge */}
+                                            {typeDataSourceInfo.remark && (
+                                                <div
+                                                    className={`badge px-3 py-1.5 rounded-pill d-inline-flex align-items-center gap-1.5 fw-bold shadow-xs ${
+                                                        typeDataSourceInfo.isFallback
+                                                            ? "bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25"
+                                                            : "bg-success bg-opacity-10 text-success border border-success border-opacity-25"
+                                                    }`}
+                                                    style={{ fontSize: "11px" }}
+                                                    title={typeDataSourceInfo.remark}
+                                                >
+                                                    {typeDataSourceInfo.isFallback ? <FaInfoCircle size={12} /> : <FaCheckCircle size={12} />}
+                                                    <span>{typeDataSourceInfo.remark}</span>
+                                                </div>
+                                            )}
+                                            {/* Catchment Radius Settings */}
+                                            {analysisViewMode === "catchment" && (
+                                                <div
+                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                                                    style={{ borderColor: "#cbd5e1" }}
+                                                >
+                                                    <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
+                                                        <FaRulerCombined size={13} style={{ color: "#448C74" }} />
+                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>Radius:</span>
+                                                    </div>
+
+                                                    <select
+                                                        value={[500, 1000, 2000, 3000, 5000].includes(Number(analysisInputRadius)) ? analysisInputRadius : "custom"}
+                                                        onChange={(e) => {
+                                                            if (e.target.value !== "custom") {
+                                                                const val = Number(e.target.value);
+                                                                setAnalysisInputRadius(val);
+                                                                setAnalysisAppliedRadius(val);
+                                                            }
+                                                        }}
+                                                        className="form-select form-select-sm px-2.5 py-1 fw-bold rounded-2 border"
+                                                        style={{
+                                                            fontSize: "12px",
+                                                            color: "#1e293b",
+                                                            backgroundColor: "#ffffff",
+                                                            borderColor: "#cbd5e1",
+                                                            cursor: "pointer",
+                                                            width: "auto"
+                                                        }}
+                                                    >
+                                                        <option value="500">500m (0.5km)</option>
+                                                        <option value="1000">1000m (1.0km)</option>
+                                                        <option value="2000">2000m (2.0km)</option>
+                                                        <option value="3000">3000m (3.0km)</option>
+                                                        <option value="5000">5000m (5.0km)</option>
+                                                        <option value="custom">Custom Value...</option>
+                                                    </select>
+
+                                                    <div className="d-flex align-items-center ms-1">
+                                                        <input
+                                                            type="number"
+                                                            min="100"
+                                                            max="20000"
+                                                            step="100"
+                                                            value={analysisInputRadius}
+                                                            onChange={(e) => setAnalysisInputRadius(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") {
+                                                                    const val = Math.max(100, Number(analysisInputRadius) || 1000);
+                                                                    setAnalysisInputRadius(val);
+                                                                    setAnalysisAppliedRadius(val);
+                                                                }
+                                                            }}
+                                                            className="form-control form-control-sm px-2.5 py-1 text-center fw-bold rounded-2 border shadow-inner"
+                                                            style={{
+                                                                width: "80px",
+                                                                backgroundColor: "#ffffff",
+                                                                fontSize: "12px",
+                                                                color: "#1e293b",
+                                                                borderColor: "#cbd5e1",
+                                                                outline: "none"
+                                                            }}
+                                                            placeholder="Meters"
+                                                        />
+                                                        <span className="text-muted fw-bold ms-1" style={{ fontSize: "11px" }}>mtrs</span>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm rounded-pill px-3 py-1 fw-bold text-white d-flex align-items-center gap-1.5 shadow-sm transition-all ms-1"
+                                                        style={{
+                                                            backgroundColor: "#448C74",
+                                                            borderColor: "#448C74",
+                                                            fontSize: "12px",
+                                                            boxShadow: "0 2px 6px rgba(68,140,116,0.3)"
+                                                        }}
+                                                        onClick={() => {
+                                                            const val = Math.max(100, Number(analysisInputRadius) || 1000);
+                                                            setAnalysisInputRadius(val);
+                                                            setAnalysisAppliedRadius(val);
+                                                        }}
+                                                    >
+                                                        <FaCheck size={11} />
+                                                        <span>Apply</span>
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Nearby Projects Selector */}
+                                            {analysisViewMode === "nearby" && (
+                                                <div
+                                                    className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1.5 rounded-pill border shadow-xs"
+                                                    style={{ borderColor: "#cbd5e1" }}
+                                                >
+                                                    <div className="d-flex align-items-center gap-1 text-secondary pe-2 border-end me-1" style={{ borderColor: "#cbd5e1" }}>
+                                                        <FaBuilding size={13} style={{ color: "#448C74" }} />
+                                                        <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>Select Project:</span>
+                                                    </div>
+
+                                                    {(() => {
+                                                        const projectOptions = analysisNearbyProjects.map((p, idx) => ({
+                                                            value: p.project_id ? `id:${p.project_id}:${p.project_name}` : p.project_name,
+                                                            label: `${p.project_name} (${p.distance_formatted} away • ${p.total_transactions} sales)`,
+                                                            project: p,
+                                                            index: idx + 1
+                                                        }));
+                                                        return (
+                                                            <Select
+                                                                options={projectOptions}
+                                                                value={projectOptions.find(opt => opt.value === analysisSelectedProject) || null}
+                                                                onChange={(selectedOption) => setAnalysisSelectedProject(selectedOption ? selectedOption.value : "all")}
+                                                                formatOptionLabel={formatProjectOption}
+                                                                styles={customSelectStyles}
+                                                                placeholder="Select a project..."
+                                                                isSearchable={true}
+                                                                classNamePrefix="custom-select"
+                                                            />
+                                                        );
+                                                    })()}
+
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1.5 shadow-xs transition-all ms-1"
+                                                        style={{
+                                                            fontSize: "12px",
+                                                            backgroundColor: "#eef7f4",
+                                                            color: "#448C74",
+                                                            borderColor: "#a3d9c9"
+                                                        }}
+                                                        disabled={loadingAnalysisNearbyProjects}
+                                                        onClick={() => setAnalysisNearbyLimit((prev) => prev + 5)}
+                                                        title="Load the next 5 nearest competitor projects"
+                                                    >
+                                                        <FaPlus size={10} />
+                                                        <span>Show More (+5)</span>
+                                                    </button>
+
+                                                    {loadingAnalysisNearbyProjects && (
+                                                        <span className="spinner-border spinner-border-sm text-success ms-1" role="status" />
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Universal Analysis View Tab Row */}
+                                    <div className="d-flex align-items-center flex-wrap gap-3 pt-2 border-top" style={{ borderColor: "#f1f5f9" }}>
+                                        <div className="d-flex align-items-center gap-2 text-secondary">
+                                            <FaClock size={14} style={{ color: "#448C74" }} />
+                                            <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>Analysis View:</span>
+                                        </div>
+
+                                        {/* Tab Buttons */}
+                                        <div className="d-inline-flex p-1 bg-light rounded-pill border shadow-xs" style={{ borderColor: "#cbd5e1" }}>
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
+                                                style={{
+                                                    fontSize: "12px",
+                                                    backgroundColor: analysisViewTab === "overall" ? "#448C74" : "transparent",
+                                                    borderColor: "transparent",
+                                                    color: analysisViewTab === "overall" ? "#ffffff" : "#475569",
+                                                    boxShadow: analysisViewTab === "overall" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                }}
+                                                onClick={() => handleTabChange("overall")}
+                                            >
+                                                Overall (2020+)
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
+                                                style={{
+                                                    fontSize: "12px",
+                                                    backgroundColor: analysisViewTab === "yoy" ? "#448C74" : "transparent",
+                                                    borderColor: "transparent",
+                                                    color: analysisViewTab === "yoy" ? "#ffffff" : "#475569",
+                                                    boxShadow: analysisViewTab === "yoy" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                }}
+                                                onClick={() => handleTabChange("yoy")}
+                                            >
+                                                YoY Breakdown
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all"
+                                                style={{
+                                                    fontSize: "12px",
+                                                    backgroundColor: analysisViewTab === "custom" ? "#448C74" : "transparent",
+                                                    borderColor: "transparent",
+                                                    color: analysisViewTab === "custom" ? "#ffffff" : "#475569",
+                                                    boxShadow: analysisViewTab === "custom" ? "0 2px 6px rgba(68,140,116,0.3)" : "none"
+                                                }}
+                                                onClick={() => handleTabChange("custom")}
+                                            >
+                                                Custom Date Range
+                                            </button>
+                                        </div>
+
+                                        {/* Custom Date Pickers container */}
+                                        {analysisViewTab === "custom" && (
+                                            <div className="d-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border ms-auto" style={{ borderColor: "#cbd5e1" }}>
+                                                <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>From:</span>
+                                                <input
+                                                    type="date"
+                                                    value={customStartDate}
+                                                    onChange={(e) => setCustomStartDate(e.target.value)}
+                                                    className="form-control form-control-sm px-2 py-0.5 rounded border"
+                                                    style={{ fontSize: "12px", color: "#1e293b", backgroundColor: "#ffffff" }}
+                                                />
+                                                <span className="fw-bold text-dark ms-1" style={{ fontSize: "12px" }}>To:</span>
+                                                <input
+                                                    type="date"
+                                                    value={customEndDate}
+                                                    onChange={(e) => setCustomEndDate(e.target.value)}
+                                                    className="form-control form-control-sm px-2 py-0.5 rounded border"
+                                                    style={{ fontSize: "12px", color: "#1e293b", backgroundColor: "#ffffff" }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-success rounded-pill px-3 py-1 fw-bold d-flex align-items-center gap-1 ms-1"
+                                                    style={{ fontSize: "12px", backgroundColor: "#448C74", borderColor: "#448C74" }}
+                                                    onClick={handleApplyCustomDates}
+                                                >
+                                                    <FaCheck size={11} />
+                                                    <span>Apply Dates</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="row g-4">
                                 {/* Table 1: Area Range Analysis */}
                                 <div className="col-md-4">
@@ -859,6 +1491,8 @@ const ProductMixTicketSize = () => {
                                                                     value={row.unitType}
                                                                     onChange={(e) => handleAreaRowChange(row.id, 'unitType', e.target.value)}
                                                                     isLoading={typesLoading}
+                                                                    propertyType={row.propertyType}
+                                                                    dbPropertyUnitMap={dbPropertyUnitMap}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -944,6 +1578,8 @@ const ProductMixTicketSize = () => {
                                                                     onChange={(e) => handleRateRowChange(row.id, 'unitType', e.target.value)}
                                                                     options={dbUnitTypes}
                                                                     isLoading={typesLoading}
+                                                                    propertyType={row.propertyType}
+                                                                    dbPropertyUnitMap={dbPropertyUnitMap}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -991,7 +1627,11 @@ const ProductMixTicketSize = () => {
                                     <div className="pm-table-container h-100 mb-0">
                                         <div className="pm-table-title">
                                             <span>Ticket Size Analysis</span>
-                                            <button className="pm-action-btn" onClick={handleAnalyzeTicketSize}>Analyze Ticket Size</button>
+                                            <button className="pm-action-btn" onClick={() => handleAnalyzeTicketSize()} disabled={isAnalyzingTicketSize}>
+                                                {isAnalyzingTicketSize ? (
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
+                                                ) : "Analyze Ticket Size"}
+                                            </button>
                                         </div>
                                         <div className="table-responsive">
                                             <table className="pm-table">
@@ -1000,7 +1640,7 @@ const ProductMixTicketSize = () => {
                                                         <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Property Type</th>
                                                         <th rowSpan="2" className="align-middle" style={{ width: '22%' }}>Unit Type</th>
                                                         <th colSpan="2" style={{ borderBottom: 'none', paddingBottom: '4px' }}>Ticket Size Range</th>
-                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '20%' }}>Intervals for Ticket Size Range</th>
+                                                        <th rowSpan="2" className="align-middle" style={{ whiteSpace: 'normal', width: '20%' }}>Intervals for Ticket Range</th>
                                                         <th rowSpan="2" style={{ width: '30px' }}></th>
                                                     </tr>
                                                     <tr>
@@ -1013,18 +1653,20 @@ const ProductMixTicketSize = () => {
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
                                                                 <PropertyTypeSelect
-                                                                    options={dbPropertyTypes}
                                                                     value={row.propertyType}
                                                                     onChange={(e) => handleTicketRowChange(row.id, 'propertyType', e.target.value)}
+                                                                    options={dbPropertyTypes}
                                                                     isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <UnitTypeSelect
-                                                                    options={dbUnitTypes}
                                                                     value={row.unitType}
                                                                     onChange={(e) => handleTicketRowChange(row.id, 'unitType', e.target.value)}
+                                                                    options={dbUnitTypes}
                                                                     isLoading={typesLoading}
+                                                                    propertyType={row.propertyType}
+                                                                    dbPropertyUnitMap={dbPropertyUnitMap}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -1080,7 +1722,9 @@ const ProductMixTicketSize = () => {
                         >
                             <div>
                                 <div className="pm-section-eyebrow">SUBSECTION 1.5</div>
-                                <div className="pm-section-maintitle">Analysis Results</div>
+                                <div className="pm-section-maintitle">
+                                    Analysis Results {analysisViewTab === 'yoy' ? '(Year-on-Year View)' : analysisViewTab === 'custom' ? `(${customStartDate || 'Start'} to ${customEndDate || 'End'})` : '(Overall 2020+ View)'}
+                                </div>
                             </div>
                             <div className="pm-chevron-btn">
                                 {isAnalysisResultsOpen ? <FaChevronUp size={14} /> : <FaChevronDown size={14} />}
@@ -1089,8 +1733,9 @@ const ProductMixTicketSize = () => {
                         {isAnalysisResultsOpen && (
                             <div className="pm-section-body">
                                 <div className="row g-4">
+                                    {/* Area Range Results */}
                                     {areaAnalysisResults.map((result) => (
-                                        <div className="col-md-4" key={result.id}>
+                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
                                                     <span>Area Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
@@ -1102,22 +1747,16 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Area Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">
-                                                                    Transaction Count
-                                                                    <div className="mt-1">
-                                                                        <select 
-                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
-                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
-                                                                            value={timeFilter}
-                                                                            onChange={handleTimeFilterChange}
-                                                                        >
-                                                                            <option value="Last 3 years">Last 3 years</option>
-                                                                            <option value="Last 2 years">Last 2 years</option>
-                                                                            <option value="Last 1 year">Last 1 year</option>
-                                                                            <option value="Last 6 Months">Last 6 Months</option>
-                                                                        </select>
-                                                                    </div>
-                                                                </th>
+                                                                {analysisViewTab === 'yoy' ? (
+                                                                    <>
+                                                                        {availableYears.map(yr => (
+                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                        ))}
+                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                    </>
+                                                                ) : (
+                                                                    <th className="align-middle text-center">Transaction Count</th>
+                                                                )}
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1126,16 +1765,29 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    <td className="align-middle text-center">
-                                                                        {r.count === null ? (
-                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                        )}
-                                                                    </td>
+                                                                    {analysisViewTab === 'yoy' ? (
+                                                                        <>
+                                                                            {availableYears.map(yr => (
+                                                                                <td key={yr} className="align-middle text-center">
+                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                </td>
+                                                                            ))}
+                                                                            <td className="align-middle text-center bg-light">
+                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                            </td>
+                                                                        </>
+                                                                    ) : (
+                                                                        <td className="align-middle text-center">
+                                                                            {r.count === null ? (
+                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                            )}
+                                                                        </td>
+                                                                    )}
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -1145,8 +1797,9 @@ const ProductMixTicketSize = () => {
                                         </div>
                                     ))}
 
+                                    {/* Rate Range Results */}
                                     {rateAnalysisResults.map((result) => (
-                                        <div className="col-md-4" key={result.id}>
+                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
                                                     <span>Rate Range Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
@@ -1158,22 +1811,16 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Rate Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">
-                                                                    Transaction Count
-                                                                    <div className="mt-1">
-                                                                        <select 
-                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
-                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
-                                                                            value={rateTimeFilter}
-                                                                            onChange={handleRateTimeFilterChange}
-                                                                        >
-                                                                            <option value="Last 3 years">Last 3 years</option>
-                                                                            <option value="Last 2 years">Last 2 years</option>
-                                                                            <option value="Last 1 year">Last 1 year</option>
-                                                                            <option value="Last 6 Months">Last 6 Months</option>
-                                                                        </select>
-                                                                    </div>
-                                                                </th>
+                                                                {analysisViewTab === 'yoy' ? (
+                                                                    <>
+                                                                        {availableYears.map(yr => (
+                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                        ))}
+                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                    </>
+                                                                ) : (
+                                                                    <th className="align-middle text-center">Transaction Count</th>
+                                                                )}
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1182,16 +1829,29 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    <td className="align-middle text-center">
-                                                                        {r.count === null ? (
-                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                        )}
-                                                                    </td>
+                                                                    {analysisViewTab === 'yoy' ? (
+                                                                        <>
+                                                                            {availableYears.map(yr => (
+                                                                                <td key={yr} className="align-middle text-center">
+                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                </td>
+                                                                            ))}
+                                                                            <td className="align-middle text-center bg-light">
+                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                            </td>
+                                                                        </>
+                                                                    ) : (
+                                                                        <td className="align-middle text-center">
+                                                                            {r.count === null ? (
+                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                            )}
+                                                                        </td>
+                                                                    )}
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -1201,8 +1861,9 @@ const ProductMixTicketSize = () => {
                                         </div>
                                     ))}
 
+                                    {/* Ticket Size Results */}
                                     {ticketSizeAnalysisResults.map((result) => (
-                                        <div className="col-md-4" key={result.id}>
+                                        <div className={analysisViewTab === 'yoy' ? "col-12" : "col-md-4"} key={result.id}>
                                             <div className="pm-table-container h-100 mb-0">
                                                 <div className="pm-table-title">
                                                     <span>Ticket Size Analysis ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})</span>
@@ -1214,22 +1875,16 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Ticket Size Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">
-                                                                    Transaction Count
-                                                                    <div className="mt-1">
-                                                                        <select 
-                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
-                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
-                                                                            value={ticketSizeTimeFilter}
-                                                                            onChange={handleTicketSizeTimeFilterChange}
-                                                                        >
-                                                                            <option value="Last 3 years">Last 3 years</option>
-                                                                            <option value="Last 2 years">Last 2 years</option>
-                                                                            <option value="Last 1 year">Last 1 year</option>
-                                                                            <option value="Last 6 Months">Last 6 Months</option>
-                                                                        </select>
-                                                                    </div>
-                                                                </th>
+                                                                {analysisViewTab === 'yoy' ? (
+                                                                    <>
+                                                                        {availableYears.map(yr => (
+                                                                            <th key={yr} className="align-middle text-center">{yr}</th>
+                                                                        ))}
+                                                                        <th className="align-middle text-center bg-light text-success fw-bold">Overall Total</th>
+                                                                    </>
+                                                                ) : (
+                                                                    <th className="align-middle text-center">Transaction Count</th>
+                                                                )}
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1238,16 +1893,29 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.propertyType || 'Apartment'}</td>
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
-                                                                    <td className="align-middle text-center">
-                                                                        {r.count === null ? (
-                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
-                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
-                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
-                                                                        )}
-                                                                    </td>
+                                                                    {analysisViewTab === 'yoy' ? (
+                                                                        <>
+                                                                            {availableYears.map(yr => (
+                                                                                <td key={yr} className="align-middle text-center">
+                                                                                    <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                </td>
+                                                                            ))}
+                                                                            <td className="align-middle text-center bg-light">
+                                                                                <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill fw-bold">{r.countsByYear?.overall ?? r.count ?? 0}</span>
+                                                                            </td>
+                                                                        </>
+                                                                    ) : (
+                                                                        <td className="align-middle text-center">
+                                                                            {r.count === null ? (
+                                                                                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                    <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                            )}
+                                                                        </td>
+                                                                    )}
                                                                 </tr>
                                                             ))}
                                                         </tbody>
