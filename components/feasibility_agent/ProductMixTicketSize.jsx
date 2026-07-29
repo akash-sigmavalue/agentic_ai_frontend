@@ -14,7 +14,17 @@ const DEFAULT_UNIT_TYPES = [
     "Retail Unit", "Mixed Unit", "Other"
 ];
 
-const PropertyTypeSelect = ({ value, onChange, options = [], style }) => {
+const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading }) => {
+    if (isLoading) {
+        return (
+            <div className="d-flex align-items-center" style={{ minWidth: '95px', padding: '0.15rem 0', ...style }}>
+                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                    <span style={{ color: '#2ea868' }}>Fetching...</span>
+                </span>
+            </div>
+        );
+    }
     const list = (options && options.length > 0) ? options : DEFAULT_PROPERTY_TYPES;
     return (
         <select 
@@ -30,7 +40,17 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style }) => {
     );
 };
 
-const UnitTypeSelect = ({ value, onChange, options = [], style }) => {
+const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading }) => {
+    if (isLoading) {
+        return (
+            <div className="d-flex align-items-center" style={{ minWidth: '85px', padding: '0.15rem 0', ...style }}>
+                <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                    <span style={{ color: '#2ea868' }}>Fetching...</span>
+                </span>
+            </div>
+        );
+    }
     const list = (options && options.length > 0) ? options : DEFAULT_UNIT_TYPES;
     return (
         <select 
@@ -58,6 +78,13 @@ const ProductMixTicketSize = () => {
 
     const [dbPropertyTypes, setDbPropertyTypes] = useState(DEFAULT_PROPERTY_TYPES);
     const [dbUnitTypes, setDbUnitTypes] = useState(DEFAULT_UNIT_TYPES);
+    const [typesLoading, setTypesLoading] = useState(false);
+    const [isAnalyzingArea, setIsAnalyzingArea] = useState(false);
+    const [timeFilter, setTimeFilter] = useState("Last 1 year");
+    const [isAnalyzingRate, setIsAnalyzingRate] = useState(false);
+    const [rateTimeFilter, setRateTimeFilter] = useState("Last 1 year");
+    const [isAnalyzingTicketSize, setIsAnalyzingTicketSize] = useState(false);
+    const [ticketSizeTimeFilter, setTicketSizeTimeFilter] = useState("Last 1 year");
 
     useEffect(() => {
         const savedData = localStorage.getItem("Land_and_fsi_details");
@@ -89,6 +116,7 @@ const ProductMixTicketSize = () => {
         }
 
         const fetchTypes = async () => {
+            setTypesLoading(true);
             try {
                 const res = await fetch(apiUrl("/new_rate_simulator/simulator/property-and-unit-types/"), {
                     method: "POST",
@@ -108,6 +136,8 @@ const ProductMixTicketSize = () => {
                 }
             } catch (e) {
                 console.error("Failed to fetch property/unit types from DB", e);
+            } finally {
+                setTypesLoading(false);
             }
         };
         fetchTypes();
@@ -134,8 +164,17 @@ const ProductMixTicketSize = () => {
         setTicketRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
     };
 
-    const handleAnalyzeArea = () => {
+    const handleAnalyzeArea = async (overrideTimeFilter) => {
+        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : timeFilter;
         const results = [];
+        const queries = [];
+        
+        let conversionFactor = 1;
+        if (areaUnit === 'sq ft') conversionFactor = 0.092903;
+        else if (areaUnit === 'sq yd') conversionFactor = 0.836127;
+        else if (areaUnit === 'acres') conversionFactor = 4046.86;
+        else if (areaUnit === 'hectares') conversionFactor = 10000;
+        
         areaRows.forEach(row => {
             const min = Number(row.min);
             const max = Number(row.max);
@@ -148,6 +187,13 @@ const ProductMixTicketSize = () => {
                     unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
+                
+                const queryData = {
+                    id: row.id,
+                    property_type: tableData.propertyType,
+                    unit_type: tableData.unitType,
+                    ranges: []
+                };
 
                 let currentMin = min;
                 while (currentMin <= max) {
@@ -155,14 +201,18 @@ const ProductMixTicketSize = () => {
                     if (currentMax > max || (max - currentMax < interval / 2)) {
                         currentMax = max;
                     }
-                    
-                    const count = Math.floor(Math.random() * 20) + 1;
 
                     tableData.rows.push({
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: count
+                        count: null
+                    });
+                    
+                    queryData.ranges.push({
+                        id: currentMin + '-' + currentMax,
+                        min_sqm: currentMin * conversionFactor,
+                        max_sqm: currentMax * conversionFactor
                     });
                     
                     if (currentMax === max) break;
@@ -170,19 +220,95 @@ const ProductMixTicketSize = () => {
                 }
                 
                 results.push(tableData);
+                queries.push(queryData);
             }
         });
         
-        if (results.length > 0) {
-            setAreaAnalysisResults(results);
-            setIsAnalysisResultsOpen(true);
-        } else {
+        if (results.length === 0) {
             alert("Please enter valid Min, Max, and Interval values for at least one row.");
+            return;
+        }
+
+        setAreaAnalysisResults([...results]);
+        setIsAnalysisResultsOpen(true);
+        setIsAnalyzingArea(true);
+
+        try {
+            const savedLandData = localStorage.getItem("Land Identification");
+            let reqCity = "";
+            let reqLoc = "";
+            if (savedLandData) {
+                const parsedLand = JSON.parse(savedLandData);
+                reqCity = parsedLand.location || parsedLand.city || "";
+                reqLoc = parsedLand.village || parsedLand.villageName || "";
+            }
+
+            const res = await fetch(apiUrl("/new_rate_simulator/simulator/area-range-analysis/"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    city_name: reqCity,
+                    location_name: reqLoc,
+                    queries: queries,
+                    time_filter: filterToUse
+                })
+            });
+            
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    json.data.forEach(apiData => {
+                        const targetResult = results.find(r => r.id === apiData.id);
+                        if (targetResult && apiData.counts) {
+                            targetResult.rows.forEach(rRow => {
+                                if (apiData.counts[rRow.id] !== undefined) {
+                                    rRow.count = apiData.counts[rRow.id];
+                                } else {
+                                    rRow.count = 0;
+                                }
+                            });
+                        }
+                    });
+                }
+            } else {
+                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+            }
+        } catch (e) {
+            console.error("Failed to analyze area", e);
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+        } finally {
+            setIsAnalyzingArea(false);
+            setAreaAnalysisResults([...results]);
         }
     };
 
-    const handleAnalyzeRate = () => {
+    const handleTimeFilterChange = (e) => {
+        const newFilter = e.target.value;
+        setTimeFilter(newFilter);
+        if (areaAnalysisResults.length > 0) {
+            handleAnalyzeArea(newFilter);
+        }
+    };
+
+    const handleRateTimeFilterChange = (e) => {
+        const newFilter = e.target.value;
+        setRateTimeFilter(newFilter);
+        if (rateAnalysisResults.length > 0) {
+            handleAnalyzeRate(newFilter);
+        }
+    };
+
+    const handleAnalyzeRate = async (overrideTimeFilter) => {
+        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : rateTimeFilter;
         const results = [];
+        const queries = [];
+        
+        let conversionFactor = 1;
+        if (areaUnit === 'sq ft') conversionFactor = 0.092903;
+        else if (areaUnit === 'sq yd') conversionFactor = 0.836127;
+        else if (areaUnit === 'acres') conversionFactor = 4046.86;
+        else if (areaUnit === 'hectares') conversionFactor = 10000;
+
         rateRows.forEach(row => {
             const min = Number(row.min);
             const max = Number(row.max);
@@ -195,6 +321,13 @@ const ProductMixTicketSize = () => {
                     unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
+                
+                const queryData = {
+                    id: row.id,
+                    property_type: tableData.propertyType,
+                    unit_type: tableData.unitType,
+                    ranges: []
+                };
 
                 let currentMin = min;
                 while (currentMin <= max) {
@@ -203,13 +336,17 @@ const ProductMixTicketSize = () => {
                         currentMax = max;
                     }
                     
-                    const count = Math.floor(Math.random() * 20) + 1;
-
                     tableData.rows.push({
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: count
+                        count: null
+                    });
+                    
+                    queryData.ranges.push({
+                        id: currentMin + '-' + currentMax,
+                        min_rate: currentMin,
+                        max_rate: currentMax
                     });
                     
                     if (currentMax === max) break;
@@ -217,19 +354,82 @@ const ProductMixTicketSize = () => {
                 }
                 
                 results.push(tableData);
+                queries.push(queryData);
             }
         });
         
-        if (results.length > 0) {
-            setRateAnalysisResults(results);
-            setIsAnalysisResultsOpen(true);
-        } else {
+        if (results.length === 0) {
             alert("Please enter valid Min, Max, and Interval values for at least one row.");
+            return;
+        }
+
+        setRateAnalysisResults([...results]);
+        setIsAnalysisResultsOpen(true);
+        setIsAnalyzingRate(true);
+
+        try {
+            const savedLandData = localStorage.getItem("Land Identification");
+            let reqCity = "";
+            let reqLoc = "";
+            if (savedLandData) {
+                const parsedLand = JSON.parse(savedLandData);
+                reqCity = parsedLand.location || parsedLand.city || "";
+                reqLoc = parsedLand.village || parsedLand.villageName || "";
+            }
+
+            const res = await fetch(apiUrl("/new_rate_simulator/simulator/rate-range-analysis/"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    city_name: reqCity,
+                    location_name: reqLoc,
+                    queries: queries,
+                    time_filter: filterToUse,
+                    conversion_factor: conversionFactor
+                })
+            });
+            
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    json.data.forEach(apiData => {
+                        const targetResult = results.find(r => r.id === apiData.id);
+                        if (targetResult && apiData.counts) {
+                            targetResult.rows.forEach(rRow => {
+                                if (apiData.counts[rRow.id] !== undefined) {
+                                    rRow.count = apiData.counts[rRow.id];
+                                } else {
+                                    rRow.count = 0;
+                                }
+                            });
+                        }
+                    });
+                }
+            } else {
+                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+            }
+        } catch (e) {
+            console.error("Failed to analyze rate", e);
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+        } finally {
+            setIsAnalyzingRate(false);
+            setRateAnalysisResults([...results]);
         }
     };
 
-    const handleAnalyzeTicketSize = () => {
+    const handleTicketSizeTimeFilterChange = (e) => {
+        const newFilter = e.target.value;
+        setTicketSizeTimeFilter(newFilter);
+        if (ticketSizeAnalysisResults.length > 0) {
+            handleAnalyzeTicketSize(newFilter);
+        }
+    };
+
+    const handleAnalyzeTicketSize = async (overrideTimeFilter) => {
+        const filterToUse = (typeof overrideTimeFilter === 'string') ? overrideTimeFilter : ticketSizeTimeFilter;
         const results = [];
+        const queries = [];
+        
         ticketRows.forEach(row => {
             const min = Number(row.min);
             const max = Number(row.max);
@@ -242,6 +442,13 @@ const ProductMixTicketSize = () => {
                     unitType: row.unitType || dbUnitTypes[0] || '1Bhk',
                     rows: []
                 };
+                
+                const queryData = {
+                    id: row.id,
+                    property_type: tableData.propertyType,
+                    unit_type: tableData.unitType,
+                    ranges: []
+                };
 
                 let currentMin = min;
                 while (currentMin <= max) {
@@ -250,13 +457,17 @@ const ProductMixTicketSize = () => {
                         currentMax = max;
                     }
                     
-                    const count = Math.floor(Math.random() * 20) + 1;
-
                     tableData.rows.push({
                         id: currentMin + '-' + currentMax,
                         rangeMin: currentMin,
                         rangeMax: currentMax,
-                        count: count
+                        count: null
+                    });
+                    
+                    queryData.ranges.push({
+                        id: currentMin + '-' + currentMax,
+                        min: currentMin,
+                        max: currentMax
                     });
                     
                     if (currentMax === max) break;
@@ -264,14 +475,65 @@ const ProductMixTicketSize = () => {
                 }
                 
                 results.push(tableData);
+                queries.push(queryData);
             }
         });
         
-        if (results.length > 0) {
-            setTicketSizeAnalysisResults(results);
-            setIsAnalysisResultsOpen(true);
-        } else {
+        if (results.length === 0) {
             alert("Please enter valid Min, Max, and Interval values for at least one row.");
+            return;
+        }
+
+        setTicketSizeAnalysisResults([...results]);
+        setIsAnalysisResultsOpen(true);
+        setIsAnalyzingTicketSize(true);
+
+        try {
+            const savedLandData = localStorage.getItem("Land Identification");
+            let reqCity = "";
+            let reqLoc = "";
+            if (savedLandData) {
+                const parsedLand = JSON.parse(savedLandData);
+                reqCity = parsedLand.location || parsedLand.city || "";
+                reqLoc = parsedLand.village || parsedLand.villageName || "";
+            }
+
+            const res = await fetch(apiUrl("/new_rate_simulator/simulator/ticket-size-analysis/"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    city_name: reqCity,
+                    location_name: reqLoc,
+                    queries: queries,
+                    time_filter: filterToUse
+                })
+            });
+            
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    json.data.forEach(apiData => {
+                        const targetResult = results.find(r => r.id === apiData.id);
+                        if (targetResult && apiData.counts) {
+                            targetResult.rows.forEach(rRow => {
+                                if (apiData.counts[rRow.id] !== undefined) {
+                                    rRow.count = apiData.counts[rRow.id];
+                                } else {
+                                    rRow.count = 0;
+                                }
+                            });
+                        }
+                    });
+                }
+            } else {
+                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+            }
+        } catch (e) {
+            console.error("Failed to analyze ticket size", e);
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
+        } finally {
+            setIsAnalyzingTicketSize(false);
+            setTicketSizeAnalysisResults([...results]);
         }
     };
 
@@ -559,7 +821,11 @@ const ProductMixTicketSize = () => {
                                     <div className="pm-table-container h-100 mb-0">
                                         <div className="pm-table-title">
                                             <span>Area Range Analysis</span>
-                                            <button className="pm-action-btn" onClick={handleAnalyzeArea}>Analyze Area </button>
+                                            <button className="pm-action-btn" onClick={() => handleAnalyzeArea()} disabled={isAnalyzingArea}>
+                                                {isAnalyzingArea ? (
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
+                                                ) : "Analyze Area"}
+                                            </button>
                                         </div>
                                         <div className="table-responsive">
                                             <table className="pm-table">
@@ -581,16 +847,18 @@ const ProductMixTicketSize = () => {
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
                                                                 <PropertyTypeSelect
+                                                                    options={dbPropertyTypes}
                                                                     value={row.propertyType}
                                                                     onChange={(e) => handleAreaRowChange(row.id, 'propertyType', e.target.value)}
-                                                                    options={dbPropertyTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <UnitTypeSelect
+                                                                    options={dbUnitTypes}
                                                                     value={row.unitType}
                                                                     onChange={(e) => handleAreaRowChange(row.id, 'unitType', e.target.value)}
-                                                                    options={dbUnitTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -638,7 +906,11 @@ const ProductMixTicketSize = () => {
                                     <div className="pm-table-container h-100 mb-0">
                                         <div className="pm-table-title">
                                             <span>Rate Range Analysis</span>
-                                            <button className="pm-action-btn" onClick={handleAnalyzeRate}>Analyze Rate </button>
+                                            <button className="pm-action-btn" onClick={() => handleAnalyzeRate()} disabled={isAnalyzingRate}>
+                                                {isAnalyzingRate ? (
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Analyzing...</>
+                                                ) : "Analyze Rate"}
+                                            </button>
                                         </div>
                                         <div className="table-responsive">
                                             <table className="pm-table">
@@ -663,6 +935,7 @@ const ProductMixTicketSize = () => {
                                                                     value={row.propertyType}
                                                                     onChange={(e) => handleRateRowChange(row.id, 'propertyType', e.target.value)}
                                                                     options={dbPropertyTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -670,6 +943,7 @@ const ProductMixTicketSize = () => {
                                                                     value={row.unitType}
                                                                     onChange={(e) => handleRateRowChange(row.id, 'unitType', e.target.value)}
                                                                     options={dbUnitTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -739,16 +1013,18 @@ const ProductMixTicketSize = () => {
                                                         <tr key={row.id}>
                                                             <td className="align-middle">
                                                                 <PropertyTypeSelect
+                                                                    options={dbPropertyTypes}
                                                                     value={row.propertyType}
                                                                     onChange={(e) => handleTicketRowChange(row.id, 'propertyType', e.target.value)}
-                                                                    options={dbPropertyTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
                                                                 <UnitTypeSelect
+                                                                    options={dbUnitTypes}
                                                                     value={row.unitType}
                                                                     onChange={(e) => handleTicketRowChange(row.id, 'unitType', e.target.value)}
-                                                                    options={dbUnitTypes}
+                                                                    isLoading={typesLoading}
                                                                 />
                                                             </td>
                                                             <td className="align-middle">
@@ -826,7 +1102,22 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Area Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">Transaction Count</th>
+                                                                <th className="align-middle text-center">
+                                                                    Transaction Count
+                                                                    <div className="mt-1">
+                                                                        <select 
+                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
+                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
+                                                                            value={timeFilter}
+                                                                            onChange={handleTimeFilterChange}
+                                                                        >
+                                                                            <option value="Last 3 years">Last 3 years</option>
+                                                                            <option value="Last 2 years">Last 2 years</option>
+                                                                            <option value="Last 1 year">Last 1 year</option>
+                                                                            <option value="Last 6 Months">Last 6 Months</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -836,7 +1127,14 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
-                                                                        <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        {r.count === null ? (
+                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        )}
                                                                     </td>
                                                                 </tr>
                                                             ))}
@@ -860,7 +1158,22 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Rate Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">Transaction Count</th>
+                                                                <th className="align-middle text-center">
+                                                                    Transaction Count
+                                                                    <div className="mt-1">
+                                                                        <select 
+                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
+                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
+                                                                            value={rateTimeFilter}
+                                                                            onChange={handleRateTimeFilterChange}
+                                                                        >
+                                                                            <option value="Last 3 years">Last 3 years</option>
+                                                                            <option value="Last 2 years">Last 2 years</option>
+                                                                            <option value="Last 1 year">Last 1 year</option>
+                                                                            <option value="Last 6 Months">Last 6 Months</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -870,7 +1183,14 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
-                                                                        <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        {r.count === null ? (
+                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        )}
                                                                     </td>
                                                                 </tr>
                                                             ))}
@@ -894,7 +1214,22 @@ const ProductMixTicketSize = () => {
                                                                 <th className="align-middle">Property Type</th>
                                                                 <th className="align-middle">Unit Type</th>
                                                                 <th className="align-middle text-center">Ticket Size Range<br/><span style={{fontWeight: 400, fontSize: '10px'}}>(Min - Max)</span></th>
-                                                                <th className="align-middle text-center">Transaction Count</th>
+                                                                <th className="align-middle text-center">
+                                                                    Transaction Count
+                                                                    <div className="mt-1">
+                                                                        <select 
+                                                                            className="form-select form-select-sm d-inline-block shadow-none" 
+                                                                            style={{fontSize: '11px', padding: '0.1rem 0.5rem', width: 'auto'}}
+                                                                            value={ticketSizeTimeFilter}
+                                                                            onChange={handleTicketSizeTimeFilterChange}
+                                                                        >
+                                                                            <option value="Last 3 years">Last 3 years</option>
+                                                                            <option value="Last 2 years">Last 2 years</option>
+                                                                            <option value="Last 1 year">Last 1 year</option>
+                                                                            <option value="Last 6 Months">Last 6 Months</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -904,7 +1239,14 @@ const ProductMixTicketSize = () => {
                                                                     <td className="align-middle fw-medium">{result.unitType}</td>
                                                                     <td className="align-middle text-center">{r.rangeMin.toLocaleString()} - {r.rangeMax.toLocaleString()}</td>
                                                                     <td className="align-middle text-center">
-                                                                        <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        {r.count === null ? (
+                                                                            <span className="badge px-3 py-1 rounded-pill d-inline-flex align-items-center" style={{ backgroundColor: '#eef9f2', fontSize: '11px', fontWeight: 500 }}>
+                                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{width: '10px', height: '10px', borderWidth: '1.5px', color: '#0da19c'}}></span>
+                                                                                <span style={{ color: '#2ea868' }}>Loading data...</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill">{r.count}</span>
+                                                                        )}
                                                                     </td>
                                                                 </tr>
                                                             ))}
@@ -995,17 +1337,19 @@ const ProductMixTicketSize = () => {
                                                     </td>
                                                     <td className="align-middle">
                                                         <PropertyTypeSelect
+                                                            options={dbPropertyTypes}
                                                             value={row.propertyType}
                                                             onChange={(e) => handleProductMixChange(row.id, 'propertyType', e.target.value)}
-                                                            options={dbPropertyTypes}
+                                                            isLoading={typesLoading}
                                                             style={{ margin: '0 auto', minWidth: '110px' }}
                                                         />
                                                     </td>
                                                     <td className="align-middle">
                                                         <UnitTypeSelect
+                                                            options={dbUnitTypes}
                                                             value={row.unitMix}
                                                             onChange={(e) => handleProductMixChange(row.id, 'unitMix', e.target.value)}
-                                                            options={dbUnitTypes}
+                                                            isLoading={typesLoading}
                                                             style={{ margin: '0 auto', minWidth: '90px' }}
                                                         />
                                                     </td>
