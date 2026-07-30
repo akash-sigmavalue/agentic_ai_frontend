@@ -356,6 +356,12 @@ const ProductMixTicketSize = () => {
     };
 
     useEffect(() => {
+        if (areaAnalysisResults.length > 0) handleAnalyzeArea();
+        if (rateAnalysisResults.length > 0) handleAnalyzeRate();
+        if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize();
+    }, [analysisViewMode, analysisSelectedProject, analysisAppliedRadius]);
+
+    useEffect(() => {
         const syncFromStorage = () => {
             const savedData = localStorage.getItem("Land_and_fsi_details");
             if (savedData) {
@@ -449,9 +455,9 @@ const ProductMixTicketSize = () => {
         };
     }, []);
 
-    const [areaRows, setAreaRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
-    const [rateRows, setRateRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
-    const [ticketRows, setTicketRows] = useState([{ id: 1, propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    const [areaRows, setAreaRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    const [rateRows, setRateRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    const [ticketRows, setTicketRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
 
     const [isAnalysisResultsOpen, setIsAnalysisResultsOpen] = useState(true);
     const [areaAnalysisResults, setAreaAnalysisResults] = useState([]);
@@ -625,7 +631,7 @@ const ProductMixTicketSize = () => {
                         setAvailableYears(json.years);
                     }
                     json.data.forEach(apiData => {
-                        const targetResult = results.find(r => r.id === apiData.id);
+                        const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
                                 if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
@@ -740,7 +746,7 @@ const ProductMixTicketSize = () => {
                         setAvailableYears(json.years);
                     }
                     json.data.forEach(apiData => {
-                        const targetResult = results.find(r => r.id === apiData.id);
+                        const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
                                 if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
@@ -848,7 +854,7 @@ const ProductMixTicketSize = () => {
                         setAvailableYears(json.years);
                     }
                     json.data.forEach(apiData => {
-                        const targetResult = results.find(r => r.id === apiData.id);
+                        const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
                                 if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
@@ -878,7 +884,7 @@ const ProductMixTicketSize = () => {
 
 
     const addRow = (setter) => {
-        setter(prev => [...prev, { id: Date.now() + Math.random(), propertyType: dbPropertyTypes[0] || '', unitType: dbUnitTypes[0] || '', min: '', max: '', interval: '' }]);
+        setter(prev => [...prev, { id: `${Date.now()}-${Math.floor(Math.random() * 10000)}`, propertyType: dbPropertyTypes[0] || '', unitType: dbUnitTypes[0] || '', min: '', max: '', interval: '' }]);
     };
     const removeRow = (setter, id) => {
         setter(prev => prev.filter(row => row.id !== id));
@@ -1950,9 +1956,9 @@ const ProductMixTicketSize = () => {
                                                                             {result.unitType}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="table-responsive">
+                                                                    <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
-                                                                            <thead>
+                                                                            <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "#fff" }}>
                                                                                 <tr>
                                                                                     <th className="align-middle">Property Type</th>
                                                                                     <th className="align-middle">Unit Type</th>
@@ -2035,9 +2041,9 @@ const ProductMixTicketSize = () => {
                                                                             {result.unitType}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="table-responsive">
+                                                                    <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
-                                                                            <thead>
+                                                                            <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "#fff" }}>
                                                                                 <tr>
                                                                                     <th className="align-middle">Property Type</th>
                                                                                     <th className="align-middle">Unit Type</th>
@@ -2120,9 +2126,9 @@ const ProductMixTicketSize = () => {
                                                                             {result.unitType}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="table-responsive">
+                                                                    <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
-                                                                            <thead>
+                                                                            <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "#fff" }}>
                                                                                 <tr>
                                                                                     <th className="align-middle">Property Type</th>
                                                                                     <th className="align-middle">Unit Type</th>
