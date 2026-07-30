@@ -1870,10 +1870,7 @@ const Index = () => {
                   </div>
                 </div>
 
-                {/* Revenue Projection (same as /revenuep2) - between Unit Design Structure and Required Parking */}
-                <div className="col-12 fade-in-up stagger-5">
-                  <RevenueProjection2 embedded />
-                </div>
+
                 {/* Section 2: Revenue Calculation Header */}
                 <div
                   id="section-revenue"

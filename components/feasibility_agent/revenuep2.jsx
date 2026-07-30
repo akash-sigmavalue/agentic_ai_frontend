@@ -3908,6 +3908,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         )}
 
         {/* Second Table - Revenue Table Section (Rows 14+) */}
+        {!embedded && (
         <div
           id="section-ticket-size"
           className="rp2-selected-panel fade-in-up"
@@ -4049,6 +4050,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Note Card (hidden when embedded in /new_rate_simulator) */}
         {!embedded && (
