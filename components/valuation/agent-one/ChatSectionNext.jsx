@@ -25,6 +25,8 @@ import {
   X,
   Zap,
   Loader2,
+  Terminal,
+  Cpu,
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -4854,6 +4856,38 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
   );
 }
 
+function PropertyProfilingLiveCard({ streamingNote, isStreaming }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md my-1 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+          </div>
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-400 ml-1">
+            Stage 1 • Property Profiling Status
+          </span>
+        </div>
+        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 select-none">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+          {isStreaming ? "Processing" : "Complete"}
+        </span>
+      </div>
+      <div className="p-4 font-mono text-[11px] leading-relaxed">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 font-bold text-cyan-400">›</span>
+          <span className="text-slate-300 font-semibold break-words">
+            {streamingNote || "Running property profiling..."}
+          </span>
+          <span className="animate-pulse text-emerald-400">█</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -9070,10 +9104,20 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   className={
                     message.role === "user"
                       ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
-                      : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
+                      : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
+                        ? "p-0 bg-transparent border-0 shadow-none"
+                        : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
                   }
                 >
-                  {message.content}
+                  {message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
+                    <PropertyProfilingLiveCard
+                      streamingNote={streamingNote}
+                      subjectData={subjectDataRef.current || subjectData}
+                      isStreaming={isStreaming}
+                    />
+                  ) : (
+                    message.content
+                  )}
                   {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
                     <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
@@ -9096,19 +9140,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   )}
                   {(message.comparables || message.dropped_comparables) && (
                     <div className="space-y-3">
-                      {isComparableSearchActive && (
-                        <div className="rounded-xl border border-info/30 bg-info/8 px-3 py-2.5 flex items-start gap-2.5 shadow-[inset_0_1px_1px_rgba(56,189,248,0.08)] animate-in fade-in duration-200">
-                          <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-info" />
-                          <div>
-                            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-info">
-                              Comparable Search In Progress
-                            </span>
-                            <span className="text-[10px] leading-relaxed text-text-secondary">
-                              {comparableSearchStatus || "Searching for matching projects and preparing the comparable table."}
-                            </span>
-                          </div>
-                        </div>
-                      )}
                       {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
                         <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
@@ -9266,8 +9297,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             ))}
 
             {/* ── Execution Terminal Log ─────────────────────────── */}
-            {(isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
+            {(isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
               <div className="mr-2 animate-slide-in space-y-2">
+                {isStreaming && !messages.some(m => m.content === "Running property profiling...") && (
+                  <PropertyProfilingLiveCard
+                    streamingNote={streamingNote}
+                    subjectData={subjectDataRef.current || subjectData}
+                    isStreaming={isStreaming}
+                  />
+                )}
                 {isListingStreaming && (
                   <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
