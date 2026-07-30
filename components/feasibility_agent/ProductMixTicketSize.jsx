@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle, FaSearch } from 'react-icons/fa';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
+import TransactionDrilldownModal from './TransactionDrilldownModal';
 
 const formatProjectOption = ({ project, index }, { context }) => {
     if (context === "value") {
@@ -214,6 +215,9 @@ const ProductMixTicketSize = () => {
     const [isAnalyzingRate, setIsAnalyzingRate] = useState(false);
     const [isAnalyzingTicketSize, setIsAnalyzingTicketSize] = useState(false);
     const [subjectCity, setSubjectCity] = useState("");
+    // Drilldown modal state
+    const [drilldownModal, setDrilldownModal] = useState(null); // { analysisType, propertyType, unitType, rangeMin, rangeMax, conversionFactor }
+    const [rateConversionFactor, setRateConversionFactor] = useState(1);
     const [subjectLocation, setSubjectLocation] = useState("");
 
     // Universal Scope & Tab Filter States
@@ -654,6 +658,7 @@ const ProductMixTicketSize = () => {
         else if (areaUnit === 'sq yd') conversionFactor = 0.836127;
         else if (areaUnit === 'acres') conversionFactor = 4046.86;
         else if (areaUnit === 'hectares') conversionFactor = 10000;
+        setRateConversionFactor(conversionFactor);
 
         rateRows.forEach(row => {
             const min = Number(row.min);
@@ -901,6 +906,7 @@ const ProductMixTicketSize = () => {
     };
 
     return (
+        <>
         <div className="unit-design-panel mt-4 h-100 w-100">
             <style>{`
                 .unit-design-panel {
@@ -1880,13 +1886,29 @@ const ProductMixTicketSize = () => {
                                                     </td>
                                                     {analysisViewTab === 'yoy' ? (
                                                         <>
-                                                            {yearsToRender.map(yr => (
-                                                                <td key={yr} className="align-middle text-center py-2">
-                                                                    <span className="badge bg-secondary bg-opacity-15 text-dark fw-bold border" style={{ fontSize: "11px" }}>
-                                                                        {(yearlyTotals[String(yr)] || 0).toLocaleString()}
-                                                                    </span>
-                                                                </td>
-                                                            ))}
+                                                            {yearsToRender.map(yr => {
+                                                                const yTot = yearlyTotals[String(yr)] || 0;
+                                                                return (
+                                                                    <td key={yr} className="align-middle text-center py-2">
+                                                                        {yTot > 0 ? (
+                                                                            <span
+                                                                                className="badge rounded-pill fw-bold"
+                                                                                style={{
+                                                                                    backgroundColor: '#f1f5f9',
+                                                                                    color: '#334155',
+                                                                                    border: '1px solid #cbd5e1',
+                                                                                    padding: '3px 8px',
+                                                                                    fontSize: '11px',
+                                                                                }}
+                                                                            >
+                                                                                {yTot.toLocaleString()}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>0</span>
+                                                                        )}
+                                                                    </td>
+                                                                );
+                                                            })}
                                                             <td className="align-middle text-center bg-success bg-opacity-10 py-2">
                                                                 <span className="badge bg-success text-white px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "11.5px" }}>
                                                                     {totalCount.toLocaleString()}
@@ -1992,9 +2014,49 @@ const ProductMixTicketSize = () => {
                                                                         <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
                                                                             Area Range Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
                                                                         </span>
-                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
-                                                                            {result.unitType}
-                                                                        </span>
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                                {result.unitType}
+                                                                            </span>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const rows = result.rows || [];
+                                                                                    const min = rows.length > 0 ? Math.min(...rows.map(r => r.rangeMin)) : 0;
+                                                                                    const max = rows.length > 0 ? Math.max(...rows.map(r => r.rangeMax)) : 0;
+                                                                                    const areaConvFactor = areaUnit === 'sq ft' ? 0.092903 : areaUnit === 'sq yd' ? 0.836127 : areaUnit === 'acres' ? 4046.86 : areaUnit === 'hectares' ? 10000 : 1;
+                                                                                    const params = getAnalysisParams();
+                                                                                    setDrilldownModal({
+                                                                                        analysisType: 'area',
+                                                                                        propertyType: result.propertyType || '',
+                                                                                        unitType: result.unitType || '',
+                                                                                        rangeMin: min * areaConvFactor,
+                                                                                        rangeMax: max * areaConvFactor,
+                                                                                        conversionFactor: 1,
+                                                                                        cityName: params.city_name,
+                                                                                        locationName: params.location_name,
+                                                                                        mode: params.mode,
+                                                                                        latitude: params.latitude,
+                                                                                        longitude: params.longitude,
+                                                                                        radiusKm: params.radius_km,
+                                                                                        projectId: params.project_id,
+                                                                                        projectName: params.project_name,
+                                                                                        startDate: params.start_date,
+                                                                                        endDate: params.end_date,
+                                                                                        analysisView: params.analysis_view,
+                                                                                    });
+                                                                                }}
+                                                                                style={{
+                                                                                    background: 'linear-gradient(135deg, #448C74 0%, #35725e 100%)', boxShadow: '0 2px 6px rgba(68, 140, 116, 0.25)',
+                                                                                    color: '#fff', border: 'none',
+                                                                                    borderRadius: '99px', padding: '3px 10px',
+                                                                                    fontSize: '10px', fontWeight: 600,
+                                                                                    cursor: 'pointer', whiteSpace: 'nowrap',
+                                                                                    letterSpacing: '0.2px',
+                                                                                }}
+                                                                            >
+                                                                                <FaSearch size={10} className="me-1" /> View Transactions
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
@@ -2040,7 +2102,13 @@ const ProductMixTicketSize = () => {
                                                                                                 <>
                                                                                                     {yearsToRender.map(yr => (
                                                                                                         <td key={yr} className="align-middle text-center">
-                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                            {Number(r.countsByYear?.[String(yr)] ?? 0) > 0 ? (
+                                                                                                                <span className="badge rounded-pill fw-bold" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '3px 8px', fontSize: '11px' }}>
+                                                                                                                    {Number(r.countsByYear?.[String(yr)] ?? 0).toLocaleString()}
+                                                                                                                </span>
+                                                                                                            ) : (
+                                                                                                                <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>0</span>
+                                                                                                            )}
                                                                                                         </td>
                                                                                                     ))}
                                                                                                     <td className="align-middle text-center bg-light">
@@ -2078,9 +2146,48 @@ const ProductMixTicketSize = () => {
                                                                         <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
                                                                             Rate Range Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
                                                                         </span>
-                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
-                                                                            {result.unitType}
-                                                                        </span>
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                                {result.unitType}
+                                                                            </span>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const rows = result.rows || [];
+                                                                                    const min = rows.length > 0 ? Math.min(...rows.map(r => r.rangeMin)) : 0;
+                                                                                    const max = rows.length > 0 ? Math.max(...rows.map(r => r.rangeMax)) : 0;
+                                                                                    const params = getAnalysisParams();
+                                                                                    setDrilldownModal({
+                                                                                        analysisType: 'rate',
+                                                                                        propertyType: result.propertyType || '',
+                                                                                        unitType: result.unitType || '',
+                                                                                        rangeMin: min,
+                                                                                        rangeMax: max,
+                                                                                        conversionFactor: rateConversionFactor,
+                                                                                        cityName: params.city_name,
+                                                                                        locationName: params.location_name,
+                                                                                        mode: params.mode,
+                                                                                        latitude: params.latitude,
+                                                                                        longitude: params.longitude,
+                                                                                        radiusKm: params.radius_km,
+                                                                                        projectId: params.project_id,
+                                                                                        projectName: params.project_name,
+                                                                                        startDate: params.start_date,
+                                                                                        endDate: params.end_date,
+                                                                                        analysisView: params.analysis_view,
+                                                                                    });
+                                                                                }}
+                                                                                style={{
+                                                                                    background: 'linear-gradient(135deg, #448C74 0%, #35725e 100%)', boxShadow: '0 2px 6px rgba(68, 140, 116, 0.25)',
+                                                                                    color: '#fff', border: 'none',
+                                                                                    borderRadius: '99px', padding: '3px 10px',
+                                                                                    fontSize: '10px', fontWeight: 600,
+                                                                                    cursor: 'pointer', whiteSpace: 'nowrap',
+                                                                                    letterSpacing: '0.2px',
+                                                                                }}
+                                                                            >
+                                                                                <FaSearch size={10} className="me-1" /> View Transactions
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
@@ -2126,7 +2233,13 @@ const ProductMixTicketSize = () => {
                                                                                                 <>
                                                                                                     {yearsToRender.map(yr => (
                                                                                                         <td key={yr} className="align-middle text-center">
-                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                            {Number(r.countsByYear?.[String(yr)] ?? 0) > 0 ? (
+                                                                                                                <span className="badge rounded-pill fw-bold" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '3px 8px', fontSize: '11px' }}>
+                                                                                                                    {Number(r.countsByYear?.[String(yr)] ?? 0).toLocaleString()}
+                                                                                                                </span>
+                                                                                                            ) : (
+                                                                                                                <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>0</span>
+                                                                                                            )}
                                                                                                         </td>
                                                                                                     ))}
                                                                                                     <td className="align-middle text-center bg-light">
@@ -2164,9 +2277,48 @@ const ProductMixTicketSize = () => {
                                                                         <span className="fw-bold text-dark" style={{ fontSize: "13px" }}>
                                                                             Ticket Size Results ({result.propertyType ? `${result.propertyType} - ` : ''}{result.unitType})
                                                                         </span>
-                                                                        <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-0.5 rounded-pill" style={{ fontSize: "10px" }}>
-                                                                            {result.unitType}
-                                                                        </span>
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <span className="badge bg-success bg-opacity-10 text-success fw-bold px-2 rounded-pill" style={{ fontSize: "10px" }}>
+                                                                                {result.unitType}
+                                                                            </span>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const rows = result.rows || [];
+                                                                                    const min = rows.length > 0 ? Math.min(...rows.map(r => r.rangeMin)) : 0;
+                                                                                    const max = rows.length > 0 ? Math.max(...rows.map(r => r.rangeMax)) : 0;
+                                                                                    const params = getAnalysisParams();
+                                                                                    setDrilldownModal({
+                                                                                        analysisType: 'ticket',
+                                                                                        propertyType: result.propertyType || '',
+                                                                                        unitType: result.unitType || '',
+                                                                                        rangeMin: min,
+                                                                                        rangeMax: max,
+                                                                                        conversionFactor: 1,
+                                                                                        cityName: params.city_name,
+                                                                                        locationName: params.location_name,
+                                                                                        mode: params.mode,
+                                                                                        latitude: params.latitude,
+                                                                                        longitude: params.longitude,
+                                                                                        radiusKm: params.radius_km,
+                                                                                        projectId: params.project_id,
+                                                                                        projectName: params.project_name,
+                                                                                        startDate: params.start_date,
+                                                                                        endDate: params.end_date,
+                                                                                        analysisView: params.analysis_view,
+                                                                                    });
+                                                                                }}
+                                                                                style={{
+                                                                                    background: 'linear-gradient(135deg, #448C74 0%, #35725e 100%)', boxShadow: '0 2px 6px rgba(68, 140, 116, 0.25)',
+                                                                                    color: '#fff', border: 'none',
+                                                                                    borderRadius: '99px', padding: '3px 10px',
+                                                                                    fontSize: '10px', fontWeight: 600,
+                                                                                    cursor: 'pointer', whiteSpace: 'nowrap',
+                                                                                    letterSpacing: '0.2px',
+                                                                                }}
+                                                                            >
+                                                                                <FaSearch size={10} className="me-1" /> View Transactions
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="table-responsive" style={{ maxHeight: "300px", overflowY: "auto" }}>
                                                                         <table className="pm-table mb-0">
@@ -2212,7 +2364,13 @@ const ProductMixTicketSize = () => {
                                                                                                 <>
                                                                                                     {yearsToRender.map(yr => (
                                                                                                         <td key={yr} className="align-middle text-center">
-                                                                                                            <span className="badge bg-light text-dark fw-bold border">{r.countsByYear?.[String(yr)] ?? 0}</span>
+                                                                                                            {Number(r.countsByYear?.[String(yr)] ?? 0) > 0 ? (
+                                                                                                                <span className="badge rounded-pill fw-bold" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '3px 8px', fontSize: '11px' }}>
+                                                                                                                    {Number(r.countsByYear?.[String(yr)] ?? 0).toLocaleString()}
+                                                                                                                </span>
+                                                                                                            ) : (
+                                                                                                                <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>0</span>
+                                                                                                            )}
                                                                                                         </td>
                                                                                                     ))}
                                                                                                     <td className="align-middle text-center bg-light">
@@ -2427,6 +2585,31 @@ const ProductMixTicketSize = () => {
                 </div>
             </div>
         </div>
+
+        {/* Transaction Drilldown Modal */}
+        {drilldownModal && (
+            <TransactionDrilldownModal
+                analysisType={drilldownModal.analysisType}
+                propertyType={drilldownModal.propertyType}
+                unitType={drilldownModal.unitType}
+                rangeMin={drilldownModal.rangeMin}
+                rangeMax={drilldownModal.rangeMax}
+                cityName={drilldownModal.cityName}
+                locationName={drilldownModal.locationName}
+                mode={drilldownModal.mode}
+                latitude={drilldownModal.latitude}
+                longitude={drilldownModal.longitude}
+                radiusKm={drilldownModal.radiusKm}
+                projectId={drilldownModal.projectId}
+                projectName={drilldownModal.projectName}
+                startDate={drilldownModal.startDate}
+                endDate={drilldownModal.endDate}
+                analysisView={drilldownModal.analysisView}
+                conversionFactor={drilldownModal.conversionFactor || 1}
+                onClose={() => setDrilldownModal(null)}
+            />
+        )}
+        </>
     );
 };
 
