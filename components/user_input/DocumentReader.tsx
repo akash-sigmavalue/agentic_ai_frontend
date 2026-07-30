@@ -130,21 +130,47 @@ function formatDuration(ms?: number | null) {
 
 function parseChunkPages(chunk: Chunk | null): number[] {
   if (!chunk) return [1];
+
+  // page_range from backend: "1-5, 10-15, 20" (comma-separated ranges/single pages)
+  // page from backend: a single page number (string or number)
   const raw = chunk.page_range || chunk.page || "1";
-  if (raw === "unknown") return [1];
-  
-  const parts = raw.split("-").map(s => parseInt(s.trim(), 10));
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    const pages = [];
-    for (let i = parts[0]; i <= parts[1]; i++) {
-      pages.push(i);
+  const rawStr = String(raw).trim();
+
+  if (!rawStr || rawStr === "unknown") return [1];
+
+  const pages: number[] = [];
+
+  // Split by commas first, then handle each segment as either a range or single page
+  for (const segment of rawStr.split(",")) {
+    const s = segment.trim();
+    if (!s) continue;
+
+    // Range segment: "10-15"
+    const dashIdx = s.indexOf("-");
+    if (dashIdx > 0) {
+      const start = parseInt(s.slice(0, dashIdx).trim(), 10);
+      const end   = parseInt(s.slice(dashIdx + 1).trim(), 10);
+      if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+        // Cap range to MAX_PAGES_PER_CHUNK to prevent rendering explosions on
+        // large merged chunks (e.g. a 576-page merged document)
+        const MAX_PAGES_PER_CHUNK = 10;
+        for (let i = start; i <= Math.min(end, start + MAX_PAGES_PER_CHUNK - 1); i++) {
+          pages.push(i);
+        }
+        continue;
+      }
     }
-    return pages;
+
+    // Single page segment
+    const p = parseInt(s, 10);
+    if (!isNaN(p) && p > 0) {
+      pages.push(p);
+    }
   }
-  
-  const page = parseInt(parts[0], 10);
-  return Number.isFinite(page) && page > 0 ? [page] : [1];
+
+  return pages.length > 0 ? [...new Set(pages)].sort((a, b) => a - b) : [1];
 }
+
 
 function getSearchTerm(chunkContent?: string) {
   if (!chunkContent) return "";
@@ -570,64 +596,509 @@ export default function DocumentReader() {
     }
   }
 
-  const handleDownloadPdf = async () => {
-    if (!answerContainerRef.current) return;
+  const handleDownloadPdf = () => {
+    if (!answerContainerRef.current) {
+      alert("No answer to download yet. Ask a question first.");
+      return;
+    }
     setIsExporting(true);
     try {
-      const originalTitle = document.title;
-      document.title = `QA-Export-${Date.now()}`;
-      
-      const printWrapper = document.createElement('div');
-      printWrapper.className = 'print-wrapper';
+      const docName = uploadResult?.document_name || files.map(f => f.name).join(", ") || "Document";
+      const timestamp = new Date().toLocaleString();
+      const userQuestion = messages.filter(m => m.role === "user").slice(-1)[0]?.content || "Document Analysis";
+
+      // Clone rendered DOM for static extraction
       const clone = answerContainerRef.current.cloneNode(true) as HTMLElement;
-      
-      clone.style.height = 'auto';
-      clone.style.overflow = 'visible';
-      printWrapper.appendChild(clone);
-      
-      const style = document.createElement('style');
-      style.innerHTML = `
-        @media print {
-          html, body {
-            background-color: white !important;
+      clone.querySelectorAll("button, script, style, hr").forEach(el => el.remove());
+
+      // 1. Remove standalone "Question" and "Answer" label headings only (keep all answer paragraphs and content intact!)
+      clone.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(h => {
+        const text = h.textContent?.trim().toLowerCase() || "";
+        if (text === "question" || text === "answer" || text === "user question" || text === "user query") {
+          h.remove();
+        }
+      });
+
+      // 2. Format and clean tables
+      clone.querySelectorAll("table").forEach(table => {
+        const rows = Array.from(table.querySelectorAll("tr"));
+        rows.forEach(tr => {
+          const cells = Array.from(tr.querySelectorAll("td, th"));
+          if (cells.length >= 2) {
+            const valText = cells[1].textContent?.trim().toLowerCase() || "";
+            if (!valText || valText === "-" || valText === "—" || valText === "n/a" || valText === "not available" || valText === "none" || valText === "null" || valText === "[not specified]") {
+              tr.remove();
+            }
           }
-          body > :not(.print-wrapper) {
-            display: none !important;
-          }
-          .print-wrapper {
-            display: block !important;
-            padding: 20px;
-            background-color: white !important;
-            color: black !important;
-          }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+        });
+
+        if (table.querySelectorAll("td, th").length === 0) {
+          table.remove();
+          return;
+        }
+
+        table.classList.add("report-table");
+
+        // Calculate max columns across rows
+        const maxCols = Math.max(...Array.from(table.querySelectorAll("tr")).map(tr => tr.querySelectorAll("th, td").length));
+
+        if (maxCols === 2) {
+          table.classList.add("kv-table");
+          table.querySelectorAll("tr").forEach(tr => {
+            const tds = tr.querySelectorAll("td");
+            if (tds.length >= 1) {
+              tds[0].classList.add("kv-key");
+            }
+          });
+        } else {
+          table.classList.add("data-table");
+          table.querySelectorAll("tr").forEach(tr => {
+            const cells = tr.querySelectorAll("td, th");
+            if (cells.length > 0) {
+              const firstText = cells[0].textContent?.trim() || "";
+              if (/^#$|^\d{1,3}$/.test(firstText)) {
+                cells[0].classList.add("col-index");
+              }
+            }
+          });
+        }
+      });
+
+      // 3. Format images into a clean Supporting Evidence grid
+      const images = Array.from(clone.querySelectorAll("img"));
+      let evidenceCardsHtml = "";
+      if (images.length > 0) {
+        evidenceCardsHtml = `
+          <div class="report-section-header">🖼 Supporting Evidence (Source Images)</div>
+          <div class="evidence-grid">
+        `;
+        images.forEach((img, idx) => {
+          const src = img.getAttribute("src") || "";
+          const alt = img.getAttribute("alt") || `Source Image ${idx + 1}`;
+          evidenceCardsHtml += `
+            <div class="evidence-card">
+              <img src="${src}" alt="${alt}" class="evidence-img" />
+              <div class="evidence-caption">📌 ${alt.includes("Image") || alt.includes("Source") ? alt : `Source Image ${idx + 1}: ${alt}`}</div>
+            </div>
+          `;
+          img.remove();
+        });
+        evidenceCardsHtml += `</div>`;
+      }
+
+      // 4. Clean up empty/duplicate headings at the end
+      clone.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(h => {
+        const text = h.textContent?.trim() || "";
+        if (!text || /^(supporting images|suggested follow-ups|supporting evidence)$/i.test(text)) {
+          const next = h.nextElementSibling;
+          if (!next || next.tagName.startsWith("H")) {
+            h.remove();
+            return;
           }
         }
-        @media screen {
-          .print-wrapper {
-            display: none !important;
-          }
+      });
+
+      // 5. Apply clean icons & styles to all section headings
+      clone.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(h => {
+        let text = h.textContent?.trim() || "";
+        if (!text) {
+          h.remove();
+          return;
         }
-      `;
-      
-      document.body.appendChild(printWrapper);
-      document.head.appendChild(style);
-      
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      window.print();
-      
-      document.body.removeChild(printWrapper);
-      document.head.removeChild(style);
-      document.title = originalTitle;
+
+        if (/buyer/i.test(text)) {
+          h.innerHTML = `👤 ${text}`;
+        } else if (/seller|vendor/i.test(text)) {
+          h.innerHTML = `🏢 ${text}`;
+        } else if (/living room|dimensions|layout plan|flat d-301|area/i.test(text)) {
+          h.innerHTML = `📏 ${text}`;
+        } else if (/property|land|plot|flat|unit/i.test(text)) {
+          h.innerHTML = `🏠 ${text}`;
+        } else if (/visual|floor plan|architectural|drawing/i.test(text)) {
+          h.innerHTML = `📐 ${text}`;
+        } else if (/image \d+|figure \d+|diagram \d+/i.test(text)) {
+          h.innerHTML = `🖼 ${text}`;
+        } else if (/verification|verify|check|confirm/i.test(text)) {
+          h.innerHTML = `✅ ${text}`;
+        } else if (/cross-reference|reference|citation/i.test(text)) {
+          h.innerHTML = `🔗 ${text}`;
+        } else if (/final answer|conclusion|answer/i.test(text)) {
+          h.innerHTML = `🎯 ${text}`;
+        } else if (/document|registration|meta/i.test(text)) {
+          h.innerHTML = `📄 ${text}`;
+        } else if (/financial|fee|stamp|consideration|amount|duty/i.test(text)) {
+          h.innerHTML = `📊 ${text}`;
+        } else if (/summary|overview/i.test(text)) {
+          h.innerHTML = `📋 ${text}`;
+        } else if (/note|observation|additional/i.test(text)) {
+          h.innerHTML = `💡 ${text}`;
+        } else {
+          h.innerHTML = `📌 ${text}`;
+        }
+        h.classList.add("report-section-header");
+      });
+
+      const logoUrl = typeof window !== "undefined" ? `${window.location.origin}/user_input/sigma_value_logo.jpg` : "/user_input/sigma_value_logo.jpg";
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Document Analysis Report — ${docName.replace(/</g, "&lt;")}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 22mm 15mm 20mm 15mm;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #111827;
+      background: #FFFFFF;
+      margin: 0;
+      padding: 32px;
+      font-size: 13px;
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+
+    /* Executive Brand Header */
+    .report-brand-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 18px;
+      border-bottom: 2.5px solid #0F172A;
+      margin-bottom: 22px;
+    }
+    .brand-logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-logo {
+      height: 56px;
+      width: auto;
+      object-fit: contain;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0F172A;
+      letter-spacing: -0.4px;
+      line-height: 1.1;
+    }
+    .brand-tagline {
+      font-size: 11px;
+      font-weight: 600;
+      color: #0D9488;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .report-meta-right {
+      text-align: right;
+    }
+    .report-type-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0F172A;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+    .report-date {
+      font-size: 11px;
+      color: #6B7280;
+      margin-top: 3px;
+    }
+
+    /* Metadata Bar */
+    .doc-info-bar {
+      display: flex;
+      justify-content: space-between;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-left: 4px solid #0D9488;
+      border-radius: 6px;
+      padding: 10px 16px;
+      margin-bottom: 22px;
+      font-size: 11.5px;
+      color: #334155;
+    }
+    .doc-info-item {
+      display: flex;
+      gap: 6px;
+    }
+    .doc-info-label {
+      font-weight: 700;
+      color: #0F172A;
+    }
+
+    /* User Query Box */
+    .user-query-card {
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+    }
+    .user-query-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+    .user-query-text {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #0F172A;
+      margin: 0;
+    }
+
+    /* Section Headings */
+    .report-section-header, h1, h2, h3, h4 {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      padding-bottom: 5px;
+      border-bottom: 1.5px solid #E2E8F0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Professional Executive Report Tables */
+    .report-table, table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 16px 0 24px;
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      page-break-inside: avoid;
+    }
+
+    /* Table Headers — Forced High Contrast Dark Navy Header */
+    .report-table th, .data-table th, .kv-table th, table th, th {
+      background-color: #0F172A !important;
+      background: #0F172A !important;
+      color: #FFFFFF !important;
+      font-weight: 800 !important;
+      font-size: 11.5px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.8px !important;
+      padding: 11px 14px !important;
+      text-align: left !important;
+      border-bottom: 2px solid #0F172A !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+
+    /* Table Body Cells */
+    .report-table td, table td {
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: #1E293B;
+      line-height: 1.5;
+      border-bottom: 1px solid #E2E8F0;
+      vertical-align: top;
+    }
+
+    /* Alternating Row Striping for Data Tables */
+    .data-table tr:nth-child(even) td {
+      background-color: #F8FAFC !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    .report-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Key Column for 2-column KV Tables */
+    .kv-key {
+      font-weight: 600;
+      color: #334155;
+      width: 32%;
+      background-color: #F8FAFC !important;
+      border-right: 1px solid #E2E8F0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Index Column for Multi-Column Data Tables */
+    .col-index {
+      width: 44px;
+      text-align: center;
+      font-weight: 700;
+      color: #475569;
+      background-color: #F8FAFC !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* Paragraphs and Lists */
+    p { margin: 0 0 12px; color: #334155; }
+    ul, ol { margin: 10px 0 16px; padding-left: 20px; }
+    li { margin-bottom: 6px; color: #334155; }
+    strong { color: #0F172A; font-weight: 600; }
+
+    /* Evidence Grid */
+    .evidence-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .evidence-card {
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 10px;
+      background: #FAFAFA;
+      page-break-inside: avoid;
+    }
+    .evidence-img {
+      width: 100%;
+      height: auto;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 4px;
+      border: 1px solid #CBD5E1;
+      background: #FFFFFF;
+    }
+    .evidence-caption {
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      margin-top: 6px;
+    }
+
+    /* Footer */
+    .report-footer {
+      margin-top: 36px;
+      padding-top: 14px;
+      border-top: 1px solid #E2E8F0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #94A3B8;
+    }
+
+    @media print {
+      @page {
+        margin: 22mm 15mm 20mm 15mm;
+      }
+      *, *::before, *::after, body, table, th, td, div {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      body { padding: 0; background: white; }
+      .no-print { display: none !important; }
+      .report-section-header, h1, h2, h3, h4 {
+        page-break-after: avoid;
+        margin-top: 24px !important;
+        padding-top: 8px !important;
+      }
+      .evidence-card, .report-table, table, .user-query-card {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Executive Header -->
+  <div class="report-brand-header">
+    <div class="brand-logo-wrap">
+      <img src="${logoUrl}" alt="Sigma Value" class="brand-logo" />
+      <div class="brand-text">
+        <span class="brand-name">Sigma Value</span>
+        <span class="brand-tagline">AI Document Intelligence</span>
+      </div>
+    </div>
+    <div class="report-meta-right">
+      <div class="report-type-title">AI Document Analysis Report</div>
+      <div class="report-date">Generated on ${timestamp}</div>
+    </div>
+  </div>
+
+  <!-- Document Meta Bar -->
+  <div class="doc-info-bar">
+    <div class="doc-info-item"><span class="doc-info-label">Document:</span> ${docName.replace(/</g, "&lt;")}</div>
+    <div class="doc-info-item"><span class="doc-info-label">Analysis Engine:</span> Sigma Value RAG Intelligence</div>
+    <div class="doc-info-item"><span class="doc-info-label">Status:</span> Verified Extraction</div>
+  </div>
+
+  <!-- User Query -->
+  <div class="user-query-card">
+    <div class="user-query-label">User Query</div>
+    <div class="user-query-text">${userQuestion.replace(/</g, "&lt;")}</div>
+  </div>
+
+  <!-- Report Body -->
+  <div class="report-body">
+    ${clone.innerHTML}
+    ${evidenceCardsHtml}
+  </div>
+
+  <!-- Report Footer -->
+  <div class="report-footer">
+    <div>Confidential — For Internal Document Analysis Only</div>
+    <div>Sigma Value AI System</div>
+  </div>
+</body>
+</html>`;
+
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+        }, 500);
+      } else {
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `SigmaValue-AI-Analysis-Report-${Date.now()}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (err: any) {
-      console.error("PDF generation failed:", err);
-      alert(`Failed to generate PDF: ${err?.message || err}. Please try again.`);
+      console.error("Export failed:", err);
+      alert(`Export failed: ${err?.message || err}`);
     } finally {
       setIsExporting(false);
     }
   };
+
+
 
   return (
     <main className="h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 to-white p-5 font-sans antialiased">
@@ -636,8 +1107,8 @@ export default function DocumentReader() {
         <div className="flex items-center gap-4">
           <img
             onClick={() => router.push("/")}
-            src="user_input/DS.jpeg"
-            alt="Logo"
+            src="user_input/sigma_value_logo.jpg"
+            alt="SigmaValue Logo"
             className="h-10 w-auto cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
           />
           <div>
