@@ -138,7 +138,7 @@ const getUnitTypesForProperty = (propType, dbMap = {}, globalUnitTypes = []) => 
         subList = globalUnitTypes.length > 0 ? globalUnitTypes : GENERAL_UNITS;
     }
 
-    const filteredSub = subList.filter(u => u !== ALL_UNITS_OPTION && !["other", "others", "other category"].includes(String(u).trim().toLowerCase()));
+    const filteredSub = subList.filter(u => u !== ALL_UNITS_OPTION);
     return [ALL_UNITS_OPTION, ...filteredSub];
 };
 
@@ -153,10 +153,7 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
             </div>
         );
     }
-    const filteredOptions = (options && options.length > 0 ? options : DEFAULT_PROPERTY_TYPES).filter(
-        opt => opt && !["other", "others", "other category"].includes(String(opt).trim().toLowerCase())
-    );
-    const list = filteredOptions.length > 0 ? filteredOptions : DEFAULT_PROPERTY_TYPES;
+    const list = options && options.length > 0 ? options : DEFAULT_PROPERTY_TYPES;
     return (
         <select 
             className="form-select pm-table-select shadow-none" 
@@ -377,12 +374,10 @@ const ProductMixTicketSize = () => {
                         setDbPropertyUnitMap(json.property_type_units_map);
                     }
                     if (Array.isArray(json.property_types) && json.property_types.length > 0) {
-                        const cleaned = json.property_types.filter(pt => pt && !["other", "others", "other category"].includes(String(pt).trim().toLowerCase()));
-                        if (cleaned.length > 0) setDbPropertyTypes(cleaned);
+                        setDbPropertyTypes(json.property_types);
                     }
                     if (Array.isArray(json.unit_types) && json.unit_types.length > 0) {
-                        const cleanedUnits = json.unit_types.filter(ut => ut && !["other", "others", "other category"].includes(String(ut).trim().toLowerCase()));
-                        if (cleanedUnits.length > 0) setDbUnitTypes(cleanedUnits);
+                        setDbUnitTypes(json.unit_types);
                     }
                 }
             }
@@ -1857,6 +1852,59 @@ const ProductMixTicketSize = () => {
                                     const hasAnyResults = areaAnalysisResults.length > 0 || rateAnalysisResults.length > 0 || ticketSizeAnalysisResults.length > 0;
                                     const yearsToRender = (availableYears && availableYears.length > 0) ? availableYears : DEFAULT_YOY_YEARS;
 
+                                    const renderResultTableFooter = (result) => {
+                                        if (!result || !Array.isArray(result.rows)) return null;
+
+                                        let totalCount = 0;
+                                        const yearlyTotals = {};
+                                        if (analysisViewTab === 'yoy') {
+                                            yearsToRender.forEach(yr => { yearlyTotals[String(yr)] = 0; });
+                                            result.rows.forEach(r => {
+                                                yearsToRender.forEach(yr => {
+                                                    const yrStr = String(yr);
+                                                    yearlyTotals[yrStr] += Number(r.countsByYear?.[yrStr] || 0);
+                                                });
+                                                totalCount += Number(r.countsByYear?.overall ?? r.count ?? 0);
+                                            });
+                                        } else {
+                                            result.rows.forEach(r => {
+                                                totalCount += Number(r.count || 0);
+                                            });
+                                        }
+
+                                        return (
+                                            <tfoot style={{ position: "sticky", bottom: 0, backgroundColor: "#f8fafc", zIndex: 1, borderTop: "2px solid #cbd5e1" }}>
+                                                <tr className="fw-bold">
+                                                    <td colSpan="3" className="align-middle text-dark ps-3 py-2" style={{ fontSize: "12px" }}>
+                                                        <strong style={{ color: "#1e293b" }}>Total Transactions</strong>
+                                                    </td>
+                                                    {analysisViewTab === 'yoy' ? (
+                                                        <>
+                                                            {yearsToRender.map(yr => (
+                                                                <td key={yr} className="align-middle text-center py-2">
+                                                                    <span className="badge bg-secondary bg-opacity-15 text-dark fw-bold border" style={{ fontSize: "11px" }}>
+                                                                        {(yearlyTotals[String(yr)] || 0).toLocaleString()}
+                                                                    </span>
+                                                                </td>
+                                                            ))}
+                                                            <td className="align-middle text-center bg-success bg-opacity-10 py-2">
+                                                                <span className="badge bg-success text-white px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "11.5px" }}>
+                                                                    {totalCount.toLocaleString()}
+                                                                </span>
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <td className="align-middle text-center py-2">
+                                                            <span className="badge bg-primary text-white px-2.5 py-1 rounded-pill fw-bold" style={{ fontSize: "12px" }}>
+                                                                {totalCount.toLocaleString()}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            </tfoot>
+                                        );
+                                    };
+
                                     return (
                                         <>
                                             <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -2015,6 +2063,7 @@ const ProductMixTicketSize = () => {
                                                                                     </tr>
                                                                                 ))}
                                                                             </tbody>
+                                                                            {renderResultTableFooter(result)}
                                                                         </table>
                                                                     </div>
                                                                 </div>
@@ -2100,6 +2149,7 @@ const ProductMixTicketSize = () => {
                                                                                     </tr>
                                                                                 ))}
                                                                             </tbody>
+                                                                            {renderResultTableFooter(result)}
                                                                         </table>
                                                                     </div>
                                                                 </div>
@@ -2185,6 +2235,7 @@ const ProductMixTicketSize = () => {
                                                                                     </tr>
                                                                                 ))}
                                                                             </tbody>
+                                                                            {renderResultTableFooter(result)}
                                                                         </table>
                                                                     </div>
                                                                 </div>
