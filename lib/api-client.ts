@@ -17,17 +17,34 @@ export const API_ROUTES = {
   // Email verification
   authVerifyEmail: '/auth/verify-email',
   authResendVerification: '/auth/resend-verification',
-  // Profile (full, includes role + token_balance)
+  // Profile (full, includes personal balance + active org)
   profileMe: '/profile/me',
   profileUpdate: '/profile/me',
   profileDelete: '/profile/me',
-  // Token redemption
-  myTokenBalance: '/tokens/my-balance',
-  requestTokenRedemption: '/tokens/request-redemption',
   // Admin
-  adminRedemptionRequests: '/admin/redemption-requests',
-  adminPendingRequests: '/admin/redemption-requests/pending',
   adminUsers: '/admin/users',
+  adminOrgs: '/admin/orgs',
+  adminTransactions: '/admin/transactions',
+  adminPromoteEnterprise: (userId: number) => `/admin/users/${userId}/promote-to-enterprise`,
+  adminSetOrgBalance: (orgId: number) => `/admin/orgs/${orgId}/set-balance`,
+  adminSuspendOrg: (orgId: number) => `/admin/orgs/${orgId}/suspend`,
+  adminActivateOrg: (orgId: number) => `/admin/orgs/${orgId}/activate`,
+  // Enterprise Org
+  enterpriseCreateOrg: '/enterprise/orgs',
+  enterpriseMyOrg: '/enterprise/orgs/mine',
+  enterpriseRenameOrg: '/enterprise/orgs/mine',
+  enterpriseMyOrgMembers: '/enterprise/orgs/mine/members',
+  enterpriseMyOrgInvites: '/enterprise/orgs/mine/invites',
+  enterpriseSendInvite: '/enterprise/orgs/mine/invites',
+  enterpriseRevokeInvite: (inviteId: number) => `/enterprise/orgs/mine/invites/${inviteId}`,
+  enterpriseRemoveMember: (userId: number) => `/enterprise/orgs/mine/members/${userId}`,
+  enterpriseMyOrgUsage: '/enterprise/orgs/mine/usage',
+  enterprisePurchaseTokens: '/enterprise/orgs/mine/purchase-tokens',
+  enterpriseInviteAccept: '/enterprise/invites/accept',
+  // Payments
+  paymentHistory: '/payments/history',
+  adminPaymentHistory: '/payments/admin/all',
+  // Agent & Generation
   generationQuery: '/generation/query',
   generationUploadData: '/generation/upload-data',
   generationStream: '/generation/stream',

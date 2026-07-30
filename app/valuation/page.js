@@ -6,7 +6,7 @@ import { Building2 } from "lucide-react";
 import ThemeToggle from "@/components/valuation/shared/ThemeToggle";
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
-import TokenAccessGate from "@/components/shared/TokenAccessGate";
+import WalletGate from "@/components/shared/WalletGate";
 
 const MapSection = dynamic(() => import("@/components/valuation/shared/MapSection"), { ssr: false });
 
@@ -175,7 +175,7 @@ export default function HomePage() {
           <section ref={containerRef} className="flex flex-col xl:flex-row h-full min-h-0 flex-1 gap-4 xl:gap-0">
             {/* Chat section */}
             <div className="resize-panel-left w-full xl:h-full min-h-0 relative">
-              <TokenAccessGate featureName="Valuation Agent">
+              <WalletGate featureName="Valuation Agent">
                 <ChatSection
                   onClear={() => {
                     setEvents([]);
@@ -192,7 +192,7 @@ export default function HomePage() {
                   events={events}
                   setEvents={setEvents}
                 />
-              </TokenAccessGate>
+              </WalletGate>
             </div>
 
             {/* Splitter 1 */}

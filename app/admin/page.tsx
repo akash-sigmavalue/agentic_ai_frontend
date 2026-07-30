@@ -1,303 +1,752 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  ShieldCheck, Users, CheckCircle2, XCircle, Clock, RefreshCw,
-  Loader2, AlertCircle, ChevronDown, Filter, BarChart3, Mail,
-  User as UserIcon, Calendar,
-} from 'lucide-react';
-import RoleGuard from '@/components/shared/RoleGuard';
-import { apiFetch, apiRequest, apiUrl, API_ROUTES } from '@/lib/api-client';
+  Users,
+  Building2,
+  Receipt,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Building,
+  PlusCircle,
+  XCircle,
+  CheckCircle2,
+  Coins,
+  Loader2,
+  AlertTriangle,
+  Zap,
+} from "lucide-react";
+import AdminOnlyGate from "@/components/shared/AdminOnlyGate";
+import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-interface RedemptionRequest {
+interface AdminUser {
   id: number;
-  user_id: number;
   username: string;
   email: string | null;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  requested_at: string;
-  reviewed_at: string | null;
-  admin_remark: string | null;
+  role: string;
+  account_type: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  personal_token_balance: number;
+  active_org_id: number | null;
+  active_org_name: string | null;
+  active_org_role: string | null;
 }
 
-type FilterStatus = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED';
-
-// ── Helper components ──────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const cfg: Record<string, { color: string; icon: React.ReactNode }> = {
-    PENDING:  { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: <Clock className="h-3 w-3" /> },
-    APPROVED: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3 w-3" /> },
-    REJECTED: { color: 'bg-red-50 text-red-700 border-red-200', icon: <XCircle className="h-3 w-3" /> },
-  };
-  const c = cfg[status] ?? cfg['PENDING'];
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${c.color}`}>
-      {c.icon}
-      {status.charAt(0) + status.slice(1).toLowerCase()}
-    </span>
-  );
+interface AdminOrg {
+  id: number;
+  name: string;
+  owner_user_id: number;
+  owner_username: string;
+  org_token_balance: number;
+  status: string;
+  created_at: string;
+  active_member_count: number;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+interface AdminTransaction {
+  id: number;
+  wallet_type: string;
+  wallet_owner_id: number;
+  amount: number;
+  type: string;
+  agent_id: number | null;
+  created_at: string;
 }
 
-// ── Admin Panel Page ───────────────────────────────────────────────────────────
-function AdminPanelContent() {
-  const [requests, setRequests] = useState<RedemptionRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterStatus>('ALL');
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [actionError, setActionError] = useState('');
-  const [actionSuccess, setActionSuccess] = useState('');
-  const [rejectRemark, setRejectRemark] = useState<Record<number, string>>({});
+export default function AdminDashboardPage() {
+  const [activeTab, setActiveTab] = useState<"users" | "orgs" | "transactions" | "payments">("users");
 
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
-    setActionError('');
+  // Payments state
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+
+  const fetchPayments = async () => {
+    setLoadingPayments(true);
     try {
-      const url = filter === 'ALL'
-        ? API_ROUTES.adminRedemptionRequests
-        : `${API_ROUTES.adminRedemptionRequests}?status=${filter}`;
-      const data = await apiFetch<RedemptionRequest[]>(url);
-      setRequests(data);
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to load requests.');
+      const data = await apiFetch<any[]>(API_ROUTES.adminPaymentHistory);
+      setPayments(data);
+    } catch {
+      // ignore
     } finally {
-      setLoading(false);
+      setLoadingPayments(false);
     }
-  }, [filter]);
+  };
 
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
-  const handleApprove = async (id: number) => {
-    setActionLoading(id);
-    setActionError('');
-    setActionSuccess('');
+  // Users state
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [userSearch, setUserSearch] = useState("");
+
+  // Promote Modal state
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [initialTokens, setInitialTokens] = useState("10000000"); // Default 10M
+  const [promoting, setPromoting] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
+
+  // Orgs state
+  const [orgs, setOrgs] = useState<AdminOrg[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
+
+  // Set org balance modal state
+  const [selectedOrg, setSelectedOrg] = useState<AdminOrg | null>(null);
+  const [newBalance, setNewBalance] = useState("");
+  const [updatingOrg, setUpdatingOrg] = useState(false);
+
+  // Transactions state
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
+  const [loadingTx, setLoadingTx] = useState(false);
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
     try {
-      const res = await apiRequest(`/admin/redemption-requests/${id}/approve`, { method: 'POST' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || 'Approve failed.');
+      const data = await apiFetch<AdminUser[]>(API_ROUTES.adminUsers);
+      setUsers(data);
+    } catch (err: any) {
+      console.error("Failed to load users", err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const fetchOrgs = async () => {
+    setLoadingOrgs(true);
+    try {
+      const data = await apiFetch<AdminOrg[]>(API_ROUTES.adminOrgs);
+      setOrgs(data);
+    } catch (err: any) {
+      console.error("Failed to load orgs", err);
+    } finally {
+      setLoadingOrgs(false);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    setLoadingTx(true);
+    try {
+      const data = await apiFetch<AdminTransaction[]>(API_ROUTES.adminTransactions);
+      setTransactions(data);
+    } catch (err: any) {
+      console.error("Failed to load transactions", err);
+    } finally {
+      setLoadingTx(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "users") fetchUsers();
+    if (activeTab === "orgs") fetchOrgs();
+    if (activeTab === "transactions") fetchTransactions();
+    if (activeTab === "payments") fetchPayments();
+  }, [activeTab]);
+
+
+  // Promote user to Enterprise Owner
+  const handlePromote = async () => {
+    if (!selectedUser) return;
+    setPromoting(true);
+    setPromoteError(null);
+    setPromoteSuccess(null);
+
+    try {
+      const tokensNum = parseInt(initialTokens, 10);
+      if (isNaN(tokensNum) || tokensNum < 0) {
+        throw new Error("Invalid token amount");
       }
-      setActionSuccess(`Request #${id} approved successfully!`);
-      await fetchRequests();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
-  const handleReject = async (id: number) => {
-    setActionLoading(id);
-    setActionError('');
-    setActionSuccess('');
-    try {
-      const res = await apiRequest(`/admin/redemption-requests/${id}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ remark: rejectRemark[id] || '' }),
+      const url = API_ROUTES.adminPromoteEnterprise(selectedUser.id);
+      const res = await apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({ initial_org_tokens: tokensNum }),
       });
+
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || 'Reject failed.');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to promote user.");
       }
-      setActionSuccess(`Request #${id} rejected.`);
-      setRejectRemark(prev => { const n = { ...prev }; delete n[id]; return n; });
-      await fetchRequests();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
+
+      const data = await res.json();
+      setPromoteSuccess(data.message || "User promoted to Enterprise Owner!");
+      fetchUsers();
+      setTimeout(() => {
+        setSelectedUser(null);
+        setPromoteSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setPromoteError(err.message);
     } finally {
-      setActionLoading(null);
+      setPromoting(false);
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
+  // Set Org Balance
+  const handleSetBalance = async () => {
+    if (!selectedOrg) return;
+    setUpdatingOrg(true);
+    try {
+      const bal = parseInt(newBalance, 10);
+      if (isNaN(bal) || bal < 0) throw new Error("Invalid balance");
+
+      const url = API_ROUTES.adminSetOrgBalance(selectedOrg.id);
+      const res = await apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({ new_balance: bal }),
+      });
+      if (!res.ok) throw new Error("Failed to set balance");
+
+      fetchOrgs();
+      setSelectedOrg(null);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpdatingOrg(false);
+    }
+  };
+
+  // Toggle Suspend / Activate
+  const handleToggleSuspend = async (org: AdminOrg) => {
+    const isSuspended = org.status === "SUSPENDED";
+    const route = isSuspended
+      ? API_ROUTES.adminActivateOrg(org.id)
+      : API_ROUTES.adminSuspendOrg(org.id);
+
+    try {
+      const res = await apiRequest(route, { method: "POST" });
+      if (!res.ok) throw new Error("Action failed");
+      fetchOrgs();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+      (u.email && u.email.toLowerCase().includes(userSearch.toLowerCase()))
+  );
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-24 pb-12 px-4">
-      <div className="max-w-5xl mx-auto space-y-6">
-
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-200">
-              <ShieldCheck className="h-6 w-6 text-white" />
-            </div>
+    <AdminOnlyGate>
+      <div className="min-h-screen bg-slate-950 text-slate-100 pt-24 px-6 pb-12">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Admin Panel</h1>
-              <p className="text-sm text-slate-400">Token Redemption Requests</p>
-            </div>
-          </div>
-          <button
-            onClick={fetchRequests}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:text-slate-900 transition-all"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </button>
-        </div>
-
-        {/* ── Stats ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: 'Total Requests', value: requests.length, icon: <BarChart3 className="h-5 w-5" />, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
-            { label: 'Pending', value: pendingCount, icon: <Clock className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50 border-amber-100' },
-            { label: 'Approved', value: requests.filter(r => r.status === 'APPROVED').length, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-          ].map(({ label, value, icon, color }) => (
-            <div key={label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-              <div className={`h-10 w-10 rounded-xl border flex items-center justify-center ${color}`}>
-                {icon}
-              </div>
-              <div>
-                <p className="text-2xl font-black text-slate-900">{value}</p>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{label}</p>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black tracking-tight">Admin Management Hub</h1>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Manage users, Enterprise organizations, and inspect the token audit trail.
+                  </p>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* ── Action feedback ── */}
-        {actionSuccess && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium">
-            <CheckCircle2 className="h-4 w-4 shrink-0" /> {actionSuccess}
-          </div>
-        )}
-        {actionError && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
-            <AlertCircle className="h-4 w-4 shrink-0" /> {actionError}
-          </div>
-        )}
-
-        {/* ── Filter ── */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-2 flex-wrap">
-          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as FilterStatus[]).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                filter === f
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              {f === 'ALL' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Requests Table ── */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+            {/* Navigation Tabs */}
+            <div className="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+              <button
+                onClick={() => setActiveTab("users")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === "users"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Users ({users.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("orgs")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === "orgs"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                Organizations
+              </button>
+              <button
+                onClick={() => setActiveTab("transactions")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === "transactions"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Receipt className="w-4 h-4" />
+                Token Audit
+              </button>
+              <button
+                onClick={() => setActiveTab("payments")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === "payments"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                Fiat Payments ({payments.length})
+              </button>
             </div>
-          ) : requests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users className="h-12 w-12 text-slate-200 mb-3" />
-              <p className="text-sm font-bold text-slate-500">No requests found</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {filter !== 'ALL' ? `No ${filter.toLowerCase()} requests.` : 'No token redemption requests yet.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/80">
-                    {['User', 'Email', 'Requested', 'Status', 'Actions'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((req, i) => (
-                    <tr key={req.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                            <UserIcon className="h-4 w-4 text-indigo-500" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900 text-xs">{req.username}</p>
-                            <p className="text-[10px] text-slate-400">ID #{req.user_id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                          <Mail className="h-3 w-3 text-slate-300 shrink-0" />
-                          {req.email ?? '—'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                          <Calendar className="h-3 w-3 text-slate-300 shrink-0" />
-                          {formatDate(req.requested_at)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={req.status} />
-                      </td>
-                      <td className="px-4 py-4">
-                        {req.status === 'PENDING' ? (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleApprove(req.id)}
-                                disabled={actionLoading === req.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all disabled:opacity-60"
-                              >
-                                {actionLoading === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleReject(req.id)}
-                                disabled={actionLoading === req.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold hover:bg-red-100 transition-all disabled:opacity-60"
-                              >
-                                {actionLoading === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                                Reject
-                              </button>
-                            </div>
-                            <input
-                              placeholder="Optional remark for rejection..."
-                              value={rejectRemark[req.id] ?? ''}
-                              onChange={e => setRejectRemark(prev => ({ ...prev, [req.id]: e.target.value }))}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[11px] text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-400">
-                            {req.reviewed_at ? formatDate(req.reviewed_at) : '—'}
-                            {req.admin_remark && (
-                              <p className="mt-1 text-slate-500 italic">"{req.admin_remark}"</p>
-                            )}
-                          </div>
-                        )}
-                      </td>
+
+          </div>
+
+          {/* TAB 1: USERS */}
+          {activeTab === "users" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search by username or email..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium focus:outline-none focus:border-indigo-500 text-slate-200 placeholder-slate-500"
+                  />
+                </div>
+                <button
+                  onClick={fetchUsers}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Table */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                      <th className="p-4">User</th>
+                      <th className="p-4">Role</th>
+                      <th className="p-4">Account Type</th>
+                      <th className="p-4">Personal Balance</th>
+                      <th className="p-4">Active Organization</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-xs font-medium">
+                    {loadingUsers ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                          Loading user directory...
+                        </td>
+                      </tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          No users found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((u) => (
+                        <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-4 font-bold text-slate-200">
+                            <div>{u.username}</div>
+                            <div className="text-[11px] font-normal text-slate-400">{u.email || "No email"}</div>
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wider uppercase border ${
+                                u.role === "ADMIN"
+                                  ? "bg-violet-950/80 text-violet-300 border-violet-800"
+                                  : u.role === "PAID"
+                                  ? "bg-emerald-950/80 text-emerald-300 border-emerald-800"
+                                  : "bg-slate-800 text-slate-400 border-slate-700"
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-300 font-semibold">
+                            {u.account_type || "—"}
+                          </td>
+                          <td className="p-4 font-bold text-indigo-300">
+                            {u.personal_token_balance.toLocaleString()} tokens
+                          </td>
+                          <td className="p-4 text-slate-300">
+                            {u.active_org_name ? (
+                              <div className="flex items-center gap-1.5">
+                                <Building className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>{u.active_org_name}</span>
+                                <span className="text-[10px] text-slate-500 uppercase">({u.active_org_role})</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600">None</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-right">
+                            {!u.active_org_id && u.account_type !== "ENTERPRISE" && (
+                              <button
+                                onClick={() => setSelectedUser(u)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40 border border-indigo-500/30 text-xs font-bold transition-all"
+                              >
+                                <Zap className="w-3.5 h-3.5" />
+                                Promote to Enterprise Owner
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-        </div>
-      </div>
-    </main>
-  );
-}
 
-export default function AdminPage() {
-  return (
-    <RoleGuard allowedRoles={['ADMIN']}>
-      <AdminPanelContent />
-    </RoleGuard>
+          {/* TAB 2: ORGANIZATIONS */}
+          {activeTab === "orgs" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  onClick={fetchOrgs}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingOrgs ? "animate-spin" : ""}`} />
+                  Refresh Orgs
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {loadingOrgs ? (
+                  <div className="col-span-full p-12 text-center text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                    Loading organizations...
+                  </div>
+                ) : orgs.length === 0 ? (
+                  <div className="col-span-full p-12 text-center text-slate-500">
+                    No organizations created yet. Promote a user to Enterprise Owner to get started.
+                  </div>
+                ) : (
+                  orgs.map((org) => (
+                    <div
+                      key={org.id}
+                      className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4 relative overflow-hidden"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-bold text-slate-100 text-base">{org.name}</h3>
+                          <p className="text-xs text-slate-400">Owner: {org.owner_username}</p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            org.status === "ACTIVE"
+                              ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                              : "bg-rose-950 text-rose-400 border border-rose-800"
+                          }`}
+                        >
+                          {org.status}
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Shared Token Pool:</span>
+                          <span className="font-bold text-indigo-300">
+                            {org.org_token_balance.toLocaleString()} tokens
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Active Members:</span>
+                          <span className="font-semibold text-slate-200">{org.active_member_count}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                        <button
+                          onClick={() => {
+                            setSelectedOrg(org);
+                            setNewBalance(org.org_token_balance.toString());
+                          }}
+                          className="flex-1 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-all text-center"
+                        >
+                          Update Balance
+                        </button>
+                        <button
+                          onClick={() => handleToggleSuspend(org)}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all border ${
+                            org.status === "ACTIVE"
+                              ? "bg-rose-950/50 hover:bg-rose-900/50 text-rose-300 border-rose-800"
+                              : "bg-emerald-950/50 hover:bg-emerald-900/50 text-emerald-300 border-emerald-800"
+                          }`}
+                        >
+                          {org.status === "ACTIVE" ? "Suspend" : "Activate"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: TRANSACTIONS AUDIT TRAIL */}
+          {activeTab === "transactions" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  onClick={fetchTransactions}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingTx ? "animate-spin" : ""}`} />
+                  Refresh Audit Trail
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                      <th className="p-4">ID</th>
+                      <th className="p-4">Wallet Type</th>
+                      <th className="p-4">Owner ID</th>
+                      <th className="p-4">Type</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-xs font-medium">
+                    {loadingTx ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                          Loading audit trail...
+                        </td>
+                      </tr>
+                    ) : transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          No token transactions recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((tx) => (
+                        <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-4 text-slate-400 font-mono">#{tx.id}</td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                tx.wallet_type === "ORG"
+                                  ? "bg-indigo-950 text-indigo-300 border border-indigo-800"
+                                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                              }`}
+                            >
+                              {tx.wallet_type}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-300 font-mono">ID #{tx.wallet_owner_id}</td>
+                          <td className="p-4 font-bold text-slate-200">{tx.type}</td>
+                          <td className="p-4 font-bold">
+                            <span className={tx.amount >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                              {tx.amount >= 0 ? `+${tx.amount.toLocaleString()}` : tx.amount.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-400">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: FIAT PAYMENTS HISTORY */}
+          {activeTab === "payments" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  onClick={fetchPayments}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingPayments ? "animate-spin" : ""}`} />
+                  Refresh Payments
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                      <th className="p-4">ID</th>
+                      <th className="p-4">User</th>
+                      <th className="p-4">Amount (INR)</th>
+                      <th className="p-4">Tokens Credited</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Session / Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-xs font-medium">
+                    {loadingPayments ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                          Loading fiat payments...
+                        </td>
+                      </tr>
+                    ) : payments.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500">
+                          No payments recorded in database yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      payments.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-4 text-slate-400 font-mono">#{p.id}</td>
+                          <td className="p-4">
+                            <div className="font-bold text-slate-200">{p.username}</div>
+                            <div className="text-[11px] font-normal text-slate-400">{p.user_email || `ID #${p.user_id}`}</div>
+                          </td>
+                          <td className="p-4 font-bold text-emerald-400">₹{p.amount_inr?.toLocaleString()}</td>
+                          <td className="p-4 font-bold text-indigo-300">+{p.tokens_credited?.toLocaleString()}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                              p.status === "succeeded"
+                                ? "bg-emerald-950 text-emerald-400 border-emerald-800"
+                                : p.status === "pending"
+                                ? "bg-amber-950 text-amber-300 border-amber-800"
+                                : "bg-rose-950 text-rose-400 border-rose-800"
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-400">
+                            <div>{new Date(p.created_at).toLocaleString()}</div>
+                            <div className="text-[10px] font-mono text-slate-500">{p.stripe_session_id?.slice(-14)}</div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* PROMOTE MODAL */}
+        {selectedUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-100 text-lg">Promote to Enterprise Owner</h3>
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                User: <strong className="text-slate-200">{selectedUser.username}</strong> ({selectedUser.email || "No email"})
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Initial Org Tokens (Sales Contract)</label>
+                <input
+                  type="number"
+                  value={initialTokens}
+                  onChange={(e) => setInitialTokens(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm font-semibold text-indigo-300 focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-slate-500">Default: 10,000,000 tokens</p>
+              </div>
+
+              {promoteError && (
+                <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-rose-300 text-xs font-medium">
+                  {promoteError}
+                </div>
+              )}
+              {promoteSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs font-medium">
+                  {promoteSuccess}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePromote}
+                  disabled={promoting}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {promoting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Confirm Promotion
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SET BALANCE MODAL */}
+        {selectedOrg && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-100 text-lg">Update Org Token Balance</h3>
+                <button
+                  onClick={() => setSelectedOrg(null)}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                Org: <strong className="text-slate-200">{selectedOrg.name}</strong>
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">New Token Balance</label>
+                <input
+                  type="number"
+                  value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm font-semibold text-indigo-300 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setSelectedOrg(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSetBalance}
+                  disabled={updatingOrg}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {updatingOrg && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Save New Balance
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AdminOnlyGate>
   );
 }

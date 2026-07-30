@@ -4,11 +4,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { apiFetch, apiRequest, API_ROUTES } from '@/lib/api-client';
 
-export interface TokenBalance {
-  total_allocated_tokens: number;
-  available_tokens: number;
-  used_tokens: number;
-  status: 'NOT_REQUESTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+export interface ActiveOrg {
+  org_id: number;
+  org_name: string;
+  org_role: 'OWNER' | 'EMPLOYEE';
+  org_token_balance: number;
+  org_status: 'ACTIVE' | 'SUSPENDED';
 }
 
 export interface User {
@@ -16,9 +19,14 @@ export interface User {
   username: string;
   email?: string | null;
   role: 'ADMIN' | 'FREE' | 'PAID';
+  account_type?: 'INDIVIDUAL' | 'ENTERPRISE' | null;
+  /** Personal wallet — 10,000 granted on signup, grows with individual token purchases */
+  personal_token_balance: number;
   is_active?: boolean;
+  is_email_verified?: boolean;
   created_at?: string;
-  token_balance?: TokenBalance | null;
+  /** Set when the user has an ACTIVE enterprise org membership */
+  active_org?: ActiveOrg | null;
 }
 
 interface AuthContextType {
@@ -35,7 +43,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /** Pages that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/auth', '/register', '/auth/reset-password'];
+const PUBLIC_PATHS = ['/login', '/auth', '/register', '/auth/reset-password', '/pricing', '/office/invite', '/payment'];
+
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -49,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data);
     } catch {
       setUser(null);
-      if (!PUBLIC_PATHS.includes(pathname)) {
+      const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
+      if (!isPublic) {
         router.push('/auth');
       }
     } finally {
@@ -63,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await apiFetch<User>(API_ROUTES.profileMe);
       setUser(data);
     } catch {
-      // silently ignore — user session may be valid but brief network hiccup
+      // silently ignore — session may be briefly invalid
     }
   };
 
@@ -72,10 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  /**
-   * Login with username OR email + password.
-   * The backend accepts either in the `username` form field.
-   */
   const login = async (identifier: string, password: string) => {
     setLoading(true);
     try {
@@ -94,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorData.detail || 'Incorrect username/email or password');
       }
 
-      // Fetch full profile (includes role + token_balance)
       await checkUser();
     } catch (err) {
       setUser(null);
@@ -104,10 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  /**
-   * Register a new account.
-   * Does NOT auto-login — user must verify email and sign in manually.
-   */
   const register = async (username: string, email: string, password: string) => {
     setLoading(true);
     try {
@@ -121,7 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Registration failed. Please try again.');
       }
-      // Intentionally NOT calling checkUser() — user must login manually after email verification.
     } catch (err) {
       setUser(null);
       throw err;
@@ -130,9 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  /**
-   * Send a forgot-password reset email.
-   */
   const forgotPassword = async (email: string) => {
     const response = await apiRequest(API_ROUTES.authForgotPassword, {
       method: 'POST',
