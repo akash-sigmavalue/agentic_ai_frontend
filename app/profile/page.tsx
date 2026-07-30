@@ -9,6 +9,7 @@ import {
 
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -90,8 +91,13 @@ function InviteStatusBadge({ status }: { status: string }) {
 
 // ─── Section Card ───────────────────────────────────────────────────────────────
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const isDark = useTheme();
   return (
-    <div className={`p-6 rounded-3xl bg-slate-900/60 border border-slate-800 ${className}`}>
+    <div className={`p-6 rounded-3xl border transition-colors ${
+      isDark
+        ? "bg-slate-900/60 border-slate-800 text-slate-100"
+        : "bg-white border-slate-200 text-slate-900 shadow-sm"
+    } ${className}`}>
       {children}
     </div>
   );
@@ -529,12 +535,13 @@ function PaymentHistoryCard() {
 export default function ProfilePage() {
 
   const { user, logout, loading } = useAuth();
+  const isDark = useTheme();
   const router = useRouter();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900"}`}>
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
   }
@@ -543,29 +550,32 @@ export default function ProfilePage() {
   const isOwner = user.active_org?.org_role === "OWNER";
   const isEmployee = user.active_org?.org_role === "EMPLOYEE";
 
+  const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
+  const bannerClass = isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm";
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pt-24 px-6 pb-16">
+    <div className={`min-h-screen pt-24 px-4 sm:px-6 pb-16 transition-colors ${bgClass}`}>
       <div className="max-w-3xl mx-auto space-y-6">
 
         {/* ─── Profile Banner ─────────────────────────────────────────────────── */}
-        <div className="p-7 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-center gap-6 justify-between shadow-2xl">
+        <div className={`p-7 rounded-3xl border flex flex-col sm:flex-row items-center gap-6 justify-between transition-colors ${bannerClass}`}>
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-black text-2xl shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-500 font-black text-2xl shrink-0">
               {user.username.charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                <h1 className="text-xl font-black text-slate-100">{user.username}</h1>
+                <h1 className="text-xl font-black">{user.username}</h1>
                 <RoleBadge role={user.role} accountType={user.account_type} orgRole={user.active_org?.org_role} />
               </div>
-              <p className="text-xs text-slate-400 flex items-center gap-1.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5" />
                 {user.email || "No email attached"}
               </p>
             </div>
           </div>
           <button onClick={logout}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-950/40 text-rose-400 border border-rose-800/60 text-xs font-bold hover:bg-rose-900/40 transition-all shrink-0">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold hover:bg-rose-500/20 transition-all shrink-0">
             <LogOut className="h-4 w-4" /> Sign Out
           </button>
         </div>

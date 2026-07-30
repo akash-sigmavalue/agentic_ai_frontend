@@ -73,11 +73,19 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  return fetch(apiUrl(path), {
+  const res = await fetch(apiUrl(path), {
     credentials: 'include',
     ...options,
     headers,
   });
+
+  if (res.status === 402) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('sigmavalue-tokens-exhausted'));
+    }
+  }
+
+  return res;
 }
 
 export async function apiFetch<T = unknown>(

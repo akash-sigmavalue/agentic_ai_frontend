@@ -5392,6 +5392,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
+        if (response.status === 402) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("sigmavalue-tokens-exhausted"));
+          }
+          throw new Error("Your token balance has been exhausted. Please view pricing plans to purchase a token pack.");
+        }
         throw new Error(`Quick Estimate request failed with status ${response.status}`);
       }
 
@@ -7626,6 +7632,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
+        if (response.status === 402) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("sigmavalue-tokens-exhausted"));
+          }
+          throw new Error("Your token balance has been exhausted. Please view pricing plans to purchase a token pack.");
+        }
         throw new Error(`Backend request failed with status ${response.status}`);
       }
 

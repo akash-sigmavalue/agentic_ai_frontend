@@ -43,7 +43,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /** Pages that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/auth', '/register', '/auth/reset-password', '/pricing', '/office/invite', '/payment'];
+const PUBLIC_PATHS = ['/', '/login', '/auth', '/register', '/auth/reset-password', '/pricing', '/office/invite', '/payment'];
 
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data);
     } catch {
       setUser(null);
-      const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
+      const isPublic = PUBLIC_PATHS.some(p => p === '/' ? pathname === '/' : pathname.startsWith(p));
       if (!isPublic) {
         router.push('/auth');
       }

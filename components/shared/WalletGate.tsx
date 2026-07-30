@@ -26,14 +26,27 @@ export default function WalletGate({
   children,
   featureName = "Valuation Agent",
 }: WalletGateProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshProfile } = useAuth();
   const router = useRouter();
   const [visible, setVisible] = useState(false);
+  const [tokensExhaustedTriggered, setTokensExhaustedTriggered] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 60);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const handleExhausted = () => {
+      setTokensExhaustedTriggered(true);
+      setVisible(true);
+      if (refreshProfile) {
+        refreshProfile();
+      }
+    };
+    window.addEventListener('sigmavalue-tokens-exhausted', handleExhausted);
+    return () => window.removeEventListener('sigmavalue-tokens-exhausted', handleExhausted);
+  }, [refreshProfile]);
 
   // Still loading auth
   if (loading) {
@@ -53,17 +66,19 @@ export default function WalletGate({
   // ADMIN always passes through
   if (user.role === "ADMIN") return <>{children}</>;
 
-  // Enterprise org member with active org → passes through (uses org wallet)
-  const hasActiveOrg =
-    user.active_org &&
-    user.active_org.org_status === "ACTIVE" &&
-    (user.active_org.org_token_balance ?? 0) > 0;
+  if (!tokensExhaustedTriggered) {
+    // Enterprise org member with active org → passes through (uses org wallet)
+    const hasActiveOrg =
+      user.active_org &&
+      user.active_org.org_status === "ACTIVE" &&
+      (user.active_org.org_token_balance ?? 0) > 0;
 
-  if (hasActiveOrg) return <>{children}</>;
+    if (hasActiveOrg) return <>{children}</>;
 
-  // Personal wallet check
-  const personalBalance = user.personal_token_balance ?? 0;
-  if (personalBalance > 0) return <>{children}</>;
+    // Personal wallet check
+    const personalBalance = user.personal_token_balance ?? 0;
+    if (personalBalance > 0) return <>{children}</>;
+  }
 
   // No tokens anywhere — show upgrade prompt
   const orgSuspended =
@@ -86,6 +101,8 @@ export default function WalletGate({
     body =
       "Your organization's shared token pool is empty. Your Owner needs to purchase more tokens.";
   }
+
+  const personalBalance = user.personal_token_balance ?? 0;
 
   return (
     <div className={`wg-overlay ${visible ? "wg-overlay--in" : ""}`}>
@@ -115,7 +132,7 @@ export default function WalletGate({
             </button>
             <button
               className="wg-cta wg-cta--secondary"
-              onClick={() => router.push("/pricing#enterprise")}
+              onClick={() => router.push("/pricing#enterprise-contact")}
             >
               Contact Us
               <ArrowRight style={{ width: 13, height: 13 }} />

@@ -241,29 +241,21 @@ export default function AgentListDropdown() {
                 {activeAgentLayer.agents.map((agent) => {
                   const AgentIcon = agent.icon;
                   const allowed = isAgentAllowed(agent.key);
-                  const clickable = !!agent.href && allowed;
+                  const hasHref = !!agent.href;
 
                   return (
                     <button
                       key={agent.name}
                       type="button"
                       onClick={() => {
-                        if (!clickable) {
-                          if (agent.href && !allowed) {
-                            setIsAgentsOpen(false);
-                            router.push('/unauthorized');
-                          }
-                          return;
-                        }
+                        if (!hasHref) return;
                         setIsAgentsOpen(false);
                         router.push(agent.href!);
                       }}
-                      title={!allowed && agent.key ? 'Access restricted for your role' : undefined}
-                      className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${clickable
+                      title={!allowed && agent.key ? 'Click to view Demo Video & Contact Us' : undefined}
+                      className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2.5 text-left shadow-sm transition-colors ${hasHref
                           ? 'hover:bg-violet-50/70 cursor-pointer'
-                          : agent.href
-                            ? 'opacity-60 cursor-not-allowed'
-                            : 'opacity-40 cursor-default'
+                          : 'opacity-40 cursor-default'
                         }`}
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${activeAgentLayer.accent}`}>
@@ -272,9 +264,11 @@ export default function AgentListDropdown() {
                       <span className="flex-1 break-words text-sm font-extrabold leading-5 text-slate-900">
                         {agent.name}
                       </span>
-                      {/* Lock icon for role-restricted agents */}
-                      {agent.href && !allowed && (
-                        <Lock className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                      {/* Demo Badge / Lock for restricted agents */}
+                      {hasHref && !allowed && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-700 text-[9px] font-black uppercase tracking-wider shrink-0">
+                          Demo
+                        </span>
                       )}
                     </button>
                   );

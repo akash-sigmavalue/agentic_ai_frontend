@@ -6,6 +6,7 @@ import {
   Users, Phone, MessageSquare, ChevronDown, Shield, Globe
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiRequest } from "@/lib/api-client";
 
@@ -28,14 +29,36 @@ export default function PricingPage() {
   // Payment state
   const [buyingTokens, setBuyingTokens] = useState(false);
 
-  // Contact form state
+  // Role & Enterprise checks
+  const isAdmin = user?.role === 'ADMIN';
+  const isEnterprise = !!user?.active_org;
+  const isEnterpriseOwner = user?.active_org?.org_role === 'OWNER';
+
+  let disabledNotice = '';
+  if (isAdmin) {
+    disabledNotice = 'Admin Account — Unlimited System Access';
+  } else if (isEnterpriseOwner) {
+    disabledNotice = 'Enterprise Owner — Managed via Enterprise Billing';
+  } else if (isEnterprise) {
+    disabledNotice = 'Enterprise Member — Covered by Org Token Pool';
+  }
+
+  const isBuyDisabled = buyingTokens || isAdmin || isEnterprise;
+
+  // Contact form state with smart default pre-filled text
+  const defaultCompany = user?.email && user.email.includes('@')
+    ? user.email.split('@')[1].split('.')[0].toUpperCase() + " Corp"
+    : user?.username
+    ? `${user.username} Organization`
+    : "Individual / Organization";
+
   const [form, setForm] = useState<ContactForm>({
     name: user?.username || "",
     email: user?.email || "",
-    company: "",
+    company: defaultCompany,
     phone: "",
-    team_size: "",
-    message: "",
+    team_size: "5–20",
+    message: "Interested in Enterprise Organization Plan for Sigmavalue AI Pilot.",
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{
@@ -43,6 +66,19 @@ export default function PricingPage() {
     text: string;
   } | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  // Auto-scroll & expand contact form when hash is #enterprise-form or #enterprise-contact
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash === '#enterprise-form' || hash === '#enterprise-contact' || window.location.search.includes('contact=true')) {
+        setShowForm(true);
+        setTimeout(() => {
+          document.getElementById("enterprise-form")?.scrollIntoView({ behavior: "smooth" });
+        }, 150);
+      }
+    }
+  }, []);
 
   const handleBuyTokens = async () => {
     if (!user) { router.push("/auth"); return; }
@@ -82,20 +118,25 @@ export default function PricingPage() {
     }
   };
 
+  const isDark = useTheme();
+  const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
+  const cardClass = isDark ? "bg-slate-900/60 border-slate-800 text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-900";
+  const featCardClass = isDark ? "bg-slate-900 border-2 border-indigo-500/80 shadow-indigo-500/10 text-slate-100" : "bg-white border-2 border-indigo-500 shadow-xl shadow-indigo-500/10 text-slate-900";
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pt-24 px-6 pb-20">
+    <div className={`min-h-screen pt-24 px-4 sm:px-6 pb-20 transition-colors ${bgClass}`}>
       <div className="max-w-6xl mx-auto space-y-16">
 
         {/* ─── Header ─────────────────────────────────────────────────────────── */}
         <div className="text-center max-w-2xl mx-auto space-y-4">
-          <span className="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <span className="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
             Simple &amp; Transparent Pricing
           </span>
-          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight">
             Pick Your Token Plan
           </h1>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Every user gets <strong className="text-slate-200">10,000 free tokens</strong> on signup.
+          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+            Every user gets <strong className="text-slate-800 dark:text-slate-200">10,000 free tokens</strong> on signup.
             Upgrade whenever you need more. International cards accepted.
           </p>
         </div>
@@ -104,22 +145,22 @@ export default function PricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
 
           {/* TIER 1: FREE */}
-          <div className="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-6">
+          <div className={`p-8 rounded-3xl border flex flex-col justify-between space-y-6 transition-all ${cardClass}`}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Free Tier</span>
-                <span className="p-2 rounded-xl bg-slate-800 text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Free Tier</span>
+                <span className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                   <Coins className="w-5 h-5" />
                 </span>
               </div>
               <div>
-                <div className="text-3xl font-black text-slate-100">Free</div>
-                <p className="text-xs text-slate-400 mt-1">Auto-credited on signup</p>
+                <div className="text-3xl font-black">Free</div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Auto-credited on signup</p>
               </div>
-              <div className="pt-4 border-t border-slate-800 space-y-3 text-xs text-slate-300">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
                 {["10,000 tokens included at signup", "Full Valuation Agent access", "No approval required", "Tokens never expire"].map(f => (
                   <div key={f} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                     <span>{f}</span>
                   </div>
                 ))}
@@ -127,14 +168,14 @@ export default function PricingPage() {
             </div>
             <button
               onClick={() => router.push(user ? "/valuation" : "/auth")}
-              className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-200 transition-all"
+              className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-xs text-slate-800 dark:text-slate-200 transition-all"
             >
               {user ? "Go to Agent →" : "Get Started Free →"}
             </button>
           </div>
 
           {/* TIER 2: INDIVIDUAL PRO — MOST POPULAR */}
-          <div className="p-8 rounded-3xl bg-slate-900 border-2 border-indigo-500/80 flex flex-col justify-between space-y-6 relative shadow-2xl shadow-indigo-500/10">
+          <div className={`p-8 rounded-3xl flex flex-col justify-between space-y-6 relative transition-all ${featCardClass}`}>
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg whitespace-nowrap">
               Most Popular
             </div>
@@ -184,11 +225,17 @@ export default function PricingPage() {
             <button
               id="pricing-buy-token-pack"
               onClick={handleBuyTokens}
-              disabled={buyingTokens}
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 font-bold text-xs text-white transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-70"
+              disabled={isBuyDisabled}
+              className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 ${
+                isBuyDisabled
+                  ? "bg-slate-800/90 border border-slate-700 text-slate-400 cursor-not-allowed shadow-none opacity-90"
+                  : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-600/30 cursor-pointer"
+              }`}
             >
               {buyingTokens ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to checkout…</>
+              ) : isBuyDisabled ? (
+                <><Shield className="w-4 h-4 text-amber-400" /> {disabledNotice}</>
               ) : (
                 <><Zap className="w-4 h-4" /> Buy 1M Token Pack — ₹5,000</>
               )}
@@ -200,7 +247,7 @@ export default function PricingPage() {
           </div>
 
           {/* TIER 3: ENTERPRISE */}
-          <div id="enterprise" className="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between space-y-6">
+          <div id="enterprise" className={`p-8 rounded-3xl border flex flex-col justify-between space-y-6 transition-all ${cardClass}`}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-400">Enterprise Organization</span>
