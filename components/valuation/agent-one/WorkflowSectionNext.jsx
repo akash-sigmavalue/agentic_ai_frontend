@@ -51,14 +51,14 @@ const STAGE_META = {
     description: "Deterministic execution plan generated (market: 6 steps · cost: 8 steps)",
   },
   "Stage 3A": {
-    label: "Stage 3A — Comparable Identification",
+    label: "Stage 3A  — Comparable Discovery",
     icon: Search,
     accent: "#fb923c",
     accentGlow: "rgba(251,146,60,0.18)",
     description: "Agent web search × 2 passes → geocode → confidence scoring → 15km filter",
   },
   "Stage 3B": {
-    label: "Stage 3B — Listing & Transaction Fetch",
+    label: "Stage 3B— Market Data Collection",
     icon: Database,
     accent: "#f97316",
     accentGlow: "rgba(249,115,22,0.18)",
@@ -79,7 +79,7 @@ const STAGE_META = {
     description: "Compute avg rate per comparable project for Agent spatial adjustment",
   },
   "Stage 5": {
-    label: "Stage 5 — Agent Factoring & Final Valuation",
+    label: "Stage 5 — Valuation Synthesis",
     icon: Brain,
     accent: "#f472b6",
     accentGlow: "rgba(244,114,182,0.18)",
@@ -257,6 +257,20 @@ function DetailRow({ label, value }) {
 }
 
 // ── Per-event structured detail panels ────────────────────────────────────────
+function countVisibleDroppedComparables(droppedComparables) {
+  if (!Array.isArray(droppedComparables) || droppedComparables.length === 0) return 0;
+  const seen = new Set();
+  let count = 0;
+  for (const d of droppedComparables) {
+    if (String(d?.drop_stage || "").toLowerCase().trim() === "dedup") continue;
+    const name = String(d?.project_name || "").toLowerCase().trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    count += 1;
+  }
+  return count;
+}
+
 function StepDetails({ step }) {
   const { data } = step;
   const type = data.eventType;
@@ -400,15 +414,16 @@ function StepDetails({ step }) {
   if (type === "comparable_results" && content) {
     // Note: final_radius_km and iterations are always null in current backend
     // (s3_market_execution.py sets them to None). Only show total_found and source.
+    const shownCount = Array.isArray(content.comparables) ? content.comparables.length : (content.total_found || 0);
     const sourceLabel = {
       web: "Agent Web Search (gpt-4o-mini + web_search_preview × 2 passes)",
       db: "Internal Database",
-      both: "Agent Web Search + Internal Database",
+      both: "Agent Web Search + Transaction Database",
     }[content.comparable_source] || content.comparable_source || "Agent Web Search";
     return (
       <div className={`${boxClass} space-y-0.5`}>
-        <DetailRow label="Total Found" value={content.total_found} />
-        <DetailRow label="Dropped" value={content.dropped_comparables?.length || 0} />
+        <DetailRow label="Total Found" value={shownCount} />
+        <DetailRow label="Dropped" value={countVisibleDroppedComparables(content.dropped_comparables)} />
         <DetailRow label="Source" value={sourceLabel} />
         <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>
@@ -540,7 +555,7 @@ function StepDetails({ step }) {
     );
   }
 
-  if (type === "factorial_analysis_result" && content) {
+  if ((type === "factorial_analysis_result" || type === "valuation_synthesis_result") && content) {
     const isPlotLand = content.rate_basis === "plot_land";
     const finalRate = isPlotLand
       ? (content.subject_final_plot_rate || content.subject_final_rate)
@@ -643,6 +658,7 @@ function getStepIcon(type) {
     recalculate_results:      SlidersHorizontal,
     factorial_results:        Table,
     factorial_analysis_result:Brain,
+    valuation_synthesis_result:Brain,
     cost_calculation_result:  ShieldCheck,
     done:                     Flag,
     error:                    AlertTriangle,
@@ -820,11 +836,11 @@ function EmptyState() {
   const previewStages = [
     { label: "Stage 1 — Property Profiling", icon: Box, color: "#22d3ee" },
     { label: "Stage 2 — Workflow Planning", icon: ClipboardList, color: "#a78bfa" },
-    { label: "Stage 3A — Comparable Identification", icon: Search, color: "#fb923c" },
-    { label: "Stage 3B — Listing Fetch", icon: Database, color: "#f97316" },
+    { label: "Stage 3A  — Comparable Discovery", icon: Search, color: "#fb923c" },
+    { label: "Stage 3B— Market Data Collection", icon: Database, color: "#f97316" },
     { label: "Stage 3C — Data Cleaning", icon: Sparkles, color: "#60a5fa" },
     { label: "Stage 4 — Factorial Table", icon: Table, color: "#34d399" },
-    { label: "Stage 5 — Agent Factoring & Value", icon: Brain, color: "#f472b6" },
+    { label: "Stage 5 — Valuation Synthesis", icon: Brain, color: "#f472b6" },
   ];
 
   return (
@@ -922,7 +938,7 @@ export default function WorkflowSectionNext({ events = [] }) {
         <div className="flex items-center gap-2">
           {!isEmpty && (
             <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
-              {stages.length} / 7 STAGES
+              5 MAIN STAGES
             </span>
           )}
           <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>

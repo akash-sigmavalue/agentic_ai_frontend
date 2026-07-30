@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
+import Link from 'next/link';
 import { apiUrl } from '@/lib/api-client';
 import "./web_search.css"
 
@@ -31,6 +32,30 @@ type Message = {
     total_tokens: number;
     total_cost: number;
   };
+};
+
+type SearchResult = {
+  url: string;
+  title: string;
+  time_ago?: string;
+  source_trust?: number;
+  trust_score?: number;
+  verification_status?: string;
+};
+
+const formatAgentError = (error: unknown) => {
+  const message = typeof error === 'string' ? error : 'The search agent could not complete this request.';
+
+  // Avoid exposing compressed/binary source content from backend conversion errors.
+  if (
+    message.includes('invalid literal for int()') ||
+    /\\x[0-9a-f]{2}/i.test(message) ||
+    message.includes('\uFFFD')
+  ) {
+    return 'The search agent could not process one of the retrieved sources. Please try again.';
+  }
+
+  return message;
 };
 
 export default function Home() {
@@ -73,8 +98,14 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(apiUrl(`/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`));
+      const response = await fetch(apiUrl(`/api/chat_stream?query=${encodeURIComponent(userMessage.content)}&no_cache=true`), {
+        cache: 'no-store',
+        headers: {
+          Accept: 'text/event-stream',
+        },
+      });
 
+      if (!response.ok) throw new Error(`Search request failed (${response.status})`);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -103,9 +134,9 @@ export default function Home() {
                   } else if (data.type === 'chunk') {
                     return { ...msg, content: msg.content + data.content, status: '' };
                   } else if (data.type === 'error') {
-                    return { ...msg, status: '❌ Agent Error: ' + data.content, isStreaming: false };
+                    return { ...msg, status: '❌ Agent Error: ' + formatAgentError(data.content), isStreaming: false };
                   } else if (data.type === 'done') {
-                    const sources = data.result?.results?.slice(0, 10)?.map((r: any) => ({
+                    const sources = data.result?.results?.slice(0, 10)?.map((r: SearchResult) => ({
                       url: r.url,
                       title: r.title,
                       time_ago: r.time_ago || 'Recently',
@@ -147,10 +178,11 @@ export default function Home() {
           boundary = buffer.indexOf('\n\n');
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setMessages(prev => prev.map(msg =>
         msg.id === assistantMessageId
-          ? { ...msg, status: '❌ Network Error: ' + error.message, isStreaming: false }
+          ? { ...msg, status: '❌ Network Error: ' + formatAgentError(message), isStreaming: false }
           : msg
       ));
     } finally {
@@ -173,8 +205,24 @@ export default function Home() {
               Nexus Search
             </h1>
           </div>
-          <div className="text-xs font-medium px-3 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700/50">
-            High Accuracy Agent
+          <div className="flex items-center gap-3">
+            <div className="hidden text-xs font-medium px-3 py-1 rounded-full bg-slate-800/50 text-slate-400 border border-slate-700/50 sm:block">
+              High Accuracy Agent
+            </div>
+            <button
+              type="button"
+              disabled
+              aria-current="page"
+              className="cursor-not-allowed rounded-lg border border-cyan-300 bg-gradient-to-r from-cyan-500 to-blue-500 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-500/30 sm:px-4 sm:text-sm"
+            >
+              Web Agent V1
+            </button>
+            <Link
+              href="/web_search_v2"
+              className="rounded-lg border border-slate-600 bg-slate-800/70 px-3 py-2 text-xs font-semibold text-slate-200 transition-all duration-200 hover:border-cyan-300 hover:bg-cyan-500 hover:text-white hover:shadow-lg hover:shadow-cyan-500/30 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 sm:px-4 sm:text-sm"
+            >
+              Web Agent V2
+            </Link>
           </div>
         </div>
       </header>
