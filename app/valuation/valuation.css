@@ -1,5 +1,29 @@
 
 :root {
+  --bg-deep: #edf4fb;
+  --bg-dark: #f8fbff;
+  --bg-panel: rgba(255, 255, 255, 0.72);
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-input: rgba(15, 23, 42, 0.035);
+  --bg-header: rgba(255, 255, 255, 0.86);
+  --border-dim: rgba(15, 23, 42, 0.10);
+  --border-soft: rgba(15, 23, 42, 0.18);
+  --border-glow: rgba(8, 145, 178, 0.2);
+  --text-primary: #020617;
+  --text-secondary: #0f172a;
+  --text-muted: #334155;
+  --text-dim: #475569;
+  --accent: #0891b2;
+  --accent-light: #0ea5e9;
+  --accent-glow: rgba(8, 145, 178, 0.1);
+  --accent-purple: #7c3aed;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius-panel: 20px;
+}
+
+.dark-mode {
   --bg-deep: #02040a;
   --bg-dark: #0b0e14;
   --bg-panel: rgba(19, 23, 31, 0.66);
@@ -20,27 +44,6 @@
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --radius-panel: 20px;
-}
-
-.light {
-  --bg-deep: #edf4fb;
-  --bg-dark: #f8fbff;
-  --bg-panel: rgba(255, 255, 255, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.92);
-  --bg-input: rgba(15, 23, 42, 0.035);
-  --bg-header: rgba(255, 255, 255, 0.86);
-  --border-dim: rgba(15, 23, 42, 0.10);
-  --border-soft: rgba(15, 23, 42, 0.18);
-  --border-glow: rgba(8, 145, 178, 0.2);
-  --text-primary: #020617;
-  --text-secondary: #0f172a;
-  --text-muted: #334155;
-  --text-dim: #475569;
-  --accent: #0891b2;
-  --accent-light: #0ea5e9;
-  --accent-glow: rgba(8, 145, 178, 0.1);
-  --accent-purple: #7c3aed;
 }
 
 * {

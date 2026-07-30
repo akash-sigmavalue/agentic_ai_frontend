@@ -7,24 +7,40 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
 
+const THEME_STORAGE_KEY = 'sigmavalue_theme';
+const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+
+const getThemeSnapshot = () => localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+const getServerThemeSnapshot = () => false;
+
+const subscribeToTheme = (onStoreChange: () => void) => {
+  const handleChange = () => {
+    const isDark = getThemeSnapshot();
+    document.documentElement.classList.toggle('dark-mode', isDark);
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    onStoreChange();
+  };
+
+  window.addEventListener('storage', handleChange);
+  window.addEventListener(THEME_CHANGE_EVENT, handleChange);
+  return () => {
+    window.removeEventListener('storage', handleChange);
+    window.removeEventListener(THEME_CHANGE_EVENT, handleChange);
+  };
+};
+
 const Header = () => {
-  const [isDark, setIsDark] = React.useState(false);
+  const isDark = React.useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  React.useEffect(() => {
-    const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
-    setIsDark(theme);
-  }, []);
-
-  React.useEffect(() => {
-    document.documentElement.classList.toggle('dark-mode', isDark);
-    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
-    localStorage.setItem('sigmavalue_theme', isDark ? 'dark' : 'light');
-  }, [isDark]);
-
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'light' : 'dark');
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   };
 
   const shellClass = isDark
@@ -70,12 +86,17 @@ const Header = () => {
               <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
             </Link>
           ) : (
-            <div
-              title="Admin only — contact your admin to get access"
-              className={`flex items-center gap-2 px-4 py-2 rounded-2xl border cursor-not-allowed select-none opacity-40 ${pillClass}`}
-            >
-              <Lock className="h-4 w-4 text-slate-400" />
-              <span className={`text-[10px] font-black uppercase tracking-widest ${pillTextClass}`}>SOLUTION</span>
+            <div className="relative group/tooltip">
+              <div
+                className={`flex items-center gap-2 px-4 py-2 rounded-2xl border cursor-not-allowed select-none opacity-40 ${pillClass}`}
+              >
+                <Lock className="h-4 w-4 text-slate-400" />
+                <span className={`text-[10px] font-black uppercase tracking-widest ${pillTextClass}`}>SOLUTION</span>
+              </div>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 w-52 scale-95 opacity-0 pointer-events-none group-hover/tooltip:scale-100 group-hover/tooltip:opacity-100 transition-all duration-200 z-[1002] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 p-3 shadow-xl backdrop-blur-md text-[10px] leading-relaxed text-slate-600 dark:text-slate-400 font-bold text-center">
+                <span className="text-[#525ceb] block mb-1 font-extrabold tracking-wider">ADMINISTRATOR ONLY</span>
+                Please contact your administrator to request access to the Solution Workspace.
+              </div>
             </div>
           )}
 
