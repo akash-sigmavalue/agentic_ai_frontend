@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle } from 'react-icons/fa';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
@@ -138,7 +138,7 @@ const getUnitTypesForProperty = (propType, dbMap = {}, globalUnitTypes = []) => 
         subList = globalUnitTypes.length > 0 ? globalUnitTypes : GENERAL_UNITS;
     }
 
-    const filteredSub = subList.filter(u => u !== ALL_UNITS_OPTION);
+    const filteredSub = subList.filter(u => u !== ALL_UNITS_OPTION && !["other", "others", "other category"].includes(String(u).trim().toLowerCase()));
     return [ALL_UNITS_OPTION, ...filteredSub];
 };
 
@@ -154,7 +154,7 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
         );
     }
     const filteredOptions = (options && options.length > 0 ? options : DEFAULT_PROPERTY_TYPES).filter(
-        opt => opt && !["other", "others"].includes(String(opt).trim().toLowerCase())
+        opt => opt && !["other", "others", "other category"].includes(String(opt).trim().toLowerCase())
     );
     const list = filteredOptions.length > 0 ? filteredOptions : DEFAULT_PROPERTY_TYPES;
     return (
@@ -297,7 +297,7 @@ const ProductMixTicketSize = () => {
         };
 
         fetchNearby();
-    }, [analysisViewMode, analysisNearbyLimit]);
+    }, [analysisViewMode, analysisNearbyLimit, subjectCity, subjectLocation]);
 
     const getAnalysisParams = (overrideTab, overrideStart, overrideEnd) => {
         let city = "";
@@ -355,11 +355,54 @@ const ProductMixTicketSize = () => {
         };
     };
 
+    const fetchTypes = useCallback(async (cName, lName) => {
+        setTypesLoading(true);
+        try {
+            const res = await fetch(apiUrl("/new_rate_simulator/simulator/property-and-unit-types/"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ city_name: cName || "", location_name: lName || "" })
+            });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success) {
+                    if (json.remark) {
+                        setTypeDataSourceInfo({
+                            isFallback: !!json.is_fallback,
+                            remark: json.remark,
+                            dataSource: json.data_source || ""
+                        });
+                    }
+                    if (json.property_type_units_map && typeof json.property_type_units_map === "object") {
+                        setDbPropertyUnitMap(json.property_type_units_map);
+                    }
+                    if (Array.isArray(json.property_types) && json.property_types.length > 0) {
+                        const cleaned = json.property_types.filter(pt => pt && !["other", "others", "other category"].includes(String(pt).trim().toLowerCase()));
+                        if (cleaned.length > 0) setDbPropertyTypes(cleaned);
+                    }
+                    if (Array.isArray(json.unit_types) && json.unit_types.length > 0) {
+                        const cleanedUnits = json.unit_types.filter(ut => ut && !["other", "others", "other category"].includes(String(ut).trim().toLowerCase()));
+                        if (cleanedUnits.length > 0) setDbUnitTypes(cleanedUnits);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch property/unit types from DB", e);
+        } finally {
+            setTypesLoading(false);
+        }
+    }, []);
+
+    // Fetch property and unit types whenever city/location payload updates
+    useEffect(() => {
+        fetchTypes(subjectCity, subjectLocation);
+    }, [subjectCity, subjectLocation, fetchTypes]);
+
     useEffect(() => {
         if (areaAnalysisResults.length > 0) handleAnalyzeArea();
         if (rateAnalysisResults.length > 0) handleAnalyzeRate();
         if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize();
-    }, [analysisViewMode, analysisSelectedProject, analysisAppliedRadius]);
+    }, [analysisViewMode, analysisSelectedProject, analysisAppliedRadius, subjectCity, subjectLocation]);
 
     useEffect(() => {
         const syncFromStorage = () => {
@@ -384,8 +427,8 @@ const ProductMixTicketSize = () => {
                     }
                     const cName = parsedLand.location || parsedLand.city || "";
                     const vName = parsedLand.village || parsedLand.villageName || "";
-                    setSubjectCity(cName);
-                    setSubjectLocation(vName);
+                    setSubjectCity(prev => (prev !== cName ? cName : prev));
+                    setSubjectLocation(prev => (prev !== vName ? vName : prev));
                 } catch (e) {
                     console.error("Error parsing Land Identification", e);
                 }
@@ -396,57 +439,6 @@ const ProductMixTicketSize = () => {
         window.addEventListener("storage", syncFromStorage);
         window.addEventListener("landIdentificationUpdated", syncFromStorage);
         const intervalId = setInterval(syncFromStorage, 500);
-
-        let cityName = "";
-        let locationName = "";
-        const savedLandData = localStorage.getItem("Land Identification");
-        if (savedLandData) {
-            try {
-                const parsedLand = JSON.parse(savedLandData);
-                cityName = parsedLand.location || parsedLand.city || "";
-                locationName = parsedLand.village || parsedLand.villageName || "";
-            } catch (e) {
-                console.error("Error parsing Land Identification", e);
-            }
-        }
-
-        const fetchTypes = async () => {
-            setTypesLoading(true);
-            try {
-                const res = await fetch(apiUrl("/new_rate_simulator/simulator/property-and-unit-types/"), {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ city_name: cityName, location_name: locationName })
-                });
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.success) {
-                        if (json.remark) {
-                            setTypeDataSourceInfo({
-                                isFallback: !!json.is_fallback,
-                                remark: json.remark,
-                                dataSource: json.data_source || ""
-                            });
-                        }
-                        if (json.property_type_units_map && typeof json.property_type_units_map === "object") {
-                            setDbPropertyUnitMap(json.property_type_units_map);
-                        }
-                        if (Array.isArray(json.property_types) && json.property_types.length > 0) {
-                            const cleaned = json.property_types.filter(pt => pt && !["other", "others"].includes(String(pt).trim().toLowerCase()));
-                            if (cleaned.length > 0) setDbPropertyTypes(cleaned);
-                        }
-                        if (Array.isArray(json.unit_types) && json.unit_types.length > 0) {
-                            setDbUnitTypes(json.unit_types);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("Failed to fetch property/unit types from DB", e);
-            } finally {
-                setTypesLoading(false);
-            }
-        };
-        fetchTypes();
 
         return () => {
             window.removeEventListener("storage", syncFromStorage);
