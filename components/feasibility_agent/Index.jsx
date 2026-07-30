@@ -1861,15 +1861,7 @@ const Index = () => {
                     </h1>
                   </div>
 
-                  <div className="row g-4 align-items-stretch mt-4">
-                    <div className="col-12 d-flex">
-                      <UnitDesignStructure
-                        onSave={handleUnitDesignSave}
-                        calculationMode={calculationMode}
-                        setCalculationMode={setCalculationMode}
-                      />
-                    </div>
-                  </div>
+
 
                   <div className="row g-4 align-items-stretch mt-4">
                     <div className="col-12 d-flex">

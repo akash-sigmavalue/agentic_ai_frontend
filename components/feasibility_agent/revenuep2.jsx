@@ -3648,6 +3648,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         ) : null}
 
         {/* First Table - Unit Mix Section (Rows 1-13) */}
+        {!embedded && (
         <div className="rp2-selected-panel fade-in-up">
           <div className="rp2-selected-header">
             <div className="rp2-selected-eyebrow">Selected Section</div>
@@ -3770,6 +3771,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             </div>
           </div>
         </div>
+        )}
 
 
         {/* Market Analysis Charts Section (Hidden for now) */}
@@ -3794,6 +3796,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
         */}
 
         {/* Finalize Product Mix Summary Table */}
+        {!embedded && (
         <div className="rp2-selected-panel fade-in-up">
           <div className="rp2-selected-header">
             <div className="rp2-selected-eyebrow">Selected Section</div>
@@ -3850,6 +3853,7 @@ const RevenueProjection2 = ({ embedded = false } = {}) => {
             </div>
           </div>
         </div>
+        )}
 
         {false && (
           <div className="d-none card border-0 shadow-lg rounded-4 mb-5 overflow-hidden interactive-card fade-in-up" style={{ background: 'white' }}>
