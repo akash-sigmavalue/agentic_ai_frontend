@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle, FaSearch } from 'react-icons/fa';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
@@ -229,6 +229,11 @@ const ProductMixTicketSize = () => {
     const [analysisNearbyLimit, setAnalysisNearbyLimit] = useState(5);
     const [loadingAnalysisNearbyProjects, setLoadingAnalysisNearbyProjects] = useState(false);
 
+    // AbortControllers to cancel stale API requests
+    const areaAbortRef = useRef(null);
+    const rateAbortRef = useRef(null);
+    const ticketSizeAbortRef = useRef(null);
+
     // Analysis View Tab: "overall" | "yoy" | "custom"
     const [analysisViewTab, setAnalysisViewTab] = useState("overall");
     const [activeResultPropertyTab, setActiveResultPropertyTab] = useState("all");
@@ -397,10 +402,28 @@ const ProductMixTicketSize = () => {
         fetchTypes(subjectCity, subjectLocation);
     }, [subjectCity, subjectLocation, fetchTypes]);
 
+    const handleAnalyzeAllSequentially = async (overrideTab, overrideStart, overrideEnd) => {
+        if (areaAnalysisResults.length > 0) {
+            await handleAnalyzeArea(overrideTab, overrideStart, overrideEnd);
+        }
+        if (rateAnalysisResults.length > 0) {
+            await handleAnalyzeRate(overrideTab, overrideStart, overrideEnd);
+        }
+        if (ticketSizeAnalysisResults.length > 0) {
+            await handleAnalyzeTicketSize(overrideTab, overrideStart, overrideEnd);
+        }
+    };
+
     useEffect(() => {
-        if (areaAnalysisResults.length > 0) handleAnalyzeArea();
-        if (rateAnalysisResults.length > 0) handleAnalyzeRate();
-        if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize();
+        let isMounted = true;
+        const triggerSequential = async () => {
+            if (!isMounted) return;
+            if (areaAnalysisResults.length > 0 || rateAnalysisResults.length > 0 || ticketSizeAnalysisResults.length > 0) {
+                await handleAnalyzeAllSequentially();
+            }
+        };
+        triggerSequential();
+        return () => { isMounted = false; };
     }, [analysisViewMode, analysisSelectedProject, analysisAppliedRadius, subjectCity, subjectLocation]);
 
     useEffect(() => {
@@ -437,12 +460,10 @@ const ProductMixTicketSize = () => {
         syncFromStorage();
         window.addEventListener("storage", syncFromStorage);
         window.addEventListener("landIdentificationUpdated", syncFromStorage);
-        const intervalId = setInterval(syncFromStorage, 500);
 
         return () => {
             window.removeEventListener("storage", syncFromStorage);
             window.removeEventListener("landIdentificationUpdated", syncFromStorage);
-            clearInterval(intervalId);
         };
     }, []);
 
@@ -605,10 +626,14 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingArea(true);
 
         try {
+            if (areaAbortRef.current) areaAbortRef.current.abort();
+            areaAbortRef.current = new AbortController();
+
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/area-range-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: areaAbortRef.current.signal,
                 body: JSON.stringify({
                     ...params,
                     queries: queries
@@ -720,10 +745,14 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingRate(true);
 
         try {
+            if (rateAbortRef.current) rateAbortRef.current.abort();
+            rateAbortRef.current = new AbortController();
+
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/rate-range-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: rateAbortRef.current.signal,
                 body: JSON.stringify({
                     ...params,
                     queries: queries,
@@ -829,10 +858,14 @@ const ProductMixTicketSize = () => {
         setIsAnalyzingTicketSize(true);
 
         try {
+            if (ticketSizeAbortRef.current) ticketSizeAbortRef.current.abort();
+            ticketSizeAbortRef.current = new AbortController();
+
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/ticket-size-analysis/"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: ticketSizeAbortRef.current.signal,
                 body: JSON.stringify({
                     ...params,
                     queries: queries
