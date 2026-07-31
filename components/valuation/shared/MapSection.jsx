@@ -1491,7 +1491,7 @@ function DensityTableContent({ liveDensity, factorialData, markers }) {
   );
 }
 
-function AmenitiesTableContent({ allAmenities, radius, markers }) {
+function AmenitiesTableContent({ allAmenities, radius, markers, showSource = false }) {
   if (allAmenities.length === 0) {
     return <p className="text-xs text-text-dim italic">No amenities found within {radius}m.</p>;
   }
@@ -1549,7 +1549,7 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
                     <th className="pb-2 font-semibold">Name</th>
                     <th className="pb-2 font-semibold">Category</th>
                     <th className="pb-2 font-semibold text-center">Distance(m)</th>
-                    <th className="pb-2 text-right font-semibold">Source</th>
+                    {showSource && <th className="pb-2 text-right font-semibold">Source</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -1567,7 +1567,7 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
                         </span>
                       </td>
                       <td className="py-2.5 text-center font-mono text-text-dim">{Math.round(a.distance_m)}m</td>
-                      <td className="py-2.5 text-right text-[10px] text-text-dim italic">{a.source || "N/A"}</td>
+                      {showSource && <td className="py-2.5 text-right text-[10px] text-text-dim italic">{a.source || "N/A"}</td>}
                     </tr>
                   ))}
                 </tbody>
