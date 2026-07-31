@@ -604,7 +604,7 @@ const ProductMixTicketSize = () => {
                     queryData.ranges.push({
                         id: currentMin + '-' + currentMax,
                         min_sqm: currentMin * conversionFactor,
-                        max_sqm: currentMax * conversionFactor
+                        max_sqm: (currentMax + 1) * conversionFactor
                     });
                     
                     if (currentMax === max) break;
@@ -723,7 +723,7 @@ const ProductMixTicketSize = () => {
                     queryData.ranges.push({
                         id: currentMin + '-' + currentMax,
                         min_rate: currentMin,
-                        max_rate: currentMax
+                        max_rate: currentMax + 1
                     });
                     
                     if (currentMax === max) break;
@@ -836,7 +836,7 @@ const ProductMixTicketSize = () => {
                     queryData.ranges.push({
                         id: currentMin + '-' + currentMax,
                         min: currentMin,
-                        max: currentMax
+                        max: currentMax + 1
                     });
                     
                     if (currentMax === max) break;
