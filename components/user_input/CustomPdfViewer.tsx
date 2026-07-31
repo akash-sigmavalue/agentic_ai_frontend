@@ -65,6 +65,18 @@ export default function CustomPdfViewer({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (highlightRects.length > 0) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById("highlight-rect-first");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightRects]);
+
   const customTextRenderer = useCallback(
     ({ str }: { str: string }) => {
       if (!searchText) return str;
@@ -74,13 +86,13 @@ export default function CustomPdfViewer({
       if (!normalizedStr || !normalizedSearch) return str;
 
       if (
-        normalizedStr.length > 10 &&
+        normalizedStr.length >= 3 &&
         (normalizedSearch.includes(normalizedStr) || normalizedStr.includes(normalizedSearch))
       ) {
         return (
           <mark
             className="highlighted-text-fallback"
-            style={{ backgroundColor: "rgba(255, 255, 0, 0.45)", color: "inherit", borderRadius: "2px" }}
+            style={{ backgroundColor: "rgba(255, 235, 59, 0.6)", color: "inherit", borderRadius: "2px" }}
           >
             {str}
           </mark>
@@ -167,22 +179,22 @@ export default function CustomPdfViewer({
                         />
                         {renderedPageWidth > 0 && page === safePage &&
                           highlightRects.map((rect, index) => {
-                            const scaleX = renderedPageWidth / rect.page_width;
-                            const scaleY = (renderedPageHeight || rect.page_height) / rect.page_height;
+                            const scale = renderedPageWidth / rect.page_width;
 
                             return (
                               <div
                                 key={`${index}-${rect.x0}-${rect.y0}`}
                                 id={index === 0 ? "highlight-rect-first" : undefined}
-                                className="pointer-events-none absolute rounded-[3px]"
+                                className="pointer-events-none absolute rounded-[3px] transition-all"
                                 style={{
-                                  left: rect.x0 * scaleX,
-                                  top: rect.y0 * scaleY,
-                                  width: (rect.x1 - rect.x0) * scaleX,
-                                  height: (rect.y1 - rect.y0) * scaleY,
-                                  background: "rgba(255, 255, 0, 0.45)",
+                                  left: rect.x0 * scale,
+                                  top: rect.y0 * scale,
+                                  width: Math.max((rect.x1 - rect.x0) * scale, 6),
+                                  height: Math.max((rect.y1 - rect.y0) * scale, 12),
+                                  backgroundColor: "rgba(255, 235, 59, 0.55)",
+                                  outline: "1.5px solid rgba(234, 179, 8, 0.9)",
                                   mixBlendMode: "multiply",
-                                  zIndex: 20,
+                                  zIndex: 30,
                                 }}
                               />
                             );
