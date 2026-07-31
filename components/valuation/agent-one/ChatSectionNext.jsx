@@ -25,6 +25,8 @@ import {
   X,
   Zap,
   Loader2,
+  Terminal,
+  Cpu,
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -4854,6 +4856,38 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
   );
 }
 
+function PropertyProfilingLiveCard({ streamingNote, isStreaming }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md my-1 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+          </div>
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-400 ml-1">
+            Stage 1 • Property Profiling Status
+          </span>
+        </div>
+        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 select-none">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+          {isStreaming ? "Processing" : "Complete"}
+        </span>
+      </div>
+      <div className="p-4 font-mono text-[11px] leading-relaxed">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 font-bold text-cyan-400">›</span>
+          <span className="text-slate-300 font-semibold break-words">
+            {streamingNote || "Running property profiling..."}
+          </span>
+          <span className="animate-pulse text-emerald-400">█</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -6442,10 +6476,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setCurrentStage("Stage 3: Market Approach (Listing Fetch)");
     // Initialise per-project statuses
     const allFetchProjects = [
-      ...(shouldFetchSubjectTx ? [{ name: "DB Search", type: "db" }] : []),
-      ...(shouldFetchWebListings ? [{ name: "Web Listing Search", type: "web" }] : []),
-      ...dbComps.map(c => ({ name: c.project_name, type: "db" })),
-      ...webComps.map(c => ({ name: c.project_name, type: "web" })),
+      ...(shouldFetchSubjectTx ? [{ name: "db:__subject__", type: "db" }] : []),
+      ...dbComps.map(c => ({ name: `db:${c.project_name}`, type: "db" })),
+      ...(shouldFetchWebListings ? [{ name: "web:__subject__", type: "web" }] : []),
+      ...webComps.map(c => ({ name: `web:${c.project_name}`, type: "web" })),
     ];
     setProjectFetchStatuses(Object.fromEntries(allFetchProjects.map(p => [p.name, "pending"])));
 
@@ -6459,6 +6493,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           : `Proceed with ${selected.length} selected comparable(s) — ${totalDbFetches} from Transaction DB, ${webComps.length} from Web.`,
         meta: "Now",
       },
+      // Placeholder assistant message — DB/web results will be stamped here so
+      // the Market Signal table always appears in the dark-card assistant bubble.
+      {
+        role: "assistant",
+        content: "Running listing pipeline...",
+        meta: "Live",
+      },
     ]);
 
     try {
@@ -6468,10 +6509,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         const propType = comp.property_type || subjectData.property_type || "apartment";
         if (!projId) return [];
         const statusName = isSubject ? subjectDisplayName : comp.project_name;
+        const statusKey = isSubject ? "db:__subject__" : `db:${comp.project_name}`;
 
         setStreamingNote(`🗄️ Searching transaction database for "${statusName}"...`);
         addLog(`Searching transaction database for "${statusName}"...`, "info");
-        setProjectFetchStatuses(prev => ({ ...prev, [statusName]: "fetching" }));
+        setProjectFetchStatuses(prev => ({ ...prev, [statusKey]: "fetching" }));
         const projectTx = [];
         try {
           const res = await fetch(apiUrl("/transaction_stream"), {
@@ -6508,10 +6550,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     const nextTx = [...prev, ...mapped];
                     setMessages(prevMsgs => {
                       const nextMsgs = [...prevMsgs];
-                      const lastIndex = nextMsgs.length - 1;
-                      if (lastIndex >= 0) {
-                        nextMsgs[lastIndex] = {
-                          ...nextMsgs[lastIndex],
+                      // Target the assistant placeholder (last assistant message),
+                      // never the user bubble — so the table always appears with the dark-card style.
+                      const assistantIdx = nextMsgs.findLastIndex((m) => m.role === "assistant");
+                      const targetIdx = assistantIdx !== -1 ? assistantIdx : nextMsgs.length - 1;
+                      if (targetIdx >= 0) {
+                        nextMsgs[targetIdx] = {
+                          ...nextMsgs[targetIdx],
                           db_transactions: nextTx,
                         };
                       }
@@ -6523,15 +6568,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 const txCount = ev.content?.total || 0;
                 setStreamingNote(`✅ DB search complete for "${statusName}" (${txCount} transaction(s))`);
                 addLog(`DB search complete for "${statusName}" (${txCount} transaction(s))`, txCount > 0 ? "success" : "warn");
-                setProjectFetchStatuses(prev => ({ ...prev, [statusName]: txCount > 0 ? "done" : "error" }));
-                if (isSubject) {
-                  setProjectFetchStatuses(prev => ({ ...prev, "Subject DB Search": txCount > 0 ? "done" : "error" }));
-                }
+                setProjectFetchStatuses(prev => ({ ...prev, [statusKey]: txCount > 0 ? "done" : "error" }));
               }
             }
           }
         } catch (e) {
           console.warn("DB transaction fetch failed for", comp.project_name, e);
+          setProjectFetchStatuses(prev => ({ ...prev, [statusKey]: "error" }));
         }
         return projectTx;
       };
@@ -6542,8 +6585,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           : `🌐 Searching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
         addLog(webFetchNote, "info");
-        setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "fetching" }));
-        webComps.forEach(c => setProjectFetchStatuses(prev => ({ ...prev, [c.project_name]: "fetching" })));
+        
+        setProjectFetchStatuses(prev => {
+          const next = { ...prev };
+          if (shouldFetchWebListings) {
+            next["web:__subject__"] = "fetching";
+          }
+          webComps.forEach(c => {
+            next[`web:${c.project_name}`] = "fetching";
+          });
+          return next;
+        });
 
         try {
           const response = await fetch(apiUrl("/listing_stream"), {
@@ -6577,6 +6629,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               onEvent?.(event);
               const summary = summarizeEvent(event);
               setStreamingNote(summary);
+
+              if (event.type === "listing_progress") {
+                const p = event.content;
+                if (p && p.project && p.status === "scraped") {
+                  const isSubj = String(p.project).toLowerCase().trim() === subjectProjectName;
+                  const key = isSubj ? "web:__subject__" : `web:${p.project}`;
+                  setProjectFetchStatuses(prev => ({
+                    ...prev,
+                    [key]: "done"
+                  }));
+                }
+              }
 
               if (event.type === "listing_results") {
                 listings = event.content?.listings || [];
@@ -6633,7 +6697,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 });
                 setMessages((prev) => {
                   const next = [...prev];
-                  const targetIndex = next.findLastIndex((m) => m.meta === "Live" && String(m.content || "").startsWith("Running listing pipeline"));
+                  // 1st priority: find the "Live" placeholder created for listing pipeline
+                  let targetIndex = next.findLastIndex((m) => m.meta === "Live" && String(m.content || "").startsWith("Running listing pipeline"));
+                  // 2nd priority: find the most recent message that already has db_transactions
+                  //   stamped on it (DB fetch ran in parallel and completed first) — merge into it
+                  //   so we don't push a second Market Signal table.
+                  if (targetIndex === -1) {
+                    targetIndex = next.findLastIndex((m) => m.db_transactions && m.db_transactions.length >= 0);
+                  }
+                  // 3rd priority: use the last assistant message in the list
+                  if (targetIndex === -1) {
+                    targetIndex = next.length - 1;
+                  }
                   const payload = {
                     role: "assistant",
                     content: summary,
@@ -6651,7 +6726,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   }
                   return next;
                 });
-                setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "done" }));
+                
+                // Mark all web fetch statuses as done
+                setProjectFetchStatuses(prev => {
+                  const next = { ...prev };
+                  Object.keys(next).forEach(k => {
+                    if (k.startsWith("web:") && (next[k] === "fetching" || next[k] === "pending")) {
+                      next[k] = "done";
+                    }
+                  });
+                  return next;
+                });
               }
 
               if (event.type === "listing_done" || event.type === "error") {
@@ -6669,7 +6754,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   return next;
                 });
                 if (event.type === "error") {
-                  setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "error" }));
+                  setProjectFetchStatuses(prev => {
+                    const next = { ...prev };
+                    Object.keys(next).forEach(k => {
+                      if (k.startsWith("web:") && next[k] === "fetching") {
+                        next[k] = "error";
+                      }
+                    });
+                    return next;
+                  });
                 }
               }
             }
@@ -6677,7 +6770,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           return listings;
         } catch (error) {
           console.warn("Web listing fetch failed", error);
-          setProjectFetchStatuses(prev => ({ ...prev, "Web Listing Search": "error" }));
+          setProjectFetchStatuses(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(k => {
+              if (k.startsWith("web:") && next[k] === "fetching") {
+                next[k] = "error";
+              }
+            });
+            return next;
+          });
           throw error;
         }
       };
@@ -9015,10 +9116,20 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   className={
                     message.role === "user"
                       ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
-                      : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
+                      : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
+                        ? "p-0 bg-transparent border-0 shadow-none"
+                        : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
                   }
                 >
-                  {message.content}
+                  {message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
+                    <PropertyProfilingLiveCard
+                      streamingNote={streamingNote}
+                      subjectData={subjectDataRef.current || subjectData}
+                      isStreaming={isStreaming}
+                    />
+                  ) : (
+                    message.content
+                  )}
                   {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
                     <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
@@ -9041,19 +9152,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   )}
                   {(message.comparables || message.dropped_comparables) && (
                     <div className="space-y-3">
-                      {isComparableSearchActive && (
-                        <div className="rounded-xl border border-info/30 bg-info/8 px-3 py-2.5 flex items-start gap-2.5 shadow-[inset_0_1px_1px_rgba(56,189,248,0.08)] animate-in fade-in duration-200">
-                          <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-info" />
-                          <div>
-                            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-info">
-                              Comparable Search In Progress
-                            </span>
-                            <span className="text-[10px] leading-relaxed text-text-secondary">
-                              {comparableSearchStatus || "Searching for matching projects and preparing the comparable table."}
-                            </span>
-                          </div>
-                        </div>
-                      )}
                       {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
                         <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
@@ -9211,8 +9309,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             ))}
 
             {/* ── Execution Terminal Log ─────────────────────────── */}
-            {(isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
+            {(isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
               <div className="mr-2 animate-slide-in space-y-2">
+                {isStreaming && !messages.some(m => m.content === "Running property profiling...") && (
+                  <PropertyProfilingLiveCard
+                    streamingNote={streamingNote}
+                    subjectData={subjectDataRef.current || subjectData}
+                    isStreaming={isStreaming}
+                  />
+                )}
                 {isListingStreaming && (
                   <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
                     <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
@@ -9236,27 +9341,100 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <span className="animate-pulse text-emerald-400">█</span>
                       </div>
                     </div>
-                    {Object.keys(projectFetchStatuses).length > 0 && (
-                      <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
-                        <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center gap-2">
-                          <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light">Live Fetch Status</span>
-                          <span className="text-[9px] text-text-dim">({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)</span>
-                        </div>
-                        <div className="p-2.5 grid grid-cols-1 gap-1">
-                          {Object.entries(projectFetchStatuses).map(([name, status]) => {
-                            const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                            const colors = { pending: "text-text-dim", fetching: "text-accent-light animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
-                            return (
-                              <div key={name} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
-                                <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                                <span className={`text-[10px] font-medium truncate flex-1 ${colors[status] || "text-text-dim"}`}>{name}</span>
-                                <span className={`text-[9px] uppercase font-bold tracking-wider ${colors[status] || "text-text-dim"}`}>{status}</span>
+                    {Object.keys(projectFetchStatuses).length > 0 && (() => {
+                      const dbStatuses = [];
+                      const webStatuses = [];
+
+                      Object.entries(projectFetchStatuses).forEach(([key, status]) => {
+                        if (key.startsWith("db:")) {
+                          const rawName = key.slice(3);
+                          const displayName = rawName === "__subject__"
+                            ? `${subjectData?.project_name || "Subject Project"}`
+                            : rawName;
+                          dbStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
+                        } else if (key.startsWith("web:")) {
+                          const rawName = key.slice(4);
+                          const displayName = rawName === "__subject__"
+                            ? `${subjectData?.project_name || "Subject Project"}`
+                            : rawName;
+                          webStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
+                        } else {
+                          // fallback for any other keys
+                          webStatuses.push({ name: key, status, isSubject: false });
+                        }
+                      });
+
+                      return (
+                        <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+                          <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center justify-between">
+                            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light font-mono">Live Fetch Status</span>
+                            <span className="text-[9px] text-text-dim font-mono">
+                              ({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)
+                            </span>
+                          </div>
+                          
+                          <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+                            {/* DB Search Group */}
+                            {dbStatuses.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">🗄️ DB Search -</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-1">
+                                  {dbStatuses.map(({ name, status, isSubject }) => {
+                                    const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                                    const colors = { pending: "text-text-dim", fetching: "text-emerald-400 animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
+                                    return (
+                                      <div key={`db-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                        <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                                        <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                          {name}
+                                          {isSubject && (
+                                            <span className="ml-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400 font-sans">
+                                              Subject
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            );
-                          })}
+                            )}
+
+                            {/* Web Search Group */}
+                            {webStatuses.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 font-mono">🌐 Web Search -</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-1">
+                                  {webStatuses.map(({ name, status, isSubject }) => {
+                                    const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                                    const colors = { pending: "text-text-dim", fetching: "text-cyan-400 animate-pulse", done: "text-cyan-400", error: "text-red-400", skipping: "text-amber-400" };
+                                    return (
+                                      <div key={`web-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                        <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                                        <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                          {name}
+                                          {isSubject && (
+                                            <span className="ml-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-400 font-sans">
+                                              Subject
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
                 {isCleaningStreaming && (
