@@ -171,7 +171,10 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   const map = useMap();
 
   useEffect(() => {
-    let timer;
+    let resizeTimer;
+    let frame;
+    let cancelled = false;
+
     if (markers.length > 0 && radius) {
       const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
       if (validMarkers.length > 0) {
@@ -192,18 +195,44 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
 
         const paddedBounds = L.latLngBounds(newSW, newNE);
 
-        if (map && typeof map.fitBounds === 'function') {
-          map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
-          timer = setTimeout(() => {
-            if (map && map._container && typeof map.invalidateSize === 'function') {
-              map.invalidateSize();
-            }
-          }, 200);
-        }
+        const fitMap = () => {
+          if (cancelled || !paddedBounds.isValid()) return;
+
+          const container = map.getContainer?.();
+          if (!container?.isConnected || !map.getPane?.("mapPane")) return;
+
+          try {
+            // Responsive layout and fullscreen changes can move/remount the map.
+            // Disable Leaflet's pan animation so it does not read a stale
+            // `_leaflet_pos` while that transition is taking place.
+            map.invalidateSize({ pan: false, animate: false });
+            map.fitBounds(paddedBounds, {
+              padding: [40, 40],
+              maxZoom: 16,
+              animate: false,
+            });
+
+            resizeTimer = window.setTimeout(() => {
+              if (!cancelled && map.getContainer?.()?.isConnected) {
+                map.invalidateSize({ pan: false, animate: false });
+              }
+            }, 200);
+          } catch {
+            // The map was detached between the lifecycle checks above.
+            // Its next mounted instance will run this effect again.
+          }
+        };
+
+        map.whenReady(() => {
+          if (!cancelled) frame = window.requestAnimationFrame(fitMap);
+        });
       }
     }
+
     return () => {
-      if (timer) clearTimeout(timer);
+      cancelled = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
     };
   }, [markers, radius, mapMode, map]);
 
@@ -1086,15 +1115,15 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   return (
     <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-      <div className="panel-header-shell border-b border-border/60">
-        <div className="panel-title-shell">
+      <div className="panel-header-shell flex-wrap border-b border-border/60">
+        <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <MapIcon className="h-5 w-5 text-accent" />
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
         {/* Tab Switcher: Visual Layer | Report */}
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <div className="flex items-center rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
             <button
               onClick={() => setPanelView("map")}
@@ -1122,7 +1151,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               )}
             </button>
           </div>
-          <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${panelView === "report" && valuationResult
+          <div className={`panel-pill shrink-0 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${panelView === "report" && valuationResult
             ? "bg-green-500/10 border-green-500/30 text-green-400"
             : markers.length > 0
               ? "bg-accent/10 border-accent/20 text-accent"
@@ -1206,9 +1235,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   , document.body) : null}
               </>
             ) : (
-              <div className="rounded-2xl border border-border bg-bg-card p-5 shadow-panel shrink-0 flex flex-col">
-                <div className="flex items-center justify-between mb-4 shrink-0 border-b border-border/40 pb-3">
-                  <div className="flex items-center gap-3">
+              <div className="flex shrink-0 flex-col rounded-2xl border border-border bg-bg-card p-3 shadow-panel">
+                <div className="mb-3 flex shrink-0 flex-col gap-3 border-b border-border/40 pb-3">
+                  <div className="flex min-w-0 items-start gap-2">
                     <h3 className="font-display text-sm font-bold uppercase tracking-[0.14em] text-text-primary flex items-center gap-2">
                       <span className="text-accent shrink-0">
                         {mapMode === "amenity" ? (
@@ -1234,9 +1263,9 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   </div>
                   <button
                     onClick={() => setIsTableMaximized(true)}
-                    className="rounded-md bg-accent/10 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
+                    className="inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-accent/10 px-3 text-[10px] font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep active:scale-[0.98] cursor-pointer"
                   >
-                    Maximize
+                    Maximize Details
                   </button>
                 </div>
                 <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2">
@@ -1526,14 +1555,14 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
 
         return (
           <div key={project} className="flex flex-col gap-2 rounded-2xl border border-border bg-bg-deep/40 p-4">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-2">
-              <div className="flex items-center gap-2">
+            <div className="mb-2 flex flex-col gap-2 border-b border-white/5 pb-3">
+              <div className="flex min-w-0 items-center gap-2">
                 {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
-                <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
+                <h4 className={`min-w-0 break-words font-display text-xs uppercase leading-5 tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
                   {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">SUBJECT</span>}
                 </h4>
               </div>
-              <div className="flex flex-wrap items-center gap-2 max-w-[50%] justify-end">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {Object.entries(counts).map(([cat, count]) => (
                   <span key={cat} title={cat} className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">
                     {cat.charAt(0)}:{count}
@@ -1542,36 +1571,30 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
               </div>
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-white/5 text-text-dim uppercase tracking-widest text-[9px]">
-                    <th className="pb-2 font-semibold">Name</th>
-                    <th className="pb-2 font-semibold">Category</th>
-                    <th className="pb-2 font-semibold text-center">Distance(m)</th>
-                    <th className="pb-2 text-right font-semibold">Source</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {amenities.map((a, i) => (
-                    <tr key={i} className="group hover:bg-white/[0.02] transition-colors">
-                      <td className="py-2.5 font-medium text-text-primary pr-4">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0">{getCategoryIcon(a.category, "h-3.5 w-3.5")}</span>
-                          <span>{a.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5">
-                        <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-text-secondary border border-white/5">
-                          {a.category.replace(/_/g, ' ')}
+            <div className="space-y-2">
+              {amenities.map((amenity, index) => (
+                <article key={`${amenity.name}-${index}`} className="rounded-xl border border-border/60 bg-bg-card p-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 shrink-0">{getCategoryIcon(amenity.category, "h-4 w-4")}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="min-w-0 break-words text-xs font-semibold leading-5 text-text-primary">
+                          {amenity.name || "Unnamed amenity"}
+                        </h5>
+                        <span className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 font-mono text-[9px] font-bold text-accent">
+                          {Math.round(amenity.distance_m)}m
                         </span>
-                      </td>
-                      <td className="py-2.5 text-center font-mono text-text-dim">{Math.round(a.distance_m)}m</td>
-                      <td className="py-2.5 text-right text-[10px] text-text-dim italic">{a.source || "N/A"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md border border-white/5 bg-white/5 px-2 py-0.5 text-[9px] capitalize text-text-secondary">
+                          {(amenity.mapped_type || amenity.category || "Other").replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[9px] italic text-text-dim">{amenity.source || "Unknown source"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         );

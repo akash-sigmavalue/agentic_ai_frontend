@@ -249,9 +249,9 @@ function DetailRow({ label, value }) {
     ? toTitleCase(value)
     : value;
   return (
-    <div className="flex items-baseline gap-2 mt-1.5">
-      <span className="shrink-0 text-[9px] uppercase tracking-[0.14em] font-bold text-text-dim w-28">{label}</span>
-      <span className="text-[10px] leading-5 text-text-secondary break-words flex-1">{String(displayVal)}</span>
+    <div className="flex items-baseline gap-2 mt-1.5 min-w-0">
+      <span className="w-[38%] max-w-[112px] min-w-[80px] shrink-0 text-[9px] uppercase tracking-normal sm:tracking-[0.14em] font-bold text-text-dim sm:w-28 sm:shrink-0">{label}</span>
+      <span className="text-[10px] leading-5 text-text-secondary break-words flex-1 min-w-0">{String(displayVal)}</span>
     </div>
   );
 }
@@ -278,7 +278,7 @@ function StepDetails({ step }) {
   let content = null;
   try { content = JSON.parse(data.payload); } catch (_) {}
 
-  const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5";
+  const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2 sm:p-2.5";
 
   if (type === "entities" && content) {
     const sublocalityItems = getSublocalityItems(content);
@@ -704,7 +704,7 @@ function StepCard({ step, accent, index }) {
       </div>
 
       <div
-        className="mb-4 flex-1 rounded-2xl border p-4 futuristic-card relative overflow-hidden"
+        className="mb-4 flex-1 rounded-2xl border p-3 sm:p-4 futuristic-card relative overflow-hidden"
         style={{ 
           background: `linear-gradient(145deg, ${accent}09 0%, rgba(255,255,255,0.01) 100%)`, 
           borderColor: `${accent}25`,
@@ -922,8 +922,8 @@ export default function WorkflowSectionNext({ events = [] }) {
       `}</style>
 
       {/* Header */}
-      <div className="panel-header-shell border-b border-border/60 shrink-0 relative z-10">
-        <div className="panel-title-shell">
+      <div className="panel-header-shell relative z-10 shrink-0 flex-wrap border-b border-border/60">
+        <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <Bot className="h-5 w-5 text-accent" />
           </div>
@@ -935,13 +935,13 @@ export default function WorkflowSectionNext({ events = [] }) {
             <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Agentic Execution Flow</h2>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
           {!isEmpty && (
             <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
               5 MAIN STAGES
             </span>
           )}
-          <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>
+          <div className={`panel-pill shrink-0 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>
             {isEmpty ? "STANDBY" : "ACTIVE"}
           </div>
         </div>

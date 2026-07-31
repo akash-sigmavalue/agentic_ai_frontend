@@ -36,6 +36,9 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+
+  /* Custom breakpoint — below sm (640px) */
+  --breakpoint-xs: 480px;
 }
 
 @layer base {
