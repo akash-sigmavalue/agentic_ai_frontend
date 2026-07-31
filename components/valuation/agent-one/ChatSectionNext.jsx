@@ -6812,6 +6812,19 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       const newDbTransactions = dbResults.flat();
 
+      // ── No-evidence guard: if BOTH web listings AND DB transactions are empty, show a clear error ──
+      const finalWebListings = listingData || [];
+      if (finalWebListings.length === 0 && newDbTransactions.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "No market evidence was found for the selected property. We are unable to generate a reliable valuation using the Sales Comparison Approach. Please verify the property details or expand the search criteria and try again.",
+            meta: "error",
+          },
+        ]);
+      }
+
       // Merge new DB transactions with existing ones (incremental case)
       const mergedDbTransactions = isIncremental
         ? [...activePreviousDbTransactions, ...newDbTransactions]
