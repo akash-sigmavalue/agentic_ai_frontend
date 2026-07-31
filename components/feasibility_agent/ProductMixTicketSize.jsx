@@ -467,7 +467,6 @@ const ProductMixTicketSize = () => {
     }, []);
 
     // ─── SCENARIO SYSTEM ─────────────────────────────────────────────────────
-    const MAX_SCENARIOS = 6;
 
     const createDefaultScenario = (index = 1) => ({
         id: `scenario-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -538,7 +537,6 @@ const ProductMixTicketSize = () => {
 
     // Scenario management
     const addScenario = () => {
-        if (scenarios.length >= MAX_SCENARIOS) return;
         const newScenario = createDefaultScenario(scenarios.length + 1);
         setScenarios(prev => [...prev, newScenario]);
         setActiveScenarioId(newScenario.id);
@@ -1168,11 +1166,24 @@ const ProductMixTicketSize = () => {
                     align-items: stretch;
                     gap: 10px;
                     overflow-x: auto;
-                    padding: 4px 2px 8px;
-                    scrollbar-width: none;
-                    -ms-overflow-style: none;
+                    padding: 4px 2px 10px;
+                    scrollbar-width: thin;
+                    scrollbar-color: ${theme === "dark" ? "#4b5563 #1a1d24" : "#cbd5e1 #f8fafc"};
                 }
-                .scenario-strip::-webkit-scrollbar { display: none; }
+                .scenario-strip::-webkit-scrollbar {
+                    height: 6px;
+                }
+                .scenario-strip::-webkit-scrollbar-track {
+                    background: ${theme === "dark" ? "#1a1d24" : "#f1f5f9"};
+                    border-radius: 4px;
+                }
+                .scenario-strip::-webkit-scrollbar-thumb {
+                    background-color: ${theme === "dark" ? "#4b5563" : "#cbd5e1"};
+                    border-radius: 4px;
+                }
+                .scenario-strip::-webkit-scrollbar-thumb:hover {
+                    background-color: ${theme === "dark" ? "#6b7280" : "#448C74"};
+                }
                 .scenario-card {
                     position: relative;
                     display: flex;
@@ -1324,7 +1335,7 @@ const ProductMixTicketSize = () => {
                                 <div>
                                     <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Product Mix Scenarios</div>
                                     <div style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 500, marginTop: '1px' }}>
-                                        {scenarios.length} of {MAX_SCENARIOS} scenarios &bull; Double-click name to rename
+                                        {scenarios.length} scenario{scenarios.length !== 1 ? 's' : ''} &bull; Double-click name to rename
                                     </div>
                                 </div>
                             </div>
@@ -1424,14 +1435,10 @@ const ProductMixTicketSize = () => {
                             <button
                                 className="scenario-add-btn"
                                 onClick={addScenario}
-                                disabled={scenarios.length >= MAX_SCENARIOS}
-                                title={scenarios.length >= MAX_SCENARIOS ? `Maximum ${MAX_SCENARIOS} scenarios allowed` : 'Add a new scenario'}
+                                title="Add a new scenario"
                             >
                                 <FaPlus size={11} />
                                 <span>Add Scenario</span>
-                                {scenarios.length >= MAX_SCENARIOS && (
-                                    <span style={{ fontSize: '9px', opacity: 0.7, marginLeft: '2px' }}>(max)</span>
-                                )}
                             </button>
                         </div>
                     </div>

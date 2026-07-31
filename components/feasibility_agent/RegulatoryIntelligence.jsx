@@ -33,7 +33,7 @@ const REGULATORY_SECTIONS = [
     id: "reservations",
     title: "Reservations (Master Plan / Survey Map)",
     question:
-      "What reservations, if any, are applicable to the property as per the Master Plan / Development Plan / Survey Map in Mumbai location?",
+      "What reservations, if any, are applicable to the property as per the Master Plan / Development Plan / Survey Map in Baner, Pune?",
     icon: FaMapLocationDot,
     color: "#448C74",
     gradient: "linear-gradient(135deg, #448C74 0%, #2d6b55 100%)",
@@ -42,7 +42,7 @@ const REGULATORY_SECTIONS = [
     id: "environmental-compliance",
     title: "Environmental Compliance",
     question:
-      "What environmental compliance requirements or approvals are applicable to the property in Baner?",
+      "What environmental compliance requirements or approvals are applicable to the property in Baner, Pune?",
     icon: FaLeaf,
     color: "#2e7d32",
     gradient: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
@@ -267,7 +267,7 @@ const RegulatoryIntelligence = () => {
   useEffect(() => {
     const handleSync = () => {
       const savedLandData = localStorage.getItem('Land Identification');
-      let location = 'Mumbai';
+      let location = 'Pune';
       let country = 'India';
       let village = 'Baner';
       let planningAuthority = 'Pune Municipal Corporation';
