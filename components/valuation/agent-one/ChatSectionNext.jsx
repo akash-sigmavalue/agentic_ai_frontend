@@ -1173,13 +1173,12 @@ function MobileComparableRow({
               <span className="rounded border border-border/50 bg-bg-input px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent-light">
                 {comp.project_category || comp.property_type || "Comparable"}
               </span>
-              <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
-                isDroppedTab
-                  ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
-                  : comp.data_source === "Internal DB"
-                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-                    : "border-blue-500/30 bg-blue-500/15 text-blue-400"
-              }`}>
+              <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider ${isDroppedTab
+                ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                : comp.data_source === "Internal DB"
+                  ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+                  : "border-blue-500/30 bg-blue-500/15 text-blue-400"
+                }`}>
                 {isDroppedTab ? "Dropped" : comp.data_source === "Internal DB" ? "DB" : "Web"}
               </span>
             </div>
@@ -1418,12 +1417,12 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
               type="button"
               onClick={() => setSourceFilter(opt)}
               className={`w-full flex items-center justify-center min-h-[36px] rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${sourceFilter === opt
-                  ? isTabDropped
-                    ? "bg-amber-500 text-bg-deep shadow font-extrabold"
-                    : "bg-[#fb923c] text-bg-deep shadow"
-                  : isTabDropped
-                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold"
-                    : "bg-bg-input/60 text-text-secondary border border-border/40 hover:text-text-primary"
+                ? isTabDropped
+                  ? "bg-amber-500 text-bg-deep shadow font-extrabold"
+                  : "bg-[#fb923c] text-bg-deep shadow"
+                : isTabDropped
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold"
+                  : "bg-bg-input/60 text-text-secondary border border-border/40 hover:text-text-primary"
                 }`}
             >
               {`${label} (${count})`}
@@ -1452,12 +1451,12 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                 type="button"
                 onClick={() => setSourceFilter(opt)}
                 className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition whitespace-nowrap ${sourceFilter === opt
-                    ? isTabDropped
-                      ? "bg-amber-500 text-bg-deep shadow font-extrabold"
-                      : "bg-[#fb923c] text-bg-deep shadow"
-                    : isTabDropped
-                      ? "text-amber-400/90 hover:text-amber-400 font-bold"
-                      : "text-text-dim hover:text-text-primary"
+                  ? isTabDropped
+                    ? "bg-amber-500 text-bg-deep shadow font-extrabold"
+                    : "bg-[#fb923c] text-bg-deep shadow"
+                  : isTabDropped
+                    ? "text-amber-400/90 hover:text-amber-400 font-bold"
+                    : "text-text-dim hover:text-text-primary"
                   }`}
               >
                 {`${label} (${count})`}
@@ -2583,15 +2582,15 @@ function MobileCleanedRow({ lst, idx, activeTab, isRowPlot, plotAreaValue, rowAr
 
   const categoryBadge = category ? (
     <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border ${isPlot ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-        : isVilla ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
-          : "bg-text-dim/10 text-text-dim border-border/40"
+      : isVilla ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+        : "bg-text-dim/10 text-text-dim border-border/40"
       }`}>{category}</span>
   ) : null;
 
   const sourceBadge = (
     <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border ${lst.source === "Internal DB"
-        ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-        : "bg-blue-500/20 text-blue-400 border-blue-500/30"
+      ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
+      : "bg-blue-500/20 text-blue-400 border-blue-500/30"
       }`}>
       {lst.source === "Internal DB" ? "DB" : "Web"}
     </span>
@@ -3456,290 +3455,290 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
       </div>
 
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-      <table className="w-full min-w-max text-left text-xs">
-        <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
-            <th className="px-4 py-3 font-semibold w-10">
-              <span className="sr-only">Select</span>
-            </th>
-            <TableHeaderCell
-              columnKey="project_name"
-              label="Project"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-            />
-            <TableHeaderCell
-              columnKey="listing_count"
-              label="Listings"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="center"
-            />
-            <TableHeaderCell
-              columnKey="road_type"
-              label="Road Type"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="center"
-            />
-            <TableHeaderCell
-              columnKey="amenity_summary"
-              label="Nearby Amenities"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-            />
-            <TableHeaderCell
-              columnKey="cbd_data"
-              label="Nearest Commercial Hubs"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="center"
-            />
-            <TableHeaderCell
-              columnKey="builtup_density.congestion.score"
-              label="Built-up Density"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="center"
-            />
-            <TableHeaderCell
-              columnKey="avg_rate"
-              label="Avg Rate"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="right"
-            />
-            <TableHeaderCell
-              columnKey="ci_90_lower"
-              label="90% CI Lower"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="right"
-            />
-            <TableHeaderCell
-              columnKey="ci_90_upper"
-              label="90% CI Upper"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="right"
-            />
-            <TableHeaderCell
-              columnKey="rate_derived_from"
-              label="Rate Source"
-              sortConfig={sortConfig}
-              onSort={setSortConfig}
-              filterConfig={filterConfig}
-              onFilterChange={setFilterConfig}
-              allRows={data.table}
-              align="center"
-            />
-          </tr>
-        </thead>
-        <tbody>
-          {filteredAndSortedTable.map((row, i) => {
-            const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
-            const isExpanded = expandedProjects.has(row.project_name);
+        <table className="w-full min-w-max text-left text-xs">
+          <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              <th className="px-4 py-3 font-semibold w-10">
+                <span className="sr-only">Select</span>
+              </th>
+              <TableHeaderCell
+                columnKey="project_name"
+                label="Project"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+              />
+              <TableHeaderCell
+                columnKey="listing_count"
+                label="Listings"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="center"
+              />
+              <TableHeaderCell
+                columnKey="road_type"
+                label="Road Type"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="center"
+              />
+              <TableHeaderCell
+                columnKey="amenity_summary"
+                label="Nearby Amenities"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+              />
+              <TableHeaderCell
+                columnKey="cbd_data"
+                label="Nearest Commercial Hubs"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="center"
+              />
+              <TableHeaderCell
+                columnKey="builtup_density.congestion.score"
+                label="Built-up Density"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="center"
+              />
+              <TableHeaderCell
+                columnKey="avg_rate"
+                label="Avg Rate"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="right"
+              />
+              <TableHeaderCell
+                columnKey="ci_90_lower"
+                label="90% CI Lower"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="right"
+              />
+              <TableHeaderCell
+                columnKey="ci_90_upper"
+                label="90% CI Upper"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="right"
+              />
+              <TableHeaderCell
+                columnKey="rate_derived_from"
+                label="Rate Source"
+                sortConfig={sortConfig}
+                onSort={setSortConfig}
+                filterConfig={filterConfig}
+                onFilterChange={setFilterConfig}
+                allRows={data.table}
+                align="center"
+              />
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAndSortedTable.map((row, i) => {
+              const hasSubRows = row.sub_rows && row.sub_rows.length > 1;
+              const isExpanded = expandedProjects.has(row.project_name);
 
-            return (
-              <Fragment key={`fact-${row.project_name || i}`}>
-                <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedForComparison.has(row.project_name)}
-                      onChange={(e) => {
-                        const next = new Set(selectedForComparison);
-                        if (e.target.checked) next.add(row.project_name);
-                        else next.delete(row.project_name);
-                        setSelectedForComparison(next);
-                      }}
-                      className="h-3.5 w-3.5 rounded border-border accent-accent"
-                    />
-                  </td>
-                  <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      {hasSubRows && (
-                        <button
-                          onClick={() => {
-                            const next = new Set(expandedProjects);
-                            if (isExpanded) next.delete(row.project_name);
-                            else next.add(row.project_name);
-                            setExpandedProjects(next);
-                          }}
-                          className="text-text-dim hover:text-text-primary p-0.5 rounded hover:bg-white/5 transition"
-                        >
-                          <span className={`inline-block w-3 text-center text-[8px] transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                            ▶
-                          </span>
-                        </button>
-                      )}
-                      <span>{row.project_name || "—"}</span>
-                      {row.is_subject && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-[11px] font-bold text-[#c4b5fd]">{row.listing_count}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center"><RoadTypeBadge type={row.road_type} /></td>
-                  <td className="px-4 py-3 text-left">
-                    {(() => {
-                      try {
-                        let summary = row.amenity_summary;
-                        if (typeof summary === 'string') summary = JSON.parse(summary);
+              return (
+                <Fragment key={`fact-${row.project_name || i}`}>
+                  <tr className={`border-b border-border/50 transition ${row.is_subject ? "bg-[rgba(167,139,250,0.10)] hover:bg-[rgba(167,139,250,0.16)]" : "hover:bg-[rgba(167,139,250,0.04)]"}`}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedForComparison.has(row.project_name)}
+                        onChange={(e) => {
+                          const next = new Set(selectedForComparison);
+                          if (e.target.checked) next.add(row.project_name);
+                          else next.delete(row.project_name);
+                          setSelectedForComparison(next);
+                        }}
+                        className="h-3.5 w-3.5 rounded border-border accent-accent"
+                      />
+                    </td>
+                    <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        {hasSubRows && (
+                          <button
+                            onClick={() => {
+                              const next = new Set(expandedProjects);
+                              if (isExpanded) next.delete(row.project_name);
+                              else next.add(row.project_name);
+                              setExpandedProjects(next);
+                            }}
+                            className="text-text-dim hover:text-text-primary p-0.5 rounded hover:bg-white/5 transition"
+                          >
+                            <span className={`inline-block w-3 text-center text-[8px] transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                              ▶
+                            </span>
+                          </button>
+                        )}
+                        <span>{row.project_name || "—"}</span>
+                        {row.is_subject && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-[11px] font-bold text-[#c4b5fd]">{row.listing_count}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center"><RoadTypeBadge type={row.road_type} /></td>
+                    <td className="px-4 py-3 text-left">
+                      {(() => {
+                        try {
+                          let summary = row.amenity_summary;
+                          if (typeof summary === 'string') summary = JSON.parse(summary);
 
-                        let counts = summary?.counts;
-                        if (typeof counts === 'string') counts = JSON.parse(counts);
+                          let counts = summary?.counts;
+                          if (typeof counts === 'string') counts = JSON.parse(counts);
 
-                        if (!counts || typeof counts !== 'object') {
-                          return <span className="text-text-dim block text-center">—</span>;
+                          if (!counts || typeof counts !== 'object') {
+                            return <span className="text-text-dim block text-center">—</span>;
+                          }
+
+                          const dictStr = "{" + Object.entries(counts).map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+
+                          return (
+                            <div className="group relative">
+                              <div className="max-w-[200px] font-mono text-[9px] leading-relaxed text-text-dim bg-bg-deep/30 p-2 rounded-lg border border-border/30 break-words hover:text-accent hover:border-accent/30 transition-colors">
+                                {dictStr}
+                              </div>
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-header px-2 py-1 rounded text-[10px] border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                Categorical Amenity Distribution
+                              </div>
+                            </div>
+                          );
+                        } catch (err) {
+                          return <span className="text-red-500 text-[8px] block text-center">Err</span>;
                         }
-
-                        const dictStr = "{" + Object.entries(counts).map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {(() => {
+                        const cbds = row.cbd_data || [];
+                        if (cbds.length === 0) return <span className="text-text-dim">—</span>;
 
                         return (
-                          <div className="group relative">
-                            <div className="max-w-[200px] font-mono text-[9px] leading-relaxed text-text-dim bg-bg-deep/30 p-2 rounded-lg border border-border/30 break-words hover:text-accent hover:border-accent/30 transition-colors">
-                              {dictStr}
-                            </div>
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-header px-2 py-1 rounded text-[10px] border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                              Categorical Amenity Distribution
-                            </div>
+                          <div className="flex flex-col items-start gap-1.5 min-w-[140px] max-w-[180px]">
+                            {cbds.slice(0, 3).map((cbd, idx) => (
+                              <div key={idx} className="flex items-center gap-3 w-full justify-between border-b border-border/30 pb-1.5 last:border-0 last:pb-0">
+                                <span
+                                  className="text-[9px] font-bold text-[#f59e0b] bg-[#f59e0b]/10 border border-[#f59e0b]/20 rounded px-1.5 py-0.5 whitespace-nowrap truncate"
+                                  title={cbd.name}
+                                >
+                                  🏢 {cbd.short_name || cbd.name.split(',')[0]}
+                                </span>
+                                <span className="text-[9px] font-mono text-text-dim whitespace-nowrap">
+                                  {cbd.distance_km != null ? `${cbd.distance_km} km` : "N/A"}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         );
-                      } catch (err) {
-                        return <span className="text-red-500 text-[8px] block text-center">Err</span>;
-                      }
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {(() => {
-                      const cbds = row.cbd_data || [];
-                      if (cbds.length === 0) return <span className="text-text-dim">—</span>;
-
-                      return (
-                        <div className="flex flex-col items-start gap-1.5 min-w-[140px] max-w-[180px]">
-                          {cbds.slice(0, 3).map((cbd, idx) => (
-                            <div key={idx} className="flex items-center gap-3 w-full justify-between border-b border-border/30 pb-1.5 last:border-0 last:pb-0">
-                              <span
-                                className="text-[9px] font-bold text-[#f59e0b] bg-[#f59e0b]/10 border border-[#f59e0b]/20 rounded px-1.5 py-0.5 whitespace-nowrap truncate"
-                                title={cbd.name}
-                              >
-                                🏢 {cbd.short_name || cbd.name.split(',')[0]}
-                              </span>
-                              <span className="text-[9px] font-mono text-text-dim whitespace-nowrap">
-                                {cbd.distance_km != null ? `${cbd.distance_km} km` : "N/A"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-bold ${row.builtup_density?.congestion?.level === 'HIGH' ? 'bg-red-500/10 text-red-400' :
-                      row.builtup_density?.congestion?.level === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400' :
-                        row.builtup_density?.congestion?.level === 'LOW' ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-text-dim'
-                      }`}>
-                      {row.builtup_density?.congestion?.score || '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
-                  <td className="px-4 py-3 text-center">
-                    {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
-                      <span className="text-text-dim text-[9px]">—</span>
-                    ) : row.rate_derived_from === "micromarket" ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
-                        Micromarket
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-bold ${row.builtup_density?.congestion?.level === 'HIGH' ? 'bg-red-500/10 text-red-400' :
+                        row.builtup_density?.congestion?.level === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400' :
+                          row.builtup_density?.congestion?.level === 'LOW' ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-text-dim'
+                        }`}>
+                        {row.builtup_density?.congestion?.score || '—'}
                       </span>
-                    ) : row.rate_derived_from === "mixed" ? (
-                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
-                        Web + DB
-                      </span>
-                    ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
-                      <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
-                        Transaction DB
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
-                        Listing
-                      </span>
-                    )}
-                  </td>
-                </tr>
-                {isExpanded && hasSubRows && row.sub_rows.map((sub, subIdx) => {
-                  const isSubDb = sub.rate_derived_from === "internal_db";
-                  return (
-                    <tr
-                      key={`fact-${row.project_name || i}-sub-${subIdx}`}
-                      className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
-                    >
-                      <td className="px-4 py-2"></td>
-                      <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
-                        <span className="text-border">└──</span>
-                        <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-[10px] font-semibold text-text-dim">
-                          {sub.listing_count}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-text-secondary">{fmt(row.avg_rate)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_lower)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
+                    <td className="px-4 py-3 text-center">
+                      {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
+                        <span className="text-text-dim text-[9px]">—</span>
+                      ) : row.rate_derived_from === "micromarket" ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                          Micromarket
                         </span>
-                      </td>
-                      <td className="px-4 py-2 text-center">—</td>
-                      <td className="px-4 py-2 text-center">—</td>
-                      <td className="px-4 py-2 text-center">—</td>
-                      <td className="px-4 py-2 text-center">—</td>
-                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.avg_rate)}</td>
-                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_lower)}</td>
-                      <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_upper)}</td>
-                      <td className="px-4 py-2 text-center">
-                        {isSubDb ? (
-                          <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
-                            Transaction DB
+                      ) : row.rate_derived_from === "mixed" ? (
+                        <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
+                          Web + DB
+                        </span>
+                      ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
+                        <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
+                          Transaction DB
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                          Listing
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                  {isExpanded && hasSubRows && row.sub_rows.map((sub, subIdx) => {
+                    const isSubDb = sub.rate_derived_from === "internal_db";
+                    return (
+                      <tr
+                        key={`fact-${row.project_name || i}-sub-${subIdx}`}
+                        className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
+                      >
+                        <td className="px-4 py-2"></td>
+                        <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
+                          <span className="text-border">└──</span>
+                          <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-[10px] font-semibold text-text-dim">
+                            {sub.listing_count}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
-                            Listing
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                        </td>
+                        <td className="px-4 py-2 text-center">—</td>
+                        <td className="px-4 py-2 text-center">—</td>
+                        <td className="px-4 py-2 text-center">—</td>
+                        <td className="px-4 py-2 text-center">—</td>
+                        <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.avg_rate)}</td>
+                        <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_lower)}</td>
+                        <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_upper)}</td>
+                        <td className="px-4 py-2 text-center">
+                          {isSubDb ? (
+                            <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
+                              Transaction DB
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
+                              Listing
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -4167,40 +4166,76 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   };
 
   const MainContent = (
-    <div className="mt-8 rounded-[2.5rem] border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+    <div className="mt-4 overflow-hidden rounded-2xl border border-border-soft bg-bg-card/90 shadow-2xl backdrop-blur-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 sm:mt-8 sm:rounded-[2.5rem]">
 
       {/* Header */}
-      <div className="border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-8 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-xl">🛡️</div>
-          <div>
-            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Comparable Factoring Analysis</h2>
-            <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Per-comparable adjustment → Confidence-weighted blend</p>
+      <div className="flex flex-col gap-3 border-b border-border-soft bg-gradient-to-r from-accent/10 to-transparent px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-5">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-lg sm:h-10 sm:w-10 sm:text-xl">🛡️</div>
+          <div className="min-w-0">
+            <h2 className="break-words text-[10px] font-black uppercase tracking-[0.16em] text-text-primary sm:tracking-[0.3em]">Valuation Synthesis</h2>
+            <p className="mt-0.5 break-words text-[8px] leading-relaxed text-text-dim opacity-60 sm:uppercase sm:tracking-widest">Comparable adjustments and confidence-weighted valuation</p>
+            {/* <div className={`flex min-h-9 items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-center text-[8px] font-black uppercase tracking-wide sm:px-3 sm:text-[9px] sm:tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" : confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>
+              <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }}></span>
+              {confidence || "Medium"} Confidence
+            </div> */}
+            <div
+              className={`
+    flex min-h-7 items-center justify-center
+    gap-1 rounded-lg border
+    px-1.5 py-1
+    text-center text-[7px] font-black uppercase tracking-normal
+    whitespace-nowrap
+
+    sm:min-h-9 sm:gap-1.5 sm:rounded-xl
+    sm:px-3 sm:py-1.5
+    sm:text-[9px] sm:tracking-widest
+
+    ${confidence === "High"
+                  ? "border-green-500/30 bg-green-500/10 text-green-400"
+                  : confidence === "Low"
+                    ? "border-red-500/30 bg-red-500/10 text-red-400"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                }
+  `}
+            >
+              <span
+                className="h-1 w-1 shrink-0 rounded-full animate-pulse sm:h-1.5 sm:w-1.5"
+                style={{ background: "currentColor" }}
+              />
+
+              <span className="sm:hidden">
+                {confidence || "Medium"}
+              </span>
+
+              <span className="hidden sm:inline">
+                {confidence || "Medium"} Confidence
+              </span>
+            </div>
+
+
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" : confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>
-            <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }}></span>
-            {confidence || "Medium"} Confidence
-          </div>
-          <button onClick={() => setIsSectionMaximized(!isSectionMaximized)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-soft bg-bg-input hover:bg-accent/20 hover:text-accent transition-all text-[8px] font-black uppercase tracking-widest">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+
+          <button onClick={() => setIsSectionMaximized(!isSectionMaximized)} className="flex min-h-9 items-center justify-center gap-2 rounded-xl border border-border-soft bg-bg-input px-2 py-1.5 text-[8px] font-black uppercase tracking-wide transition-all hover:bg-accent/20 hover:text-accent sm:px-3 sm:tracking-widest">
             {isSectionMaximized ? "Collapse" : "⛶ Expand"}
           </button>
         </div>
       </div>
 
-      <div className="p-8 space-y-10">
+      <div className="space-y-6 p-3 sm:space-y-10 sm:p-8">
 
         {/* ── Subject-Only Evidence Warning ─────────────────────────── */}
         {subject_only_mode && (
-          <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-bg-card to-amber-600/5 p-5">
+          <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-bg-card to-amber-600/5 p-3 sm:p-5">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.12),transparent_60%)]" />
-            <div className="relative z-10 flex items-start gap-4">
+            <div className="relative z-10 flex items-start gap-3 sm:gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[18px] font-black">
                 ⚠
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-amber-400 mb-1.5">
+                <p className="mb-1.5 break-words text-[9px] font-black uppercase leading-relaxed tracking-[0.12em] text-amber-400 sm:tracking-[0.25em]">
                   Limited Comparable Market Evidence — Subject-Only Valuation
                 </p>
                 <p className="text-[10px] text-amber-200/80 leading-relaxed">
@@ -4214,15 +4249,45 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
         {/* ── COMPARABLE FACTORING TABLE ─────────────────────────────── */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="mb-4 flex min-w-0 items-start gap-3 sm:items-center">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
-            <div>
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">Per-Comparable Factor Adjustment Table</h3>
-              <p className="text-[9px] text-text-dim mt-0.5">Each factor capped at ±5% · Total adjustment capped at ±{(capLimit * 100).toFixed(0)}% per comparable (subject listings: {subjectListings})</p>
+            <div className="min-w-0">
+              <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.12em] text-text-primary sm:text-[11px] sm:tracking-[0.2em]">Per-Comparable Factor Adjustments</h3>
+              <p className="mt-0.5 break-words text-[9px] leading-relaxed text-text-dim">Each factor ±5% · Total cap ±{(capLimit * 100).toFixed(0)}% · {subjectListings} subject listings</p>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-border-soft shadow-xl">
+          <div className="divide-y divide-white/[0.05] overflow-hidden rounded-xl border border-border-soft sm:hidden">
+            {comparable_factoring_table.map((row, index) => {
+              const totalFactor = row.role === "SUBJECT" ? null : Number(row.total_factor || 0);
+              return (
+                <div key={`mobile-synthesis-${row.project_name || index}`} className={row.role === "SUBJECT" ? "bg-accent/10" : "bg-bg-input/20"}>
+                  <div className="flex items-center gap-3 px-3 py-3">
+                    <span className="w-5 shrink-0 font-mono text-[9px] text-text-dim">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-bold text-text-primary">{row.project_name || "—"}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {row.role === "SUBJECT" && <span className="rounded bg-accent px-1.5 py-0.5 text-[7px] font-black uppercase text-bg-deep">Subject</span>}
+                        <span className="rounded border border-border/50 bg-bg-input px-1.5 py-0.5 text-[8px] text-text-dim">Road: {row.road_type || "—"}</span>
+                        {totalFactor != null && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${adjColor(totalFactor)}`}>{fmtPct(totalFactor)}</span>}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`font-mono text-[12px] font-black ${row.role === "SUBJECT" ? "text-green-400" : "text-blue-400"}`}>{fmtRate(row.role === "SUBJECT" ? row.avg_rate : row.factored_rate)}</p>
+                      <p className="text-[8px] text-text-dim">{row.role === "SUBJECT" ? "Base rate" : "Factored rate"}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-px border-t border-white/[0.04] bg-white/[0.04]">
+                    <div className="bg-bg-card/90 px-2 py-2 text-center"><p className="text-[7px] uppercase text-text-dim">Avg Rate</p><p className="mt-0.5 truncate font-mono text-[9px] text-text-secondary">{fmtRate(row.avg_rate)}</p></div>
+                    <div className="bg-bg-card/90 px-2 py-2 text-center"><p className="text-[7px] uppercase text-text-dim">Density</p><p className="mt-0.5 font-mono text-[9px] text-text-secondary">{row.builtup_density_score != null ? Number(row.builtup_density_score).toFixed(1) : "—"}</p></div>
+                    <div className="bg-bg-card/90 px-2 py-2 text-center"><p className="text-[7px] uppercase text-text-dim">CBD</p><p className="mt-0.5 font-mono text-[9px] text-text-secondary">{row.cbd_nearest_km != null ? `${row.cbd_nearest_km} km` : "—"}</p></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-border-soft shadow-xl sm:block">
             <table className="w-full text-left text-[10px] min-w-[900px]">
               <thead>
                 <tr className="bg-bg-input border-b border-border-soft text-text-dim uppercase tracking-widest font-black text-[8px]">
@@ -4299,9 +4364,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
           {/* Factor breakdown and adjustment sliders */}
           {compRows.some(r => r.factor_reasoning) && (
-            <div className="mt-6 space-y-4">
-              <h4 className="text-[9px] font-black uppercase tracking-[0.25em] text-text-primary">Factor Adjustment Controls</h4>
-              <div className="grid gap-4 md:grid-cols-2">
+            <div className="mt-6 space-y-4 ">
+              <h4 className="text-[9px] font-black uppercase tracking-[0.16em] text-text-primary sm:tracking-[0.25em] ">Factor Adjustment Controls</h4>
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-2 ">
                 {compRows.map((row, i) => {
                   const isModified = isProjectModified(row.project_name);
                   const isRowCapped = isCapped(row.project_name);
@@ -4311,11 +4376,11 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   const cbdVal = row.factor_cbd ?? 0;
 
                   return (
-                    <div key={i} className="rounded-2xl border border-border-soft bg-bg-input/25 p-5 space-y-4 flex flex-col justify-between hover:border-border transition-all">
-                      <div>
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5 mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-text-secondary text-[11px]">{row.project_name}</span>
+                    <div key={i} className=" ">
+                      <div className="w-[400px] min-h-[450px]  p-5 t-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
+                        <div className="mb-3 flex min-w-0 items-center justify-between gap-3  pb-2.5">
+                          <div className="flex min-w-0 items-center gap-2 ">
+                            <span className="truncate text-[11px] font-bold text-text-secondary" title={row.project_name}>{row.project_name}</span>
                             {isModified && (
                               <span className="px-2 py-0.5 rounded bg-warning/20 border border-warning/30 text-[8px] text-warning font-black uppercase tracking-wider">Edited</span>
                             )}
@@ -4332,12 +4397,12 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                         </div>
 
                         {/* Interactive Sliders for 4 Geospatial factors */}
-                        <div className="space-y-3.5">
+                        <div className="">
                           {/* Road Slider */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
-                              <span>Road Type Adjustment</span>
-                              <span className={`font-mono ${adjColor(roadVal)}`}>{fmtPct(roadVal)}</span>
+                            <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-wide text-text-dim sm:tracking-widest">
+                              <span className="min-w-0">Road Type Adjustment</span>
+                              <span className={`shrink-0 font-mono ${adjColor(roadVal)}`}>{fmtPct(roadVal)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -4366,9 +4431,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
                           {/* Amenity Slider */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
-                              <span>Amenity Adjustment</span>
-                              <span className={`font-mono ${adjColor(amenityVal)}`}>{fmtPct(amenityVal)}</span>
+                            <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-wide text-text-dim sm:tracking-widest">
+                              <span className="min-w-0">Amenity Adjustment</span>
+                              <span className={`shrink-0 font-mono ${adjColor(amenityVal)}`}>{fmtPct(amenityVal)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -4397,9 +4462,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
                           {/* Density Slider */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
-                              <span>Density Score Adjustment</span>
-                              <span className={`font-mono ${adjColor(densityVal)}`}>{fmtPct(densityVal)}</span>
+                            <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-wide text-text-dim sm:tracking-widest">
+                              <span className="min-w-0">Density Score Adjustment</span>
+                              <span className={`shrink-0 font-mono ${adjColor(densityVal)}`}>{fmtPct(densityVal)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -4428,9 +4493,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
                           {/* CBD Slider */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[9px] text-text-dim uppercase font-black tracking-widest">
-                              <span>CBD Distance Adjustment</span>
-                              <span className={`font-mono ${adjColor(cbdVal)}`}>{fmtPct(cbdVal)}</span>
+                            <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-wide text-text-dim sm:tracking-widest">
+                              <span className="min-w-0">CBD Distance Adjustment</span>
+                              <span className={`shrink-0 font-mono ${adjColor(cbdVal)}`}>{fmtPct(cbdVal)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
@@ -4459,7 +4524,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                         </div>
 
                         {/* Net Adjustments capped info */}
-                        <div className="mt-4 flex items-center justify-between text-[10px] bg-black/30 px-3.5 py-2.5 rounded-xl border border-white/5 font-mono">
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/5 bg-black/30 px-3.5 py-2.5 font-mono text-[10px]">
                           <span className="text-text-dim uppercase tracking-wider text-[8px] font-bold">Net Correction:</span>
                           <div className="flex items-center gap-2">
                             {isRowCapped && (
@@ -4470,7 +4535,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                         </div>
                       </div>
 
-                      <div className="border-t border-white/5 pt-3.5 mt-2">
+                      <div className="mt-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
                         <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
                         <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
                       </div>
@@ -4483,13 +4548,13 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
         </section>
 
         {/* ── VALUATION BLENDING & WEIGHTS CONFIGURATION ─────────────────── */}
-        <section className="rounded-[2rem] border border-border-soft bg-bg-card/75 p-6 space-y-6">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
-            <div className="flex items-center gap-3">
+        <section className="space-y-5 rounded-2xl border border-border-soft bg-bg-card/75 p-3 sm:space-y-6 sm:rounded-[2rem] sm:p-6">
+          <div className="flex flex-col gap-3 border-b border-white/5 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-purple/20 border border-accent-purple/30 text-sm">🧪</span>
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-text-primary">Appraisal Blending & Weights</h3>
-                <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest opacity-50">Adjust confidence weight balance for final valuation</p>
+              <div className="min-w-0 ">
+                <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.12em] text-text-primary sm:text-[11px] sm:tracking-[0.25em]">Appraisal Blending & Weights</h3>
+                <p className="mt-0.5 text-[8px] leading-relaxed text-text-dim opacity-60 sm:uppercase sm:tracking-widest">Adjust confidence weight balance for final valuation</p>
               </div>
             </div>
             {isWeightsModified() && (
@@ -4506,26 +4571,16 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           <div className="grid gap-6 md:grid-cols-2">
             {/* Blending stats */}
             <div className="space-y-4">
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-4 space-y-2">
+              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-4 space-y-2 ">
                 <p className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Formula:</p>
                 <p className="font-mono text-[10px] text-white/90 font-bold leading-relaxed font-semibold">
                   Blended Rate = (w₁ × Subject Rate) + (w₂ × Comparables Avg)
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-[10px] font-mono">
-                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
-                  <span className="text-text-dim block mb-1">Subject Rate:</span>
-                  <span className="font-bold text-green-400">{fmtRate(blending.subject_own_rate)}</span>
-                  <span className="text-[8px] text-text-dim block mt-0.5">({blending.subject_listing_count || 0} listings)</span>
-                </div>
-                <div className="rounded-xl bg-white/5 p-3 border border-white/5">
-                  <span className="text-text-dim block mb-1">Comparables Avg:</span>
-                  <span className="font-bold text-blue-400">{fmtRate(blending.factored_comp_avg)}</span>
-                  <span className="text-[8px] text-text-dim block mt-0.5">(from {compRows.length} comparables)</span>
-                </div>
-              </div>
+            
             </div>
+       
 
             {/* Weight Sliders */}
             <div className="space-y-4 flex flex-col justify-center">
@@ -4571,6 +4626,21 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 </div>
               )}
             </div>
+                  <div className="grid w-[650px] grid-cols-2 gap-5 text-sm font-mono">
+                <div className="rounded-xl bg-white/5 p-3 ">
+                  <span className="mb-1 block text-[10px] text-text-dim ">Subject Rate:</span>
+                  <span className="font-bold text-green-400">{fmtRate(blending.subject_own_rate)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">({blending.subject_listing_count || 0} listings)</span>
+                </div>
+                <div>
+
+                </div>
+                 <div className="rounded-xl bg-white/5 p-3 ">
+                  <span className="mb-1 block text-[10px] text-text-dim ">Comparables Avg:</span>
+                  <span className="font-bold text-blue-400">{fmtRate(blending.factored_comp_avg)}</span>
+                  <span className="text-[8px] text-text-dim block mt-0.5">(from {compRows.length} comparables)</span>
+                </div>
+              </div>
           </div>
 
           {blending.weight_reasoning && (
@@ -4615,13 +4685,13 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           const rangeLabel = `±${rangePct.toFixed(rangePct % 1 === 0 ? 0 : 1)}% ${confidence || "Medium"} confidence band`;
 
           return (
-            <section className="relative overflow-hidden rounded-[2rem] border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent pointer-events-none" />
+            <section className="relative flex flex-col gap-6 overflow-hidden rounded-2xl border border-green-500/30 bg-gradient-to-b from-bg-card to-bg-deep p-3 shadow-2xl sm:rounded-[2rem] sm:p-8">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent" />
 
-              <div className="flex-1 space-y-2">
+              <div className="w-full min-w-0 space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80 font-black">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
-                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)]">
+                  <h2 className="min-w-0 font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)] sm:text-4xl">
                     {fmtRate(finalRate)}
                   </h2>
                   <span className="text-xs text-text-dim font-bold font-semibold">/ {area_unit || "sqft"}</span>
@@ -4680,9 +4750,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
               </div>
 
               {selectedArea > 0 && (
-                <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
+                <div className="w-full min-w-0 space-y-2 border-t border-border-soft pt-6">
                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
-                  <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
+                  <h2 className="font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)] sm:text-4xl">
                     {formatter.format(exactValue)}
                   </h2>
                   {valueRange && (
@@ -4738,9 +4808,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
         {/* ── REASONING REPORT ──────────────────────────────────────── */}
         {raw_markdown_report && (
           <section>
-            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between rounded-xl border border-border-soft bg-bg-input px-4 py-3 text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-accent hover:border-accent/40 transition-all font-semibold">
-              <span className="flex items-center gap-2">🧾 Agent Reasoning Report</span>
-              <span>{showReport ? "▲ Hide" : "▼ Show"}</span>
+            <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-bg-input px-3 py-3 text-[9px] font-black uppercase tracking-wide text-text-dim transition-all hover:border-accent/40 hover:text-accent sm:px-4 sm:text-[10px] sm:tracking-widest">
+              <span className="flex min-w-0 items-center gap-2 text-left">🧾 <span className="break-words">Agent Reasoning Report</span></span>
+              <span className="shrink-0">{showReport ? "▲ Hide" : "▼ Show"}</span>
             </button>
             {showReport && (
               <div className="mt-3 rounded-xl border border-border-soft bg-bg-dark/40 p-4 overflow-auto max-h-[600px] custom-scrollbar animate-in fade-in duration-200">
@@ -4765,19 +4835,19 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-bg-deep/95 backdrop-blur-2xl animate-in fade-in duration-300 flex flex-col">
         {/* Sticky top bar with close button */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-border-soft bg-bg-card/80 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-soft bg-bg-card/80 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary font-black">Comparable Factoring Analysis</p>
-              <p className="text-[8px] text-text-dim uppercase tracking-widest opacity-50 font-semibold">Per-comparable adjustment → Confidence-weighted blend</p>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.12em] text-text-primary sm:text-[10px] sm:tracking-[0.3em]">Valuation Synthesis</p>
+              <p className="hidden truncate text-[8px] font-semibold uppercase tracking-widest text-text-dim opacity-50 sm:block">Per-comparable adjustment → Confidence-weighted blend</p>
             </div>
           </div>
           <button
             onClick={() => setIsSectionMaximized(false)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border-soft bg-bg-input hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-all text-[9px] font-black uppercase tracking-widest text-text-dim font-semibold"
+            className="flex h-9 shrink-0 items-center justify-center rounded-xl border border-border-soft bg-bg-input px-3 text-[9px] font-black uppercase tracking-wide text-text-dim transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400 sm:gap-2 sm:px-4 sm:tracking-widest"
           >
-            ✕ Collapse
+            <span>✕</span><span className="hidden sm:inline">Collapse</span>
           </button>
         </div>
         {/* Scrollable content */}
@@ -5222,18 +5292,18 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
               <div
                 key={stage.id}
                 className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300 ${isActive
-                    ? "border-accent/35 bg-accent/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]"
-                    : isComplete
-                      ? "border-success/20 bg-success/5"
-                      : "border-border/40 bg-bg-input/40 opacity-70"
+                  ? "border-accent/35 bg-accent/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]"
+                  : isComplete
+                    ? "border-success/20 bg-success/5"
+                    : "border-border/40 bg-bg-input/40 opacity-70"
                   }`}
               >
                 <div
                   className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${isActive
-                      ? "border-accent/30 bg-accent/15 text-accent"
-                      : isComplete
-                        ? "border-success/30 bg-success/10 text-success"
-                        : "border-border/50 bg-bg-card text-text-dim"
+                    ? "border-accent/30 bg-accent/15 text-accent"
+                    : isComplete
+                      ? "border-success/30 bg-success/10 text-success"
+                      : "border-border/50 bg-bg-card text-text-dim"
                     }`}
                 >
                   {isComplete ? (
@@ -5399,8 +5469,8 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
   };
 
   return (
-    <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel">
-      <div className="border-b border-accent/15 bg-accent/5 px-4 py-3">
+    <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel md:max-h-[calc(100dvh-4rem)]">
+      <div className="shrink-0 border-b border-accent/15 bg-accent/5 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
@@ -5419,7 +5489,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
         </div>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
         <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -9541,7 +9611,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
   const quickEstimateModal = showQuickEstimateModal && typeof document !== "undefined" ? createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-bg-deep/80 p-4 backdrop-blur-md animate-in fade-in duration-300 md:p-8"
       onClick={() => setShowQuickEstimateModal(false)}
     >
       <div
@@ -10422,8 +10492,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               onClick={() => calculatedTotalTokens > 0 && setShowTokenBreakdown(!showTokenBreakdown)}
               disabled={calculatedTotalTokens === 0}
               className={`flex items-center gap-1.5 transition text-text-dim ${calculatedTotalTokens > 0
-                  ? "hover:text-accent-light cursor-pointer"
-                  : "cursor-not-allowed opacity-50"
+                ? "hover:text-accent-light cursor-pointer"
+                : "cursor-not-allowed opacity-50"
                 }`}
             >
               <span className={`h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] ${calculatedTotalTokens > 0 ? "animate-pulse" : "opacity-40"}`} />
