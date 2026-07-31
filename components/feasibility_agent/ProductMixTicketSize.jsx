@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle, FaSearch } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshairs, FaBuilding, FaRulerCombined, FaCheck, FaFilter, FaClock, FaRegBuilding, FaInfoCircle, FaCheckCircle, FaSearch, FaPencilAlt, FaTimes, FaLayerGroup } from 'react-icons/fa';
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
 import TransactionDrilldownModal from './TransactionDrilldownModal';
@@ -467,24 +467,155 @@ const ProductMixTicketSize = () => {
         };
     }, []);
 
-    const [areaRows, setAreaRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
-    const [rateRows, setRateRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
-    const [ticketRows, setTicketRows] = useState([{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }]);
+    // ─── SCENARIO SYSTEM ─────────────────────────────────────────────────────
+    const MAX_SCENARIOS = 6;
+
+    const createDefaultScenario = (index = 1) => ({
+        id: `scenario-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: `Scenario ${index}`,
+        subtitle: '',
+        // Analysis Mode state
+        areaRows: [{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }],
+        rateRows: [{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }],
+        ticketRows: [{ id: '1', propertyType: 'Flat', unitType: ALL_UNITS_OPTION, min: '', max: '', interval: '' }],
+        areaAnalysisResults: [],
+        rateAnalysisResults: [],
+        ticketSizeAnalysisResults: [],
+        // Applied Product Mix state
+        productMixRows: [{ id: 1, assetClass: 'Residential', propertyType: 'Apartment', unitMix: 'Studio', mode: 'Range', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '' }]
+    });
+
+    const [scenarios, setScenarios] = useState(() => {
+        try {
+            const saved = localStorage.getItem('ProductMixScenarios');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed.scenarios) && parsed.scenarios.length > 0) {
+                    return parsed.scenarios;
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return [createDefaultScenario(1)];
+    });
+
+    const [activeScenarioId, setActiveScenarioId] = useState(() => {
+        try {
+            const saved = localStorage.getItem('ProductMixScenarios');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.activeScenarioId) return parsed.activeScenarioId;
+            }
+        } catch (e) { /* ignore */ }
+        return null; // will be corrected in effect below
+    });
+
+    // Ensure activeScenarioId always points to a valid scenario
+    const resolvedActiveId = (activeScenarioId && scenarios.find(s => s.id === activeScenarioId))
+        ? activeScenarioId
+        : scenarios[0]?.id;
+
+    const activeScenario = scenarios.find(s => s.id === resolvedActiveId) || scenarios[0];
+
+    // Persist scenarios to localStorage on every change
+    useEffect(() => {
+        try {
+            localStorage.setItem('ProductMixScenarios', JSON.stringify({
+                scenarios,
+                activeScenarioId: resolvedActiveId
+            }));
+            // Also write active scenario's productMixRows to legacy key for downstream consumers
+            if (activeScenario) {
+                localStorage.setItem('ProductMix', JSON.stringify(activeScenario.productMixRows));
+            }
+        } catch (e) { /* ignore */ }
+    }, [scenarios, resolvedActiveId]);
+
+    // Helper: patch a field in the active scenario
+    const patchActiveScenario = (updater) => {
+        setScenarios(prev => prev.map(s =>
+            s.id === resolvedActiveId ? { ...s, ...updater(s) } : s
+        ));
+    };
+
+    // Scenario management
+    const addScenario = () => {
+        if (scenarios.length >= MAX_SCENARIOS) return;
+        const newScenario = createDefaultScenario(scenarios.length + 1);
+        setScenarios(prev => [...prev, newScenario]);
+        setActiveScenarioId(newScenario.id);
+    };
+
+    const deleteScenario = (id) => {
+        if (scenarios.length <= 1) return;
+        setScenarios(prev => {
+            const remaining = prev.filter(s => s.id !== id);
+            if (resolvedActiveId === id) {
+                setActiveScenarioId(remaining[remaining.length - 1].id);
+            }
+            return remaining;
+        });
+    };
+
+    const renameScenario = (id, newName) => {
+        setScenarios(prev => prev.map(s => s.id === id ? { ...s, name: newName } : s));
+    };
+
+    const updateScenarioSubtitle = (id, newSubtitle) => {
+        setScenarios(prev => prev.map(s => s.id === id ? { ...s, subtitle: newSubtitle } : s));
+    };
+
+    // Inline rename state
+    const [editingScenarioId, setEditingScenarioId] = useState(null);
+    const [editingField, setEditingField] = useState(null); // 'name' | 'subtitle'
+    const [editingValue, setEditingValue] = useState('');
+
+    const startEditing = (scenario, field) => {
+        setEditingScenarioId(scenario.id);
+        setEditingField(field);
+        setEditingValue(field === 'name' ? scenario.name : (scenario.subtitle || ''));
+    };
+
+    const commitEditing = () => {
+        if (editingScenarioId && editingField) {
+            if (editingField === 'name' && editingValue.trim()) {
+                renameScenario(editingScenarioId, editingValue.trim());
+            } else if (editingField === 'subtitle') {
+                updateScenarioSubtitle(editingScenarioId, editingValue.trim());
+            }
+        }
+        setEditingScenarioId(null);
+        setEditingField(null);
+        setEditingValue('');
+    };
+
+    // Derive shorthand accessors for the active scenario
+    const areaRows = activeScenario?.areaRows || [];
+    const rateRows = activeScenario?.rateRows || [];
+    const ticketRows = activeScenario?.ticketRows || [];
+    const areaAnalysisResults = activeScenario?.areaAnalysisResults || [];
+    const rateAnalysisResults = activeScenario?.rateAnalysisResults || [];
+    const ticketSizeAnalysisResults = activeScenario?.ticketSizeAnalysisResults || [];
+    const productMixRows = activeScenario?.productMixRows || [];
 
     const [isAnalysisResultsOpen, setIsAnalysisResultsOpen] = useState(true);
-    const [areaAnalysisResults, setAreaAnalysisResults] = useState([]);
-    const [rateAnalysisResults, setRateAnalysisResults] = useState([]);
-    const [ticketSizeAnalysisResults, setTicketSizeAnalysisResults] = useState([]);
 
+    // ─── Row setters (proxy into active scenario) ─────────────────────────────
+    const setAreaRows = (updater) => patchActiveScenario(s => ({ areaRows: typeof updater === 'function' ? updater(s.areaRows) : updater }));
+    const setRateRows = (updater) => patchActiveScenario(s => ({ rateRows: typeof updater === 'function' ? updater(s.rateRows) : updater }));
+    const setTicketRows = (updater) => patchActiveScenario(s => ({ ticketRows: typeof updater === 'function' ? updater(s.ticketRows) : updater }));
+    const setAreaAnalysisResults = (updater) => patchActiveScenario(s => ({ areaAnalysisResults: typeof updater === 'function' ? updater(s.areaAnalysisResults) : updater }));
+    const setRateAnalysisResults = (updater) => patchActiveScenario(s => ({ rateAnalysisResults: typeof updater === 'function' ? updater(s.rateAnalysisResults) : updater }));
+    const setTicketSizeAnalysisResults = (updater) => patchActiveScenario(s => ({ ticketSizeAnalysisResults: typeof updater === 'function' ? updater(s.ticketSizeAnalysisResults) : updater }));
+    const setProductMixRows = (updater) => patchActiveScenario(s => ({ productMixRows: typeof updater === 'function' ? updater(s.productMixRows) : updater }));
+
+    // ─── Row handlers ─────────────────────────────────────────────────────────
     const handleAreaRowChange = (id, field, value) => {
         setAreaRows(prev => prev.map(row => {
             if (row.id === id) {
                 const updated = { ...row, [field]: value };
                 if (field === 'propertyType') {
                     const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
-                    if (!validUnits.includes(updated.unitType)) {
-                        updated.unitType = validUnits[0] || '';
-                    }
+                    if (!validUnits.includes(updated.unitType)) updated.unitType = validUnits[0] || '';
                 }
                 return updated;
             }
@@ -498,9 +629,7 @@ const ProductMixTicketSize = () => {
                 const updated = { ...row, [field]: value };
                 if (field === 'propertyType') {
                     const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
-                    if (!validUnits.includes(updated.unitType)) {
-                        updated.unitType = validUnits[0] || '';
-                    }
+                    if (!validUnits.includes(updated.unitType)) updated.unitType = validUnits[0] || '';
                 }
                 return updated;
             }
@@ -514,9 +643,7 @@ const ProductMixTicketSize = () => {
                 const updated = { ...row, [field]: value };
                 if (field === 'propertyType') {
                     const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
-                    if (!validUnits.includes(updated.unitType)) {
-                        updated.unitType = validUnits[0] || '';
-                    }
+                    if (!validUnits.includes(updated.unitType)) updated.unitType = validUnits[0] || '';
                 }
                 return updated;
             }
@@ -531,7 +658,6 @@ const ProductMixTicketSize = () => {
             const eDate = customEndDate || getLastOneYearDates().endStr;
             if (!customStartDate) setCustomStartDate(sDate);
             if (!customEndDate) setCustomEndDate(eDate);
-
             if (areaAnalysisResults.length > 0) handleAnalyzeArea("custom", sDate, eDate);
             if (rateAnalysisResults.length > 0) handleAnalyzeRate("custom", sDate, eDate);
             if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize("custom", sDate, eDate);
@@ -543,14 +669,8 @@ const ProductMixTicketSize = () => {
     };
 
     const handleApplyCustomDates = () => {
-        if (!customStartDate || !customEndDate) {
-            alert("Please select both Start Date and End Date.");
-            return;
-        }
-        if (new Date(customStartDate) > new Date(customEndDate)) {
-            alert("Start Date must be before or equal to End Date.");
-            return;
-        }
+        if (!customStartDate || !customEndDate) { alert("Please select both Start Date and End Date."); return; }
+        if (new Date(customStartDate) > new Date(customEndDate)) { alert("Start Date must be before or equal to End Date."); return; }
         if (areaAnalysisResults.length > 0) handleAnalyzeArea("custom", customStartDate, customEndDate);
         if (rateAnalysisResults.length > 0) handleAnalyzeRate("custom", customStartDate, customEndDate);
         if (ticketSizeAnalysisResults.length > 0) handleAnalyzeTicketSize("custom", customStartDate, customEndDate);
@@ -559,354 +679,175 @@ const ProductMixTicketSize = () => {
     const handleAnalyzeArea = async (overrideTab, overrideStart, overrideEnd) => {
         const results = [];
         const queries = [];
-        
         let conversionFactor = 1;
         if (areaUnit === 'sq ft') conversionFactor = 0.092903;
         else if (areaUnit === 'sq yd') conversionFactor = 0.836127;
         else if (areaUnit === 'acres') conversionFactor = 4046.86;
         else if (areaUnit === 'hectares') conversionFactor = 10000;
-        
-        areaRows.forEach(row => {
-            const min = Number(row.min);
-            const max = Number(row.max);
-            const interval = Number(row.interval);
 
+        // Capture current rows at call time
+        const currentAreaRows = activeScenario?.areaRows || [];
+        currentAreaRows.forEach(row => {
+            const min = Number(row.min); const max = Number(row.max); const interval = Number(row.interval);
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
-                const tableData = {
-                    id: row.id,
-                    propertyType: row.propertyType || 'Flat',
-                    unitType: row.unitType || ALL_UNITS_OPTION,
-                    rows: []
-                };
-                
-                const queryData = {
-                    id: row.id,
-                    property_type: tableData.propertyType,
-                    unit_type: tableData.unitType,
-                    ranges: []
-                };
-
+                const tableData = { id: row.id, propertyType: row.propertyType || 'Flat', unitType: row.unitType || ALL_UNITS_OPTION, rows: [] };
+                const queryData = { id: row.id, property_type: tableData.propertyType, unit_type: tableData.unitType, ranges: [] };
                 let currentMin = min;
                 while (currentMin <= max) {
                     let currentMax = currentMin + interval - 1;
-                    if (currentMax > max || (max - currentMax < interval / 2)) {
-                        currentMax = max;
-                    }
-
-                    tableData.rows.push({
-                        id: currentMin + '-' + currentMax,
-                        rangeMin: currentMin,
-                        rangeMax: currentMax,
-                        count: null,
-                        countsByYear: null
-                    });
-                    
-                    queryData.ranges.push({
-                        id: currentMin + '-' + currentMax,
-                        min_sqm: currentMin * conversionFactor,
-                        max_sqm: (currentMax + 1) * conversionFactor
-                    });
-                    
+                    if (currentMax > max || (max - currentMax < interval / 2)) currentMax = max;
+                    tableData.rows.push({ id: currentMin + '-' + currentMax, rangeMin: currentMin, rangeMax: currentMax, count: null, countsByYear: null });
+                    queryData.ranges.push({ id: currentMin + '-' + currentMax, min_sqm: currentMin * conversionFactor, max_sqm: (currentMax + 1) * conversionFactor });
                     if (currentMax === max) break;
                     currentMin = currentMax + 1;
                 }
-                
-                results.push(tableData);
-                queries.push(queryData);
+                results.push(tableData); queries.push(queryData);
             }
         });
-        
-        if (results.length === 0) {
-            alert("Please enter valid Min, Max, and Interval values for at least one row.");
-            return;
-        }
-
+        if (results.length === 0) { alert("Please enter valid Min, Max, and Interval values for at least one row."); return; }
         setAreaAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingArea(true);
-
         try {
             if (areaAbortRef.current) areaAbortRef.current.abort();
             areaAbortRef.current = new AbortController();
-
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/area-range-analysis/"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: "POST", headers: { "Content-Type": "application/json" },
                 signal: areaAbortRef.current.signal,
-                body: JSON.stringify({
-                    ...params,
-                    queries: queries
-                })
+                body: JSON.stringify({ ...params, queries })
             });
-            
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
-                    if (Array.isArray(json.years) && json.years.length > 0) {
-                        setAvailableYears(json.years);
-                    }
+                    if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
-                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
-                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
-                                } else if (apiData.counts) {
-                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
-                                } else {
-                                    rRow.count = 0;
-                                }
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) { rRow.countsByYear = apiData.counts_by_year[rRow.id]; rRow.count = apiData.counts_by_year[rRow.id].overall || 0; }
+                                else if (apiData.counts) { rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0; }
+                                else { rRow.count = 0; }
                             });
                         }
                     });
                 }
-            } else {
-                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-            }
-        } catch (e) {
-            console.error("Failed to analyze area", e);
-            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-        } finally {
-            setIsAnalyzingArea(false);
-            setAreaAnalysisResults([...results]);
-        }
+            } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        } catch (e) { console.error("Failed to analyze area", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        finally { setIsAnalyzingArea(false); setAreaAnalysisResults([...results]); }
     };
 
     const handleAnalyzeRate = async (overrideTab, overrideStart, overrideEnd) => {
-        const results = [];
-        const queries = [];
-        
+        const results = []; const queries = [];
         let conversionFactor = 1;
         if (areaUnit === 'sq ft') conversionFactor = 0.092903;
         else if (areaUnit === 'sq yd') conversionFactor = 0.836127;
         else if (areaUnit === 'acres') conversionFactor = 4046.86;
         else if (areaUnit === 'hectares') conversionFactor = 10000;
         setRateConversionFactor(conversionFactor);
-
-        rateRows.forEach(row => {
-            const min = Number(row.min);
-            const max = Number(row.max);
-            const interval = Number(row.interval);
-
+        const currentRateRows = activeScenario?.rateRows || [];
+        currentRateRows.forEach(row => {
+            const min = Number(row.min); const max = Number(row.max); const interval = Number(row.interval);
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
-                const tableData = {
-                    id: row.id,
-                    propertyType: row.propertyType || 'Flat',
-                    unitType: row.unitType || ALL_UNITS_OPTION,
-                    rows: []
-                };
-                
-                const queryData = {
-                    id: row.id,
-                    property_type: tableData.propertyType,
-                    unit_type: tableData.unitType,
-                    ranges: []
-                };
-
+                const tableData = { id: row.id, propertyType: row.propertyType || 'Flat', unitType: row.unitType || ALL_UNITS_OPTION, rows: [] };
+                const queryData = { id: row.id, property_type: tableData.propertyType, unit_type: tableData.unitType, ranges: [] };
                 let currentMin = min;
                 while (currentMin <= max) {
                     let currentMax = currentMin + interval - 1;
-                    if (currentMax > max || (max - currentMax < interval / 2)) {
-                        currentMax = max;
-                    }
-                    
-                    tableData.rows.push({
-                        id: currentMin + '-' + currentMax,
-                        rangeMin: currentMin,
-                        rangeMax: currentMax,
-                        count: null,
-                        countsByYear: null
-                    });
-                    
-                    queryData.ranges.push({
-                        id: currentMin + '-' + currentMax,
-                        min_rate: currentMin,
-                        max_rate: currentMax + 1
-                    });
-                    
+                    if (currentMax > max || (max - currentMax < interval / 2)) currentMax = max;
+                    tableData.rows.push({ id: currentMin + '-' + currentMax, rangeMin: currentMin, rangeMax: currentMax, count: null, countsByYear: null });
+                    queryData.ranges.push({ id: currentMin + '-' + currentMax, min_rate: currentMin, max_rate: currentMax + 1 });
                     if (currentMax === max) break;
                     currentMin = currentMax + 1;
                 }
-                
-                results.push(tableData);
-                queries.push(queryData);
+                results.push(tableData); queries.push(queryData);
             }
         });
-        
-        if (results.length === 0) {
-            alert("Please enter valid Min, Max, and Interval values for at least one row.");
-            return;
-        }
-
+        if (results.length === 0) { alert("Please enter valid Min, Max, and Interval values for at least one row."); return; }
         setRateAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingRate(true);
-
         try {
             if (rateAbortRef.current) rateAbortRef.current.abort();
             rateAbortRef.current = new AbortController();
-
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/rate-range-analysis/"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: "POST", headers: { "Content-Type": "application/json" },
                 signal: rateAbortRef.current.signal,
-                body: JSON.stringify({
-                    ...params,
-                    queries: queries,
-                    conversion_factor: conversionFactor
-                })
+                body: JSON.stringify({ ...params, queries, conversion_factor: conversionFactor })
             });
-            
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
-                    if (Array.isArray(json.years) && json.years.length > 0) {
-                        setAvailableYears(json.years);
-                    }
+                    if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
-                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
-                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
-                                } else if (apiData.counts) {
-                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
-                                } else {
-                                    rRow.count = 0;
-                                }
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) { rRow.countsByYear = apiData.counts_by_year[rRow.id]; rRow.count = apiData.counts_by_year[rRow.id].overall || 0; }
+                                else if (apiData.counts) { rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0; }
+                                else { rRow.count = 0; }
                             });
                         }
                     });
                 }
-            } else {
-                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-            }
-        } catch (e) {
-            console.error("Failed to analyze rate", e);
-            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-        } finally {
-            setIsAnalyzingRate(false);
-            setRateAnalysisResults([...results]);
-        }
+            } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        } catch (e) { console.error("Failed to analyze rate", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        finally { setIsAnalyzingRate(false); setRateAnalysisResults([...results]); }
     };
 
     const handleAnalyzeTicketSize = async (overrideTab, overrideStart, overrideEnd) => {
-        const results = [];
-        const queries = [];
-        
-        ticketRows.forEach(row => {
-            const min = Number(row.min);
-            const max = Number(row.max);
-            const interval = Number(row.interval);
-
+        const results = []; const queries = [];
+        const currentTicketRows = activeScenario?.ticketRows || [];
+        currentTicketRows.forEach(row => {
+            const min = Number(row.min); const max = Number(row.max); const interval = Number(row.interval);
             if (min > 0 && max > 0 && interval > 0 && max >= min) {
-                const tableData = {
-                    id: row.id,
-                    propertyType: row.propertyType || 'Flat',
-                    unitType: row.unitType || ALL_UNITS_OPTION,
-                    rows: []
-                };
-                
-                const queryData = {
-                    id: row.id,
-                    property_type: tableData.propertyType,
-                    unit_type: tableData.unitType,
-                    ranges: []
-                };
-
+                const tableData = { id: row.id, propertyType: row.propertyType || 'Flat', unitType: row.unitType || ALL_UNITS_OPTION, rows: [] };
+                const queryData = { id: row.id, property_type: tableData.propertyType, unit_type: tableData.unitType, ranges: [] };
                 let currentMin = min;
                 while (currentMin <= max) {
                     let currentMax = currentMin + interval - 1;
-                    if (currentMax > max || (max - currentMax < interval / 2)) {
-                        currentMax = max;
-                    }
-                    
-                    tableData.rows.push({
-                        id: currentMin + '-' + currentMax,
-                        rangeMin: currentMin,
-                        rangeMax: currentMax,
-                        count: null,
-                        countsByYear: null
-                    });
-                    
-                    queryData.ranges.push({
-                        id: currentMin + '-' + currentMax,
-                        min: currentMin,
-                        max: currentMax + 1
-                    });
-                    
+                    if (currentMax > max || (max - currentMax < interval / 2)) currentMax = max;
+                    tableData.rows.push({ id: currentMin + '-' + currentMax, rangeMin: currentMin, rangeMax: currentMax, count: null, countsByYear: null });
+                    queryData.ranges.push({ id: currentMin + '-' + currentMax, min: currentMin, max: currentMax + 1 });
                     if (currentMax === max) break;
                     currentMin = currentMax + 1;
                 }
-                
-                results.push(tableData);
-                queries.push(queryData);
+                results.push(tableData); queries.push(queryData);
             }
         });
-        
-        if (results.length === 0) {
-            alert("Please enter valid Min, Max, and Interval values for at least one row.");
-            return;
-        }
-
+        if (results.length === 0) { alert("Please enter valid Min, Max, and Interval values for at least one row."); return; }
         setTicketSizeAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingTicketSize(true);
-
         try {
             if (ticketSizeAbortRef.current) ticketSizeAbortRef.current.abort();
             ticketSizeAbortRef.current = new AbortController();
-
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/ticket-size-analysis/"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: "POST", headers: { "Content-Type": "application/json" },
                 signal: ticketSizeAbortRef.current.signal,
-                body: JSON.stringify({
-                    ...params,
-                    queries: queries
-                })
+                body: JSON.stringify({ ...params, queries })
             });
-            
             if (res.ok) {
                 const json = await res.json();
                 if (json.success && json.data) {
-                    if (Array.isArray(json.years) && json.years.length > 0) {
-                        setAvailableYears(json.years);
-                    }
+                    if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {
                         const targetResult = results.find(r => String(r.id) === String(apiData.id));
                         if (targetResult) {
                             targetResult.rows.forEach(rRow => {
-                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) {
-                                    rRow.countsByYear = apiData.counts_by_year[rRow.id];
-                                    rRow.count = apiData.counts_by_year[rRow.id].overall || 0;
-                                } else if (apiData.counts) {
-                                    rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0;
-                                } else {
-                                    rRow.count = 0;
-                                }
+                                if (apiData.counts_by_year && apiData.counts_by_year[rRow.id]) { rRow.countsByYear = apiData.counts_by_year[rRow.id]; rRow.count = apiData.counts_by_year[rRow.id].overall || 0; }
+                                else if (apiData.counts) { rRow.count = apiData.counts[rRow.id] !== undefined ? apiData.counts[rRow.id] : 0; }
+                                else { rRow.count = 0; }
                             });
                         }
                     });
                 }
-            } else {
-                results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-            }
-        } catch (e) {
-            console.error("Failed to analyze ticket size", e);
-            results.forEach(r => r.rows.forEach(row => { row.count = 0; }));
-        } finally {
-            setIsAnalyzingTicketSize(false);
-            setTicketSizeAnalysisResults([...results]);
-        }
+            } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        } catch (e) { console.error("Failed to analyze ticket size", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
+        finally { setIsAnalyzingTicketSize(false); setTicketSizeAnalysisResults([...results]); }
     };
-
-
 
     const addRow = (setter) => {
         setter(prev => [...prev, { id: `${Date.now()}-${Math.floor(Math.random() * 10000)}`, propertyType: dbPropertyTypes[0] || '', unitType: dbUnitTypes[0] || '', min: '', max: '', interval: '' }]);
@@ -914,10 +855,6 @@ const ProductMixTicketSize = () => {
     const removeRow = (setter, id) => {
         setter(prev => prev.filter(row => row.id !== id));
     };
-
-    const [productMixRows, setProductMixRows] = useState([
-        { id: 1, assetClass: 'Residential', propertyType: 'Apartment', unitMix: 'Studio', mode: 'Range', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '' }
-    ]);
 
     const totalAllottedArea = productMixRows.reduce((sum, row) => sum + (Number(row.allottedArea) || 0), 0);
 
@@ -937,6 +874,10 @@ const ProductMixTicketSize = () => {
     const removeProductMixRow = (id) => {
         setProductMixRows(prev => prev.filter(row => row.id !== id));
     };
+
+    // Scenario color palette
+    const SCENARIO_COLORS = ['#448C74', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'];
+    const getScenarioColor = (index) => SCENARIO_COLORS[index % SCENARIO_COLORS.length];
 
     return (
         <>
@@ -1185,12 +1126,279 @@ const ProductMixTicketSize = () => {
                 .pm-results-scroll-container::-webkit-scrollbar-thumb:hover {
                     background-color: ${theme === "dark" ? "#6b7280" : "#94a3b8"};
                 }
+                /* ─── Scenario Tab Strip ─────────────────────────────────────── */
+                .scenario-strip {
+                    display: flex;
+                    align-items: stretch;
+                    gap: 10px;
+                    overflow-x: auto;
+                    padding: 4px 2px 8px;
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
+                }
+                .scenario-strip::-webkit-scrollbar { display: none; }
+                .scenario-card {
+                    position: relative;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    min-width: 170px;
+                    max-width: 220px;
+                    padding: 12px 16px 12px 18px;
+                    border-radius: 14px;
+                    border: 2px solid #e2e8f0;
+                    background: #ffffff;
+                    cursor: pointer;
+                    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+                    flex-shrink: 0;
+                    user-select: none;
+                    overflow: hidden;
+                }
+                .scenario-card::before {
+                    content: '';
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    bottom: 0;
+                    width: 5px;
+                    border-radius: 14px 0 0 14px;
+                    background: #e2e8f0;
+                    transition: background 0.22s;
+                }
+                .scenario-card.active::before {
+                    background: var(--sc-color, #448C74);
+                }
+                .scenario-card:hover:not(.active) {
+                    border-color: #94a3b8;
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+                }
+                .scenario-card.active {
+                    border-color: var(--sc-color, #448C74);
+                    box-shadow: 0 4px 16px rgba(68,140,116,0.18);
+                    background: #f8fffe;
+                }
+                .scenario-card-icon {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 13px;
+                    font-weight: 800;
+                    color: #fff;
+                    flex-shrink: 0;
+                    margin-bottom: 6px;
+                }
+                .scenario-card-name {
+                    font-size: 12.5px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 160px;
+                }
+                .scenario-card-subtitle {
+                    font-size: 10.5px;
+                    color: #94a3b8;
+                    font-weight: 500;
+                    margin-top: 2px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 160px;
+                    min-height: 14px;
+                }
+                .scenario-card-delete {
+                    position: absolute;
+                    top: 6px;
+                    right: 6px;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    border: none;
+                    background: #fef2f2;
+                    color: #ef4444;
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    font-size: 9px;
+                    padding: 0;
+                    transition: background 0.15s;
+                    line-height: 1;
+                }
+                .scenario-card:hover .scenario-card-delete { display: flex; }
+                .scenario-card-delete:hover { background: #ef4444; color: #fff; }
+                .scenario-add-btn {
+                    min-width: 120px;
+                    padding: 10px 16px;
+                    border-radius: 14px;
+                    border: 2px dashed #cbd5e1;
+                    background: transparent;
+                    color: #64748b;
+                    font-size: 12px;
+                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    flex-shrink: 0;
+                    white-space: nowrap;
+                }
+                .scenario-add-btn:hover:not(:disabled) {
+                    border-color: #448C74;
+                    color: #448C74;
+                    background: #f0fdf9;
+                    transform: translateY(-2px);
+                }
+                .scenario-add-btn:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
+                .scenario-inline-input {
+                    background: none;
+                    border: none;
+                    border-bottom: 1.5px solid #448C74;
+                    outline: none;
+                    padding: 1px 2px;
+                    font-size: inherit;
+                    font-weight: inherit;
+                    color: inherit;
+                    width: 100%;
+                    max-width: 140px;
+                }
             `}</style>
             <div className="unit-design-header">
                 <div className="unit-design-eyebrow">Selected Section</div>
                 <h2 className="unit-design-title">Product Mix - Ticket Size</h2>
             </div>
             <div className="unit-design-body">
+                {/* ─── SCENARIO TAB STRIP ─────────────────────────────────────── */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #448C74, #35725e)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <FaLayerGroup size={13} color="#fff" />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Product Mix Scenarios</div>
+                                <div style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 500, marginTop: '1px' }}>
+                                    {scenarios.length} of {MAX_SCENARIOS} scenarios &bull; Double-click name to rename
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {scenarios.map((s, idx) => (
+                                <div
+                                    key={s.id}
+                                    style={{
+                                        width: '8px', height: '8px', borderRadius: '50%',
+                                        background: resolvedActiveId === s.id ? getScenarioColor(idx) : '#e2e8f0',
+                                        transition: 'all 0.2s'
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="scenario-strip">
+                        {scenarios.map((scenario, idx) => {
+                            const isActive = scenario.id === resolvedActiveId;
+                            const color = getScenarioColor(idx);
+                            const isEditingName = editingScenarioId === scenario.id && editingField === 'name';
+                            const isEditingSubtitle = editingScenarioId === scenario.id && editingField === 'subtitle';
+                            return (
+                                <div
+                                    key={scenario.id}
+                                    className={`scenario-card${isActive ? ' active' : ''}`}
+                                    style={{ '--sc-color': color }}
+                                    onClick={() => { if (editingScenarioId !== scenario.id) setActiveScenarioId(scenario.id); }}
+                                    title={`Click to switch to ${scenario.name}`}
+                                >
+                                    {/* Delete button */}
+                                    {scenarios.length > 1 && (
+                                        <button
+                                            className="scenario-card-delete"
+                                            onClick={(e) => { e.stopPropagation(); deleteScenario(scenario.id); }}
+                                            title="Delete scenario"
+                                        >
+                                            <FaTimes size={8} />
+                                        </button>
+                                    )}
+                                    {/* Icon badge */}
+                                    <div className="scenario-card-icon" style={{ background: color }}>
+                                        {idx + 1}
+                                    </div>
+                                    {/* Editable Name */}
+                                    <div
+                                        className="scenario-card-name"
+                                        onDoubleClick={(e) => { e.stopPropagation(); startEditing(scenario, 'name'); }}
+                                        title="Double-click to rename"
+                                    >
+                                        {isEditingName ? (
+                                            <input
+                                                className="scenario-inline-input"
+                                                value={editingValue}
+                                                autoFocus
+                                                onChange={(e) => setEditingValue(e.target.value)}
+                                                onBlur={commitEditing}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') commitEditing(); if (e.key === 'Escape') { setEditingScenarioId(null); setEditingField(null); } }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ fontSize: '12.5px', fontWeight: 800 }}
+                                            />
+                                        ) : scenario.name}
+                                    </div>
+                                    {/* Editable Subtitle */}
+                                    <div
+                                        className="scenario-card-subtitle"
+                                        onDoubleClick={(e) => { e.stopPropagation(); startEditing(scenario, 'subtitle'); }}
+                                        title="Double-click to add description"
+                                    >
+                                        {isEditingSubtitle ? (
+                                            <input
+                                                className="scenario-inline-input"
+                                                value={editingValue}
+                                                autoFocus
+                                                placeholder="Add description..."
+                                                onChange={(e) => setEditingValue(e.target.value)}
+                                                onBlur={commitEditing}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') commitEditing(); if (e.key === 'Escape') { setEditingScenarioId(null); setEditingField(null); } }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ fontSize: '10.5px', fontWeight: 500, color: '#94a3b8' }}
+                                            />
+                                        ) : (scenario.subtitle || (
+                                            <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>Add description...</span>
+                                        ))}
+                                    </div>
+                                    {/* Active indicator row */}
+                                    {isActive && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
+                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color }} />
+                                            <span style={{ fontSize: '9.5px', fontWeight: 700, color: color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Active</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {/* Add Scenario Button */}
+                        <button
+                            className="scenario-add-btn"
+                            onClick={addScenario}
+                            disabled={scenarios.length >= MAX_SCENARIOS}
+                            title={scenarios.length >= MAX_SCENARIOS ? `Maximum ${MAX_SCENARIOS} scenarios allowed` : 'Add a new scenario'}
+                        >
+                            <FaPlus size={11} />
+                            <span>Add Scenario</span>
+                            {scenarios.length >= MAX_SCENARIOS && (
+                                <span style={{ fontSize: '9px', opacity: 0.7, marginLeft: '2px' }}>(max)</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
                 {/* 1) Analysis Mode & Results */}
                 <div className="pm-section-card mb-4">
                     <div 
@@ -1199,7 +1407,14 @@ const ProductMixTicketSize = () => {
                     >
                         <div>
                             <div className="pm-section-eyebrow">SUBSECTION 1</div>
-                            <div className="pm-section-maintitle">Analysis Mode & Results</div>
+                            <div className="pm-section-maintitle" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                Analysis Mode &amp; Results
+                                <span style={{
+                                    fontSize: '11px', fontWeight: 700, padding: '2px 10px',
+                                    borderRadius: '99px', background: getScenarioColor(scenarios.findIndex(s => s.id === resolvedActiveId)),
+                                    color: '#fff', letterSpacing: '0.03em'
+                                }}>{activeScenario?.name}</span>
+                            </div>
                         </div>
                         <div className="d-flex align-items-center gap-3">
                             <div className="d-inline-flex align-items-center gap-2 bg-light px-3 py-1 rounded-pill border" style={{ borderColor: "#cbd5e1" }}>
@@ -2457,7 +2672,14 @@ const ProductMixTicketSize = () => {
                     >
                         <div>
                             <div className="pm-section-eyebrow">SUBSECTION 2</div>
-                            <div className="pm-section-maintitle">Applied Product Mix</div>
+                            <div className="pm-section-maintitle" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                Applied Product Mix
+                                <span style={{
+                                    fontSize: '11px', fontWeight: 700, padding: '2px 10px',
+                                    borderRadius: '99px', background: getScenarioColor(scenarios.findIndex(s => s.id === resolvedActiveId)),
+                                    color: '#fff', letterSpacing: '0.03em'
+                                }}>{activeScenario?.name}</span>
+                            </div>
                         </div>
                         <div className="d-flex align-items-center gap-3">
                             <div className="d-flex align-items-center rounded-pill" style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '6px 16px', fontSize: '14px', fontWeight: 600 }}>
