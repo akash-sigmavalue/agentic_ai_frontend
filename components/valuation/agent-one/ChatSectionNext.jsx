@@ -336,9 +336,9 @@ function summarizeEvent(event) {
     return `[METRICS] Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
   }
   if (event.type === "factorial_done") return "Valuation analytics generated.";
-  if (event.type === "done") return "Pipeline execution completed or artificially frozen.";
+  if (event.type === "done") return "Valuation Pipeline execution completed or artificially frozen.";
   if (event.type === "token_usage") return `Token usage updated: ${event.content?.cumulative_total_tokens || 0} tokens so far.`;
-  return "Pipeline update received.";
+  return "Valuation Pipeline update received.";
 }
 
 function humanizeFieldName(field) {
@@ -1495,7 +1495,7 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                     {comp.isDropped ? (
                       <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">Dropped</span>
                     ) : comp.data_source === "Internal DB" ? (
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
                     ) : (
                       <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Agent Web Search</span>
                     )}
@@ -1609,12 +1609,12 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
 
 // ── Dropped Comparable Table ─────────────────────────────────────
 const DROP_STAGE_CONFIG = {
-  type_filter:     { label: "Type Mismatch",  color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-  geocode:         { label: "Geocode Failed", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  distance_filter: { label: "Too Far (>15km)",color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  url_filter:      { label: "Bad URL",        color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
-  dedup:           { label: "Duplicate",      color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
-  subject_filter:  { label: "Subject Match",  color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  type_filter: { label: "Type Mismatch", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  geocode: { label: "Geocode Failed", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  distance_filter: { label: "Too Far (>15km)", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  url_filter: { label: "Bad URL", color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
+  dedup: { label: "Duplicate", color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30" },
+  subject_filter: { label: "Subject Match", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
 };
 
 function DroppedComparableTable({ droppedComparables, onRestore, selectable, onUpdateCoordinates, onResetCoordinates }) {
@@ -2048,10 +2048,10 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
             {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
               <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${lst.website_authenticity_score >= 90
-                  ? "bg-success/20 text-success border border-success/30"
-                  : lst.website_authenticity_score >= 70
-                    ? "bg-accent/20 text-accent border border-accent/30"
-                    : "bg-danger/20 text-danger border border-danger/30"
+                ? "bg-success/20 text-success border border-success/30"
+                : lst.website_authenticity_score >= 70
+                  ? "bg-accent/20 text-accent border border-accent/30"
+                  : "bg-danger/20 text-danger border border-danger/30"
                 }`}>
                 {lst.website_authenticity_score}
               </span>
@@ -2062,7 +2062,7 @@ function ListingTable({ listings, dbTransactions }) {
           </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
             ) : lst.source_url ? (
               <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
                 {lst.source_url}
@@ -2459,10 +2459,10 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
                 <td className="px-3 py-2 whitespace-nowrap">
                   {lst.project_category ? (
                     <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${["plot", "land"].includes((lst.project_category || "").toLowerCase())
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
-                          ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
-                          : "bg-text-dim/10 text-text-dim border-border/40"
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
+                        ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                        : "bg-text-dim/10 text-text-dim border-border/40"
                       }`}>
                       {lst.project_category}
                     </span>
@@ -4046,7 +4046,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
               {selectedArea > 0 && (
                 <div className="flex-1 md:text-right space-y-2 md:border-l md:border-border-soft md:pl-8">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Property Value</span>
                   <h2 className="font-mono text-4xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)]">
                     {formatter.format(exactValue)}
                   </h2>
@@ -4550,7 +4550,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
-                Quick Estimate Running
+                AI Quick Estimate Running
               </p>
               <p className="mt-1 text-xs text-text-secondary">
                 {propertyLabel} · {locationLabel}
@@ -4564,7 +4564,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-text-dim">
-            <span>Pipeline progress</span>
+            <span>Valuation Pipeline progress</span>
             <span className="text-accent">{progressPct}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-border/30">
@@ -4586,22 +4586,20 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
             return (
               <div
                 key={stage.id}
-                className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300 ${
-                  isActive
+                className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300 ${isActive
                     ? "border-accent/35 bg-accent/10 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]"
                     : isComplete
                       ? "border-success/20 bg-success/5"
                       : "border-border/40 bg-bg-input/40 opacity-70"
-                }`}
+                  }`}
               >
                 <div
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
-                    isActive
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${isActive
                       ? "border-accent/30 bg-accent/15 text-accent"
                       : isComplete
                         ? "border-success/30 bg-success/10 text-success"
                         : "border-border/50 bg-bg-card text-text-dim"
-                  }`}
+                    }`}
                 >
                   {isComplete ? (
                     <CheckCircle className="h-4 w-4" />
@@ -4613,9 +4611,8 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
-                      isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
-                    }`}>
+                    <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                      }`}>
                       {stage.label}
                     </p>
                     {isActive && (
@@ -4775,7 +4772,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
               <Zap className="h-5 w-5 text-accent" />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Quick Estimate</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">AI Quick Estimate</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                 Enter the subject details once and get a direct valuation result.
               </p>
@@ -5032,7 +5029,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     if (!comparableData || !subjectData) return false;
     const selected = Array.from(selectedComps).map(i => comparableData[i]);
     const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
-    
+
     // Check if any selected comparable is not fetched yet
     const hasUnfetchedComp = selected.some(c => !fetchedCompIds.has(getCompId(c)));
     if (hasUnfetchedComp) return true;
@@ -5123,13 +5120,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     if (!isRecalculation) {
       setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: `Run Traditional Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Economic Life: ${payload.total_life_of_building} yrs. Plot Area: ${payload.plot_area_sqft} sqft, Built-up Area: ${payload.builtup_area_sqft} sqft, Age: ${payload.age_of_property} yrs.`,
-        meta: "Now"
-      },
-      { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
+        ...prev,
+        {
+          role: "user",
+          content: `Run Traditional Cost Approach calculation. Construction Rate: ₹${payload.construction_rate_per_sqft}/sqft, Economic Life: ${payload.total_life_of_building} yrs. Plot Area: ${payload.plot_area_sqft} sqft, Built-up Area: ${payload.builtup_area_sqft} sqft, Age: ${payload.age_of_property} yrs.`,
+          meta: "Now"
+        },
+        { role: "assistant", content: "Calculating depreciated property value...", meta: "Live" },
       ]);
     } else {
       setMessages((prev) => {
@@ -5176,7 +5173,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           const event = JSON.parse(chunk.slice(6));
 
           onEvent?.(event);
-          let summary = "Pipeline update received.";
+          let summary = "Valuation update received.";
           if (event.type === "cost_calculation_start") summary = event.content?.message || "Running Cost Approach calculations...";
           else if (event.type === "cost_calculation_result") summary = `🛡️ Cost Approach calculated.`;
           else if (event.type === "cost_calculation_done") summary = "Cost Approach calculation complete.";
@@ -5391,7 +5388,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     ]);
     setCurrentQuestion(summary);
     setOriginalQuestion(summary);
-    setCurrentStage("Quick Estimate: Starting");
+    setCurrentStage("AI Quick Estimate: Starting");
     setStreamingNote("");
     setQuickEstimateProgress({
       activeIndex: 0,
@@ -5426,7 +5423,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Quick Estimate request failed with status ${response.status}`);
+        throw new Error(`AI Quick Estimate request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -5448,7 +5445,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           onEvent?.(event);
 
           if (event.type === "quick_estimate_start") {
-            setCurrentStage("Quick Estimate: Running");
+            setCurrentStage("AI Quick Estimate: Running");
             updateQuickEstimateProgress("geocoding", event.content?.message || "Starting quick estimate...");
           } else if (event.type === "quick_estimate_progress") {
             const stage = event.stage || "quick_estimate";
@@ -5470,7 +5467,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               detail.comparables = event.content.comparables;
             }
             updateQuickEstimateProgress(stage, message, detail);
-            setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
+            setCurrentStage(`AI Quick Estimate: ${stage.replaceAll("_", " ")}`);
           } else if (event.type === "quick_estimate_validation_error") {
             const missing = event.content?.missing_fields?.join(", ") || "required fields";
             updateQuickEstimateProgress("geocoding", event.content?.message || `Missing required fields: ${missing}`);
@@ -5542,12 +5539,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               ...prev,
               {
                 role: "assistant",
-                content: `Quick Estimate failed: ${event.content}`,
+                content: `AI Quick Estimate failed: ${event.content}`,
                 meta: "error",
               },
             ]);
           } else if (event.type === "quick_estimate_done") {
-            setCurrentStage("Quick Estimate: Complete");
+            setCurrentStage("AI Quick Estimate: Complete");
             setQuickEstimateProgress((prev) => ({ ...prev, done: true }));
             window.setTimeout(() => setIsQuickEstimateStreaming(false), 900);
           }
@@ -5560,7 +5557,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           ...prev,
           {
             role: "assistant",
-            content: `Quick Estimate failed: ${error.message}`,
+            content: `AI Quick Estimate failed: ${error.message}`,
             meta: "error",
           },
         ]);
@@ -5692,15 +5689,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       // Recalculate exact distance from subject using Haversine
       const distanceKm = c.distance_from_subject_km ?? (
         (subjectData?.lat && subjectData?.lng)
-          ? (()=>{
-              const R = 6371;
-              const dLat = (validLat - subjectData.lat) * Math.PI / 180;
-              const dLng = (validLng - subjectData.lng) * Math.PI / 180;
-              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(subjectData.lat * Math.PI / 180) * Math.cos(validLat * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-              return Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(2));
-            })()
+          ? (() => {
+            const R = 6371;
+            const dLat = (validLat - subjectData.lat) * Math.PI / 180;
+            const dLng = (validLng - subjectData.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(subjectData.lat * Math.PI / 180) * Math.cos(validLat * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            return Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2));
+          })()
           : 2.0
       );
 
@@ -6579,7 +6576,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           : `🌐 Searching web listings for Subject Project...`;
         setStreamingNote(webFetchNote);
         addLog(webFetchNote, "info");
-        
+
         setProjectFetchStatuses(prev => {
           const next = { ...prev };
           if (shouldFetchWebListings) {
@@ -6720,7 +6717,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   }
                   return next;
                 });
-                
+
                 // Mark all web fetch statuses as done
                 setProjectFetchStatuses(prev => {
                   const next = { ...prev };
@@ -8009,15 +8006,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   meta: event.type.replaceAll("_", " "),
                   ...(event.type === "comparable_results"
                     ? {
-                        // Store null (not []) when no comparables found so the fallback card
-                        // condition `!message.comparables` remains truthy
-                        comparables: (event.content?.comparables?.length > 0)
-                          ? event.content.comparables
-                          : null,
-                        dropped_comparables: (event.content?.dropped_comparables?.length > 0)
-                          ? event.content.dropped_comparables
-                          : null,
-                      }
+                      // Store null (not []) when no comparables found so the fallback card
+                      // condition `!message.comparables` remains truthy
+                      comparables: (event.content?.comparables?.length > 0)
+                        ? event.content.comparables
+                        : null,
+                      dropped_comparables: (event.content?.dropped_comparables?.length > 0)
+                        ? event.content.dropped_comparables
+                        : null,
+                    }
                     : {}),
                   // Preserve db_no_results flag across meta overwrites
                   db_no_results: next[lastIndex]?.db_no_results || false,
@@ -8989,11 +8986,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const anyStreaming = isStreaming || isQuickEstimateStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
 
   const quickEstimateModal = showQuickEstimateModal && typeof document !== "undefined" ? createPortal(
-    <div 
+    <div
       className="fixed inset-0 z-[9999] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
       onClick={() => setShowQuickEstimateModal(false)}
     >
-      <div 
+      <div
         className="relative w-full max-w-2xl animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
@@ -9018,977 +9015,976 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   return (
     <>
       <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-      <div className="panel-header-shell border-b border-border/60">
-        <div className="panel-title-shell">
-          <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
-            <MessageSquareCode className="h-5 w-5 text-accent" />
-          </div>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          {!anyStreaming && (
-            <button
-              type="button"
-              onClick={() => setShowQuickEstimateModal(true)}
-              className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 transition cursor-pointer"
-            >
-              <Zap className="h-3 w-3" />
-              Quick Estimate
-            </button>
-          )}
-          {subjectData && !anyStreaming && (
-            <button
-              type="button"
-              onClick={handleEditPropertyDetails}
-              className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
-            >
-              <SlidersHorizontal className="h-3 w-3" />
-              Edit Details
-            </button>
-          )}
-          <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center py-6">
-            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
-              <Bot className="h-8 w-8 text-accent" />
+        <div className="panel-header-shell border-b border-border/60">
+          <div className="panel-title-shell">
+            <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
+              <MessageSquareCode className="h-5 w-5 text-accent" />
             </div>
-            <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
-              Start A Valuation Conversation
-            </h3>
-            <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
-              Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowQuickEstimateModal(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
-            >
-              <Zap className="h-4 w-4" />
-              Quick Estimate Valuation
-            </button>
-            <div className="mt-6 grid gap-3 w-full max-w-lg">
-              {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => submitQuestion(prompt)}
-                  className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-
-
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">AI Assistant</h2>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {revertNotice && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-warning/25 bg-warning/10 px-4 py-3 text-xs font-semibold text-warning shadow-md backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                <span>{revertNotice}</span>
-              </div>
-            )}
-            {messages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
+          <div className="flex items-center gap-2">
+            {!anyStreaming && (
+              <button
+                type="button"
+                onClick={() => setShowQuickEstimateModal(true)}
+                className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 transition cursor-pointer"
               >
-                <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
-                  {message.role === "user" ? "You" : `Assistant · ${message.meta}`}
-                </p>
+                <Zap className="h-3 w-3" />
+                AI Quick Estimate
+              </button>
+            )}
+            {subjectData && !anyStreaming && (
+              <button
+                type="button"
+                onClick={handleEditPropertyDetails}
+                className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                Edit Details
+              </button>
+            )}
+            <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">{anyStreaming ? "LIVE" : "READY"}</div>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center py-6">
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
+                <Bot className="h-8 w-8 text-accent" />
+              </div>
+              <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
+                Start A Valuation Conversation
+              </h3>
+              <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
+                Ask about a property and the Valuation Pipeline will stream entity extraction updates into the workflow view.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowQuickEstimateModal(true)}
+                className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+              >
+                <Zap className="h-4 w-4" />
+                AI Quick Estimate Valuation
+              </button>
+              <div className="mt-6 grid gap-3 w-full max-w-lg">
+                {QUICK_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => submitQuestion(prompt)}
+                    className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+
+
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {revertNotice && (
+                <div className="flex items-center gap-2.5 rounded-xl border border-warning/25 bg-warning/10 px-4 py-3 text-xs font-semibold text-warning shadow-md backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                  <span>{revertNotice}</span>
+                </div>
+              )}
+              {messages.map((message, index) => (
                 <div
-                  className={
-                    message.role === "user"
-                      ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
-                      : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
-                        ? "p-0 bg-transparent border-0 shadow-none"
-                        : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
-                  }
+                  key={`${message.role}-${index}`}
+                  className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
                 >
-                  {message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
+                  <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
+                    {message.role === "user" ? "You" : `Assistant · ${message.meta}`}
+                  </p>
+                  <div
+                    className={
+                      message.role === "user"
+                        ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
+                        : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
+                          ? "p-0 bg-transparent border-0 shadow-none"
+                          : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
+                    }
+                  >
+                    {message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
+                      <PropertyProfilingLiveCard
+                        streamingNote={streamingNote}
+                        subjectData={subjectDataRef.current || subjectData}
+                        isStreaming={isStreaming}
+                      />
+                    ) : (
+                      message.content
+                    )}
+                    {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
+                      <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
+                        {message.sub_locality && (
+                          <p className="mt-1 text-sm font-medium text-text-primary">{message.sub_locality}</p>
+                        )}
+                        {Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {message.sub_locality_list.map((item) => (
+                              <span
+                                key={item}
+                                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+                              >
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(message.comparables || message.dropped_comparables) && (
+                      <div className="space-y-3">
+                        {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
+                          <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
+                            <div>
+                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                              <span className="text-[10px] text-text-secondary leading-relaxed">
+                                Please review and select comparable projects from the table below, then click &quot;Proceed to Fetch Listings&quot;.
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <ComparableTable
+                          comparables={message.comparables || []}
+                          droppedComparables={message.dropped_comparables}
+                          selectedComps={selectedComps}
+                          onToggle={handleCompToggle}
+                          onRestoreDropped={handleRestoreDroppedComps}
+                          onUpdateCoordinates={handleUpdateComparableCoords}
+                          onResetCoordinates={handleResetComparableCoords}
+                          selectable={pipelineDone && !isListingStreaming && !listingData}
+                        />
+                        {listingData && (
+                          <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
+                            <span className="text-[10px] text-text-dim font-medium">Comparable selection is locked.</span>
+                            <button
+                              type="button"
+                              onClick={handleBackToComparables}
+                              className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
+                            >
+                              Modify Selection
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* DB found nothing but web results exist - amber warning */}
+                    {message.db_no_results && message.comparables && (
+                      <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
+                        <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Transaction Database</p>
+                          <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* DB found nothing AND no web comparables either — interactive fallback prompt */}
+                    {message.db_no_results && message.web_comparable_search_done && !message.comparables && (
+                      <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-300">
+                        {/* Warning header */}
+                        <div className="flex items-start gap-3">
+                          <Database className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Comparable Projects Found</p>
+                            <p className="text-[10px] text-text-dim mt-1 leading-relaxed">
+                              No matching projects were found in the Transaction Database or via web search for this location and property type.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Offer options only while listing hasn't started */}
+                        {!listingData && !cleanedData && !isListingStreaming && (
+                          <>
+                            <p className="text-sm text-text-secondary leading-relaxed">
+                              Would you like to continue the valuation using only the{" "}
+                              <span className="font-semibold text-accent-light">subject property&apos;s own listings</span>?{" "}
+                              The system will derive a market rate from available signals for the subject alone
+                              (Subject-Only Mode).
+                            </p>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={submitSubjectOnlyListingFetch}
+                                disabled={isListingStreaming}
+                                className="rounded-xl bg-accent/10 border border-accent/30 text-accent px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-accent/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                Yes, Continue Without Comparables →
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  clearInteractiveState();
+                                  setMessages([]);
+                                }}
+                                className="rounded-xl border border-border bg-bg-input text-text-dim px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:text-text-primary hover:border-border/80 transition"
+                              >
+                                No, Start a New Query
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* After the user confirmed, show a soft status note */}
+                        {(listingData || cleanedData || isListingStreaming) && (
+                          <p className="text-[10px] text-text-dim italic pt-1">
+                            Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property&apos;s listings.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {(message.listings || message.db_transactions) && (
+                      <ListingTable
+                        listings={message.listings || []}
+                        dbTransactions={message.db_transactions || []}
+                      />
+                    )}
+                    {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
+                    {message.factorial_data && (
+                      <div className="flex flex-col gap-3">
+                        <FactorialTable
+                          data={message.factorial_data}
+                          onCalculateRate={() => handleCalculateRate(message.factorial_data)}
+                          isCalculatingRate={isFactorialAnalysisStreaming}
+                          canCalculateRate={Boolean(subjectData && (selectedComparablePayload().length > 0 || (message.factorial_data?.table || []).some(r => r.is_subject && r.avg_rate > 0)))}
+                        />
+                      </div>
+                    )}
+                    {message.factorial_analysis_data && (
+                      <FactoringResultCard
+                        data={message.factorial_analysis_data}
+                        area_unit={subjectData?.area_unit || "sqft"}
+                        subjectData={subjectData}
+                        onUpdateData={handleUpdateFactoringData}
+                      />
+                    )}
+                    {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
+
+                    {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
+                      <>
+                        {costCalculationData && (
+                          <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
+                              <CheckCircle className="h-4.5 w-4.5 text-success" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
+                              <p className="text-[9px] text-text-dim mt-0.5">Update the cost parameters below and recalculate if needed.</p>
+                            </div>
+                          </div>
+                        )}
+                        {costInputsSchema && (
+                          <CostInputsForm
+                            schema={costInputsSchema}
+                            values={costInputsValues}
+                            onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
+                            onSubmit={handleCostCalculate}
+                            isCalculating={isCostCalculating}
+                            subjectData={subjectData}
+                            submitLabel={costCalculationData ? "Recalculate Cost Approach" : "Execute Cost Approach Calculation"}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* ── Execution Terminal Log ─────────────────────────── */}
+              {(isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
+                <div className="mr-2 animate-slide-in space-y-2">
+                  {isStreaming && !messages.some(m => m.content === "Running property profiling...") && (
                     <PropertyProfilingLiveCard
                       streamingNote={streamingNote}
                       subjectData={subjectDataRef.current || subjectData}
                       isStreaming={isStreaming}
                     />
-                  ) : (
-                    message.content
                   )}
-                  {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
-                    <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
-                      {message.sub_locality && (
-                        <p className="mt-1 text-sm font-medium text-text-primary">{message.sub_locality}</p>
-                      )}
-                      {Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {message.sub_locality_list.map((item) => (
-                            <span
-                              key={item}
-                              className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
-                            >
-                              {item}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {(message.comparables || message.dropped_comparables) && (
-                    <div className="space-y-3">
-                      {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
-                        <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
-                          <div>
-                            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                            <span className="text-[10px] text-text-secondary leading-relaxed">
-                              Please review and select comparable projects from the table below, then click &quot;Proceed to Fetch Listings&quot;.
-                            </span>
+                  {isListingStreaming && (
+                    <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
                           </div>
+                          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Listing Fetch Status</span>
                         </div>
-                      )}
-                      <ComparableTable
-                        comparables={message.comparables || []}
-                        droppedComparables={message.dropped_comparables}
-                        selectedComps={selectedComps}
-                        onToggle={handleCompToggle}
-                        onRestoreDropped={handleRestoreDroppedComps}
-                        onUpdateCoordinates={handleUpdateComparableCoords}
-                        onResetCoordinates={handleResetComparableCoords}
-                        selectable={pipelineDone && !isListingStreaming && !listingData}
-                      />
-                      {listingData && (
-                        <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
-                          <span className="text-[10px] text-text-dim font-medium">Comparable selection is locked.</span>
-                          <button
-                            type="button"
-                            onClick={handleBackToComparables}
-                            className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-warning hover:bg-warning/20 transition cursor-pointer"
-                          >
-                            Modify Selection
-                          </button>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                          Processing
+                        </span>
+                      </div>
+                      <div className="p-4 font-mono text-[11px] leading-relaxed">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 font-bold text-cyan-400">›</span>
+                          <span className="text-slate-300 font-semibold break-words">{listingStatusNote || streamingNote || "Waiting for listing fetch..."}</span>
+                          <span className="animate-pulse text-emerald-400">█</span>
                         </div>
-                      )}
+                      </div>
+                      {Object.keys(projectFetchStatuses).length > 0 && (() => {
+                        const dbStatuses = [];
+                        const webStatuses = [];
+
+                        Object.entries(projectFetchStatuses).forEach(([key, status]) => {
+                          if (key.startsWith("db:")) {
+                            const rawName = key.slice(3);
+                            const displayName = rawName === "__subject__"
+                              ? `${subjectData?.project_name || "Subject Project"}`
+                              : rawName;
+                            dbStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
+                          } else if (key.startsWith("web:")) {
+                            const rawName = key.slice(4);
+                            const displayName = rawName === "__subject__"
+                              ? `${subjectData?.project_name || "Subject Project"}`
+                              : rawName;
+                            webStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
+                          } else {
+                            // fallback for any other keys
+                            webStatuses.push({ name: key, status, isSubject: false });
+                          }
+                        });
+
+                        return (
+                          <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+                            <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center justify-between">
+                              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light font-mono">Live Fetch Status</span>
+                              <span className="text-[9px] text-text-dim font-mono">
+                                ({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)
+                              </span>
+                            </div>
+
+                            <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+                              {/* DB Search Group */}
+                              {dbStatuses.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">🗄️ DB Search -</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {dbStatuses.map(({ name, status, isSubject }) => {
+                                      const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                                      const colors = { pending: "text-text-dim", fetching: "text-emerald-400 animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
+                                      return (
+                                        <div key={`db-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                          <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                                          <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                            {name}
+                                            {isSubject && (
+                                              <span className="ml-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400 font-sans">
+                                                Subject
+                                              </span>
+                                            )}
+                                          </span>
+                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Web Search Group */}
+                              {webStatuses.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 font-mono">🌐 Web Search -</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {webStatuses.map(({ name, status, isSubject }) => {
+                                      const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
+                                      const colors = { pending: "text-text-dim", fetching: "text-cyan-400 animate-pulse", done: "text-cyan-400", error: "text-red-400", skipping: "text-amber-400" };
+                                      return (
+                                        <div key={`web-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                          <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
+                                          <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                            {name}
+                                            {isSubject && (
+                                              <span className="ml-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-400 font-sans">
+                                                Subject
+                                              </span>
+                                            )}
+                                          </span>
+                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
-                  {/* DB found nothing but web results exist - amber warning */}
-                  {message.db_no_results && message.comparables && (
-                    <div className="mt-2.5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 animate-in slide-in-from-bottom-2 duration-300">
-                      <Database className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400">No Project Found in Transaction Database</p>
-                        <p className="text-[10px] text-text-dim mt-1 leading-relaxed">The internal database returned no matching projects for this location and property type. Results above are from web search only.</p>
+                  {isCleaningStreaming && (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-emerald-500/10 bg-emerald-500/5 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-emerald-300">Cleaning Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse shadow-[0_0_6px_#86efac]" />
+                          Processing
+                        </span>
+                      </div>
+                      <div className="p-4 font-mono text-[11px] leading-relaxed text-emerald-100">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 font-bold text-emerald-300">›</span>
+                          <span className="font-semibold break-words">{cleaningStatusNote || streamingNote || "Cleaning listings..."}</span>
+                          <span className="animate-pulse text-emerald-300">█</span>
+                        </div>
                       </div>
                     </div>
                   )}
-                  {/* DB found nothing AND no web comparables either — interactive fallback prompt */}
-                  {message.db_no_results && message.web_comparable_search_done && !message.comparables && (
-                    <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-300">
-                      {/* Warning header */}
-                      <div className="flex items-start gap-3">
-                        <Database className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-widest text-red-400">No Comparable Projects Found</p>
-                          <p className="text-[10px] text-text-dim mt-1 leading-relaxed">
-                            No matching projects were found in the Transaction Database or via web search for this location and property type.
-                          </p>
+                  {isFactorialStreaming && (
+                    <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-purple-500/10 bg-purple-500/5 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-purple-300">Factorial Table Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse shadow-[0_0_6px_#c084fc]" />
+                          Processing
+                        </span>
+                      </div>
+                      <div className="p-4 font-mono text-[11px] leading-relaxed text-purple-100">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 font-bold text-purple-300">›</span>
+                          <span className="font-semibold break-words">{factorialStatusNote || streamingNote || "Building factorial table..."}</span>
+                          <span className="animate-pulse text-purple-300">█</span>
                         </div>
                       </div>
-
-                      {/* Offer options only while listing hasn't started */}
-                      {!listingData && !cleanedData && !isListingStreaming && (
-                        <>
-                          <p className="text-sm text-text-secondary leading-relaxed">
-                            Would you like to continue the valuation using only the{" "}
-                            <span className="font-semibold text-accent-light">subject property&apos;s own listings</span>?{" "}
-                            The system will derive a market rate from available signals for the subject alone
-                            (Subject-Only Mode).
-                          </p>
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={submitSubjectOnlyListingFetch}
-                              disabled={isListingStreaming}
-                              className="rounded-xl bg-accent/10 border border-accent/30 text-accent px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:bg-accent/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              Yes, Continue Without Comparables →
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                clearInteractiveState();
-                                setMessages([]);
-                              }}
-                              className="rounded-xl border border-border bg-bg-input text-text-dim px-4 py-2 text-[11px] font-bold uppercase tracking-wider hover:text-text-primary hover:border-border/80 transition"
-                            >
-                              No, Start a New Query
-                            </button>
-                          </div>
-                        </>
-                      )}
-
-                      {/* After the user confirmed, show a soft status note */}
-                      {(listingData || cleanedData || isListingStreaming) && (
-                        <p className="text-[10px] text-text-dim italic pt-1">
-                          Proceeding in Subject-Only Mode — valuation is based exclusively on the subject property&apos;s listings.
-                        </p>
-                      )}
                     </div>
                   )}
-                  {(message.listings || message.db_transactions) && (
-                    <ListingTable
-                      listings={message.listings || []}
-                      dbTransactions={message.db_transactions || []}
-                    />
-                  )}
-                  {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
-                  {message.factorial_data && (
-                    <div className="flex flex-col gap-3">
-                      <FactorialTable
-                        data={message.factorial_data}
-                        onCalculateRate={() => handleCalculateRate(message.factorial_data)}
-                        isCalculatingRate={isFactorialAnalysisStreaming}
-                        canCalculateRate={Boolean(subjectData && (selectedComparablePayload().length > 0 || (message.factorial_data?.table || []).some(r => r.is_subject && r.avg_rate > 0)))}
-                      />
-                    </div>
-                  )}
-                  {message.factorial_analysis_data && (
-                    <FactoringResultCard
-                      data={message.factorial_analysis_data}
-                      area_unit={subjectData?.area_unit || "sqft"}
-                      subjectData={subjectData}
-                      onUpdateData={handleUpdateFactoringData}
-                    />
-                  )}
-                  {message.cost_calculation_data && <CostResultCard data={message.cost_calculation_data} subjectData={subjectData} />}
-
-                  {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
-                    <>
-                      {costCalculationData && (
-                        <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
-                            <CheckCircle className="h-4.5 w-4.5 text-success" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
-                            <p className="text-[9px] text-text-dim mt-0.5">Update the cost parameters below and recalculate if needed.</p>
-                          </div>
+                  {isFactorialAnalysisStreaming && (
+                    <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-pink-500/10 bg-pink-500/5 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-pink-300">Factorial Analysis Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-pink-300 animate-pulse shadow-[0_0_6px_#f9a8d4]" />
+                          Processing
+                        </span>
+                      </div>
+                      <div className="p-4 font-mono text-[11px] leading-relaxed text-pink-100">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 font-bold text-pink-300">›</span>
+                          <span className="font-semibold break-words">{analysisStatusNote || streamingNote || "Running valuation synthesis..."}</span>
+                          <span className="animate-pulse text-pink-300">█</span>
                         </div>
-                      )}
-                      {costInputsSchema && (
-                        <CostInputsForm
-                          schema={costInputsSchema}
-                          values={costInputsValues}
-                          onChange={(field, val) => setCostInputsValues(prev => ({ ...prev, [field]: val }))}
-                          onSubmit={handleCostCalculate}
-                          isCalculating={isCostCalculating}
-                          subjectData={subjectData}
-                          submitLabel={costCalculationData ? "Recalculate Cost Approach" : "Execute Cost Approach Calculation"}
-                        />
-                      )}
-                    </>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              )}
 
-            {/* ── Execution Terminal Log ─────────────────────────── */}
-            {(isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || streamingNote) && !isQuickEstimateStreaming && (
-              <div className="mr-2 animate-slide-in space-y-2">
-                {isStreaming && !messages.some(m => m.content === "Running property profiling...") && (
-                  <PropertyProfilingLiveCard
-                    streamingNote={streamingNote}
-                    subjectData={subjectDataRef.current || subjectData}
-                    isStreaming={isStreaming}
-                  />
-                )}
-                {isListingStreaming && (
-                  <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="flex gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
-                        </div>
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Listing Fetch Status</span>
-                      </div>
-                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
-                        Processing
-                      </span>
-                    </div>
-                    <div className="p-4 font-mono text-[11px] leading-relaxed">
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 font-bold text-cyan-400">›</span>
-                        <span className="text-slate-300 font-semibold break-words">{listingStatusNote || streamingNote || "Waiting for listing fetch..."}</span>
-                        <span className="animate-pulse text-emerald-400">█</span>
-                      </div>
-                    </div>
-                    {Object.keys(projectFetchStatuses).length > 0 && (() => {
-                      const dbStatuses = [];
-                      const webStatuses = [];
+              {isQuickEstimateStreaming && (
+                <QuickEstimateProgressPanel
+                  progress={quickEstimateProgress}
+                  includeCost={
+                    quickEstimateValues.recommended_approach === "cost"
+                    && ["villa", "building_land"].includes(String(quickEstimateValues.property_type || "").toLowerCase())
+                  }
+                  propertyLabel={String(quickEstimateValues.property_type || "property").replaceAll("_", " ")}
+                  locationLabel={quickEstimateValues.location_name || quickEstimateValues.city_name || "selected location"}
+                />
+              )}
 
-                      Object.entries(projectFetchStatuses).forEach(([key, status]) => {
-                        if (key.startsWith("db:")) {
-                          const rawName = key.slice(3);
-                          const displayName = rawName === "__subject__"
-                            ? `${subjectData?.project_name || "Subject Project"}`
-                            : rawName;
-                          dbStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
-                        } else if (key.startsWith("web:")) {
-                          const rawName = key.slice(4);
-                          const displayName = rawName === "__subject__"
-                            ? `${subjectData?.project_name || "Subject Project"}`
-                            : rawName;
-                          webStatuses.push({ name: displayName, status, isSubject: rawName === "__subject__" });
-                        } else {
-                          // fallback for any other keys
-                          webStatuses.push({ name: key, status, isSubject: false });
-                        }
-                      });
-
-                      return (
-                        <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
-                          <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center justify-between">
-                            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light font-mono">Live Fetch Status</span>
-                            <span className="text-[9px] text-text-dim font-mono">
-                              ({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)
-                            </span>
-                          </div>
-                          
-                          <div className="p-3 space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
-                            {/* DB Search Group */}
-                            {dbStatuses.length > 0 && (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
-                                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">🗄️ DB Search -</span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-1">
-                                  {dbStatuses.map(({ name, status, isSubject }) => {
-                                    const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                                    const colors = { pending: "text-text-dim", fetching: "text-emerald-400 animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
-                                    return (
-                                      <div key={`db-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
-                                        <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                                        <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
-                                          {name}
-                                          {isSubject && (
-                                            <span className="ml-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400 font-sans">
-                                              Subject
-                                            </span>
-                                          )}
-                                        </span>
-                                        <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Web Search Group */}
-                            {webStatuses.length > 0 && (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
-                                  <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 font-mono">🌐 Web Search -</span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-1">
-                                  {webStatuses.map(({ name, status, isSubject }) => {
-                                    const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                                    const colors = { pending: "text-text-dim", fetching: "text-cyan-400 animate-pulse", done: "text-cyan-400", error: "text-red-400", skipping: "text-amber-400" };
-                                    return (
-                                      <div key={`web-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
-                                        <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                                        <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
-                                          {name}
-                                          {isSubject && (
-                                            <span className="ml-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-400 font-sans">
-                                              Subject
-                                            </span>
-                                          )}
-                                        </span>
-                                        <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-                {isCleaningStreaming && (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-3 border-b border-emerald-500/10 bg-emerald-500/5 px-4 py-2.5">
-                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-emerald-300">Cleaning Status</span>
-                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 select-none">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse shadow-[0_0_6px_#86efac]" />
-                        Processing
-                      </span>
-                    </div>
-                    <div className="p-4 font-mono text-[11px] leading-relaxed text-emerald-100">
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 font-bold text-emerald-300">›</span>
-                        <span className="font-semibold break-words">{cleaningStatusNote || streamingNote || "Cleaning listings..."}</span>
-                        <span className="animate-pulse text-emerald-300">█</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {isFactorialStreaming && (
-                  <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-3 border-b border-purple-500/10 bg-purple-500/5 px-4 py-2.5">
-                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-purple-300">Factorial Table Status</span>
-                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-300 select-none">
-                        <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse shadow-[0_0_6px_#c084fc]" />
-                        Processing
-                      </span>
-                    </div>
-                    <div className="p-4 font-mono text-[11px] leading-relaxed text-purple-100">
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 font-bold text-purple-300">›</span>
-                        <span className="font-semibold break-words">{factorialStatusNote || streamingNote || "Building factorial table..."}</span>
-                        <span className="animate-pulse text-purple-300">█</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {isFactorialAnalysisStreaming && (
-                  <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-3 border-b border-pink-500/10 bg-pink-500/5 px-4 py-2.5">
-                      <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-pink-300">Factorial Analysis Status</span>
-                      <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-300 select-none">
-                        <span className="h-1.5 w-1.5 rounded-full bg-pink-300 animate-pulse shadow-[0_0_6px_#f9a8d4]" />
-                        Processing
-                      </span>
-                    </div>
-                    <div className="p-4 font-mono text-[11px] leading-relaxed text-pink-100">
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 font-bold text-pink-300">›</span>
-                        <span className="font-semibold break-words">{analysisStatusNote || streamingNote || "Running valuation synthesis..."}</span>
-                        <span className="animate-pulse text-pink-300">█</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isQuickEstimateStreaming && (
-              <QuickEstimateProgressPanel
-                progress={quickEstimateProgress}
-                includeCost={
-                  quickEstimateValues.recommended_approach === "cost"
-                  && ["villa", "building_land"].includes(String(quickEstimateValues.property_type || "").toLowerCase())
-                }
-                propertyLabel={String(quickEstimateValues.property_type || "property").replaceAll("_", " ")}
-                locationLabel={quickEstimateValues.location_name || quickEstimateValues.city_name || "selected location"}
-              />
-            )}
-
-            {/* ── Proceed to Listing Fetch CTA ────────────────── */}
-            {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
-                <div
-                  onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
-                  className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
-                      <FileSearch className="h-5 w-5 text-accent-light" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                          Step 2 — Fetch Listings
-                        </p>
-                        {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
-                      </div>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        {selectedComps.size > 0
-                          ? (() => {
-                            const selected = Array.from(selectedComps).map(i => comparableData[i]);
-                            const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
-                            const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
-                            const newCount = selected.length - skipCount;
-                            if (skipCount > 0) {
-                              return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
-                            }
-                            return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
-                          })()
-                          : "Select at least one comparable from the table above to proceed."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {!ctaListingCollapsed && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                    <p className="text-xs text-text-dim">
-                      {fetchedCompIds.size > 0
-                        ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
-                        : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
-                    </p>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {backupValuationState && (
-                        <button
-                          type="button"
-                          onClick={handleCancelModification}
-                          className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 cursor-pointer animate-in fade-in duration-300"
-                        >
-                          Cancel Modification
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={submitListingFetch}
-                        disabled={selectedComps.size === 0}
-                        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-                      >
-                        {fetchedCompIds.size > 0 ? "Fetch New Comparables →" : "Proceed to Next Step →"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-            {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && !hasPendingFetch && (listingData?.length > 0 || dbTransactions.length > 0) && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-                <div
-                  onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
-                  className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
-                      <Sparkles className="h-5 w-5 text-[#fb923c]" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                          Step 3 — Clean Raw Listings
-                        </p>
-                        {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
-                      </div>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {!ctaCleanCollapsed && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                    <p className="text-xs text-text-dim">
-                      The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={submitCleaning}
-                      className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                    >
-                      Start Data Cleaning →
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Proceed to Factorial Table CTA ────────────────── */}
-            {cleanedData && cleanedData.length > 0 && (!factorialData || needsFactorialRegeneration) && !isFactorialStreaming && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
-                <div
-                  onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
-                  className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
-                      <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                          Step 4 — Generate Factorial Table
-                        </p>
-                        {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
-                      </div>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        {needsFactorialRegeneration
-                          ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
-                          : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {!ctaFactorialCollapsed && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                    <p className="text-xs text-text-dim">
-                      This will group data by project and calculate key rate statistics for valuation.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={submitFactorial}
-                      className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                    >
-                      Generate Factorial Table →
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Start New Valuation CTA ─────────────────────── */}
-            {factorialAnalysisData && pipelineDone && !anyStreaming && (
-              <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="rounded-2xl border border-success/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.05),rgba(52,211,153,0.03))] p-5 flex flex-col items-center gap-4 shadow-panel text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-success/15 border border-success/30 text-2xl">🎉</div>
-                  <div>
-                    <p className="text-sm font-bold uppercase tracking-widest text-success">Valuation Complete</p>
-                    <p className="text-[11px] text-text-dim mt-1">Your valuation report is ready. You can start a new valuation or review the results in the panels above.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearInteractiveState();
-                      setMessages([]);
-                      setInput("");
-                      onClear?.();
-                    }}
-                    className="inline-flex items-center gap-2.5 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+              {/* ── Proceed to Listing Fetch CTA ────────────────── */}
+              {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+                  <div
+                    onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
+                    className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
                   >
-                    <span>✦</span>
-                    Start New Valuation
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
-            {Stage1GateWizard}
-
-            {/* ── Map Confirmation (standalone — not part of wizard) */}
-            {mapConfirmation && !gateActive && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
-                <div
-                  onClick={() => setMapCollapsed(!mapCollapsed)}
-                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
-                >
-                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
-                        <MapPin className="h-5 w-5 text-warning" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                        <FileSearch className="h-5 w-5 text-accent-light" />
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
-                          {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
+                            Step 2 — Fetch Listings
+                          </p>
+                          {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
                         </div>
-                        <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {selectedComps.size > 0
+                            ? (() => {
+                              const selected = Array.from(selectedComps).map(i => comparableData[i]);
+                              const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+                              const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
+                              const newCount = selected.length - skipCount;
+                              if (skipCount > 0) {
+                                return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
+                              }
+                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
+                            })()
+                            : "Select at least one comparable from the table above to proceed."}
+                        </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMapConfirmation(null);
-                      }}
-                      className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
-                    >×</button>
                   </div>
+                  {!ctaListingCollapsed && (
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                      <p className="text-xs text-text-dim">
+                        {fetchedCompIds.size > 0
+                          ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
+                          : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
+                      </p>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {backupValuationState && (
+                          <button
+                            type="button"
+                            onClick={handleCancelModification}
+                            className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 cursor-pointer animate-in fade-in duration-300"
+                          >
+                            Cancel Modification
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={submitListingFetch}
+                          disabled={selectedComps.size === 0}
+                          className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                        >
+                          {fetchedCompIds.size > 0 ? "Fetch New Comparables →" : "Proceed to Next Step →"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {!mapCollapsed && (
-                  <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
-                    <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                        <span className="text-[10px] text-text-secondary leading-relaxed">
-                          Verify the marked location of the subject property on the Map panel. Choose 'Location Is Correct' or input coordinates to adjust.
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => submitMapConfirmation(true)}
-                        className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
-                      >Location Is Correct</button>
-                      <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                        <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
-                        <input
-                          type="text"
-                          value={clarificationValues.coordinates || ""}
-                          onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
-                          placeholder={PLACEHOLDER_MAP.coordinates}
-                          className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => submitMapConfirmation(false)}
-                        className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 shrink-0"
-                      >Apply Fix</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* ── Approach Choice (standalone fallback if wizard not active) */}
-            {approachChoiceNeeded && !gateActive && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
-                <div
-                  onClick={() => setApproachCollapsed(!approachCollapsed)}
-                  className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
-                      <SlidersHorizontal className="h-5 w-5 text-warning" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
-                        {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+              {/* ── Proceed to Data Cleaning CTA ────────────────── */}
+              {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && !hasPendingFetch && (listingData?.length > 0 || dbTransactions.length > 0) && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
+                  <div
+                    onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
+                    className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                        <Sparkles className="h-5 w-5 text-[#fb923c]" />
                       </div>
-                      <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                            Step 3 — Clean Raw Listings
+                          </p>
+                          {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                        </div>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                {!approachCollapsed && (
-                  <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
-                    <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                        <span className="text-[10px] text-text-secondary leading-relaxed">
-                          Select the recommended valuation methodology or choose a custom approach override to proceed.
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-3">
+                  {!ctaCleanCollapsed && (
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                      <p className="text-xs text-text-dim">
+                        The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                      </p>
                       <button
                         type="button"
-                        onClick={() => submitApproachChoice(true)}
-                        className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
-                      >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
-                    <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                      <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
-                      <select
-                        value={clarificationValues.override_approach || ""}
-                        onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
-                        className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                        onClick={submitCleaning}
+                        className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
                       >
-                        <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
-                        <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
-                        <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                          Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
-                        </option>
-                      </select>
-                    </label>
+                        Start Data Cleaning →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Proceed to Factorial Table CTA ────────────────── */}
+              {cleanedData && cleanedData.length > 0 && (!factorialData || needsFactorialRegeneration) && !isFactorialStreaming && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-[#a78bfa]/30 bg-bg-card/95 shadow-panel">
+                  <div
+                    onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
+                    className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                        <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
+                            Step 4 — Generate Factorial Table
+                          </p>
+                          {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                        </div>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {needsFactorialRegeneration
+                            ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
+                            : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {!ctaFactorialCollapsed && (
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
+                      <p className="text-xs text-text-dim">
+                        This will group data by project and calculate key rate statistics for valuation.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={submitFactorial}
+                        className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                      >
+                        Generate Factorial Table →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Start New Valuation CTA ─────────────────────── */}
+              {factorialAnalysisData && pipelineDone && !anyStreaming && (
+                <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="rounded-2xl border border-success/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.05),rgba(52,211,153,0.03))] p-5 flex flex-col items-center gap-4 shadow-panel text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-success/15 border border-success/30 text-2xl">🎉</div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-widest text-success">Valuation Complete</p>
+                      <p className="text-[11px] text-text-dim mt-1">Your valuation report is ready. You can start a new valuation or review the results in the panels above.</p>
+                    </div>
                     <button
                       type="button"
-                      disabled={!clarificationValues.override_approach}
-                      onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
-                      className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50 shrink-0"
-                    >Apply Override</button>
+                      onClick={() => {
+                        clearInteractiveState();
+                        setMessages([]);
+                        setInput("");
+                        onClear?.();
+                      }}
+                      className="inline-flex items-center gap-2.5 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                    >
+                      <span>✦</span>
+                      Start New Valuation
+                    </button>
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-            {/* ── Token Breakdown UI ────────────────── */}
-            {showTokenBreakdown && (
-              <div className="mb-4 overflow-y-auto custom-scrollbar max-h-[30vh] rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
-                <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-accent animate-pulse" />
-                    <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
+              {/* ── Stage 1 Gate Wizard (replaces flat clarification/verification panels) */}
+              {Stage1GateWizard}
+
+              {/* ── Map Confirmation (standalone — not part of wizard) */}
+              {mapConfirmation && !gateActive && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                  <div
+                    onClick={() => setMapCollapsed(!mapCollapsed)}
+                    className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-base font-semibold text-warning">
+                          <MapPin className="h-5 w-5 text-warning" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                            {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                          </div>
+                          <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMapConfirmation(null);
+                        }}
+                        className="text-sm text-text-dim transition hover:text-danger cursor-pointer font-bold px-1.5"
+                      >×</button>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
-                    <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
-                    {tokenStats.last_stage_tokens && (
-                      <p className="text-[8px] text-accent-light font-bold mt-0.5">
-                        +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
-                      </p>
-                    )}
-                  </div>
+                  {!mapCollapsed && (
+                    <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                      <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                          <span className="text-[10px] text-text-secondary leading-relaxed">
+                            Verify the marked location of the subject property on the Map panel. Choose 'Location Is Correct' or input coordinates to adjust.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => submitMapConfirmation(true)}
+                          className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
+                        >Location Is Correct</button>
+                        <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
+                          <input
+                            type="text"
+                            value={clarificationValues.coordinates || ""}
+                            onChange={(e) => setClarificationValues(prev => ({ ...prev, coordinates: e.target.value }))}
+                            placeholder={PLACEHOLDER_MAP.coordinates}
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2.5 text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => submitMapConfirmation(false)}
+                          className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 shrink-0"
+                        >Apply Fix</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
-                    {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
-                      <p className="text-[11px] text-text-dim italic">No model data yet...</p>
-                    ) : (
-                      Object.entries(tokenStats.model_breakdown)
-                        .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
-                        .map(([model, usage]) => (
-                          <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[11px] font-bold text-accent-light">{model}</span>
-                              <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
-                            </div>
-                            <div className="flex gap-3">
-                              <div className="flex-1">
-                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-accent"
-                                    style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
-                                  />
+              {/* ── Approach Choice (standalone fallback if wizard not active) */}
+              {approachChoiceNeeded && !gateActive && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
+                  <div
+                    onClick={() => setApproachCollapsed(!approachCollapsed)}
+                    className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
+                        <SlidersHorizontal className="h-5 w-5 text-warning" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                          {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                        </div>
+                        <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {!approachCollapsed && (
+                    <div className="overflow-y-auto custom-scrollbar max-h-[30vh] p-4 flex flex-col gap-4 animate-in fade-in duration-200 min-h-0">
+                      <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                          <span className="text-[10px] text-text-secondary leading-relaxed">
+                            Select the recommended valuation methodology or choose a custom approach override to proceed.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => submitApproachChoice(true)}
+                          className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
+                        >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
+                        <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                          <select
+                            value={clarificationValues.override_approach || ""}
+                            onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
+                            className="rounded-xl border border-border bg-bg-input px-3 py-2 text-sm text-text-primary outline-none transition focus:border-warning focus:bg-warning/5"
+                          >
+                            <option value="" disabled style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Select approach...</option>
+                            <option value="market" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>Market Approach</option>
+                            <option value="cost" disabled={subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land"} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                              Cost Approach{(subjectData?.property_type !== "villa" && subjectData?.property_type !== "building_land") ? " (Villa / Building + Land Only)" : ""}
+                            </option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          disabled={!clarificationValues.override_approach}
+                          onClick={() => submitApproachChoice(false, clarificationValues.override_approach)}
+                          className="rounded-xl bg-warning px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-105 disabled:opacity-50 shrink-0"
+                        >Apply Override</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Token Breakdown UI ────────────────── */}
+              {showTokenBreakdown && (
+                <div className="mb-4 overflow-y-auto custom-scrollbar max-h-[30vh] rounded-2xl border border-border bg-bg-card p-4 backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-300 shadow-2xl">
+                  <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-accent animate-pulse" />
+                      <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
+                      <p className="text-sm font-mono font-bold text-success">${calculatedCostUsd.toFixed(4)}</p>
+                      {tokenStats.last_stage_tokens && (
+                        <p className="text-[8px] text-accent-light font-bold mt-0.5">
+                          +{tokenStats.last_stage_tokens.toLocaleString()} ({tokenStats.last_stage_name})
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Model Breakdown</p>
+                      {Object.entries(tokenStats.model_breakdown).filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown").length === 0 ? (
+                        <p className="text-[11px] text-text-dim italic">No model data yet...</p>
+                      ) : (
+                        Object.entries(tokenStats.model_breakdown)
+                          .filter(([model, usage]) => (usage.total || 0) > 0 && model.toLowerCase() !== "unknown")
+                          .map(([model, usage]) => (
+                            <div key={model} className="rounded-xl bg-bg-input p-2.5 border border-border/40">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-bold text-accent-light">{model}</span>
+                                <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
+                              </div>
+                              <div className="flex gap-3">
+                                <div className="flex-1">
+                                  <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-accent"
+                                      style={{ width: `${(usage.prompt / (usage.total || 1)) * 100}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between mt-1">
+                                    <span className="text-[8px] uppercase text-text-dim">Input</span>
+                                    <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
+                                  </div>
                                 </div>
-                                <div className="flex justify-between mt-1">
-                                  <span className="text-[8px] uppercase text-text-dim">Input</span>
-                                  <span className="text-[8px] font-mono text-text-dim">{usage.prompt?.toLocaleString()}</span>
+                                <div className="flex-1">
+                                  <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-accent-purple"
+                                      style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between mt-1">
+                                    <span className="text-[8px] uppercase text-text-dim">Output</span>
+                                    <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex-1">
-                                <div className="h-1 w-full bg-border/20 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-accent-purple"
-                                    style={{ width: `${(usage.completion / (usage.total || 1)) * 100}%` }}
-                                  />
+                            </div>
+                          ))
+                      )}
+
+                      <div className="rounded-xl bg-bg-input p-3 border border-border/40">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Stage Breakdown</span>
+                          <span className="text-[10px] font-bold text-accent-light">{stageBreakdownEntries.length} stages</span>
+                        </div>
+                        {stageBreakdownEntries.length === 0 ? (
+                          <p className="text-[10px] text-text-dim italic">No stage usage yet...</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {stageBreakdownEntries.map(([stage, usage]) => (
+                              <div key={stage} className="rounded-lg border border-border/30 bg-bg-card/70 px-2.5 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-semibold text-text-primary">{stage}</span>
+                                  <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between mt-1">
-                                  <span className="text-[8px] uppercase text-text-dim">Output</span>
-                                  <span className="text-[8px] font-mono text-text-dim">{usage.completion?.toLocaleString()}</span>
+                                <div className="mt-1 flex gap-3">
+                                  <span className="text-[8px] uppercase text-text-dim">Input {usage.prompt?.toLocaleString()}</span>
+                                  <span className="text-[8px] uppercase text-text-dim">Output {usage.completion?.toLocaleString()}</span>
                                 </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
+                      {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
+                        <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
+                          <p className="text-[10px] text-text-dim">No tools called in this run.</p>
+                        </div>
+                      ) : (
+                        Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
+                          <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                <SlidersHorizontal className="h-4 w-4 text-accent" />
+                                <div>
+                                  <p className="text-[10px] font-bold text-text-primary">{tool}</p>
+                                  <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
+                                <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
                               </div>
                             </div>
                           </div>
                         ))
-                    )}
-
-                    <div className="rounded-xl bg-bg-input p-3 border border-border/40">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Stage Breakdown</span>
-                        <span className="text-[10px] font-bold text-accent-light">{stageBreakdownEntries.length} stages</span>
-                      </div>
-                      {stageBreakdownEntries.length === 0 ? (
-                        <p className="text-[10px] text-text-dim italic">No stage usage yet...</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {stageBreakdownEntries.map(([stage, usage]) => (
-                            <div key={stage} className="rounded-lg border border-border/30 bg-bg-card/70 px-2.5 py-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-semibold text-text-primary">{stage}</span>
-                                <span className="text-[10px] font-mono text-text-primary">{usage.total?.toLocaleString()}</span>
-                              </div>
-                              <div className="mt-1 flex gap-3">
-                                <span className="text-[8px] uppercase text-text-dim">Input {usage.prompt?.toLocaleString()}</span>
-                                <span className="text-[8px] uppercase text-text-dim">Output {usage.completion?.toLocaleString()}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
                       )}
-                    </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim opacity-70">Tool Intelligence</p>
-                    {Object.entries(tokenStats.tool_breakdown).length === 0 ? (
-                      <div className="rounded-xl bg-bg-input p-3 text-center border border-dashed border-border/40">
-                        <p className="text-[10px] text-text-dim">No tools called in this run.</p>
-                      </div>
-                    ) : (
-                      Object.entries(tokenStats.tool_breakdown).map(([tool, data]) => (
-                        <div key={tool} className="rounded-xl border border-border-glow bg-accent-glow p-2.5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2">
-                              <SlidersHorizontal className="h-4 w-4 text-accent" />
-                              <div>
-                                <p className="text-[10px] font-bold text-text-primary">{tool}</p>
-                                <p className="text-[9px] text-text-dim">{data.calls} {data.calls === 1 ? 'Call' : 'Calls'}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] font-mono font-bold text-accent-light">${data.cost_usd.toFixed(3)}</p>
-                              <p className="text-[8px] uppercase tracking-tighter text-text-dim">Direct Cost</p>
-                            </div>
-                          </div>
+                      <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
+                          <span className="text-[10px] font-bold text-success">Optimal</span>
                         </div>
-                      ))
-                    )}
-
-                    <div className="mt-4 rounded-xl bg-bg-input p-3 border border-border/40">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Efficiency</span>
-                        <span className="text-[10px] font-bold text-success">Optimal</span>
-                      </div>
-                      <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
-                        Stage 1 profiles the property, Stage 2 plans the workflow, Stage 3 finds comparables and listings, and Stage 4/5 handle cleaning and valuation using the models and tools shown above.
+                        <div className="mt-2 text-[10px] text-text-secondary leading-relaxed">
+                          Stage 1 profiles the property, Stage 2 plans the workflow, Stage 3 finds comparables and listings, and Stage 4/5 handle cleaning and valuation using the models and tools shown above.
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div ref={scrollRef} />
-          </div>
-        )}
-      </div>
-
-      <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
-          <span className="truncate pr-4">{currentStage}</span>
-          <button
-            type="button"
-            onClick={() => calculatedTotalTokens > 0 && setShowTokenBreakdown(!showTokenBreakdown)}
-            disabled={calculatedTotalTokens === 0}
-            className={`flex items-center gap-1.5 transition text-text-dim ${
-              calculatedTotalTokens > 0 
-                ? "hover:text-accent-light cursor-pointer" 
-                : "cursor-not-allowed opacity-50"
-            }`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] ${calculatedTotalTokens > 0 ? "animate-pulse" : "opacity-40"}`} />
-            {calculatedTotalTokens > 0 ? `${calculatedTotalTokens.toLocaleString()} tokens` : "No usage yet"}
-            {calculatedTotalTokens > 0 && <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>}
-          </button>
+              <div ref={scrollRef} />
+            </div>
+          )}
         </div>
 
-        {messages.length === 0 && (
-          <div className="relative mt-2.5">
-            <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
-            <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
-              <textarea
-                rows={1}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    submitQuestion(input);
-                  }
-                }}
-                disabled={anyStreaming}
-                placeholder="Describe the property to value..."
-                className="max-h-28 min-h-[28px] flex-1 resize-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-dim"
-              />
-              <button
-                type="button"
-                onClick={() => (anyStreaming ? abortRef.current?.abort?.() : submitQuestion(input))}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-bg-deep transition hover:scale-[1.03] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!anyStreaming && !input.trim()}
-              >
-                {anyStreaming ? "■" : "➜"}
-              </button>
-            </div>
+        <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
+            <span className="truncate pr-4">{currentStage}</span>
+            <button
+              type="button"
+              onClick={() => calculatedTotalTokens > 0 && setShowTokenBreakdown(!showTokenBreakdown)}
+              disabled={calculatedTotalTokens === 0}
+              className={`flex items-center gap-1.5 transition text-text-dim ${calculatedTotalTokens > 0
+                  ? "hover:text-accent-light cursor-pointer"
+                  : "cursor-not-allowed opacity-50"
+                }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)] ${calculatedTotalTokens > 0 ? "animate-pulse" : "opacity-40"}`} />
+              {calculatedTotalTokens > 0 ? `${calculatedTotalTokens.toLocaleString()} tokens` : "No usage yet"}
+              {calculatedTotalTokens > 0 && <span className="ml-1 opacity-50">{showTokenBreakdown ? "▲" : "▼"}</span>}
+            </button>
           </div>
-        )}
-      </div>
-    </section>
-    {quickEstimateModal}
+
+          {messages.length === 0 && (
+            <div className="relative mt-2.5">
+              <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
+              <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
+                <textarea
+                  rows={1}
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      submitQuestion(input);
+                    }
+                  }}
+                  disabled={anyStreaming}
+                  placeholder="Describe the property to value..."
+                  className="max-h-28 min-h-[28px] flex-1 resize-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-dim"
+                />
+                <button
+                  type="button"
+                  onClick={() => (anyStreaming ? abortRef.current?.abort?.() : submitQuestion(input))}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-bg-deep transition hover:scale-[1.03] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!anyStreaming && !input.trim()}
+                >
+                  {anyStreaming ? "■" : "➜"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+      {quickEstimateModal}
     </>
   );
 }
