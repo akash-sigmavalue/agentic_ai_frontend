@@ -4561,7 +4561,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
               <button
                 type="button"
                 onClick={handleResetWeights}
-                className="text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer"
+                className="self-start text-[9px] font-bold text-warning hover:text-warning-light hover:underline transition uppercase tracking-wider cursor-pointer sm:self-auto"
               >
                 Reset Weights
               </button>
@@ -4573,7 +4573,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
             <div className="space-y-4">
               <div className="rounded-xl bg-black/40 border border-white/[0.05] p-4 space-y-2 ">
                 <p className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Formula:</p>
-                <p className="font-mono text-[10px] text-white/90 font-bold leading-relaxed font-semibold">
+                <p className="break-words font-mono text-[9px] text-white/90 font-bold leading-relaxed font-semibold sm:break-normal sm:text-[10px]">
                   Blended Rate = (w₁ × Subject Rate) + (w₂ × Comparables Avg)
                 </p>
               </div>
@@ -4587,9 +4587,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
               {subjectListings > 0 ? (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
-                      <span>Subject Weight (w₁)</span>
-                      <span className="text-accent font-mono font-bold">{((blending.w1 ?? 0.5) * 100).toFixed(0)}%</span>
+                    <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase text-text-dim font-semibold sm:items-stretch sm:gap-0">
+                      <span className="min-w-0">Subject Weight (w₁)</span>
+                      <span className="shrink-0 text-accent font-mono font-bold">{((blending.w1 ?? 0.5) * 100).toFixed(0)}%</span>
                     </div>
                     <input
                       type="range"
@@ -4602,9 +4602,9 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-text-dim font-semibold">
-                      <span>Comparable Weight (w₂)</span>
-                      <span className="text-accent-purple font-mono font-bold">{((blending.w2 ?? 0.5) * 100).toFixed(0)}%</span>
+                    <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase text-text-dim font-semibold sm:items-stretch sm:gap-0">
+                      <span className="min-w-0">Comparable Weight (w₂)</span>
+                      <span className="shrink-0 text-accent-purple font-mono font-bold">{((blending.w2 ?? 0.5) * 100).toFixed(0)}%</span>
                     </div>
                     <input
                       type="range"
@@ -4626,16 +4626,16 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 </div>
               )}
             </div>
-                  <div className="grid w-[650px] grid-cols-2 gap-5 text-sm font-mono">
-                <div className="rounded-xl bg-white/5 p-3 ">
+                  <div className="grid w-full min-w-0 grid-cols-1 gap-3 font-mono text-sm sm:w-[650px] sm:grid-cols-2 sm:gap-5">
+                <div className="min-w-0 rounded-xl bg-white/5 p-3 ">
                   <span className="mb-1 block text-[10px] text-text-dim ">Subject Rate:</span>
                   <span className="font-bold text-green-400">{fmtRate(blending.subject_own_rate)}</span>
                   <span className="text-[8px] text-text-dim block mt-0.5">({blending.subject_listing_count || 0} listings)</span>
                 </div>
-                <div>
+                <div className="hidden sm:block">
 
                 </div>
-                 <div className="rounded-xl bg-white/5 p-3 ">
+                 <div className="min-w-0 rounded-xl bg-white/5 p-3 ">
                   <span className="mb-1 block text-[10px] text-text-dim ">Comparables Avg:</span>
                   <span className="font-bold text-blue-400">{fmtRate(blending.factored_comp_avg)}</span>
                   <span className="text-[8px] text-text-dim block mt-0.5">(from {compRows.length} comparables)</span>
