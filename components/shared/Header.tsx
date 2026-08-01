@@ -131,12 +131,18 @@ const Header = () => {
               href="/admin"
               className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${
                 pathname === '/admin'
-                  ? 'bg-violet-50 border-violet-200'
-                  : 'bg-white border-slate-200 shadow-sm hover:bg-violet-50 hover:border-violet-200'
+                  ? isDark
+                    ? 'bg-violet-950/60 border-violet-800'
+                    : 'bg-violet-50 border-violet-200 shadow-sm'
+                  : pillClass
               }`}
             >
-              <Shield className={`h-4 w-4 transition-colors ${pathname === '/admin' ? 'text-violet-600' : 'text-slate-400 group-hover:text-violet-600'}`} />
-              <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/admin' ? 'text-violet-700' : pillTextClass}`}>ADMIN</span>
+              <Shield className={`h-4 w-4 transition-colors ${pathname === '/admin' ? (isDark ? 'text-violet-400' : 'text-violet-600') : 'text-slate-400 group-hover:text-violet-500'}`} />
+              <span className={`text-[10px] font-black uppercase tracking-widest ${
+                pathname === '/admin'
+                  ? (isDark ? 'text-violet-300' : 'text-violet-700')
+                  : pillTextClass
+              }`}>ADMIN</span>
             </Link>
           )}
         </div>
