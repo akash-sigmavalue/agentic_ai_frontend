@@ -8087,7 +8087,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           next[next.length - 1] = {
             ...next[next.length - 1],
             role: "assistant",
-            content: `Factorial table error: ${error.message}`,
+            content: `Factorial table error message: ${error.message}`,
             meta: "Error",
           };
         }
