@@ -49,8 +49,8 @@ export default function PricingPage() {
   const defaultCompany = user?.email && user.email.includes('@')
     ? user.email.split('@')[1].split('.')[0].toUpperCase() + " Corp"
     : user?.username
-    ? `${user.username} Organization`
-    : "Individual / Organization";
+      ? `${user.username} Organization`
+      : "Individual / Organization";
 
   const [form, setForm] = useState<ContactForm>({
     name: user?.username || "",
@@ -120,7 +120,7 @@ export default function PricingPage() {
 
   const isDark = useTheme();
   const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
-  const cardClass = isDark ? "bg-slate-900/60 border-slate-800 text-slate-100" : "bg-white border-slate-200 shadow-sm text-slate-900";
+  const cardClass = isDark ? "bg-slate-900 border-slate-800 text-slate-100 shadow-xl" : "bg-white border-slate-200 shadow-sm text-slate-900";
   const featCardClass = isDark ? "bg-slate-900 border-2 border-indigo-500/80 shadow-indigo-500/10 text-slate-100" : "bg-white border-2 border-indigo-500 shadow-xl shadow-indigo-500/10 text-slate-900";
 
   return (
@@ -129,14 +129,15 @@ export default function PricingPage() {
 
         {/* ─── Header ─────────────────────────────────────────────────────────── */}
         <div className="text-center max-w-2xl mx-auto space-y-4">
-          <span className="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+          <span className={`px-3.5 py-1 mb-5 rounded-full text-xs font-black uppercase tracking-wider border ${isDark ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" : "bg-indigo-50 text-indigo-600 border-indigo-200"
+            }`}>
             Simple &amp; Transparent Pricing
           </span>
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight">
+          <h1 className={`text-3xl sm:text-5xl mt-5 font-black tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>
             Pick Your Token Plan
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-            Every user gets <strong className="text-slate-800 dark:text-slate-200">10,000 free tokens</strong> on signup.
+          <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            Every user gets <strong className={isDark ? "text-slate-200" : "text-slate-800"}>10,000 free tokens</strong> on signup.
             Upgrade whenever you need more. International cards accepted.
           </p>
         </div>
@@ -148,16 +149,16 @@ export default function PricingPage() {
           <div className={`p-8 rounded-3xl border flex flex-col justify-between space-y-6 transition-all ${cardClass}`}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Free Tier</span>
-                <span className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Free Tier</span>
+                <span className={`p-2 rounded-xl border ${isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
                   <Coins className="w-5 h-5" />
                 </span>
               </div>
               <div>
-                <div className="text-3xl font-black">Free</div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Auto-credited on signup</p>
+                <div className={`text-3xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>Free</div>
+                <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Auto-credited on signup</p>
               </div>
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+              <div className={`pt-4 border-t space-y-3 text-xs ${isDark ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-600"}`}>
                 {["10,000 tokens included at signup", "Full Valuation Agent access", "No approval required", "Tokens never expire"].map(f => (
                   <div key={f} className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -168,7 +169,8 @@ export default function PricingPage() {
             </div>
             <button
               onClick={() => router.push(user ? "/valuation" : "/auth")}
-              className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-xs text-slate-800 dark:text-slate-200 transition-all"
+              className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border ${isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700" : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200"
+                }`}
             >
               {user ? "Go to Agent →" : "Get Started Free →"}
             </button>
@@ -182,19 +184,19 @@ export default function PricingPage() {
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Individual Pro Pack</span>
-                <span className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-indigo-400" : "text-indigo-600"}`}>Individual Pro Pack</span>
+                <span className={`p-2 rounded-xl border ${isDark ? "bg-indigo-600/20 text-indigo-400 border-indigo-500/30" : "bg-indigo-50 text-indigo-600 border-indigo-200"}`}>
                   <Zap className="w-5 h-5" />
                 </span>
               </div>
               <div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-slate-100">₹5,000</span>
-                  <span className="text-xs text-slate-400">/ pack</span>
+                  <span className={`text-3xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>₹5,000</span>
+                  <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>/ pack</span>
                 </div>
-                <p className="text-xs text-indigo-300 font-bold mt-1">1,000,000 tokens per pack</p>
+                <p className={`text-xs font-bold mt-1 ${isDark ? "text-indigo-300" : "text-indigo-600"}`}>1,000,000 tokens per pack</p>
               </div>
-              <div className="pt-4 border-t border-slate-800 space-y-3 text-xs text-slate-300">
+              <div className={`pt-4 border-t space-y-3 text-xs font-medium ${isDark ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-700"}`}>
                 {[
                   "1,000,000 tokens added instantly",
                   "International cards accepted",
@@ -203,18 +205,19 @@ export default function PricingPage() {
                   "No limit on repurchases",
                 ].map(f => (
                   <div key={f} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                     <span>{f}</span>
                   </div>
                 ))}
               </div>
 
               {/* Accepted payment methods */}
-              <div className="pt-3 border-t border-slate-800/60">
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Accepted payment methods</p>
+              <div className={`pt-3 border-t ${isDark ? "border-slate-800/60" : "border-slate-200"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Accepted payment methods</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   {["Visa", "Mastercard", "Amex", "UPI", "NetBanking"].map(m => (
-                    <span key={m} className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold border border-slate-700">
+                    <span key={m} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${isDark ? "bg-slate-800 text-slate-300 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-200"
+                      }`}>
                       {m}
                     </span>
                   ))}
@@ -226,22 +229,21 @@ export default function PricingPage() {
               id="pricing-buy-token-pack"
               onClick={handleBuyTokens}
               disabled={isBuyDisabled}
-              className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 ${
-                isBuyDisabled
-                  ? "bg-slate-800/90 border border-slate-700 text-slate-400 cursor-not-allowed shadow-none opacity-90"
-                  : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-600/30 cursor-pointer"
-              }`}
+              className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 ${isBuyDisabled
+                ? isDark ? "bg-slate-800/90 border border-slate-700 text-slate-400 cursor-not-allowed shadow-none opacity-90" : "bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed shadow-none opacity-90"
+                : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-600/30 cursor-pointer"
+                }`}
             >
               {buyingTokens ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to checkout…</>
               ) : isBuyDisabled ? (
-                <><Shield className="w-4 h-4 text-amber-400" /> {disabledNotice}</>
+                <><Shield className="w-4 h-4 text-amber-500" /> {disabledNotice}</>
               ) : (
                 <><Zap className="w-4 h-4" /> Buy 1M Token Pack — ₹5,000</>
               )}
             </button>
 
-            <p className="text-[10px] text-slate-500 text-center -mt-2">
+            <p className={`text-[10px] text-center -mt-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               Secured by Stripe · 256-bit SSL encryption
             </p>
           </div>
@@ -250,16 +252,16 @@ export default function PricingPage() {
           <div id="enterprise" className={`p-8 rounded-3xl border flex flex-col justify-between space-y-6 transition-all ${cardClass}`}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-400">Enterprise Organization</span>
-                <span className="p-2 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-purple-400" : "text-purple-600"}`}>Enterprise Organization</span>
+                <span className={`p-2 rounded-xl border ${isDark ? "bg-purple-600/20 text-purple-400 border-purple-500/30" : "bg-purple-50 text-purple-600 border-purple-200"}`}>
                   <Building2 className="w-5 h-5" />
                 </span>
               </div>
               <div>
-                <div className="text-3xl font-black text-slate-100">Custom</div>
-                <p className="text-xs text-slate-400 mt-1">Negotiated contract with sales team</p>
+                <div className={`text-3xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>Custom</div>
+                <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Negotiated contract with sales team</p>
               </div>
-              <div className="pt-4 border-t border-slate-800 space-y-3 text-xs text-slate-300">
+              <div className={`pt-4 border-t space-y-3 text-xs ${isDark ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-600"}`}>
                 {[
                   "1 Owner + unlimited Employees",
                   "Shared organization token pool",
@@ -268,7 +270,7 @@ export default function PricingPage() {
                   "Dedicated support & SLA",
                 ].map(f => (
                   <div key={f} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                     <span>{f}</span>
                   </div>
                 ))}
@@ -277,7 +279,8 @@ export default function PricingPage() {
 
             <button
               onClick={() => { setShowForm(true); document.getElementById("enterprise-form")?.scrollIntoView({ behavior: "smooth" }); }}
-              className="w-full py-3 px-4 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600/30 font-bold text-xs text-purple-300 transition-all flex items-center justify-center gap-2"
+              className={`w-full py-3 px-4 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 ${isDark ? "bg-purple-600/20 hover:bg-purple-600/30 border-purple-600/30 text-purple-300" : "bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+                }`}
             >
               <Mail className="w-4 h-4" />
               Contact Us for Enterprise
@@ -288,14 +291,14 @@ export default function PricingPage() {
         {/* ─── Trust Bar ───────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center text-xs">
           {[
-            { icon: <Shield className="w-4 h-4 text-emerald-400" />, title: "Secure Payments", desc: "All payments processed by Stripe with 256-bit SSL encryption." },
-            { icon: <Globe className="w-4 h-4 text-indigo-400" />, title: "International Cards", desc: "Visa, Mastercard, Amex, Maestro — 135+ currencies accepted." },
-            { icon: <Zap className="w-4 h-4 text-amber-400" />, title: "Instant Credits", desc: "Tokens credited to your wallet within seconds of payment confirmation." },
+            { icon: <Shield className="w-4 h-4 text-emerald-500" />, title: "Secure Payments", desc: "All payments processed by Stripe with 256-bit SSL encryption." },
+            { icon: <Globe className="w-4 h-4 text-indigo-500" />, title: "International Cards", desc: "Visa, Mastercard, Amex, Maestro — 135+ currencies accepted." },
+            { icon: <Zap className="w-4 h-4 text-amber-500" />, title: "Instant Credits", desc: "Tokens credited to your wallet within seconds of payment confirmation." },
           ].map(item => (
-            <div key={item.title} className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-2">
+            <div key={item.title} className={`p-5 rounded-2xl border space-y-2 ${cardClass}`}>
               <div className="flex justify-center">{item.icon}</div>
-              <div className="font-bold text-slate-200">{item.title}</div>
-              <p className="text-slate-500 text-[11px] leading-relaxed">{item.desc}</p>
+              <div className={`font-bold ${isDark ? "text-slate-100" : "text-slate-900"}`}>{item.title}</div>
+              <p className={`text-[11px] leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>{item.desc}</p>
             </div>
           ))}
         </div>
@@ -303,34 +306,34 @@ export default function PricingPage() {
         {/* ─── Enterprise Contact Form ──────────────────────────────────────────── */}
         <div id="enterprise-form" className="max-w-2xl mx-auto">
           <div
-            className="p-7 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl cursor-pointer"
+            className={`p-7 rounded-3xl border shadow-xl cursor-pointer transition-colors ${cardClass}`}
             onClick={() => setShowForm(v => !v)}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${isDark ? "bg-purple-600/20 border-purple-500/30 text-purple-400" : "bg-purple-50 border-purple-200 text-purple-600"
+                  }`}>
                   <Building2 className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-slate-100">Enterprise Inquiry</h2>
-                  <p className="text-xs text-slate-400">Our sales team will respond within 1–2 business days.</p>
+                  <h2 className={`text-lg font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>Enterprise Inquiry</h2>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-900"}`}>Our sales team will respond within 1–2 business days.</p>
                 </div>
               </div>
-              <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${showForm ? "rotate-180" : ""}`} />
+              <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isDark ? "text-slate-400" : "text-slate-900"} ${showForm ? "rotate-180" : ""}`} />
             </div>
           </div>
 
           {showForm && (
-            <div className="mt-4 p-7 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-5">
+            <div className={`mt-4 p-7 rounded-3xl border space-y-5 shadow-lg ${cardClass}`}>
               {submitResult ? (
-                <div className={`p-4 rounded-2xl text-sm font-medium text-center ${
-                  submitResult.type === "success"
-                    ? "bg-emerald-950/50 border border-emerald-800 text-emerald-300"
-                    : "bg-rose-950/50 border border-rose-800 text-rose-300"
-                }`}>
+                <div className={`p-4 rounded-2xl text-sm font-medium text-center border ${submitResult.type === "success"
+                  ? isDark ? "bg-emerald-950/50 border-emerald-800 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
+                  }`}>
                   {submitResult.text}
                   {submitResult.type === "success" && (
-                    <div className="mt-3 text-xs text-emerald-400 font-normal">
+                    <div className={`mt-3 text-xs font-normal ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
                       Check your inbox — we've sent a confirmation to your email.
                     </div>
                   )}
@@ -339,66 +342,79 @@ export default function PricingPage() {
                 <form onSubmit={handleContactSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-400">Full Name *</label>
+                      <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Full Name *</label>
                       <input
                         required
                         type="text"
                         value={form.name}
                         onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                         placeholder="Your full name"
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:border-indigo-500 ${isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                          : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                          }`}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-400">Work Email *</label>
+                      <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Work Email *</label>
                       <input
                         required
                         type="email"
                         value={form.email}
                         onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                         placeholder="you@company.com"
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:border-indigo-500 ${isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                          : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                          }`}
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-400">Company Name *</label>
+                      <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Company Name *</label>
                       <input
                         required
                         type="text"
                         value={form.company}
                         onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
                         placeholder="Acme Corp"
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:border-indigo-500 ${isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                          : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                          }`}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-400">Phone (optional)</label>
+                      <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Phone (optional)</label>
                       <input
                         type="tel"
                         value={form.phone}
                         onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                         placeholder="+91 98765 43210"
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:border-indigo-500 ${isDark
+                          ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                          : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                          }`}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-400">Team Size</label>
+                    <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Team Size</label>
                     <div className="flex flex-wrap gap-2">
                       {TEAM_SIZES.map(size => (
                         <button
                           key={size}
                           type="button"
                           onClick={() => setForm(f => ({ ...f, team_size: size }))}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                            form.team_size === size
-                              ? "bg-indigo-600 text-white border-indigo-500"
-                              : "bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-600"
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${form.team_size === size
+                            ? "bg-indigo-600 text-white border-indigo-500"
+                            : isDark
+                              ? "bg-slate-800 text-slate-300 border-slate-700 hover:border-indigo-500"
+                              : "bg-slate-100 text-slate-700 border-slate-200 hover:border-indigo-500"
+                            }`}
                         >
                           {size}
                         </button>
@@ -407,13 +423,16 @@ export default function PricingPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-400">Message (optional)</label>
+                    <label className={`text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>Message (optional)</label>
                     <textarea
                       value={form.message}
                       onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                       rows={4}
                       placeholder="Tell us about your use case, required integrations, or any specific questions..."
-                      className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:border-indigo-500 resize-none ${isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500"
+                        : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                        }`}
                     />
                   </div>
 
@@ -430,7 +449,7 @@ export default function PricingPage() {
                     )}
                   </button>
 
-                  <p className="text-[11px] text-slate-500 text-center">
+                  <p className={`text-[11px] text-center ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                     By submitting, you agree to be contacted by our sales team.
                     We'll never share your info.
                   </p>

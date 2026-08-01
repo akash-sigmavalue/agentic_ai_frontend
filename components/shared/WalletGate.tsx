@@ -53,7 +53,7 @@ export default function WalletGate({
     return (
       <div className="wg-overlay wg-overlay--in">
         <div className="wg-card">
-          <Loader2 className="wg-spin" style={{ width: 32, height: 32, color: "#818cf8" }} />
+          <Loader2 className="wg-spin" style={{ width: 32, height: 32 }} />
           <p className="wg-body">Checking access…</p>
         </div>
         <WalletGateStyles />
@@ -142,7 +142,7 @@ export default function WalletGate({
 
         <p className="wg-footnote">
           You still have{" "}
-          <strong style={{ color: "#c7d2fe" }}>
+          <strong className="wg-token-count">
             {(personalBalance).toLocaleString()} tokens
           </strong>{" "}
           remaining in your personal wallet.
@@ -156,6 +156,7 @@ export default function WalletGate({
 function WalletGateStyles() {
   return (
     <style>{`
+      /* Light Mode (default) */
       .wg-overlay {
         position: absolute;
         inset: 0;
@@ -166,9 +167,9 @@ function WalletGateStyles() {
         padding: 24px;
         background: linear-gradient(
           160deg,
-          rgba(2,6,23,0.93) 0%,
-          rgba(15,23,42,0.96) 60%,
-          rgba(30,41,59,0.91) 100%
+          rgba(248, 250, 252, 0.92) 0%,
+          rgba(241, 245, 249, 0.95) 60%,
+          rgba(226, 232, 240, 0.92) 100%
         );
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
@@ -189,10 +190,10 @@ function WalletGateStyles() {
         width: 100%;
         text-align: center;
         padding: 36px 32px;
-        background: linear-gradient(145deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9));
-        border: 1px solid rgba(99,102,241,0.22);
+        background: #ffffff;
+        border: 1px solid rgba(99, 102, 241, 0.2);
         border-radius: 20px;
-        box-shadow: 0 0 0 1px rgba(99,102,241,0.08), 0 24px 60px rgba(0,0,0,0.5);
+        box-shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.12), 0 10px 25px -5px rgba(0, 0, 0, 0.08);
         overflow: hidden;
       }
 
@@ -203,7 +204,7 @@ function WalletGateStyles() {
         transform: translateX(-50%);
         width: 240px;
         height: 240px;
-        background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%);
         pointer-events: none;
       }
 
@@ -214,15 +215,15 @@ function WalletGateStyles() {
         width: 58px;
         height: 58px;
         border-radius: 16px;
-        background: linear-gradient(135deg,rgba(99,102,241,0.22),rgba(139,92,246,0.18));
-        border: 1px solid rgba(99,102,241,0.32);
-        color: #818cf8;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.08));
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        color: #4f46e5;
       }
 
       .wg-heading {
         font-size: 17px;
         font-weight: 800;
-        color: #f1f5f9;
+        color: #0f172a;
         margin: 0;
         letter-spacing: -0.01em;
         line-height: 1.3;
@@ -230,7 +231,7 @@ function WalletGateStyles() {
 
       .wg-body {
         font-size: 13px;
-        color: #94a3b8;
+        color: #475569;
         line-height: 1.65;
         margin: 0;
       }
@@ -239,6 +240,11 @@ function WalletGateStyles() {
         font-size: 11px;
         color: #64748b;
         margin: 4px 0 0;
+      }
+
+      .wg-token-count {
+        color: #4f46e5;
+        font-weight: 700;
       }
 
       .wg-actions {
@@ -268,23 +274,112 @@ function WalletGateStyles() {
       .wg-cta--primary {
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
-        box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
       }
-      .wg-cta--primary:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(99,102,241,0.45); }
+      .wg-cta--primary:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45); }
 
       .wg-cta--secondary {
-        background: rgba(99,102,241,0.08);
-        color: #a5b4fc;
-        border: 1px solid rgba(99,102,241,0.2);
+        background: rgba(99, 102, 241, 0.06);
+        color: #4f46e5;
+        border: 1px solid rgba(99, 102, 241, 0.25);
       }
-      .wg-cta--secondary:hover { background: rgba(99,102,241,0.14); transform: translateY(-1px); }
+      .wg-cta--secondary:hover { background: rgba(99, 102, 241, 0.12); transform: translateY(-1px); }
 
       .wg-spin {
         animation: wg-spin 1s linear infinite;
+        color: #4f46e5;
       }
       @keyframes wg-spin {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
+      }
+
+      /* Dark Mode Overrides */
+      .dark-mode .wg-overlay,
+      html.dark-mode .wg-overlay,
+      .dark .wg-overlay,
+      html.dark .wg-overlay {
+        background: linear-gradient(
+          160deg,
+          rgba(2, 6, 23, 0.93) 0%,
+          rgba(15, 23, 42, 0.96) 60%,
+          rgba(30, 41, 59, 0.91) 100%
+        );
+      }
+
+      .dark-mode .wg-card,
+      html.dark-mode .wg-card,
+      .dark .wg-card,
+      html.dark .wg-card {
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+        border: 1px solid rgba(99, 102, 241, 0.22);
+        box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.08), 0 24px 60px rgba(0, 0, 0, 0.5);
+      }
+
+      .dark-mode .wg-glow,
+      html.dark-mode .wg-glow,
+      .dark .wg-glow,
+      html.dark .wg-glow {
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+      }
+
+      .dark-mode .wg-icon-wrap,
+      html.dark-mode .wg-icon-wrap,
+      .dark .wg-icon-wrap,
+      html.dark .wg-icon-wrap {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(139, 92, 246, 0.18));
+        border: 1px solid rgba(99, 102, 241, 0.32);
+        color: #818cf8;
+      }
+
+      .dark-mode .wg-heading,
+      html.dark-mode .wg-heading,
+      .dark .wg-heading,
+      html.dark .wg-heading {
+        color: #f1f5f9;
+      }
+
+      .dark-mode .wg-body,
+      html.dark-mode .wg-body,
+      .dark .wg-body,
+      html.dark .wg-body {
+        color: #94a3b8;
+      }
+
+      .dark-mode .wg-footnote,
+      html.dark-mode .wg-footnote,
+      .dark .wg-footnote,
+      html.dark .wg-footnote {
+        color: #64748b;
+      }
+
+      .dark-mode .wg-token-count,
+      html.dark-mode .wg-token-count,
+      .dark .wg-token-count,
+      html.dark .wg-token-count {
+        color: #c7d2fe;
+      }
+
+      .dark-mode .wg-cta--secondary,
+      html.dark-mode .wg-cta--secondary,
+      .dark .wg-cta--secondary,
+      html.dark .wg-cta--secondary {
+        background: rgba(99, 102, 241, 0.08);
+        color: #a5b4fc;
+        border: 1px solid rgba(99, 102, 241, 0.2);
+      }
+      .dark-mode .wg-cta--secondary:hover,
+      html.dark-mode .wg-cta--secondary:hover,
+      .dark .wg-cta--secondary:hover,
+      html.dark .wg-cta--secondary:hover {
+        background: rgba(99, 102, 241, 0.14);
+      }
+
+      .dark-mode .wg-spin,
+      html.dark-mode .wg-spin,
+      .dark .wg-spin,
+      html.dark .wg-spin {
+        color: #818cf8;
       }
     `}</style>
   );

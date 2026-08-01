@@ -147,27 +147,45 @@ const Header = () => {
             <div className="flex items-center gap-3">
               <Link
                 href="/profile"
-                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100/50 transition-all"
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all shadow-sm ${
+                  isDark
+                    ? "bg-indigo-950/80 border-indigo-800 hover:bg-indigo-900/80"
+                    : "bg-white border-indigo-200/90 hover:bg-indigo-50/80"
+                }`}
                 title="My Profile"
               >
-                <UserIcon className="h-3.5 w-3.5 text-indigo-500" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <UserIcon className={`h-3.5 w-3.5 ${isDark ? "text-indigo-400" : "text-indigo-600"}`} />
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                  isDark ? "text-indigo-200" : "text-indigo-950 font-black"
+                }`}>
                   {user.username}
                 </span>
                 {user.role === 'ADMIN' && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-black uppercase">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                    isDark
+                      ? "bg-violet-900/80 text-violet-200 border border-violet-700"
+                      : "bg-violet-600 text-white shadow-sm"
+                  }`}>
                     ADMIN
                   </span>
                 )}
                 {user.role === 'FREE' && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[9px] font-black uppercase">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                    isDark
+                      ? "bg-blue-900/80 text-blue-200 border border-blue-700"
+                      : "bg-indigo-600 text-white shadow-sm"
+                  }`}>
                     FREE
                   </span>
                 )}
               </Link>
               <button
                 onClick={logout}
-                className="flex items-center justify-center p-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-400 hover:text-rose-500 transition-all cursor-pointer shadow-sm"
+                className={`flex items-center justify-center p-2 rounded-2xl border transition-all cursor-pointer shadow-sm ${
+                  isDark
+                    ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-400 hover:border-rose-800"
+                    : "border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200"
+                }`}
                 title="Logout"
               >
                 <LogOut className="h-4 w-4" />
@@ -223,22 +241,32 @@ const Header = () => {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="fixed top-20 left-0 w-full max-h-[calc(100vh-5rem)] overflow-y-auto bg-slate-950/95 text-slate-100 border-b border-slate-800 p-6 flex flex-col gap-5 shadow-2xl backdrop-blur-2xl lg:hidden z-[1000] animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className={`fixed top-20 left-0 w-full max-h-[calc(100vh-5rem)] overflow-y-auto p-6 flex flex-col gap-5 shadow-2xl backdrop-blur-2xl lg:hidden z-[1000] animate-in fade-in slide-in-from-top-2 duration-200 border-b ${
+          isDark
+            ? "bg-slate-950/95 text-slate-100 border-slate-800"
+            : "bg-white/95 text-slate-900 border-slate-200 shadow-2xl"
+        }`}>
           <div className="flex flex-col gap-3">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Navigation</div>
+            <div className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+              isDark ? "text-slate-400" : "text-slate-500"
+            }`}>Navigation</div>
             
             {/* Agent List Selector */}
             <div className="w-full">
-              <AgentListDropdown />
+              <AgentListDropdown onNavigate={() => setMobileMenuOpen(false)} />
             </div>
 
             {/* Pricing link */}
             <Link
               href="/pricing"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-200 font-bold text-xs"
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs transition-all ${
+                isDark
+                  ? "bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800"
+                  : "bg-slate-50 border-slate-200 text-slate-900 hover:bg-amber-50 hover:border-amber-200 shadow-sm"
+              }`}
             >
-              <Zap className="w-4 h-4 text-amber-400" />
+              <Zap className="w-4 h-4 text-amber-500" />
               <span>Pricing Plans</span>
             </Link>
 
@@ -247,14 +275,22 @@ const Header = () => {
               <Link
                 href="/portfolio-management"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-indigo-950/50 border border-indigo-900 text-indigo-300 font-bold text-xs"
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs transition-all ${
+                  isDark
+                    ? "bg-indigo-950/50 border-indigo-900 text-indigo-300"
+                    : "bg-indigo-50 border-indigo-200 text-indigo-900 shadow-sm"
+                }`}
               >
-                <LayoutDashboard className="w-4 h-4 text-indigo-400" />
+                <LayoutDashboard className="w-4 h-4 text-indigo-500" />
                 <span>Solution Workspace</span>
               </Link>
             ) : (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/50 border border-slate-800 text-slate-500 font-bold text-xs opacity-60">
-                <Lock className="w-4 h-4 text-slate-500" />
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs opacity-60 ${
+                isDark
+                  ? "bg-slate-900/50 border-slate-800 text-slate-500"
+                  : "bg-slate-100 border-slate-200 text-slate-400"
+              }`}>
+                <Lock className="w-4 h-4 text-slate-400" />
                 <span>Solution Workspace (Admin Only)</span>
               </div>
             )}
@@ -264,28 +300,46 @@ const Header = () => {
               <Link
                 href="/admin"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-violet-950/50 border border-violet-900 text-violet-300 font-bold text-xs"
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs transition-all ${
+                  isDark
+                    ? "bg-violet-950/50 border-violet-900 text-violet-300"
+                    : "bg-violet-50 border-violet-200 text-violet-900 shadow-sm"
+                }`}
               >
-                <Shield className="w-4 h-4 text-violet-400" />
+                <Shield className="w-4 h-4 text-violet-500" />
                 <span>Admin Dashboard</span>
               </Link>
             )}
           </div>
 
-          <div className="pt-4 border-t border-slate-800/80 flex flex-col gap-3">
+          <div className={`pt-4 border-t flex flex-col gap-3 ${
+            isDark ? "border-slate-800/80" : "border-slate-200"
+          }`}>
             {user ? (
-              <div className="flex items-center justify-between bg-slate-900 p-3.5 rounded-2xl border border-slate-800">
+              <div className={`flex items-center justify-between p-3.5 rounded-2xl border ${
+                isDark
+                  ? "bg-slate-900 border-slate-800 text-slate-100"
+                  : "bg-slate-50 border-slate-200 text-slate-900 shadow-sm"
+              }`}>
                 <Link
                   href="/profile"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-3"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <div className={`w-9 h-9 rounded-xl border flex items-center justify-center ${
+                    isDark
+                      ? "bg-indigo-600/20 border-indigo-500/30 text-indigo-400"
+                      : "bg-indigo-100 border-indigo-200 text-indigo-700"
+                  }`}>
                     <UserIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-white">{user.username}</div>
-                    <div className="text-[10px] text-slate-400 uppercase font-black">{user.role} ROLE</div>
+                    <div className={`text-xs font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                      {user.username}
+                    </div>
+                    <div className={`text-[10px] uppercase font-black ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      {user.role} ROLE
+                    </div>
                   </div>
                 </Link>
                 <button
@@ -293,7 +347,11 @@ const Header = () => {
                     setMobileMenuOpen(false);
                     logout();
                   }}
-                  className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs font-bold transition-colors"
+                  className={`p-2.5 rounded-xl text-xs font-bold transition-colors border ${
+                    isDark
+                      ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20"
+                      : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+                  }`}
                 >
                   Logout
                 </button>
@@ -302,9 +360,10 @@ const Header = () => {
               <Link
                 href="/auth"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-extrabold text-xs tracking-wider uppercase text-center shadow-lg shadow-indigo-600/20"
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-xs uppercase tracking-wider shadow-lg"
               >
-                Sign In / Register
+                <UserIcon className="w-4 h-4" />
+                <span>Sign In / Register</span>
               </Link>
             )}
           </div>

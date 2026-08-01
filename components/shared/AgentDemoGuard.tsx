@@ -256,20 +256,20 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
 
         {/* Hero Header */}
         <div className="space-y-4 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" /> {info.category}
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
             {info.title}
           </h1>
-          <p className="text-slate-400 text-base leading-relaxed font-medium">
+          <p className="text-slate-600 dark:text-slate-400 text-base leading-relaxed font-medium">
             {info.description}
           </p>
         </div>
 
         {/* ── Demo Video Player Card ────────────────────────────────────────── */}
-        <div className="relative rounded-3xl border border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden backdrop-blur-xl">
-          <div className="p-4 border-b border-slate-800/80 bg-slate-950/60 flex items-center justify-between text-xs font-bold text-slate-400">
+        <div className="relative rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 shadow-2xl overflow-hidden backdrop-blur-xl transition-colors">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/80 dark:bg-slate-950/60 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -345,15 +345,19 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
         </div>
 
         {/* ── Action Section: Contact Us CTA ──────────────────────────────── */}
-        <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/40 via-slate-900/90 to-slate-950 p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl backdrop-blur-xl">
+        <div className={`rounded-3xl border p-8 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-8 backdrop-blur-xl transition-all ${
+          isDark
+            ? "bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-950 border-indigo-500/30 shadow-2xl text-white"
+            : "bg-gradient-to-br from-white via-indigo-50/60 to-slate-50 border-indigo-200/80 shadow-xl text-slate-900"
+        }`}>
           <div className="space-y-3 text-center md:text-left max-w-xl">
-            <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-400">
+            <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
               <Building2 className="w-4 h-4" /> Enterprise Early Access
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               Want access to {info.title}?
             </h2>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed font-medium">
               We are rolling out specialized AI agents to enterprise partners and early access users. Contact our team to schedule a custom demo or unlock access for your organization.
             </p>
           </div>
@@ -375,16 +379,28 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
       {/* ── Contact Us Modal ────────────────────────────────────────────────── */}
       {showContactModal && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-8 shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className={`relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 ${
+            isDark
+              ? "bg-[#0f172a] border border-slate-800 text-slate-100"
+              : "bg-white border border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between pb-4 border-b ${
+              isDark ? "border-slate-800" : "border-slate-200"
+            }`}>
               <div>
-                <h3 className="text-xl font-black text-white">Contact Us</h3>
-                <p className="text-xs text-slate-400 mt-1">Request access to {info.title}</p>
+                <h3 className="text-xl font-black">Contact Us</h3>
+                <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-500 font-medium"}`}>
+                  Request access to {info.title}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowContactModal(false)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                className={`p-2 rounded-xl transition-colors ${
+                  isDark
+                    ? "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800"
+                    : "bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -392,12 +408,12 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
 
             {submitted ? (
               <div className="text-center py-8 space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h4 className="text-lg font-bold text-white">Inquiry Sent Successfully!</h4>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Our enterprise team will reach out to <strong>{form.email}</strong> shortly with custom access details.
+                <h4 className="text-lg font-bold">Inquiry Sent Successfully!</h4>
+                <p className={`text-xs max-w-xs mx-auto ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                  Our enterprise team will reach out to <strong className={isDark ? "text-slate-200" : "text-slate-900 font-bold"}>{form.email}</strong> shortly with custom access details.
                 </p>
                 <button
                   type="button"
@@ -405,7 +421,7 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
                     setSubmitted(false);
                     setShowContactModal(false);
                   }}
-                  className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors"
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30"
                 >
                   Close
                 </button>
@@ -413,13 +429,15 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
             ) : (
               <form onSubmit={handleContactSubmit} className="space-y-4">
                 {errorMsg && (
-                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold">
                     {errorMsg}
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}>
                     Your Name
                   </label>
                   <input
@@ -427,13 +445,19 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
                     required
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                    className={`w-full px-4 py-3 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+                      isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-indigo-500"
+                        : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600"
+                    }`}
                     placeholder="Enter your name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}>
                     Work Email
                   </label>
                   <input
@@ -441,13 +465,19 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
                     required
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                    className={`w-full px-4 py-3 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+                      isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-indigo-500"
+                        : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600"
+                    }`}
                     placeholder="name@company.com"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}>
                     Company / Organization
                   </label>
                   <input
@@ -455,20 +485,30 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
                     required
                     value={form.company}
                     onChange={(e) => setForm({ ...form, company: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                    className={`w-full px-4 py-3 rounded-xl text-xs font-medium focus:outline-none transition-colors border ${
+                      isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-indigo-500"
+                        : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600"
+                    }`}
                     placeholder="Company name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}>
                     Message
                   </label>
                   <textarea
                     rows={3}
                     value={form.message}
                     onChange={(e) => setForm({ ...form, message: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                    className={`w-full px-4 py-3 rounded-xl text-xs font-medium focus:outline-none transition-colors border resize-none ${
+                      isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-indigo-500"
+                        : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600"
+                    }`}
                   />
                 </div>
 
@@ -476,14 +516,18 @@ export default function AgentDemoGuard({ agentKey = "data_retrieval", customTitl
                   <button
                     type="button"
                     onClick={() => setShowContactModal(false)}
-                    className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                    className={`px-5 py-3 rounded-xl text-xs font-bold transition-colors ${
+                      isDark
+                        ? "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    }`}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition-colors flex items-center gap-2"
+                    className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-extrabold transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2"
                   >
                     {submitting ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>

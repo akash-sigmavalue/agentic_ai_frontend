@@ -19,6 +19,13 @@ import {
   ExternalLink,
   Crown,
   X,
+  MessageSquare,
+  Mail,
+  Phone,
+  Clock,
+  Trash2,
+  Eye,
+  Filter,
 } from "lucide-react";
 import AdminOnlyGate from "@/components/shared/AdminOnlyGate";
 import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
@@ -59,9 +66,30 @@ interface AdminTransaction {
   created_at: string;
 }
 
+interface AdminContactInquiry {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  team_size: string | null;
+  message: string | null;
+  status: string;
+  created_at: string;
+}
+
 export default function AdminDashboardPage() {
   const isDark = useTheme();
-  const [activeTab, setActiveTab] = useState<"users" | "orgs" | "transactions" | "payments">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "orgs" | "transactions" | "payments" | "queries">("users");
+
+  // User Queries (Contact Inquiries) state
+  const [inquiries, setInquiries] = useState<AdminContactInquiry[]>([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [inquirySearch, setInquirySearch] = useState("");
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<string>("ALL");
+  const [selectedInquiry, setSelectedInquiry] = useState<AdminContactInquiry | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [deletingInquiryId, setDeletingInquiryId] = useState<number | null>(null);
 
   // Payments state
   const [payments, setPayments] = useState<any[]>([]);
@@ -140,11 +168,64 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchInquiries = async () => {
+    setLoadingInquiries(true);
+    try {
+      const data = await apiFetch<AdminContactInquiry[]>(API_ROUTES.adminInquiries);
+      setInquiries(data);
+    } catch (err: any) {
+      console.error("Failed to load contact inquiries", err);
+    } finally {
+      setLoadingInquiries(false);
+    }
+  };
+
+  const handleUpdateStatus = async (inquiryId: number, newStatus: string) => {
+    setUpdatingStatusId(inquiryId);
+    try {
+      const url = API_ROUTES.adminUpdateInquiryStatus(inquiryId);
+      const res = await apiRequest(url, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      setInquiries((prev) =>
+        prev.map((item) => (item.id === inquiryId ? { ...item, status: newStatus } : item))
+      );
+      if (selectedInquiry && selectedInquiry.id === inquiryId) {
+        setSelectedInquiry((prev) => (prev ? { ...prev, status: newStatus } : null));
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update status");
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const handleDeleteInquiry = async (inquiryId: number) => {
+    if (!confirm("Are you sure you want to delete this user query?")) return;
+    setDeletingInquiryId(inquiryId);
+    try {
+      const url = API_ROUTES.adminDeleteInquiry(inquiryId);
+      const res = await apiRequest(url, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete inquiry");
+      setInquiries((prev) => prev.filter((item) => item.id !== inquiryId));
+      if (selectedInquiry && selectedInquiry.id === inquiryId) {
+        setSelectedInquiry(null);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to delete inquiry");
+    } finally {
+      setDeletingInquiryId(null);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "users") fetchUsers();
     if (activeTab === "orgs") fetchOrgs();
     if (activeTab === "transactions") fetchTransactions();
     if (activeTab === "payments") fetchPayments();
+    if (activeTab === "queries") fetchInquiries();
   }, [activeTab]);
 
   // Promote user to Enterprise Owner
@@ -231,14 +312,31 @@ export default function AdminDashboardPage() {
       (u.email && u.email.toLowerCase().includes(userSearch.toLowerCase()))
   );
 
-  // Theme-adaptive style utilities
+  const filteredInquiries = inquiries.filter((inq) => {
+    const matchesSearch =
+      inq.name.toLowerCase().includes(inquirySearch.toLowerCase()) ||
+      inq.email.toLowerCase().includes(inquirySearch.toLowerCase()) ||
+      (inq.company && inq.company.toLowerCase().includes(inquirySearch.toLowerCase())) ||
+      (inq.message && inq.message.toLowerCase().includes(inquirySearch.toLowerCase()));
+
+    const matchesStatus =
+      inquiryStatusFilter === "ALL" ||
+      inq.status.toUpperCase() === inquiryStatusFilter.toUpperCase();
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Explicit theme variables to guarantee ZERO color bleeding
   const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
-  const cardClass = isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-sm";
-  const tableHeaderClass = isDark ? "bg-slate-900/90 text-slate-400 border-slate-800" : "bg-slate-100/80 text-slate-600 border-slate-200";
+  const cardClass = isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-sm text-slate-900";
+  const tableHeaderClass = isDark ? "bg-slate-900/90 text-slate-400 border-slate-800" : "bg-slate-100 text-slate-700 border-slate-200 font-black";
   const tableRowClass = isDark ? "hover:bg-slate-800/40 border-slate-800/60 text-slate-200" : "hover:bg-slate-50 border-slate-200 text-slate-800";
   const inputClass = isDark
-    ? "bg-slate-900 border-slate-800 text-slate-200 placeholder-slate-500"
-    : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 shadow-sm";
+    ? "bg-slate-900 border-slate-800 text-slate-100 placeholder-slate-500"
+    : "bg-white border-slate-300 text-slate-900 placeholder-slate-400 shadow-sm";
+  const buttonSecClass = isDark
+    ? "bg-slate-900 text-slate-200 border-slate-800 hover:bg-slate-800"
+    : "bg-white text-slate-800 border-slate-300 hover:bg-slate-100 shadow-sm font-bold";
 
   return (
     <AdminOnlyGate>
@@ -253,20 +351,24 @@ export default function AdminDashboardPage() {
               <div>
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight">Admin Management Hub</h1>
                 <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                  Manage users, Enterprise organizations, and inspect the token audit trail.
+                  Manage users, Enterprise organizations, token audit trail, and user contact queries.
                 </p>
               </div>
             </div>
 
             {/* Navigation Tabs (Scrollable on Mobile) */}
-            <div className="flex items-center gap-2 bg-slate-200/60 dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-300 dark:border-slate-800 overflow-x-auto max-w-full shrink-0">
+            <div className={`flex items-center gap-2 p-1.5 rounded-2xl border overflow-x-auto max-w-full shrink-0 ${
+              isDark ? "bg-slate-900/80 border-slate-800" : "bg-slate-200/80 border-slate-300 shadow-sm"
+            }`}>
               <button
                 type="button"
                 onClick={() => setActiveTab("users")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   activeTab === "users"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -279,7 +381,9 @@ export default function AdminDashboardPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   activeTab === "orgs"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
                 }`}
               >
                 <Building2 className="w-4 h-4" />
@@ -292,7 +396,9 @@ export default function AdminDashboardPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   activeTab === "transactions"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
                 }`}
               >
                 <Receipt className="w-4 h-4" />
@@ -305,11 +411,28 @@ export default function AdminDashboardPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   activeTab === "payments"
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
                 }`}
               >
-                <Zap className="w-4 h-4 text-amber-400" />
+                <Zap className="w-4 h-4 text-amber-500" />
                 Fiat Payments ({payments.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("queries")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "queries"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-emerald-500" />
+                User Queries ({inquiries.length})
               </button>
             </div>
           </div>
@@ -331,7 +454,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={fetchUsers}
-                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${cardClass}`}
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? "animate-spin" : ""}`} />
                   Refresh Directory
@@ -370,37 +493,49 @@ export default function AdminDashboardPage() {
                         filteredUsers.map((u) => (
                           <tr key={u.id} className={`transition-colors ${tableRowClass}`}>
                             <td className="p-4 font-bold">
-                              <div className="text-slate-900 dark:text-slate-100">{u.username}</div>
-                              <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400">{u.email || "No email"}</div>
+                              <div className={isDark ? "text-slate-100 font-bold" : "text-slate-900 font-extrabold"}>
+                                {u.username}
+                              </div>
+                              <div className={isDark ? "text-[11px] text-slate-400 font-normal" : "text-[11px] text-slate-600 font-medium"}>
+                                {u.email || "No email"}
+                              </div>
                             </td>
                             <td className="p-4">
                               <span
                                 className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wider uppercase border ${
                                   u.role === "ADMIN"
-                                    ? "bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/30"
+                                    ? isDark
+                                      ? "bg-violet-950/80 text-violet-300 border-violet-800"
+                                      : "bg-violet-100 text-violet-800 border-violet-300 font-bold"
                                     : u.role === "PAID"
-                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30"
-                                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700"
+                                    ? isDark
+                                      ? "bg-emerald-950/80 text-emerald-300 border-emerald-800"
+                                      : "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
+                                    : isDark
+                                    ? "bg-slate-800 text-slate-300 border-slate-700"
+                                    : "bg-slate-200 text-slate-800 border-slate-300 font-bold"
                                 }`}
                               >
                                 {u.role}
                               </span>
                             </td>
-                            <td className="p-4 font-semibold text-slate-700 dark:text-slate-300">
+                            <td className={`p-4 font-semibold ${isDark ? "text-slate-300" : "text-slate-800 font-bold"}`}>
                               {u.account_type || "—"}
                             </td>
-                            <td className="p-4 font-bold text-indigo-600 dark:text-indigo-400">
+                            <td className={`p-4 font-bold ${isDark ? "text-indigo-400" : "text-indigo-700 font-black"}`}>
                               {u.personal_token_balance.toLocaleString()} tokens
                             </td>
                             <td className="p-4">
                               {u.active_org_name ? (
-                                <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                                <div className={`flex items-center gap-1.5 ${isDark ? "text-slate-200" : "text-slate-800 font-bold"}`}>
                                   <Building className="w-3.5 h-3.5 text-indigo-500" />
                                   <span>{u.active_org_name}</span>
-                                  <span className="text-[10px] text-slate-500 uppercase">({u.active_org_role})</span>
+                                  <span className={`text-[10px] uppercase ${isDark ? "text-slate-400" : "text-slate-600 font-semibold"}`}>
+                                    ({u.active_org_role})
+                                  </span>
                                 </div>
                               ) : (
-                                <span className="text-slate-400 dark:text-slate-600">None</span>
+                                <span className={isDark ? "text-slate-500" : "text-slate-600 font-medium"}>None</span>
                               )}
                             </td>
                             <td className="p-4 text-right whitespace-nowrap">
@@ -408,9 +543,13 @@ export default function AdminDashboardPage() {
                                 <button
                                   type="button"
                                   onClick={() => setSelectedUser(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs font-bold transition-all"
+                                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    isDark
+                                      ? "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30"
+                                      : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                                  }`}
                                 >
-                                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                  <Zap className="w-3.5 h-3.5 text-amber-400" />
                                   Promote to Enterprise Owner
                                 </button>
                               )}
@@ -432,7 +571,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={fetchOrgs}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${cardClass}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingOrgs ? "animate-spin" : ""}`} />
                   Refresh Orgs
@@ -457,30 +596,46 @@ export default function AdminDashboardPage() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">{org.name}</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Owner: {org.owner_username}</p>
+                          <h3 className={`font-black text-base ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                            {org.name}
+                          </h3>
+                          <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                            Owner: <strong>{org.owner_username}</strong>
+                          </p>
                         </div>
                         <span
-                          className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                          className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
                             org.status === "ACTIVE"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                              : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                              ? isDark
+                                ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                                : "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
+                              : isDark
+                              ? "bg-rose-950 text-rose-300 border-rose-800"
+                              : "bg-rose-100 text-rose-800 border-rose-300 font-bold"
                           }`}
                         >
                           {org.status}
                         </span>
                       </div>
 
-                      <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-500 dark:text-slate-400">Shared Token Pool:</span>
-                          <span className="font-black text-indigo-600 dark:text-indigo-400">
+                      <div className={`p-4 rounded-2xl border space-y-2 ${
+                        isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200 shadow-inner"
+                      }`}>
+                        <div className="flex justify-between text-xs items-center">
+                          <span className={isDark ? "text-slate-400" : "text-slate-600 font-bold"}>
+                            Shared Token Pool:
+                          </span>
+                          <span className={`font-black ${isDark ? "text-indigo-400" : "text-indigo-700 text-sm"}`}>
                             {org.org_token_balance.toLocaleString()} tokens
                           </span>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-500 dark:text-slate-400">Active Members:</span>
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{org.active_member_count}</span>
+                        <div className="flex justify-between text-xs items-center">
+                          <span className={isDark ? "text-slate-400" : "text-slate-600 font-bold"}>
+                            Active Members:
+                          </span>
+                          <span className={`font-black ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                            {org.active_member_count}
+                          </span>
                         </div>
                       </div>
 
@@ -491,17 +646,25 @@ export default function AdminDashboardPage() {
                             setSelectedOrg(org);
                             setNewBalance(org.org_token_balance.toString());
                           }}
-                          className="flex-1 py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs font-bold transition-all text-center"
+                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-center ${
+                            isDark
+                              ? "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30"
+                              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                          }`}
                         >
                           Set Balance
                         </button>
                         <button
                           type="button"
                           onClick={() => handleToggleSuspend(org)}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
                             org.status === "ACTIVE"
-                              ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/30"
-                              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                              ? isDark
+                                ? "bg-rose-950/40 text-rose-300 border border-rose-800 hover:bg-rose-900/40"
+                                : "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
+                              : isDark
+                              ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800 hover:bg-emerald-900/40"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
                           }`}
                         >
                           {org.status === "ACTIVE" ? "Suspend" : "Activate"}
@@ -521,7 +684,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={fetchTransactions}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${cardClass}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingTx ? "animate-spin" : ""}`} />
                   Refresh Audit Trail
@@ -558,13 +721,17 @@ export default function AdminDashboardPage() {
                       ) : (
                         transactions.map((tx) => (
                           <tr key={tx.id} className={`transition-colors ${tableRowClass}`}>
-                            <td className="p-4 font-mono text-slate-500 dark:text-slate-400">#{tx.id}</td>
+                            <td className="p-4 font-mono font-bold text-slate-600 dark:text-slate-400">#{tx.id}</td>
                             <td className="p-4">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                isDark
+                                  ? "bg-slate-800 text-slate-300 border-slate-700"
+                                  : "bg-slate-100 text-slate-800 border-slate-300"
+                              }`}>
                                 {tx.wallet_type}
                               </span>
                             </td>
-                            <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{tx.wallet_owner_id}</td>
+                            <td className={`p-4 font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{tx.wallet_owner_id}</td>
                             <td className="p-4">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
@@ -579,11 +746,11 @@ export default function AdminDashboardPage() {
                               </span>
                             </td>
                             <td className="p-4 font-bold">
-                              <span className={tx.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                              <span className={tx.amount >= 0 ? (isDark ? "text-emerald-400" : "text-emerald-700 font-extrabold") : (isDark ? "text-rose-400" : "text-rose-700 font-extrabold")}>
                                 {tx.amount >= 0 ? "+" : ""}{tx.amount.toLocaleString()} tokens
                               </span>
                             </td>
-                            <td className="p-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            <td className={`p-4 whitespace-nowrap ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
                               {new Date(tx.created_at).toLocaleString()}
                             </td>
                           </tr>
@@ -603,7 +770,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={fetchPayments}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${cardClass}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingPayments ? "animate-spin" : ""}`} />
                   Refresh Payments
@@ -641,22 +808,28 @@ export default function AdminDashboardPage() {
                       ) : (
                         payments.map((p) => (
                           <tr key={p.id} className={`transition-colors ${tableRowClass}`}>
-                            <td className="p-4 font-mono text-slate-500 dark:text-slate-400">#{p.id}</td>
-                            <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{p.user_id}</td>
-                            <td className="p-4 text-slate-600 dark:text-slate-300">{p.customer_email || "—"}</td>
-                            <td className="p-4 font-bold text-slate-900 dark:text-slate-100">
+                            <td className="p-4 font-mono font-bold text-slate-600 dark:text-slate-400">#{p.id}</td>
+                            <td className={`p-4 font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{p.user_id}</td>
+                            <td className={`p-4 ${isDark ? "text-slate-300" : "text-slate-800 font-semibold"}`}>{p.customer_email || "—"}</td>
+                            <td className={`p-4 font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                               ₹{(p.amount_inr || 0).toLocaleString()}
                             </td>
-                            <td className="p-4 font-bold text-emerald-600 dark:text-emerald-400">
+                            <td className={`p-4 font-black ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
                               +{(p.tokens_credited || 0).toLocaleString()}
                             </td>
                             <td className="p-4">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
                                 p.status === "succeeded"
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30"
+                                  ? isDark
+                                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                    : "bg-emerald-100 text-emerald-800 border-emerald-300"
                                   : p.status === "pending"
-                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/30"
-                                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                  ? isDark
+                                    ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                    : "bg-amber-100 text-amber-800 border-amber-300"
+                                  : isDark
+                                  ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                                  : "bg-rose-100 text-rose-800 border-rose-300"
                               }`}>
                                 {p.status}
                               </span>
@@ -672,8 +845,181 @@ export default function AdminDashboardPage() {
                                   View Receipt <ExternalLink className="w-3 h-3" />
                                 </a>
                               ) : (
-                                <span className="text-slate-400 dark:text-slate-600">—</span>
+                                <span className={isDark ? "text-slate-600" : "text-slate-400"}>—</span>
                               )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 5: USER QUERIES (CONTACT FORM SUBMISSIONS) ─────────────── */}
+          {activeTab === "queries" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:max-w-xl">
+                  <div className="relative w-full sm:flex-1">
+                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email, company, or query..."
+                      value={inquirySearch}
+                      onChange={(e) => setInquirySearch(e.target.value)}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:border-indigo-500 transition-colors ${inputClass}`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
+                    <select
+                      value={inquiryStatusFilter}
+                      onChange={(e) => setInquiryStatusFilter(e.target.value)}
+                      className={`w-full sm:w-auto px-3 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:border-indigo-500 cursor-pointer ${inputClass}`}
+                    >
+                      <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">All Statuses</option>
+                      <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">New</option>
+                      <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Contacted</option>
+                      <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">In Progress</option>
+                      <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Resolved</option>
+                      <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Archived</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchInquiries}
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingInquiries ? "animate-spin" : ""}`} />
+                  Refresh Queries
+                </button>
+              </div>
+
+              {/* Fully Responsive Scrollable Table */}
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">Date & ID</th>
+                        <th className="p-4">User Details</th>
+                        <th className="p-4">Company & Phone</th>
+                        <th className="p-4">User Query Message</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingInquiries ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading user queries...
+                          </td>
+                        </tr>
+                      ) : filteredInquiries.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            No user queries found.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredInquiries.map((inq) => (
+                          <tr key={inq.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              <div className={`font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>#{inq.id}</div>
+                              <div className={`text-[10px] mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                                {inq.created_at ? new Date(inq.created_at).toLocaleString() : "—"}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className={`font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{inq.name}</div>
+                              <a
+                                href={`mailto:${inq.email}`}
+                                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 mt-0.5"
+                              >
+                                <Mail className="w-3 h-3 shrink-0" />
+                                {inq.email}
+                              </a>
+                            </td>
+                            <td className="p-4">
+                              <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                                {inq.company || "Individual"}
+                              </div>
+                              {inq.phone && (
+                                <div className={`text-[11px] flex items-center gap-1 mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                                  <Phone className="w-3 h-3 shrink-0" />
+                                  {inq.phone}
+                                </div>
+                              )}
+                              {inq.team_size && (
+                                <div className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>Team: {inq.team_size}</div>
+                              )}
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              <p className={`line-clamp-2 font-normal leading-relaxed ${isDark ? "text-slate-300" : "text-slate-800"}`}>
+                                {inq.message || "No message content"}
+                              </p>
+                            </td>
+                            <td className="p-4">
+                              <select
+                                value={inq.status}
+                                disabled={updatingStatusId === inq.id}
+                                onChange={(e) => handleUpdateStatus(inq.id, e.target.value)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border cursor-pointer focus:outline-none transition-colors ${
+                                  inq.status === "NEW"
+                                    ? isDark
+                                      ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                      : "bg-amber-100 text-amber-800 border-amber-300"
+                                    : inq.status === "CONTACTED" || inq.status === "IN_PROGRESS"
+                                    ? isDark
+                                      ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                                      : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                                    : inq.status === "RESOLVED"
+                                    ? isDark
+                                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                      : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                    : isDark
+                                    ? "bg-slate-800 text-slate-400 border-slate-700"
+                                    : "bg-slate-200 text-slate-800 border-slate-300"
+                                }`}
+                              >
+                                <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">NEW</option>
+                                <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">CONTACTED</option>
+                                <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">IN PROGRESS</option>
+                                <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">RESOLVED</option>
+                                <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">ARCHIVED</option>
+                              </select>
+                            </td>
+                            <td className="p-4 text-right whitespace-nowrap space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedInquiry(inq)}
+                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  isDark
+                                    ? "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                                }`}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Query
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInquiry(inq.id)}
+                                disabled={deletingInquiryId === inq.id}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${
+                                  isDark
+                                    ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                    : "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -688,7 +1034,9 @@ export default function AdminDashboardPage() {
           {/* ── MODAL 1: PROMOTE USER TO ENTERPRISE OWNER ─────────────────────── */}
           {selectedUser && (
             <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"}`}>
+              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
                 <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
                   <div>
                     <h3 className="text-lg font-black">Promote to Enterprise Owner</h3>
@@ -719,7 +1067,7 @@ export default function AdminDashboardPage() {
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
                       Initial Organization Tokens
                     </label>
                     <input
@@ -763,7 +1111,9 @@ export default function AdminDashboardPage() {
           {/* ── MODAL 2: SET ORG BALANCE ──────────────────────────────────────── */}
           {selectedOrg && (
             <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"}`}>
+              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
                 <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
                   <div>
                     <h3 className="text-lg font-black">Set Organization Token Pool</h3>
@@ -782,7 +1132,7 @@ export default function AdminDashboardPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
                       New Token Balance
                     </label>
                     <input
@@ -814,6 +1164,130 @@ export default function AdminDashboardPage() {
                       "Save Balance"
                     )}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── MODAL 3: VIEW FULL USER QUERY DETAILS ───────────────────────────── */}
+          {selectedInquiry && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+              <div className={`relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30">
+                        Query #{selectedInquiry.id}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                        selectedInquiry.status === "NEW"
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/30"
+                          : selectedInquiry.status === "RESOLVED"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30"
+                          : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/30"
+                      }`}>
+                        {selectedInquiry.status}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-black mt-2">{selectedInquiry.name}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInquiry(null)}
+                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Email Address</span>
+                    <a
+                      href={`mailto:${selectedInquiry.email}`}
+                      className="block font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      {selectedInquiry.email}
+                    </a>
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Company & Team</span>
+                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                      {selectedInquiry.company || "Individual / Not specified"}
+                    </div>
+                    {selectedInquiry.team_size && (
+                      <div className="text-slate-500">Team Size: {selectedInquiry.team_size}</div>
+                    )}
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Phone Number</span>
+                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                      {selectedInquiry.phone || "Not provided"}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Submitted At</span>
+                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                      {selectedInquiry.created_at ? new Date(selectedInquiry.created_at).toLocaleString() : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Full User Query / Message
+                  </label>
+                  <div className={`p-5 rounded-2xl border text-sm leading-relaxed whitespace-pre-wrap font-sans ${
+                    isDark ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-800"
+                  }`}>
+                    {selectedInquiry.message || "No message content submitted."}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-xs font-bold text-slate-500">Status:</span>
+                    <select
+                      value={selectedInquiry.status}
+                      onChange={(e) => handleUpdateStatus(selectedInquiry.id, e.target.value)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold focus:outline-none ${inputClass}`}
+                    >
+                      <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">NEW</option>
+                      <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">CONTACTED</option>
+                      <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">IN PROGRESS</option>
+                      <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">RESOLVED</option>
+                      <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">ARCHIVED</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <a
+                      href={`mailto:${selectedInquiry.email}?subject=Re: Sigmavalue AI Pilot Inquiry`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      Reply to User
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedInquiry(null)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

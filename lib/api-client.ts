@@ -29,6 +29,9 @@ export const API_ROUTES = {
   adminSetOrgBalance: (orgId: number) => `/admin/orgs/${orgId}/set-balance`,
   adminSuspendOrg: (orgId: number) => `/admin/orgs/${orgId}/suspend`,
   adminActivateOrg: (orgId: number) => `/admin/orgs/${orgId}/activate`,
+  adminInquiries: '/admin/inquiries',
+  adminUpdateInquiryStatus: (inquiryId: number) => `/admin/inquiries/${inquiryId}/status`,
+  adminDeleteInquiry: (inquiryId: number) => `/admin/inquiries/${inquiryId}`,
   // Enterprise Org
   enterpriseCreateOrg: '/enterprise/orgs',
   enterpriseMyOrg: '/enterprise/orgs/mine',
