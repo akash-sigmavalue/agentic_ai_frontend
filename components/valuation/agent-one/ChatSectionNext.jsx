@@ -336,9 +336,9 @@ function summarizeEvent(event) {
     return `[METRICS] Project metrics ready — ${t.length} projects, ${event.content?.total_valid || 0} valid listings.`;
   }
   if (event.type === "factorial_done") return "Valuation analytics generated.";
-  if (event.type === "done") return "Pipeline execution completed or artificially frozen.";
+  if (event.type === "done") return "Valuation Pipeline execution completed or artificially frozen.";
   if (event.type === "token_usage") return `Token usage updated: ${event.content?.cumulative_total_tokens || 0} tokens so far.`;
-  return "Pipeline update received.";
+  return "Valuation Pipeline update received.";
 }
 
 function humanizeFieldName(field) {
@@ -4753,7 +4753,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
               {selectedArea > 0 && (
                 <div className="w-full min-w-0 space-y-2 border-t border-border-soft pt-6">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Valuation Value</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Property Value</span>
                   <h2 className="font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)] sm:text-4xl">
                     {formatter.format(exactValue)}
                   </h2>
@@ -5257,7 +5257,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
-                Quick Estimate Running
+                AI Quick Estimate Running
               </p>
               <p className="mt-1 text-xs text-text-secondary">
                 {propertyLabel} · {locationLabel}
@@ -5271,7 +5271,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-text-dim">
-            <span>Pipeline progress</span>
+            <span>Valuation Pipeline progress</span>
             <span className="text-accent">{progressPct}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-border/30">
@@ -5320,13 +5320,16 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
                   <div className="flex items-center gap-2">
                     <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
                       }`}>
-                      {stage.label}
+                      <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                        }`}>
+                        {stage.label}
+                      </p>
+                      {isActive && (
+                        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent animate-pulse">
+                          Live
+                        </span>
+                      )}
                     </p>
-                    {isActive && (
-                      <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent animate-pulse">
-                        Live
-                      </span>
-                    )}
                   </div>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">
                     {isActive && progress.message ? progress.message : stage.desc}
@@ -5479,7 +5482,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
               <Zap className="h-5 w-5 text-accent" />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Quick Estimate</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">AI Quick Estimate</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                 Enter the subject details once and get a direct valuation result.
               </p>
@@ -5880,7 +5883,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           const event = JSON.parse(chunk.slice(6));
 
           onEvent?.(event);
-          let summary = "Pipeline update received.";
+          let summary = "Valuation update received.";
           if (event.type === "cost_calculation_start") summary = event.content?.message || "Running Cost Approach calculations...";
           else if (event.type === "cost_calculation_result") summary = `🛡️ Cost Approach calculated.`;
           else if (event.type === "cost_calculation_done") summary = "Cost Approach calculation complete.";
@@ -6095,7 +6098,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     ]);
     setCurrentQuestion(summary);
     setOriginalQuestion(summary);
-    setCurrentStage("Quick Estimate: Starting");
+    setCurrentStage("AI Quick Estimate: Starting");
     setStreamingNote("");
     setQuickEstimateProgress({
       activeIndex: 0,
@@ -6130,7 +6133,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Quick Estimate request failed with status ${response.status}`);
+        throw new Error(`AI Quick Estimate request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -6152,7 +6155,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           onEvent?.(event);
 
           if (event.type === "quick_estimate_start") {
-            setCurrentStage("Quick Estimate: Running");
+            setCurrentStage("AI Quick Estimate: Running");
             updateQuickEstimateProgress("geocoding", event.content?.message || "Starting quick estimate...");
           } else if (event.type === "quick_estimate_progress") {
             const stage = event.stage || "quick_estimate";
@@ -6174,7 +6177,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               detail.comparables = event.content.comparables;
             }
             updateQuickEstimateProgress(stage, message, detail);
-            setCurrentStage(`Quick Estimate: ${stage.replaceAll("_", " ")}`);
+            setCurrentStage(`AI Quick Estimate: ${stage.replaceAll("_", " ")}`);
           } else if (event.type === "quick_estimate_validation_error") {
             const missing = event.content?.missing_fields?.join(", ") || "required fields";
             updateQuickEstimateProgress("geocoding", event.content?.message || `Missing required fields: ${missing}`);
@@ -6246,12 +6249,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               ...prev,
               {
                 role: "assistant",
-                content: `Quick Estimate failed: ${event.content}`,
+                content: `AI Quick Estimate failed: ${event.content}`,
                 meta: "error",
               },
             ]);
           } else if (event.type === "quick_estimate_done") {
-            setCurrentStage("Quick Estimate: Complete");
+            setCurrentStage("AI Quick Estimate: Complete");
             setQuickEstimateProgress((prev) => ({ ...prev, done: true }));
             window.setTimeout(() => setIsQuickEstimateStreaming(false), 900);
           }
@@ -6264,7 +6267,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           ...prev,
           {
             role: "assistant",
-            content: `Quick Estimate failed: ${error.message}`,
+            content: `AI Quick Estimate failed: ${error.message}`,
             meta: "error",
           },
         ]);
@@ -7518,6 +7521,19 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       }
 
       const newDbTransactions = dbResults.flat();
+
+      // ── No-evidence guard: if BOTH web listings AND DB transactions are empty, show a clear error ──
+      const finalWebListings = listingData || [];
+      if (finalWebListings.length === 0 && newDbTransactions.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "No market evidence was found for the selected property. We are unable to generate a reliable valuation using the Sales Comparison Approach. Please verify the property details or expand the search criteria and try again.",
+            meta: "error",
+          },
+        ]);
+      }
 
       // Merge new DB transactions with existing ones (incremental case)
       const mergedDbTransactions = isIncremental
@@ -9715,6 +9731,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-bg-deep/80 p-4 backdrop-blur-md animate-in fade-in duration-300 md:p-8"
       onClick={() => setShowQuickEstimateModal(false)}
     >
+
       <div
         className="relative w-full max-w-2xl animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
@@ -9755,8 +9772,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 className="flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20 transition cursor-pointer whitespace-nowrap"
               >
                 <Zap className="h-3 w-3 shrink-0" />
-                <span className="hidden sm:inline">Quick Estimate</span>
-                <span className="sm:hidden">QE</span>
+                <span className="hidden sm:inline">AI Quick Estimate</span>
               </button>
             )}
             {subjectData && !anyStreaming && (
@@ -9767,7 +9783,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               >
                 <SlidersHorizontal className="h-3 w-3 shrink-0" />
                 <span className="hidden sm:inline">Edit Details</span>
-                <span className="sm:hidden">Edit</span>
               </button>
             )}
             <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap shrink-0">{anyStreaming ? "LIVE" : "READY"}</div>
@@ -9784,7 +9799,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 Start A Valuation Conversation
               </h3>
               <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
-                Ask about a property and the pipeline will stream entity extraction updates into the workflow view.
+                Ask about a property and the Valuation pipeline will stream entity extraction updates into the workflow view.
               </p>
               <button
                 type="button"
@@ -9792,7 +9807,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
               >
                 <Zap className="h-4 w-4" />
-                Quick Estimate Valuation
+                AI Quick Estimate Valuation
               </button>
               <div className="mt-6 grid gap-3 w-full max-w-lg">
                 {QUICK_PROMPTS.map((prompt) => (
@@ -10254,13 +10269,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   </div>
                   {!ctaListingCollapsed && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
                       <p className="text-xs text-text-dim">
                         {fetchedCompIds.size > 0
                           ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
                           : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
                       </p>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto shrink-0">
+                      <div className="flex items-center gap-3 shrink-0">
                         {backupValuationState && (
                           <button
                             type="button"
@@ -10309,14 +10324,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   </div>
                   {!ctaCleanCollapsed && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
                       <p className="text-xs text-text-dim">
                         The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
                       </p>
                       <button
                         type="button"
                         onClick={submitCleaning}
-                        className="w-full sm:w-auto shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                        className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
                       >
                         Start Data Cleaning →
                       </button>
@@ -10352,14 +10367,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   </div>
                   {!ctaFactorialCollapsed && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-3 px-4 py-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
                       <p className="text-xs text-text-dim">
                         This will group data by project and calculate key rate statistics for valuation.
                       </p>
                       <button
                         type="button"
                         onClick={submitFactorial}
-                        className="w-full sm:w-auto shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                        className="shrink-0 rounded-xl bg-[#a78bfa] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
                       >
                         Generate Factorial Table →
                       </button>
@@ -10402,7 +10417,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
                   <div
                     onClick={() => setMapCollapsed(!mapCollapsed)}
-                    className="border-b border-warning/15 bg-warning/5 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer select-none shrink-0"
+                    className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -10445,7 +10460,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
                         >Location Is Correct</button>
                         <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">Correct Lat, Lng</span>
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
                           <input
                             type="text"
                             value={clarificationValues.coordinates || ""}
@@ -10470,7 +10485,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel flex flex-col min-h-0">
                   <div
                     onClick={() => setApproachCollapsed(!approachCollapsed)}
-                    className="border-b border-warning/15 bg-warning/5 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer select-none shrink-0"
+                    className="border-b border-warning/15 bg-warning/5 px-4 py-3 cursor-pointer select-none shrink-0"
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10">
@@ -10503,7 +10518,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
                         >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
                         <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">Or Override Approach</span>
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
                           <select
                             value={clarificationValues.override_approach || ""}
                             onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}

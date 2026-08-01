@@ -1520,7 +1520,7 @@ function DensityTableContent({ liveDensity, factorialData, markers }) {
   );
 }
 
-function AmenitiesTableContent({ allAmenities, radius, markers }) {
+function AmenitiesTableContent({ allAmenities, radius, markers, showSource = false }) {
   if (allAmenities.length === 0) {
     return <p className="text-xs text-text-dim italic">No amenities found within {radius}m.</p>;
   }

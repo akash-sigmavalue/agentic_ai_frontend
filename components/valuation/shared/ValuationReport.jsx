@@ -128,9 +128,9 @@ function haversineDistanceKM(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -143,11 +143,10 @@ function SlideDots({ total, current, onChange }) {
         <button
           key={i}
           onClick={() => onChange(i)}
-          className={`transition-all duration-300 rounded-full ${
-            i === current
+          className={`transition-all duration-300 rounded-full ${i === current
               ? "w-6 h-2 bg-accent shadow-[0_0_8px_rgba(34,211,238,0.6)]"
               : "w-2 h-2 bg-white/20 hover:bg-white/40"
-          }`}
+            }`}
         />
       ))}
     </div>
@@ -332,19 +331,17 @@ function SlideReportMap({ valuationResult }) {
             {markers.map((m, idx) => (
               <div
                 key={idx}
-                className={`p-2 rounded-lg border transition-all ${
-                  m.isSubject
+                className={`p-2 rounded-lg border transition-all ${m.isSubject
                     ? "bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10"
                     : "bg-bg-input/40 border-border-soft hover:bg-bg-input/70"
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-2">
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-black shrink-0 ${
-                      m.isSubject
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-black shrink-0 ${m.isSubject
                         ? "bg-rose-500 text-white"
                         : "bg-accent text-bg-deep"
-                    }`}
+                      }`}
                   >
                     {m.index}
                   </span>
@@ -393,8 +390,8 @@ function SlideCover({ valuationResult }) {
   const marketValue = type === "cost"
     ? (costCalculation?.result?.cost_value || costCalculation?.depreciated_property_value || 0)
     : (factorialAnalysis?.market_value_computed && factorialAnalysis?.market_value
-        ? factorialAnalysis.market_value
-        : finalRate * area);
+      ? factorialAnalysis.market_value
+      : finalRate * area);
 
   const confidence = factorialAnalysis?.confidence || "Medium";
   const methodology = factorialAnalysis?.methodology || (type === "cost" ? "Cost Approach" : "Market Comparison Approach");
@@ -426,11 +423,10 @@ function SlideCover({ valuationResult }) {
                 </h1>
               </div>
             </div>
-            <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${
-              confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" :
-              confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" :
-              "border-amber-500/30 bg-amber-500/10 text-amber-400"
-            }`}>
+            <div className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" :
+                confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" :
+                  "border-amber-500/30 bg-amber-500/10 text-amber-400"
+              }`}>
               <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }} />
               {confidence} Confidence
             </div>
@@ -461,13 +457,13 @@ function SlideCover({ valuationResult }) {
         </div>
       </div>
 
-      {/* Market Value Hero */}
+      {/* Property Value Hero */}
       <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-bg-card/90 to-emerald-500/5 p-6 mb-4 shrink-0 shadow-[0_0_30px_rgba(16,185,129,0.08)]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_60%)]" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
           <div>
             <p className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-400/90 mb-1.5">
-              {type === "cost" ? "Cost Approach Value" : "Market Valuation"}
+              {type === "cost" ? "Cost Approach Value" : "Property Valuation"}
             </p>
             <p className="font-mono text-4xl font-black text-white drop-shadow-[0_0_24px_rgba(16,185,129,0.4)] tracking-wide">
               {fmtCurrency(marketValue, formatter)}
@@ -656,11 +652,10 @@ function SlideComparableGrid({ valuationResult }) {
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {[["Road", row.factor_road], ["Amenity", row.factor_amenity], ["Density", row.factor_density], ["CBD", row.factor_cbd], ["Total", row.total_factor]].map(([label, val]) => (
                   val != null && (
-                    <span key={label} className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold border ${
-                      Number(val) > 0 ? "text-green-400 border-green-500/20 bg-green-500/5" :
-                      Number(val) < 0 ? "text-red-400 border-red-500/20 bg-red-500/5" :
-                      "text-text-dim border-border-soft bg-bg-deep/30"
-                    }`}>
+                    <span key={label} className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold border ${Number(val) > 0 ? "text-green-400 border-green-500/20 bg-green-500/5" :
+                        Number(val) < 0 ? "text-red-400 border-red-500/20 bg-red-500/5" :
+                          "text-text-dim border-border-soft bg-bg-deep/30"
+                      }`}>
                       {label}: {Number(val) >= 0 ? "+" : ""}{(Number(val) * 100).toFixed(2)}%
                     </span>
                   )
@@ -860,7 +855,7 @@ function SlideBlending({ valuationResult }) {
           </div>
           {area > 0 && (
             <div className="text-right">
-              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-accent/80 mb-1">Final Market Value</p>
+              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-accent/80 mb-1">Final Property Value</p>
               <p className="font-mono text-2xl font-black text-accent drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">
                 {fmtCurrency(finalRate * area, formatter)}
               </p>
@@ -1109,7 +1104,7 @@ function SlideFactorialTable({ valuationResult }) {
 function downloadPDF(valuationResult) {
   const { subjectData, factorialAnalysis, costCalculation, type, factorialData } = valuationResult;
   const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
-  
+
   const subjectLat = subjectData?.lat ? Number(subjectData.lat) : null;
   const subjectLng = subjectData?.lng ? Number(subjectData.lng) : null;
   const subjectName = subjectData?.project_name || "Subject Property";
@@ -1235,7 +1230,7 @@ function downloadPDF(valuationResult) {
   <!-- Hero Value Block -->
   <div class="hero-box">
     <div>
-      <div class="hero-label">${type === "cost" ? "Cost Approach Value" : "Market Valuation"}</div>
+      <div class="hero-label">${type === "cost" ? "Cost Approach Value" : "Property Valuation"}</div>
       <div class="hero-value">${fmtCurrency(marketValue, formatter)}</div>
       ${area > 0 && type !== "cost" ? `<div class="hero-sub">${fmtCurrency(finalRate, formatter)}/sqft × ${area.toLocaleString()} sqft</div>` : ""}
     </div>
@@ -1260,23 +1255,23 @@ function downloadPDF(valuationResult) {
     ` : ""}
     <div class="info-grid">
       ${[
-        ["Project Name", subjectData?.project_name],
-        ["Property Type", subjectData?.property_type?.replace(/_/g, " ")?.toUpperCase()],
-        ["Location", subjectData?.location_name],
-        ["Country", subjectData?.country],
-        ["Configuration", subjectData?.configuration || subjectData?.unit_configuration],
-        ["Age", subjectData?.age_years != null ? `${subjectData.age_years} Years` : null],
-        ["Carpet Area", subjectData?.carpet_area_sqft ? `${Number(subjectData.carpet_area_sqft).toLocaleString()} sqft` : null],
-        ["Salable Area", subjectData?.salable_area_sqft ? `${Number(subjectData.salable_area_sqft).toLocaleString()} sqft` : null],
-        ["Built-up Area", subjectData?.builtup_area_sqft ? `${Number(subjectData.builtup_area_sqft).toLocaleString()} sqft` : null],
-        ["Plot Area", subjectData?.plot_area_sqft ? `${Number(subjectData.plot_area_sqft).toLocaleString()} sqft` : null],
-        ["Approach", subjectData?.recommended_approach?.toUpperCase()],
-        ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(5)}, ${Number(subjectData.lng || 0).toFixed(5)}` : null],
-        ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
-      ].filter(([, v]) => v).map(([l, v]) => {
-        const isAmenities = l === "Neighborhood Amenities";
-        return `<div class="info-item" ${isAmenities ? 'style="grid-column: span 2;"' : ''}><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`;
-      }).join("")}
+      ["Project Name", subjectData?.project_name],
+      ["Property Type", subjectData?.property_type?.replace(/_/g, " ")?.toUpperCase()],
+      ["Location", subjectData?.location_name],
+      ["Country", subjectData?.country],
+      ["Configuration", subjectData?.configuration || subjectData?.unit_configuration],
+      ["Age", subjectData?.age_years != null ? `${subjectData.age_years} Years` : null],
+      ["Carpet Area", subjectData?.carpet_area_sqft ? `${Number(subjectData.carpet_area_sqft).toLocaleString()} sqft` : null],
+      ["Salable Area", subjectData?.salable_area_sqft ? `${Number(subjectData.salable_area_sqft).toLocaleString()} sqft` : null],
+      ["Built-up Area", subjectData?.builtup_area_sqft ? `${Number(subjectData.builtup_area_sqft).toLocaleString()} sqft` : null],
+      ["Plot Area", subjectData?.plot_area_sqft ? `${Number(subjectData.plot_area_sqft).toLocaleString()} sqft` : null],
+      ["Approach", subjectData?.recommended_approach?.toUpperCase()],
+      ["Coordinates", subjectData?.lat ? `${Number(subjectData.lat).toFixed(5)}, ${Number(subjectData.lng || 0).toFixed(5)}` : null],
+      ["Neighborhood Amenities", formatAmenitySummary(getUpdatedAmenitySummary(subjectRow, factorialData))],
+    ].filter(([, v]) => v).map(([l, v]) => {
+      const isAmenities = l === "Neighborhood Amenities";
+      return `<div class="info-item" ${isAmenities ? 'style="grid-column: span 2;"' : ''}><span class="info-label">${l}</span><span class="info-value">${v}</span></div>`;
+    }).join("")}
     </div>
   </div>
 
@@ -1301,8 +1296,8 @@ function downloadPDF(valuationResult) {
       </div>
       <!-- Comparables dynamically generated in HTML template -->
       ${table.filter(row => row.role !== "SUBJECT" && row.lat && row.lng).map((row, idx) => {
-        const dist = haversineDistanceKM(subjectLat, subjectLng, Number(row.lat), Number(row.lng));
-        return `
+      const dist = haversineDistanceKM(subjectLat, subjectLng, Number(row.lat), Number(row.lng));
+      return `
         <div style="display: flex; align-items: center; gap: 8px; background: #eff6ff; border: 1px solid #bfdbfe; padding: 6px 10px; border-radius: 8px;">
           <span style="display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #2563eb; color: white; border-radius: 50%; font-weight: 900; font-size: 9px; font-family: sans-serif;">${idx + 1}</span>
           <div style="flex: 1; min-w: 0;">
@@ -1317,7 +1312,7 @@ function downloadPDF(valuationResult) {
           </div>
         </div>
         `;
-      }).join("")}
+    }).join("")}
     </div>
   </div>
 
@@ -1386,8 +1381,8 @@ function downloadPDF(valuationResult) {
           <td class="text-right mono" style="color:#16a34a;font-weight:900;">${fmtCurrency(subjectRow.avg_rate, formatter)}</td>
         </tr>` : ""}
         ${compRows.map(row => {
-          const f = row.total_factor != null ? Number(row.total_factor) : null;
-          return `<tr>
+      const f = row.total_factor != null ? Number(row.total_factor) : null;
+      return `<tr>
             <td>${row.project_name}</td>
             <td class="text-center mono">${row.road_type || "—"}</td>
             <td class="text-center">${getAmenitiesCount(getUpdatedAmenitySummary(row, factorialData))}</td>
@@ -1397,7 +1392,7 @@ function downloadPDF(valuationResult) {
             <td class="text-center mono ${f != null && f > 0 ? "pos" : f != null && f < 0 ? "neg" : ""}">${f != null ? (f >= 0 ? "+" : "") + (f * 100).toFixed(2) + "%" : "—"}</td>
             <td class="text-right mono" style="color:#2563eb;font-weight:700;">${fmtCurrency(row.factored_rate, formatter)}</td>
           </tr>`;
-        }).join("")}
+    }).join("")}
       </tbody>
     </table>
     <p style="font-size:8px;color:#94a3b8;">Each spatial factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
@@ -1452,13 +1447,13 @@ function downloadPDF(valuationResult) {
     <div class="section-title">5. Rate Reconciliation & Blending Calculations</div>
     
     ${(() => {
-      const blending = factorialAnalysis.blending || {};
-      const w1 = Number(blending.w1 || 0) * 100;
-      const w2 = Number(blending.w2 || 0) * 100;
-      const subjectOwnRate = blending.subject_own_rate;
-      const factoredCompAvg = blending.factored_comp_avg;
-      const details = factorialAnalysis.valuation_details || {};
-      return `
+        const blending = factorialAnalysis.blending || {};
+        const w1 = Number(blending.w1 || 0) * 100;
+        const w2 = Number(blending.w2 || 0) * 100;
+        const subjectOwnRate = blending.subject_own_rate;
+        const factoredCompAvg = blending.factored_comp_avg;
+        const details = factorialAnalysis.valuation_details || {};
+        return `
       <div style="border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:15px; background:#f8fafc;">
         <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
           Confidence-Weighted Blending
@@ -1512,11 +1507,11 @@ function downloadPDF(valuationResult) {
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
           ${Object.entries(details.attribute_weights || {}).map(([factor, weight]) => {
-            const impact = details.net_impacts?.[factor];
-            const formatted = factor.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-            const isPos = impact != null && Number(impact) > 0;
-            const isNeg = impact != null && Number(impact) < 0;
-            return `
+          const impact = details.net_impacts?.[factor];
+          const formatted = factor.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+          const isPos = impact != null && Number(impact) > 0;
+          const isNeg = impact != null && Number(impact) < 0;
+          return `
             <div style="border:1px solid #f1f5f9; background:#f8fafc; padding:8px 10px; border-radius:8px;">
               <div style="font-size:8px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px;">${formatted}</div>
               <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:9px;">
@@ -1524,11 +1519,11 @@ function downloadPDF(valuationResult) {
                 ${impact != null ? `<span style="font-weight:900; color:${isPos ? "#16a34a" : isNeg ? "#dc2626" : "#64748b"};">${isPos ? "+" : ""}${(Number(impact) * 100).toFixed(2)}% net impact</span>` : ""}
               </div>
             </div>`;
-          }).join("")}
+        }).join("")}
         </div>
       </div>` : ""}
       `;
-    })()}
+      })()}
   </div>` : ""}
 
   <!-- Section 6: AI Reasoning -->
@@ -1536,12 +1531,12 @@ function downloadPDF(valuationResult) {
   <div class="section page-break">
     <div class="section-title">6. AI Agent Reasoning & Valuation Rationale</div>
     ${[
-      ["Stage 1 — Comparable Scoring Analysis", factorialAnalysis.reasoning_audit.stage_1_scoring_thought],
-      ["Stage 2 — Spatial Adjustment Logic", factorialAnalysis.reasoning_audit.stage_2_adjustment_thought],
-      ["Final Reflection", factorialAnalysis.reasoning_audit.final_reflection],
-      ["Key Value Drivers", factorialAnalysis.reasoning_audit.key_drivers],
-      ["Uncertainties & Caveats", factorialAnalysis.reasoning_audit.uncertainties],
-    ].filter(([, v]) => v).map(([label, text]) => `
+        ["Stage 1 — Comparable Scoring Analysis", factorialAnalysis.reasoning_audit.stage_1_scoring_thought],
+        ["Stage 2 — Spatial Adjustment Logic", factorialAnalysis.reasoning_audit.stage_2_adjustment_thought],
+        ["Final Reflection", factorialAnalysis.reasoning_audit.final_reflection],
+        ["Key Value Drivers", factorialAnalysis.reasoning_audit.key_drivers],
+        ["Uncertainties & Caveats", factorialAnalysis.reasoning_audit.uncertainties],
+      ].filter(([, v]) => v).map(([label, text]) => `
     <div class="reasoning-box">
       <div class="reasoning-label">${label}</div>
       <div class="reasoning-text">${text}</div>
@@ -1558,12 +1553,12 @@ function downloadPDF(valuationResult) {
   <div class="section page-break">
     <div class="section-title">7. Cost Approach — Depreciated Replacement Value Schedule</div>
     ${[
-      ["1. Land Component Valuation", fmtCurrency(costCalcs.land_value, formatter), audit.step_1 || `${fmtCurrency(costInputs.derived_plot_rate_per_sqft, formatter)}/sqft × ${costInputs.plot_area_sqft} sqft`, "#0284c7"],
-      ["2. Replacement Construction Cost", fmtCurrency(costCalcs.construction_cost, formatter), audit.step_2 || `${fmtCurrency(costInputs.construction_rate_per_sqft, formatter)}/sqft × ${costInputs.builtup_area_sqft} sqft`, "#d97706"],
-      ["3. Depreciation Rate", `${costCalcs.depreciation_rate_pct || 0}%`, audit.step_3 || `Age: ${costInputs.age_of_property}yr ÷ Life: ${costInputs.total_life_of_building}yr`, "#dc2626"],
-      ["4. Depreciated Building Value", fmtCurrency(costCalcs.depreciated_building_value, formatter), audit.step_4 || "Construction Cost × (1 − Depreciation%)", "#ea580c"],
-      ["5. Final Cost Value", fmtCurrency(costResult.cost_value, formatter), audit.step_5 || "Land Value + Depreciated Building Value", "#16a34a"],
-    ].map(([label, value, formula, color]) => `
+        ["1. Land Component Valuation", fmtCurrency(costCalcs.land_value, formatter), audit.step_1 || `${fmtCurrency(costInputs.derived_plot_rate_per_sqft, formatter)}/sqft × ${costInputs.plot_area_sqft} sqft`, "#0284c7"],
+        ["2. Replacement Construction Cost", fmtCurrency(costCalcs.construction_cost, formatter), audit.step_2 || `${fmtCurrency(costInputs.construction_rate_per_sqft, formatter)}/sqft × ${costInputs.builtup_area_sqft} sqft`, "#d97706"],
+        ["3. Depreciation Rate", `${costCalcs.depreciation_rate_pct || 0}%`, audit.step_3 || `Age: ${costInputs.age_of_property}yr ÷ Life: ${costInputs.total_life_of_building}yr`, "#dc2626"],
+        ["4. Depreciated Building Value", fmtCurrency(costCalcs.depreciated_building_value, formatter), audit.step_4 || "Construction Cost × (1 − Depreciation%)", "#ea580c"],
+        ["5. Final Cost Value", fmtCurrency(costResult.cost_value, formatter), audit.step_5 || "Land Value + Depreciated Building Value", "#16a34a"],
+      ].map(([label, value, formula, color]) => `
     <div class="step-box">
       <div>
         <div class="step-label">${label}</div>
@@ -1615,18 +1610,18 @@ function downloadPDF(valuationResult) {
       .bindPopup('<b>Subject: ' + subjectName + '</b>');
       
     const comps = ${JSON.stringify(
-      table.filter(row => row.role !== "SUBJECT" && row.lat && row.lng).map((row, idx) => {
-        const dist = haversineDistanceKM(subjectLat, subjectLng, Number(row.lat), Number(row.lng));
-        return {
-          name: row.project_name,
-          lat: Number(row.lat),
-          lng: Number(row.lng),
-          rate: row.avg_rate,
-          distance: dist,
-          index: idx + 1
-        };
-      })
-    )};
+        table.filter(row => row.role !== "SUBJECT" && row.lat && row.lng).map((row, idx) => {
+          const dist = haversineDistanceKM(subjectLat, subjectLng, Number(row.lat), Number(row.lng));
+          return {
+            name: row.project_name,
+            lat: Number(row.lat),
+            lng: Number(row.lng),
+            rate: row.avg_rate,
+            distance: dist,
+            index: idx + 1
+          };
+        })
+      )};
     
     const bounds = L.latLngBounds([subjectLat, subjectLng]);
     
@@ -1740,11 +1735,10 @@ export default function ValuationReport({ valuationResult }) {
             <button
               key={slide.id}
               onClick={() => setCurrentSlide(i)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-200 shrink-0 ${
-                isActive
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-200 shrink-0 ${isActive
                   ? "bg-accent/20 border border-accent/40 text-accent shadow-[0_0_10px_rgba(34,211,238,0.15)]"
                   : "border border-border-soft bg-bg-deep/40 text-text-dim hover:text-text-secondary hover:border-border hover:bg-bg-input/60"
-              }`}
+                }`}
             >
               <Icon className="h-3 w-3" />
               {slide.label}
