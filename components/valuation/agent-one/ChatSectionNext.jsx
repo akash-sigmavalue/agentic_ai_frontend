@@ -5853,6 +5853,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [geocodeError, setGeocodeError] = useState("");
   const [showActionRequiredInfo, setShowActionRequiredInfo] = useState(false);
   const [showGeocodeTipInfo, setShowGeocodeTipInfo] = useState(false);
+  const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
@@ -8589,6 +8590,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       onClear?.();
       setMessages([]);
       setOriginalQuestion(trimmed);
+      setStageDetailForceCollapsed(false);
     }
 
     setCurrentStage("Stage 1: Property Profiling");
@@ -8882,7 +8884,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             addLog(summary, event.type === "error" ? "error" : event.type === "done" ? "success" : "info");
           }
 
-          if (["entities", "clarification_needed", "map_confirmation", "approach", "approach_choice_needed", "workflow", "comparable_results", "extraction_verification", "done", "error"].includes(event.type)) {
+          if (event.type === "workflow") {
+            setStageDetailForceCollapsed(true);
+          }
+
+          if (["clarification_needed", "map_confirmation", "approach", "approach_choice_needed", "comparable_results", "extraction_verification", "done", "error"].includes(event.type)) {
             setMessages((prev) => {
               const next = [...prev];
               const lastIndex = next.length - 1;
@@ -10058,7 +10064,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     {message.role === "user" && parseStageDetailMessage(message.content) ? (
                       <StageDetailCard
                         content={message.content}
-                        forceCollapsed={isComparableSearchActive || isListingStreaming}
+                        forceCollapsed={stageDetailForceCollapsed || isComparableSearchActive || isListingStreaming}
                       />
                     ) : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
                       <PropertyProfilingLiveCard
