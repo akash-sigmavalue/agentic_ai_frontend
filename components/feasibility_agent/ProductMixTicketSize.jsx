@@ -196,6 +196,99 @@ const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading, prope
     );
 };
 
+const EditableDropdown = ({ options, value, onChange, placeholder, style }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const isCustom = !options.includes(value) && value !== '';
+    const isOther = value === 'Other';
+    const isCustomMode = isOther || isCustom;
+
+    return (
+        <div ref={wrapperRef} className="position-relative mx-auto w-100" style={style}>
+            {isCustomMode ? (
+                <input 
+                    type="text"
+                    className="form-control pm-table-input shadow-none w-100"
+                    placeholder={placeholder || "Type here..."}
+                    value={value === 'Other' ? '' : value}
+                    onChange={(e) => {
+                        onChange(e.target.value);
+                        if (isOpen) setIsOpen(false);
+                    }}
+                    style={{ paddingRight: '24px', fontSize: '12px', padding: '4px 8px' }}
+                    autoFocus={isOther}
+                />
+            ) : (
+                <div 
+                    className="form-control pm-table-input shadow-none w-100 d-flex align-items-center justify-content-between"
+                    style={{ fontSize: '12px', padding: '4px 8px', cursor: 'pointer', backgroundColor: '#fff', minHeight: '30px' }}
+                    onClick={() => setIsOpen(!isOpen)}
+                >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {value || placeholder || 'Select...'}
+                    </span>
+                </div>
+            )}
+            
+            <div 
+                className="position-absolute d-flex align-items-center justify-content-center" 
+                style={{ right: '6px', top: '0', bottom: '0', cursor: 'pointer', color: '#6c757d', zIndex: 10 }}
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsOpen(!isOpen);
+                }}
+            >
+                <FaChevronDown size={12} />
+            </div>
+
+            {isOpen && (
+                <div 
+                    className="position-absolute w-100 shadow-sm" 
+                    style={{ 
+                        top: '100%', 
+                        left: 0, 
+                        zIndex: 1000, 
+                        backgroundColor: '#fff', 
+                        border: '1px solid #e7ebf1', 
+                        borderRadius: '4px',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        marginTop: '4px',
+                        textAlign: 'left'
+                    }}
+                >
+                    {options.map(opt => (
+                        <div 
+                            key={opt}
+                            style={{ padding: '6px 12px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', color: '#111827' }}
+                            onClick={() => {
+                                onChange(opt);
+                                setIsOpen(false);
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                            {opt}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const ProductMixTicketSize = () => {
     const theme = "light";
     const [isAnalysisModeOpen, setIsAnalysisModeOpen] = useState(true);
@@ -480,7 +573,7 @@ const ProductMixTicketSize = () => {
         rateAnalysisResults: [],
         ticketSizeAnalysisResults: [],
         // Applied Product Mix state
-        productMixRows: [{ id: 1, assetClass: 'Residential', propertyType: 'Apartment', unitMix: 'Studio', mode: 'Range', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '' }]
+        productMixRows: [{ id: 1, assetClass: 'Residential', propertyType: 'Flat', unitMix: 'Studio', mode: 'Point', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '', totalInventory: null }]
     });
 
     const [scenarios, setScenarios] = useState(() => {
@@ -525,8 +618,27 @@ const ProductMixTicketSize = () => {
             if (activeScenario) {
                 localStorage.setItem('ProductMix', JSON.stringify(activeScenario.productMixRows));
             }
+            window.dispatchEvent(new Event('productMixScenariosUpdated'));
         } catch (e) { /* ignore */ }
     }, [scenarios, resolvedActiveId]);
+
+    // Sync active scenario from external changes (e.g., from Revenue Dashboard)
+    useEffect(() => {
+        const handleUpdate = () => {
+             const saved = localStorage.getItem('ProductMixScenarios');
+             if (saved) {
+                  try {
+                      const parsed = JSON.parse(saved);
+                      // Only update if it actually changed to prevent infinite loops
+                      if (parsed.activeScenarioId && parsed.activeScenarioId !== resolvedActiveId) {
+                          setActiveScenarioId(parsed.activeScenarioId);
+                      }
+                  } catch (e) { /* ignore */ }
+             }
+        };
+        window.addEventListener('productMixScenariosUpdated', handleUpdate);
+        return () => window.removeEventListener('productMixScenariosUpdated', handleUpdate);
+    }, [resolvedActiveId]);
 
     // Helper: patch a field in the active scenario
     const patchActiveScenario = (updater) => {
@@ -742,13 +854,14 @@ const ProductMixTicketSize = () => {
         setAreaAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingArea(true);
+        const currentController = new AbortController();
         try {
             if (areaAbortRef.current) areaAbortRef.current.abort();
-            areaAbortRef.current = new AbortController();
+            areaAbortRef.current = currentController;
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/area-range-analysis/"), {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                signal: areaAbortRef.current.signal,
+                signal: currentController.signal,
                 body: JSON.stringify({ ...params, queries })
             });
             if (res.ok) {
@@ -767,8 +880,17 @@ const ProductMixTicketSize = () => {
                     });
                 }
             } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        } catch (e) { console.error("Failed to analyze area", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        finally { setIsAnalyzingArea(false); setAreaAnalysisResults([...results]); stampAnalysisLocation(); }
+        } catch (e) { 
+            if (e.name === 'AbortError') return;
+            console.error("Failed to analyze area", e); 
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; })); 
+        } finally { 
+            if (areaAbortRef.current === currentController) {
+                setIsAnalyzingArea(false); 
+                setAreaAnalysisResults([...results]); 
+                stampAnalysisLocation(); 
+            }
+        }
     };
 
     const handleAnalyzeRate = async (overrideTab, overrideStart, overrideEnd) => {
@@ -801,13 +923,14 @@ const ProductMixTicketSize = () => {
         setRateAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingRate(true);
+        const currentController = new AbortController();
         try {
             if (rateAbortRef.current) rateAbortRef.current.abort();
-            rateAbortRef.current = new AbortController();
+            rateAbortRef.current = currentController;
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/rate-range-analysis/"), {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                signal: rateAbortRef.current.signal,
+                signal: currentController.signal,
                 body: JSON.stringify({ ...params, queries, conversion_factor: conversionFactor })
             });
             if (res.ok) {
@@ -826,8 +949,17 @@ const ProductMixTicketSize = () => {
                     });
                 }
             } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        } catch (e) { console.error("Failed to analyze rate", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        finally { setIsAnalyzingRate(false); setRateAnalysisResults([...results]); stampAnalysisLocation(); }
+        } catch (e) { 
+            if (e.name === 'AbortError') return;
+            console.error("Failed to analyze rate", e); 
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; })); 
+        } finally { 
+            if (rateAbortRef.current === currentController) {
+                setIsAnalyzingRate(false); 
+                setRateAnalysisResults([...results]); 
+                stampAnalysisLocation(); 
+            }
+        }
     };
 
     const handleAnalyzeTicketSize = async (overrideTab, overrideStart, overrideEnd) => {
@@ -854,13 +986,14 @@ const ProductMixTicketSize = () => {
         setTicketSizeAnalysisResults([...results]);
         setIsAnalysisResultsOpen(true);
         setIsAnalyzingTicketSize(true);
+        const currentController = new AbortController();
         try {
             if (ticketSizeAbortRef.current) ticketSizeAbortRef.current.abort();
-            ticketSizeAbortRef.current = new AbortController();
+            ticketSizeAbortRef.current = currentController;
             const params = getAnalysisParams(overrideTab, overrideStart, overrideEnd);
             const res = await fetch(apiUrl("/new_rate_simulator/simulator/ticket-size-analysis/"), {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                signal: ticketSizeAbortRef.current.signal,
+                signal: currentController.signal,
                 body: JSON.stringify({ ...params, queries })
             });
             if (res.ok) {
@@ -879,8 +1012,17 @@ const ProductMixTicketSize = () => {
                     });
                 }
             } else { results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        } catch (e) { console.error("Failed to analyze ticket size", e); results.forEach(r => r.rows.forEach(row => { row.count = 0; })); }
-        finally { setIsAnalyzingTicketSize(false); setTicketSizeAnalysisResults([...results]); stampAnalysisLocation(); }
+        } catch (e) { 
+            if (e.name === 'AbortError') return;
+            console.error("Failed to analyze ticket size", e); 
+            results.forEach(r => r.rows.forEach(row => { row.count = 0; })); 
+        } finally { 
+            if (ticketSizeAbortRef.current === currentController) {
+                setIsAnalyzingTicketSize(false); 
+                setTicketSizeAnalysisResults([...results]); 
+                stampAnalysisLocation(); 
+            }
+        }
     };
 
     const addRow = (setter) => {
@@ -898,11 +1040,22 @@ const ProductMixTicketSize = () => {
     };
 
     const handleProductMixChange = (id, field, value) => {
-        setProductMixRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setProductMixRows(prev => prev.map(row => {
+            if (row.id === id) {
+                const updatedRow = { ...row, [field]: value };
+                if (updatedRow.allottedArea && updatedRow.pointArea) {
+                    updatedRow.totalInventory = Math.floor(Number(updatedRow.allottedArea) / Number(updatedRow.pointArea));
+                } else {
+                    updatedRow.totalInventory = null;
+                }
+                return updatedRow;
+            }
+            return row;
+        }));
     };
 
     const addProductMixRow = () => {
-        setProductMixRows(prev => [...prev, { id: Date.now(), assetClass: 'Residential', propertyType: 'Apartment', unitMix: 'Studio', mode: 'Range', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '' }]);
+        setProductMixRows(prev => [...prev, { id: Date.now(), assetClass: 'Residential', propertyType: 'Flat', unitMix: 'Studio', mode: 'Point', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '', totalInventory: null }]);
     };
 
     const removeProductMixRow = (id) => {
@@ -922,7 +1075,7 @@ const ProductMixTicketSize = () => {
                     border: 1px solid ${theme === "dark" ? "#353941" : "#e7ebf1"};
                     border-radius: 24px;
                     box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
-                    overflow: hidden;
+                    overflow: visible;
                 }
                 .unit-design-header {
                     padding: 24px 26px 14px;
@@ -2771,16 +2924,17 @@ const ProductMixTicketSize = () => {
                                         />
                                     </div>
                                 </div>
-                                <div className="table-responsive">
+                                <div className="w-100" style={{ overflow: 'visible' }}>
                                     <table className="pm-table">
                                         <thead>
                                             <tr>
                                                 <th>Asset Class</th>
                                                 <th>Property Type</th>
                                                 <th>Unit Mix</th>
-                                                <th>Saleable Area ({areaUnit.toUpperCase()})</th>
+                                                <th>Carpet Area ({areaUnit.toUpperCase()})</th>
                                                 <th>Rate ({currency}/{areaUnit.toUpperCase()})</th>
                                                 <th>Ticket Size</th>
+                                                <th>Total Inventory</th>
                                                 <th>Allotted Area ({areaUnit.toUpperCase()})</th>
                                                 <th>Mix %</th>
                                                 <th style={{ width: '40px' }}></th>
@@ -2790,13 +2944,10 @@ const ProductMixTicketSize = () => {
                                             {productMixRows.map((row, index) => {
                                                 const mixPercent = grossFloorArea > 0 ? ((Number(row.allottedArea) || 0) / grossFloorArea * 100).toFixed(1) : "0.0";
                                                 let ticketSizeDisplay = "-";
-                                                if (row.rate) {
-                                                    if (row.mode === 'Range' && row.minArea && row.maxArea) {
-                                                        ticketSizeDisplay = `${currency} ${formatCurrency(row.minArea * row.rate)} - ${currency} ${formatCurrency(row.maxArea * row.rate)}`;
-                                                    } else if (row.mode === 'Point' && row.pointArea) {
-                                                        ticketSizeDisplay = `${currency} ${formatCurrency(row.pointArea * row.rate)}`;
-                                                    }
+                                                if (row.rate && row.pointArea) {
+                                                    ticketSizeDisplay = `${currency} ${formatCurrency(row.pointArea * row.rate)}`;
                                                 }
+                                                const totalInventory = row.totalInventory !== null && row.totalInventory !== undefined ? row.totalInventory.toLocaleString() : "-";
 
                                                 return (
                                                     <tr key={row.id}>
@@ -2808,11 +2959,15 @@ const ProductMixTicketSize = () => {
                                                         </td>
                                                         <td className="align-middle">
                                                             <PropertyTypeSelect
-                                                                options={dbPropertyTypes}
+                                                                options={dbPropertyTypes.filter(type => {
+                                                                    const t = type.toLowerCase();
+                                                                    if (row.assetClass === 'Residential') return ['flat', 'villa'].includes(t);
+                                                                    if (row.assetClass === 'Commercial') return ['office', 'shop', 'retail shop', 'others'].includes(t);
+                                                                    return t !== 'plot';
+                                                                })}
                                                                 value={row.propertyType}
                                                                 onChange={(e) => handleProductMixChange(row.id, 'propertyType', e.target.value)}
                                                                 isLoading={typesLoading}
-                                                                style={{ margin: '0 auto', minWidth: '110px' }}
                                                             />
                                                         </td>
                                                         <td className="align-middle">
@@ -2821,24 +2976,13 @@ const ProductMixTicketSize = () => {
                                                                 value={row.unitMix}
                                                                 onChange={(e) => handleProductMixChange(row.id, 'unitMix', e.target.value)}
                                                                 isLoading={typesLoading}
-                                                                style={{ margin: '0 auto', minWidth: '90px' }}
+                                                                propertyType={row.propertyType}
+                                                                dbPropertyUnitMap={dbPropertyUnitMap}
                                                             />
                                                         </td>
                                                         <td className="align-middle">
                                                             <div className="d-flex align-items-center justify-content-center gap-1">
-                                                                <select className="form-select pm-table-select shadow-none" style={{ minWidth: '70px', padding: '4px 18px 4px 6px !important' }} value={row.mode} onChange={(e) => handleProductMixChange(row.id, 'mode', e.target.value)}>
-                                                                    <option value="Range">Range</option>
-                                                                    <option value="Point">Point</option>
-                                                                </select>
-                                                                {row.mode === 'Range' ? (
-                                                                    <>
-                                                                        <input type="number" className="form-control pm-table-input shadow-none" placeholder="Min" value={row.minArea} onChange={(e) => handleProductMixChange(row.id, 'minArea', e.target.value)} style={{ width: '60px', minWidth: '60px' }} />
-                                                                        <span className="text-muted" style={{ fontSize: '10px' }}>-</span>
-                                                                        <input type="number" className="form-control pm-table-input shadow-none" placeholder="Max" value={row.maxArea} onChange={(e) => handleProductMixChange(row.id, 'maxArea', e.target.value)} style={{ width: '60px', minWidth: '60px' }} />
-                                                                    </>
-                                                                ) : (
-                                                                    <input type="number" className="form-control pm-table-input shadow-none" placeholder="Point" value={row.pointArea} onChange={(e) => handleProductMixChange(row.id, 'pointArea', e.target.value)} style={{ width: '80px', minWidth: '80px' }} />
-                                                                )}
+                                                                <input type="number" className="form-control pm-table-input shadow-none text-center" placeholder="Area" value={row.pointArea} onChange={(e) => handleProductMixChange(row.id, 'pointArea', e.target.value)} style={{ width: '100px', minWidth: '100px' }} />
                                                             </div>
                                                         </td>
                                                         <td className="align-middle">
@@ -2846,6 +2990,9 @@ const ProductMixTicketSize = () => {
                                                         </td>
                                                         <td className="align-middle ticket-size-text text-nowrap">
                                                             {ticketSizeDisplay}
+                                                        </td>
+                                                        <td className="align-middle fw-bold text-center" style={{ color: '#0f172a' }}>
+                                                            {totalInventory}
                                                         </td>
                                                         <td className="align-middle">
                                                             <input type="number" className="form-control pm-table-input shadow-none text-center" value={row.allottedArea} onChange={(e) => handleProductMixChange(row.id, 'allottedArea', e.target.value)} style={{ width: '100px', margin: '0 auto', minWidth: '100px' }} />
@@ -2882,7 +3029,7 @@ const ProductMixTicketSize = () => {
                                         </tbody>
                                         <tfoot className="pm-tfoot-summary">
                                             <tr>
-                                                <td colSpan="6" className="text-end pe-4">Total</td>
+                                                <td colSpan="7" className="text-end pe-4">Total</td>
                                                 <td className={`text-center ${totalAllottedArea !== grossFloorArea && grossFloorArea > 0 ? 'text-danger fw-bold' : ''}`}>
                                                     {totalAllottedArea.toLocaleString()}
                                                     {totalAllottedArea !== grossFloorArea && grossFloorArea > 0 && (

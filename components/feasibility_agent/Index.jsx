@@ -668,6 +668,7 @@ import RevenueForm from "./LocationForm";
 import RevenueOutput from "./LocationOutput";
 import CostForm from "./CostForm";
 import CostOutput from "./CostOutput";
+import CostOfProjectDetails from "./components/CostOfProjectDetails";
 import MeansOfFinance from "./MeansOfFinance";
 import Dashboard from "./Dashboard";
 import { useLegacyNavigate as useNavigate, useLegacyLocation as useLocation } from "@/components/feasibility_agent/useLegacyNavigate"; import Link from "next/link";
@@ -685,6 +686,7 @@ import SaleAnalysis from "./components/SaleAnalysis";
 import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
 import LandIdentification from "./LandIdentification";
 import RegulatoryIntelligence from "./RegulatoryIntelligence";
+import ScenarioRevenueDashboard from "./components/ScenarioRevenueDashboard";
 import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
@@ -695,7 +697,7 @@ const sidebarButtons = [
   { id: "predictive-rate-sim", label: "Predictive Rate Simulator", subtitle: "Rate simulation", icon: FaChartBar },
   { id: "building", label: "Product Mix Design", subtitle: "Mix design", icon: FaCompassDrafting },
   { id: "ticket-size", label: "Ticket Size Calculation", subtitle: "Mix and ticket sizing", icon: FaCompassDrafting },
-  { id: "revenue", label: "Product Mix- Ticket size Simulation", subtitle: "Ticket size impact simulation", icon: FaHandHoldingDollar },
+
   { id: "revenue-details", label: "Revenue", subtitle: "Detailed projection", icon: FaHandHoldingDollar },
   { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
   { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
@@ -1871,82 +1873,6 @@ const Index = () => {
                 </div>
 
 
-                {/* Section 2: Revenue Calculation Header */}
-                <div
-                  id="section-revenue"
-                  className="text-center mb-4 mt-5 fade-in-up"
-                  style={{ scrollMarginTop: "120px" }}
-                >
-                  <h1 className="display-5 fw-bold text-dark mb-1">
-                    <FaHandHoldingDollar className="me-3" style={{ color: "#448C74" }} />
-                    Product Mix- Ticket size Simulation
-                  </h1>
-                </div>
-                {/* Excel Logic and Bayesian Optimization Buttons */}
-                <div
-                  className="col-12 fade-in-up stagger-5"
-                  style={{ marginTop: "1.5rem" }}
-                >
-                  <div className="d-flex justify-content-center gap-4">
-                    <button
-                      className={`btn px-5 py-3 fw-semibold rounded-pill shadow-sm card-hover-lift transition-all ${excelLogicSelected
-                        ? "btn-primary"
-                        : "btn-outline-primary"
-                        }`}
-                      style={{
-                        backgroundColor: excelLogicSelected
-                          ? "#0d6efd"
-                          : "transparent",
-                        borderColor: "#0d6efd",
-                        color: excelLogicSelected ? "#fff" : "#0d6efd",
-                        opacity: excelLogicSelected ? 1 : 0.6,
-                      }}
-                      onClick={() => setExcelLogicSelected(!excelLogicSelected)}
-                    >
-                      <FaCalculator className="me-2" />
-                      Base Logic
-                    </button>
-                    <button
-                      className={`btn px-5 py-3 fw-semibold rounded-pill shadow-sm card-hover-lift transition-all ${bayesianOptimizationSelected
-                        ? "btn-success"
-                        : "btn-outline-success"
-                        }`}
-                      style={{
-                        backgroundColor: bayesianOptimizationSelected
-                          ? "#198754"
-                          : "transparent",
-                        borderColor: "#198754",
-                        color: bayesianOptimizationSelected
-                          ? "#fff"
-                          : "#198754",
-                        opacity: bayesianOptimizationSelected ? 1 : 0.6,
-                      }}
-                      onClick={() =>
-                        setBayesianOptimizationSelected(
-                          !bayesianOptimizationSelected,
-                        )
-                      }
-                    >
-                      <FaChartLine className="me-2" />
-                      Bayesian Optimization
-                    </button>
-                  </div>
-                </div>
-
-                {/* Ticket Size Simulation & Bayesian Optimizer – Aligned Section by Section */}
-                <div className="col-12">
-                  <AlignedSimulationView
-                    showTicketSizeSimulation={excelLogicSelected}
-                    showBayesianOptimization={bayesianOptimizationSelected}
-                  />
-                </div>
-
-                {/* Ticket Size Summary + Expected Revenue Comparison Section */}
-                <div id="section-ticket-size" className="col-12 fade-in-up stagger-5" style={{ marginTop: '2rem', scrollMarginTop: '120px' }}>
-                  <TicketSizeSummary />
-                  <ExpectedRevenueComparison />
-                </div>
-
                 <div className="col-12">
                   <RequiredParking />
                 </div>
@@ -1992,17 +1918,11 @@ const Index = () => {
               </h1>
             </div>
 
-            {/* Section 2: Revenue Details */}
-            <div id="section-revenue-details" className="col-12 fade-in-up stagger-7">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <RevenueForm onSave={handleRevenueSave} />
-                </div>
-                <div className="col-lg-4">
-                  <RevenueOutput data={revenueData} />
-                </div>
-              </div>
+            {/* Scenario Revenue Dashboard */}
+            <div className="col-12 fade-in-up stagger-7">
+              <ScenarioRevenueDashboard />
             </div>
+
 
             <div
               id="section-cost-heading"
@@ -2013,6 +1933,11 @@ const Index = () => {
                 <FaCalculator className="me-3" style={{ color: "#448C74" }} />
                 Cost Details
               </h1>
+            </div>
+
+            {/* Cost Of Project Details (New Section) */}
+            <div className="col-12 fade-in-up stagger-7 mb-4">
+              <CostOfProjectDetails />
             </div>
 
             {/* Section 3: Cost Details */}
