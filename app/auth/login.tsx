@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useTheme } from '@/hooks/use-theme';
 import { apiUrl, API_ROUTES } from '@/lib/api-client';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -153,6 +154,7 @@ function AlertBanner({
 export default function AuthPage() {
   const router = useRouter();
   const { login, register, forgotPassword, user } = useAuth();
+  const isDark = useTheme();
 
   const [view, setView] = useState<View>('login');
   const [mounted, setMounted] = useState(false);
@@ -659,7 +661,7 @@ export default function AuthPage() {
           cursor: pointer;
           background: none;
           border: none;
-          margin-top: -6px;
+          margin-top: 6px;
           margin-bottom: 4px;
           transition: color 0.15s;
           padding: 0;
@@ -769,6 +771,160 @@ export default function AuthPage() {
 
         /* form-level spacing */
         .auth-form-space { display: flex; flex-direction: column; gap: 0; }
+
+        /* ── Terms & Links ── */
+        .auth-terms-note {
+          font-size: 11px;
+          color: #94a3b8;
+          text-align: center;
+          margin: 14px 0 0;
+          line-height: 1.5;
+        }
+        .auth-terms-link {
+          color: #4f46e5;
+          font-weight: 700;
+        }
+
+        /* ═════════════════════════════════════════════════════════════════
+           DARK MODE OVERRIDES (html.dark-mode & html[data-theme="dark"])
+        ═════════════════════════════════════════════════════════════════ */
+        html.dark-mode .auth-page, html[data-theme="dark"] .auth-page {
+          background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
+          color: #f8fafc;
+        }
+        html.dark-mode .auth-page::before, html[data-theme="dark"] .auth-page::before {
+          background-image: radial-gradient(#818cf8 1.2px, transparent 1.2px);
+          opacity: 0.08;
+        }
+        html.dark-mode .auth-blob-top, html[data-theme="dark"] .auth-blob-top {
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+          opacity: 0.5;
+        }
+        html.dark-mode .auth-blob-bottom, html[data-theme="dark"] .auth-blob-bottom {
+          background: radial-gradient(circle, rgba(124, 58, 237, 0.2) 0%, transparent 70%);
+          opacity: 0.4;
+        }
+        html.dark-mode .auth-brand-title, html[data-theme="dark"] .auth-brand-title {
+          color: #f8fafc;
+        }
+        html.dark-mode .auth-brand-sub, html[data-theme="dark"] .auth-brand-sub {
+          color: #64748b;
+        }
+        html.dark-mode .auth-card, html[data-theme="dark"] .auth-card {
+          background: rgba(15, 23, 42, 0.88);
+          border-color: rgba(51, 65, 85, 0.8);
+          box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(79, 70, 229, 0.2);
+        }
+        html.dark-mode .auth-card-title, html[data-theme="dark"] .auth-card-title {
+          color: #f8fafc;
+        }
+        html.dark-mode .auth-card-subtitle, html[data-theme="dark"] .auth-card-subtitle {
+          color: #94a3b8;
+        }
+        html.dark-mode .auth-label, html[data-theme="dark"] .auth-label {
+          color: #94a3b8;
+        }
+        html.dark-mode .auth-icon, html[data-theme="dark"] .auth-icon {
+          color: #64748b;
+        }
+        html.dark-mode .auth-input-wrap:focus-within .auth-icon, html[data-theme="dark"] .auth-input-wrap:focus-within .auth-icon {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-input, html[data-theme="dark"] .auth-input {
+          border-color: #334155;
+          background: #0f172a;
+          color: #f8fafc;
+        }
+        html.dark-mode .auth-input::placeholder, html[data-theme="dark"] .auth-input::placeholder {
+          color: #475569;
+        }
+        html.dark-mode .auth-input:focus, html[data-theme="dark"] .auth-input:focus {
+          background: #1e293b;
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+        html.dark-mode .auth-input--error, html[data-theme="dark"] .auth-input--error {
+          border-color: #ef4444 !important;
+          background: rgba(239, 68, 68, 0.15) !important;
+        }
+        html.dark-mode .auth-pw-toggle, html[data-theme="dark"] .auth-pw-toggle {
+          color: #64748b;
+        }
+        html.dark-mode .auth-pw-toggle:hover, html[data-theme="dark"] .auth-pw-toggle:hover {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-google-btn, html[data-theme="dark"] .auth-google-btn {
+          border-color: #334155;
+          background: #1e293b;
+          color: #f1f5f9;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        html.dark-mode .auth-google-btn:hover, html[data-theme="dark"] .auth-google-btn:hover {
+          border-color: #6366f1;
+          background: #0f172a;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+        html.dark-mode .auth-divider-line, html[data-theme="dark"] .auth-divider-line {
+          background: #334155;
+        }
+        html.dark-mode .auth-divider-text, html[data-theme="dark"] .auth-divider-text {
+          color: #64748b;
+        }
+        html.dark-mode .auth-switch-hint, html[data-theme="dark"] .auth-switch-hint {
+          color: #64748b;
+        }
+        html.dark-mode .auth-switch-btn, html[data-theme="dark"] .auth-switch-btn {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-switch-btn:hover, html[data-theme="dark"] .auth-switch-btn:hover {
+          color: #a5b4fc;
+        }
+        html.dark-mode .auth-forgot-link, html[data-theme="dark"] .auth-forgot-link {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-forgot-link:hover, html[data-theme="dark"] .auth-forgot-link:hover {
+          color: #a5b4fc;
+        }
+        html.dark-mode .auth-back-btn, html[data-theme="dark"] .auth-back-btn {
+          color: #94a3b8;
+        }
+        html.dark-mode .auth-back-btn:hover, html[data-theme="dark"] .auth-back-btn:hover {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-alert--error, html[data-theme="dark"] .auth-alert--error {
+          background: rgba(225, 29, 72, 0.15);
+          border-color: rgba(225, 29, 72, 0.35);
+          color: #fda4af;
+        }
+        html.dark-mode .auth-alert--success, html[data-theme="dark"] .auth-alert--success {
+          background: rgba(34, 197, 94, 0.15);
+          border-color: rgba(34, 197, 94, 0.35);
+          color: #86efac;
+        }
+        html.dark-mode .auth-success-title, html[data-theme="dark"] .auth-success-title {
+          color: #f8fafc;
+        }
+        html.dark-mode .auth-success-desc, html[data-theme="dark"] .auth-success-desc {
+          color: #94a3b8;
+        }
+        html.dark-mode .auth-success-em, html[data-theme="dark"] .auth-success-em {
+          color: #818cf8;
+        }
+        html.dark-mode .auth-success-icon--violet, html[data-theme="dark"] .auth-success-icon--violet {
+          background: linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(79, 70, 229, 0.3));
+        }
+        html.dark-mode .auth-success-icon--green, html[data-theme="dark"] .auth-success-icon--green {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(16, 185, 129, 0.3));
+        }
+        html.dark-mode .auth-footer, html[data-theme="dark"] .auth-footer {
+          color: #475569;
+        }
+        html.dark-mode .auth-terms-note, html[data-theme="dark"] .auth-terms-note {
+          color: #64748b;
+        }
+        html.dark-mode .auth-terms-link, html[data-theme="dark"] .auth-terms-link {
+          color: #818cf8;
+        }
       `}</style>
 
       <div className="auth-page">

@@ -1037,17 +1037,19 @@ export default function AdminDashboardPage() {
               <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
                 isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
               }`}>
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
                   <div>
                     <h3 className="text-lg font-black">Promote to Enterprise Owner</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
                       User: <strong>{selectedUser.username}</strong> ({selectedUser.email})
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedUser(null)}
-                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1067,7 +1069,7 @@ export default function AdminDashboardPage() {
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-700"}`}>
                       Initial Organization Tokens
                     </label>
                     <input
@@ -1077,7 +1079,7 @@ export default function AdminDashboardPage() {
                       className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:border-indigo-500 ${inputClass}`}
                       placeholder="10000000"
                     />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                    <p className={`text-[11px] mt-1.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
                       Default is 10,000,000 tokens for the organization's shared token pool.
                     </p>
                   </div>
@@ -1087,7 +1089,9 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedUser(null)}
-                    className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                    }`}
                   >
                     Cancel
                   </button>
@@ -1114,17 +1118,19 @@ export default function AdminDashboardPage() {
               <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
                 isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
               }`}>
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
                   <div>
                     <h3 className="text-lg font-black">Set Organization Token Pool</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
                       Organization: <strong>{selectedOrg.name}</strong>
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedOrg(null)}
-                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1132,7 +1138,7 @@ export default function AdminDashboardPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-700"}`}>
                       New Token Balance
                     </label>
                     <input
@@ -1148,7 +1154,9 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedOrg(null)}
-                    className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                    }`}
                   >
                     Cancel
                   </button>
@@ -1175,28 +1183,38 @@ export default function AdminDashboardPage() {
               <div className={`relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
                 isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
               }`}>
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30">
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                        isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                      }`}>
                         Query #{selectedInquiry.id}
                       </span>
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
                         selectedInquiry.status === "NEW"
-                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/30"
+                          ? isDark
+                            ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                            : "bg-amber-100 text-amber-800 border-amber-300"
                           : selectedInquiry.status === "RESOLVED"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30"
-                          : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/30"
+                          ? isDark
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                            : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : isDark
+                          ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                          : "bg-indigo-100 text-indigo-800 border-indigo-300"
                       }`}>
                         {selectedInquiry.status}
                       </span>
                     </div>
-                    <h3 className="text-xl font-black mt-2">{selectedInquiry.name}</h3>
+                    <h3 className={`text-xl font-black mt-2 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{selectedInquiry.name}</h3>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedInquiry(null)}
-                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1206,10 +1224,10 @@ export default function AdminDashboardPage() {
                   <div className={`p-4 rounded-2xl border space-y-1.5 ${
                     isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
                   }`}>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Email Address</span>
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Email Address</span>
                     <a
                       href={`mailto:${selectedInquiry.email}`}
-                      className="block font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                      className={`block font-bold hover:underline ${isDark ? "text-indigo-400" : "text-indigo-600"}`}
                     >
                       {selectedInquiry.email}
                     </a>
@@ -1217,46 +1235,48 @@ export default function AdminDashboardPage() {
                   <div className={`p-4 rounded-2xl border space-y-1.5 ${
                     isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
                   }`}>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Company & Team</span>
-                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Company & Team</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
                       {selectedInquiry.company || "Individual / Not specified"}
                     </div>
                     {selectedInquiry.team_size && (
-                      <div className="text-slate-500">Team Size: {selectedInquiry.team_size}</div>
+                      <div className={isDark ? "text-slate-400" : "text-slate-600 font-medium"}>Team Size: {selectedInquiry.team_size}</div>
                     )}
                   </div>
                   <div className={`p-4 rounded-2xl border space-y-1.5 ${
                     isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
                   }`}>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Phone Number</span>
-                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Phone Number</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
                       {selectedInquiry.phone || "Not provided"}
                     </div>
                   </div>
                   <div className={`p-4 rounded-2xl border space-y-1.5 ${
                     isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
                   }`}>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Submitted At</span>
-                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Submitted At</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
                       {selectedInquiry.created_at ? new Date(selectedInquiry.created_at).toLocaleString() : "—"}
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                  <label className={`block text-xs font-extrabold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                     Full User Query / Message
                   </label>
                   <div className={`p-5 rounded-2xl border text-sm leading-relaxed whitespace-pre-wrap font-sans ${
-                    isDark ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-800"
+                    isDark ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-900 font-medium"
                   }`}>
                     {selectedInquiry.message || "No message content submitted."}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t ${
+                  isDark ? "border-slate-800" : "border-slate-200"
+                }`}>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className="text-xs font-bold text-slate-500">Status:</span>
+                    <span className={`text-xs font-bold ${isDark ? "text-slate-400" : "text-slate-700"}`}>Status:</span>
                     <select
                       value={selectedInquiry.status}
                       onChange={(e) => handleUpdateStatus(selectedInquiry.id, e.target.value)}
@@ -1275,7 +1295,7 @@ export default function AdminDashboardPage() {
                       href={`mailto:${selectedInquiry.email}?subject=Re: Sigmavalue AI Pilot Inquiry`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                     >
                       <Mail className="w-3.5 h-3.5" />
                       Reply to User
@@ -1283,7 +1303,9 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setSelectedInquiry(null)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                        isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                      }`}
                     >
                       Close
                     </button>

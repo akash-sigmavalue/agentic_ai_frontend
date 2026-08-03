@@ -4,11 +4,13 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, Cpu, ArrowLeft } from 'lucide-react';
 import { apiRequest, API_ROUTES } from '@/lib/api-client';
+import { useTheme } from '@/hooks/use-theme';
 
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') ?? '';
+  useTheme();
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -219,6 +221,82 @@ function ResetPasswordForm() {
         .rp-success-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 8px 0 4px; gap: 12px; }
         .rp-success-icon { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg,#dcfce7,#bbf7d0); display: flex; align-items: center; justify-content: center; }
         .rp-footer { margin-top: 24px; text-align: center; font-size: 10px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: .3em; }
+
+        /* ── Dark Mode Overrides ── */
+        html.dark-mode .rp-page, html[data-theme="dark"] .rp-page {
+          background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
+          color: #f8fafc;
+        }
+        html.dark-mode .rp-page::before, html[data-theme="dark"] .rp-page::before {
+          background-image: radial-gradient(#818cf8 1.2px, transparent 1.2px);
+          opacity: 0.08;
+        }
+        html.dark-mode .rp-blob, html[data-theme="dark"] .rp-blob {
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+          opacity: 0.5;
+        }
+        html.dark-mode .rp-brand-title, html[data-theme="dark"] .rp-brand-title {
+          color: #f8fafc;
+        }
+        html.dark-mode .rp-brand-sub, html[data-theme="dark"] .rp-brand-sub {
+          color: #64748b;
+        }
+        html.dark-mode .rp-card, html[data-theme="dark"] .rp-card {
+          background: rgba(15, 23, 42, 0.88);
+          border-color: rgba(51, 65, 85, 0.8);
+          box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(79, 70, 229, 0.2);
+        }
+        html.dark-mode .rp-card-title, html[data-theme="dark"] .rp-card-title {
+          color: #f8fafc;
+        }
+        html.dark-mode .rp-card-subtitle, html[data-theme="dark"] .rp-card-subtitle {
+          color: #94a3b8;
+        }
+        html.dark-mode .rp-label, html[data-theme="dark"] .rp-label {
+          color: #94a3b8;
+        }
+        html.dark-mode .rp-icon, html[data-theme="dark"] .rp-icon {
+          color: #64748b;
+        }
+        html.dark-mode .rp-input-wrap:focus-within .rp-icon, html[data-theme="dark"] .rp-input-wrap:focus-within .rp-icon {
+          color: #818cf8;
+        }
+        html.dark-mode .rp-input, html[data-theme="dark"] .rp-input {
+          border-color: #334155;
+          background: #0f172a;
+          color: #f8fafc;
+        }
+        html.dark-mode .rp-input::placeholder, html[data-theme="dark"] .rp-input::placeholder {
+          color: #475569;
+        }
+        html.dark-mode .rp-input:focus, html[data-theme="dark"] .rp-input:focus {
+          background: #1e293b;
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+        html.dark-mode .rp-toggle, html[data-theme="dark"] .rp-toggle {
+          color: #64748b;
+        }
+        html.dark-mode .rp-toggle:hover, html[data-theme="dark"] .rp-toggle:hover {
+          color: #818cf8;
+        }
+        html.dark-mode .rp-alert, html[data-theme="dark"] .rp-alert {
+          background: rgba(225, 29, 72, 0.15);
+          border-color: rgba(225, 29, 72, 0.35);
+          color: #fda4af;
+        }
+        html.dark-mode .rp-back-btn, html[data-theme="dark"] .rp-back-btn {
+          color: #94a3b8;
+        }
+        html.dark-mode .rp-back-btn:hover, html[data-theme="dark"] .rp-back-btn:hover {
+          color: #818cf8;
+        }
+        html.dark-mode .rp-success-icon, html[data-theme="dark"] .rp-success-icon {
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(16, 185, 129, 0.3));
+        }
+        html.dark-mode .rp-footer, html[data-theme="dark"] .rp-footer {
+          color: #475569;
+        }
       `}</style>
 
       <div className="rp-page">
