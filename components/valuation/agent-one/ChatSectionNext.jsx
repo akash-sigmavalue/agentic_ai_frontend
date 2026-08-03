@@ -5595,6 +5595,159 @@ function PropertyProfilingLiveCard({ streamingNote, isStreaming }) {
   );
 }
 
+const STAGE_PROFILING_TITLE = "Stage 1 - Property Profiling";
+const STAGE_DETAIL_FIELDS = [
+  { key: "project_name", label: "Project Name" },
+  { key: "location_name", label: "Location Name" },
+  { key: "city_name", label: "City Name" },
+  { key: "country", label: "Country" },
+  { key: "property_type", label: "Property Type" },
+  { key: "approach", label: "Approach" },
+  { key: "lat", label: "Lat" },
+  { key: "lng", label: "Lng" },
+  { key: "coordinates", label: "Coordinates" },
+  { key: "subject_floor", label: "Subject Floor" },
+  { key: "total_floors", label: "Total Floors" },
+  { key: "facing", label: "Facing" },
+  { key: "salable_area_sqft", label: "Salable Area Sqft" },
+  { key: "age_years", label: "Age Years" },
+  { key: "extraction_verified", label: "Extraction Verified" },
+  { key: "coordinates_confirmed", label: "Coordinates Confirmed" },
+];
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const parseStageDetailMessage = (content) => {
+  if (typeof content !== "string") return null;
+
+  const text = content.trim();
+  if (!text.includes(":")) return null;
+
+  const rawApproach = text.match(/\bUse\s+(market|cost|income|residual)\s+approach\b/i)?.[0] || "";
+  const values = {};
+  const markers = STAGE_DETAIL_FIELDS
+    .filter(({ label }) => text.toLowerCase().includes(`${label.toLowerCase()}:`))
+    .map(({ key, label }) => {
+      const match = text.match(new RegExp(`${escapeRegExp(label)}:\\s*`, "i"));
+      return match ? { key, label, index: match.index, start: match.index + match[0].length } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.index - b.index);
+
+  if (markers.length < 4) return null;
+
+  markers.forEach((marker, idx) => {
+    const next = markers[idx + 1];
+    let raw = text.slice(marker.start, next ? next.index : text.length).trim();
+    raw = raw.replace(/,\s*$/, "").replace(/^,\s*/, "");
+    if (rawApproach && raw.includes(rawApproach)) {
+      raw = raw.replace(new RegExp(`,?\\s*${escapeRegExp(rawApproach)}`, "i"), "").trim();
+    }
+    values[marker.key] = raw;
+  });
+
+  if (rawApproach) {
+    values.approach = rawApproach.replace(/^Use\s+/i, "").replace(/\s+approach$/i, "").trim();
+  }
+
+  const cleanField = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const summaryParts = [
+    cleanField(values.project_name),
+    cleanField(values.location_name || values.city_name),
+    cleanField(values.property_type),
+  ].filter(Boolean);
+
+  const fieldEntries = STAGE_DETAIL_FIELDS
+    .map(({ key, label }) => {
+      const value = cleanField(values[key]);
+      if (!value) return null;
+      return { key, label, value };
+    })
+    .filter(Boolean);
+
+  return {
+    title: STAGE_PROFILING_TITLE,
+    summary: summaryParts.join(" • ") || "Property profiling details",
+    fieldEntries,
+  };
+};
+
+function StageDetailCard({ content, forceCollapsed = false }) {
+  const parsed = useMemo(() => parseStageDetailMessage(content), [content]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (forceCollapsed) {
+      setCollapsed(true);
+    }
+  }, [forceCollapsed]);
+
+  if (!parsed) {
+    return <>{content}</>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-warning/20 bg-bg-card/95 shadow-panel">
+      <div className="flex items-start justify-between gap-3 border-b border-warning/15 bg-warning/5 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-warning">
+              {parsed.title}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-success">
+              Verified
+            </span>
+          </div>
+          <p className="mt-2 text-sm font-semibold text-text-primary leading-snug">
+            {parsed.summary}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((prev) => !prev)}
+          className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-warning/25 bg-bg-deep/40 text-warning transition hover:bg-warning/10"
+          aria-label={collapsed ? "Expand stage details" : "Collapse stage details"}
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="px-4 py-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {parsed.fieldEntries.map((field) => {
+              const isBoolean = /^(true|false)$/i.test(field.value);
+              const isCoordinateField = field.key === "coordinates" || field.key === "lat" || field.key === "lng";
+              return (
+                <div
+                  key={`${field.key}-${field.value}`}
+                  className="rounded-xl border border-border/60 bg-bg-deep/40 px-3 py-2.5"
+                >
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-text-dim">
+                    {field.label}
+                  </p>
+                  <p
+                    className={`mt-1 text-sm font-semibold leading-snug ${
+                      isBoolean
+                        ? field.value.toLowerCase() === "true"
+                          ? "text-success"
+                          : "text-warning"
+                        : "text-text-primary"
+                    } ${isCoordinateField ? "font-mono text-[12px]" : ""}`}
+                  >
+                    {isBoolean ? (field.value.toLowerCase() === "true" ? "Yes" : "No") : field.value}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -5698,6 +5851,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [gateValues, setGateValues] = useState({});
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState("");
+  const [showActionRequiredInfo, setShowActionRequiredInfo] = useState(false);
+  const [showGeocodeTipInfo, setShowGeocodeTipInfo] = useState(false);
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
@@ -5791,6 +5946,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     }
     prevFactorialDataRef.current = factorialData;
   }, [factorialData]);
+
+  useEffect(() => {
+    setShowActionRequiredInfo(false);
+  }, [gateStep, gateCollapsed]);
+
+  useEffect(() => {
+    setShowGeocodeTipInfo(false);
+  }, [gateStep, gateCollapsed]);
 
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
@@ -7083,6 +7246,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const submitListingFetch = async () => {
     if (!comparableData || selectedComps.size === 0 || !subjectData || isListingStreaming) return;
 
+    minimizeGate();
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
     // ── Incremental Fetch: skip comps already fetched ──────────────────────────
@@ -8703,6 +8867,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               progress.message ||
               `Searching radius ${progress.radius_km || "?"}km, iteration ${progress.iteration || "?"}...`
             );
+            minimizeGate();
           }
 
           if (event.type === "done") {
@@ -9102,10 +9267,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setGateMode(null);
   };
 
+  const minimizeGate = () => {
+    setGateStep(5);
+    setGateCollapsed(true);
+    setShowActionRequiredInfo(false);
+    setShowGeocodeTipInfo(false);
+  };
+
   const gateSubmitFinal = () => {
     // Merge gateValues back into clarificationValues / extractionVerification path
     setClarificationValues(gateValues);
-    closeGate();
 
     // Prepare values to send, ensuring coordinates are formatted and verification flags are true
     const finalVals = {
@@ -9170,6 +9341,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         setExtractionVerification(null);
         setClarificationFields([]);
         setClarificationPrompt("");
+        minimizeGate();
         return; // skip full pipeline
       }
 
@@ -9195,6 +9367,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       setExtractionVerification(null);
       setClarificationFields([]);
       setClarificationPrompt("");
+      minimizeGate();
       submitQuestion(`${currentQuestion}. ${response}`, true, changes.length > 0 ? `Confirmed with corrections: ${changes.join(", ")}` : "Details confirmed");
     } else {
       // clarification flow
@@ -9210,6 +9383,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       }).join(", ");
       setClarificationPrompt("");
       setClarificationFields([]);
+      minimizeGate();
       submitQuestion(`${currentQuestion}. ${response}`, true, response);
     }
   };
@@ -9432,6 +9606,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     const visualStep = GATE_META.findIndex(g => g.step === gateStep) + 1;
     const canAdvance = Boolean(mandatoryStep);
+    const gateTitle = "Stage 1 - Property Profiling";
 
     return (
       <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-bg-card/95 backdrop-blur-md shadow-panel animate-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-0 max-h-[75vh] sm:max-h-none">
@@ -9441,20 +9616,42 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           className="border-b border-warning/15 bg-warning/5 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer select-none shrink-0"
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-sm sm:text-base">
-                {currentMeta.icon}
+          <div className="flex items-center gap-3">
+            <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-sm sm:text-base">
+              {currentMeta.icon}
+            </div>
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
+                  {gateTitle}
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowActionRequiredInfo((prev) => !prev);
+                  }}
+                  className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-[9px] font-black text-warning leading-none transition hover:bg-warning/20"
+                  aria-label="Show action required details"
+                  title="Show action required details"
+                >
+                  i
+                </button>
+                {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
-                    Gate {visualStep} of {GATE_META.length} — {currentMeta.label}
-                  </p>
-                  {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-                </div>
-                <p className="mt-0.5 text-[10px] text-text-secondary">{currentMeta.desc}</p>
+              <div
+                className={`absolute left-0 top-full z-30 mt-2 w-[280px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
+                  showActionRequiredInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                <span className="mt-1 block text-[10px] text-text-secondary leading-relaxed">
+                  Please review and verify the subject property parameters for Gate {visualStep} to proceed.
+                </span>
               </div>
             </div>
+          </div>
             <button
               type="button"
               onClick={(e) => {
@@ -9493,18 +9690,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         {/* Gate body */}
         {!gateCollapsed && (
           <div className="flex flex-col min-h-0">
-            {/* Action Required Banner */}
-            <div className="px-2.5 pt-2 pb-0 sm:px-4 sm:pt-3 shrink-0">
-              <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)]">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                  <span className="text-[10px] text-text-secondary leading-relaxed">
-                    Please review and verify the subject property parameters for Gate {visualStep} to proceed.
-                  </span>
-                </div>
-              </div>
-            </div>
             {/* Scrollable Content Container */}
             <div className="overflow-y-auto custom-scrollbar p-2.5 sm:p-4 space-y-3 max-h-[42vh] sm:max-h-[30vh] min-h-0">
               {/* Show prompt/question from the agent if available */}
@@ -9513,12 +9698,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   <span className="font-semibold text-warning">Agent Recommendation:</span> {approachChoiceNeeded.question}
                 </div>
               )}
-              {gateStep !== 3 && clarificationPrompt && (
-                <div className="rounded-xl bg-warning/5 border border-warning/15 px-3.5 py-2.5 text-xs text-text-secondary leading-relaxed animate-in fade-in duration-200">
-                  <span className="font-semibold text-warning">Clarification Requested:</span> {clarificationPrompt}
-                </div>
-              )}
-
               {/* Gate 5 = full review */}
               {gateStep === 5 ? (
                 <div className="space-y-4">
@@ -9559,7 +9738,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         <span className="text-[11px] font-bold uppercase tracking-wider text-warning flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" /> Coordinate Verification
                         </span>
-                        <div className="flex gap-3 items-center">
+                        <div className="relative flex gap-3 items-center">
                           {mapConfirmation && (
                             <button
                               type="button"
@@ -9582,18 +9761,37 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                             type="button"
                             disabled={isGeocoding}
                             onClick={handleGeocodeRefresh}
-                            className="text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
+                            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-warning hover:underline cursor-pointer disabled:opacity-50"
                           >
                             {isGeocoding ? "Refreshing..." : "🔄 Refresh from Location"}
                           </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowGeocodeTipInfo((prev) => !prev);
+                            }}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-[9px] font-black text-warning transition hover:bg-warning/20"
+                            aria-label="Show refresh tip"
+                            title="Show tip"
+                          >
+                            i
+                          </button>
+                          <div
+                            className={`absolute right-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
+                              showGeocodeTipInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                            }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-[10px] text-text-dim leading-relaxed">
+                              <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
+                            </p>
+                          </div>
                         </div>
                       </div>
 
                       {/* Geocode Tip Remark & Errors */}
-                      <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-1.5">
-                        <p className="text-[10px] text-text-dim leading-relaxed">
-                          <span className="font-semibold text-warning">💡 Tip:</span> Please add the exact locality and city name in the location field (e.g. <span className="text-warning font-mono">&quot;Sus, Pune&quot;</span>) then click <span className="text-warning font-semibold">🔄 Refresh from Location</span> to extract coordinates automatically. If auto-detection is not satisfactory or fails, please type the correct coordinates manually.
-                        </p>
+                      <div className="space-y-1.5">
                         {geocodeError && (
                           <p className="text-[9px] font-bold text-danger leading-relaxed animate-in fade-in duration-200">
                             ⚠️ {geocodeError}
@@ -9725,6 +9923,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   })() : null;
 
   const anyStreaming = isStreaming || isQuickEstimateStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
+  const visibleMessages = messages.filter((message) => {
+    const text = typeof message.content === "string" ? message.content.trim() : "";
+    return text !== "Pipeline paused for data clarification.";
+  });
 
   const quickEstimateModal = showQuickEstimateModal && typeof document !== "undefined" ? createPortal(
     <div
@@ -9830,24 +10032,35 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   <span>{revertNotice}</span>
                 </div>
               )}
-              {messages.map((message, index) => (
+              {visibleMessages.map((message, index) => (
                 <div
                   key={`${message.role}-${index}`}
                   className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
                 >
                   <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
-                    {message.role === "user" ? "You" : `Assistant · ${message.meta}`}
+                    {message.role === "user" && parseStageDetailMessage(message.content)
+                      ? STAGE_PROFILING_TITLE
+                      : message.role === "user"
+                        ? "You"
+                        : `Assistant · ${message.meta}`}
                   </p>
                   <div
                     className={
-                      message.role === "user"
-                        ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
+                      message.role === "user" && parseStageDetailMessage(message.content)
+                        ? "p-0 bg-transparent border-0 shadow-none"
+                        : message.role === "user"
+                          ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
                         : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
                           ? "p-0 bg-transparent border-0 shadow-none"
                           : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
                     }
                   >
-                    {message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
+                    {message.role === "user" && parseStageDetailMessage(message.content) ? (
+                      <StageDetailCard
+                        content={message.content}
+                        forceCollapsed={isComparableSearchActive || isListingStreaming}
+                      />
+                    ) : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
                       <PropertyProfilingLiveCard
                         streamingNote={streamingNote}
                         subjectData={subjectDataRef.current || subjectData}
