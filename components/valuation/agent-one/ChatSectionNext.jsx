@@ -9757,7 +9757,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   return (
     <>
       <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-        <div className="panel-header-shell border-b border-border/60">
+        <div className="panel-header-shell min-h-[68px] border-b border-border/60">
           <div className="panel-title-shell">
             <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
               <MessageSquareCode className="h-5 w-5 text-accent" />
@@ -9785,7 +9785,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <span className="hidden sm:inline">Edit Details</span>
               </button>
             )}
-            <div className="panel-pill bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap shrink-0">{anyStreaming ? "LIVE" : "READY"}</div>
           </div>
         </div>
 

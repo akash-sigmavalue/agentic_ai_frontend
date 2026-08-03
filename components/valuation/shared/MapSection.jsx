@@ -1115,19 +1115,18 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   return (
     <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-      <div className="panel-header-shell flex-wrap border-b border-border/60">
+      <div className="panel-header-shell min-h-[68px] flex-nowrap border-b border-border/60">
         <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <MapIcon className="h-5 w-5 text-accent" />
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
-        {/* Tab Switcher: Visual Layer | Report */}
-        <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
+        <div className="flex shrink-0 items-center justify-end">
+          <div className="flex items-center whitespace-nowrap rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
             <button
               onClick={() => setPanelView("map")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "map"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "map"
                 ? "bg-accent/20 text-accent shadow-[0_0_8px_rgba(34,211,238,0.15)] border border-accent/30"
                 : "text-text-dim hover:text-text-secondary"
                 }`}
@@ -1137,7 +1136,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             </button>
             <button
               onClick={() => setPanelView("report")}
-              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "report"
+              className={`relative flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "report"
                 ? "bg-accent-purple/20 text-accent-purple shadow-[0_0_8px_rgba(167,139,250,0.15)] border border-accent-purple/30"
                 : "text-text-dim hover:text-text-secondary"
                 }`}
@@ -1151,24 +1150,16 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               )}
             </button>
           </div>
-          <div className={`panel-pill shrink-0 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${panelView === "report" && valuationResult
-            ? "bg-green-500/10 border-green-500/30 text-green-400"
-            : markers.length > 0
-              ? "bg-accent/10 border-accent/20 text-accent"
-              : "bg-border/10 border-border/20 text-text-dim"
-            }`}>
-            {panelView === "report" ? (valuationResult ? "READY" : "PENDING") : (markers.length > 0 ? "LIVE MAP" : "WAITING")}
-          </div>
         </div>
       </div>
 
       {/* Report View */}
       {panelView === "report" ? (
-        <div className="flex-1 p-5 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 px-5 pb-5 pt-3 flex flex-col min-h-0 overflow-hidden">
           <ValuationReport valuationResult={valuationResult} />
         </div>
       ) : (
-        <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
+        <div className="flex-1 px-5 pb-5 pt-3 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
           {/* Inline controls panel relocated to floating settings overlay inside mapContent */}
 
           {markers.length > 0 ? (

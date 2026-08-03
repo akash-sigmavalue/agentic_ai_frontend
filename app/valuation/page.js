@@ -197,9 +197,9 @@ export default function HomePage() {
             {renderCompactNavigation("assistant")}
           </div>
 
-          <section ref={containerRef} className="flex flex-col min-[1071px]:flex-row h-full min-h-0 flex-1 gap-4 min-[1071px]:gap-0">
+          <section ref={containerRef} className="grid h-full min-h-0 flex-1 grid-cols-1 gap-4 min-[1071px]:grid-cols-3">
             {/* Chat section */}
-            <div className="resize-panel-left w-full min-[1071px]:h-full min-h-0 relative">
+            <div className="min-h-0 min-w-0 relative">
               <TokenAccessGate featureName="Valuation Agent">
                 <ChatSection
                   onClear={() => {
@@ -220,21 +220,8 @@ export default function HomePage() {
               </TokenAccessGate>
             </div>
 
-            {/* Splitter 1 */}
-            <div 
-              onMouseDown={handleMouseDown(0)}
-              className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-            >
-              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-              </div>
-            </div>
-
             {/* Workflow Section */}
-            <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle w-full`}>
+            <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0`}>
               {renderCompactBrandHeader()}
               <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
               <div className="min-h-0 flex-1">
@@ -242,21 +229,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Splitter 2 */}
-            <div 
-              onMouseDown={handleMouseDown(1)}
-              className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-            >
-              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-              </div>
-            </div>
-
             {/* Map Section */}
-            <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-right w-full`}>
+            <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0`}>
               {renderCompactBrandHeader()}
               <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
               <div className="min-h-0 flex-1">

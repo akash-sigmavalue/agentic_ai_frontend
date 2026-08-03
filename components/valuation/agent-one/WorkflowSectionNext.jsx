@@ -922,7 +922,7 @@ export default function WorkflowSectionNext({ events = [] }) {
       `}</style>
 
       {/* Header */}
-      <div className="panel-header-shell relative z-10 shrink-0 flex-wrap border-b border-border/60">
+      <div className="panel-header-shell relative z-10 min-h-[68px] shrink-0 flex-wrap border-b border-border/60">
         <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <Bot className="h-5 w-5 text-accent" />
@@ -935,15 +935,12 @@ export default function WorkflowSectionNext({ events = [] }) {
             <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Agentic Execution Flow</h2>
           </div>
         </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-2">
           {!isEmpty && (
             <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
               5 MAIN STAGES
             </span>
           )}
-          <div className={`panel-pill shrink-0 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>
-            {isEmpty ? "STANDBY" : "ACTIVE"}
-          </div>
         </div>
       </div>
 
@@ -952,7 +949,7 @@ export default function WorkflowSectionNext({ events = [] }) {
         {isEmpty ? (
           <EmptyState />
         ) : (
-          <div className="flex flex-col gap-4.5 p-4.5">
+          <div className="flex flex-col gap-4.5 px-4.5 pb-4.5 pt-0">
             {/* Progress Nodes - Aerospace / Telemetry Control Panel */}
             <div className="flex items-center justify-between gap-1 mb-2 bg-bg-deep/45 rounded-2xl border border-white/[0.04] p-4 backdrop-blur-md relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-pink-500/5 pointer-events-none" />
