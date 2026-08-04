@@ -225,7 +225,7 @@ const CostOfProjectDetails = () => {
                     type="text"
                     className="pill-input"
                     placeholder={placeholder}
-                    value={value}
+                    value={value || ""}
                     onChange={(e) => onChange(e.target.value)}
                     disabled={!activeScenarioId}
                     style={!prefix ? { paddingLeft: '16px' } : undefined}

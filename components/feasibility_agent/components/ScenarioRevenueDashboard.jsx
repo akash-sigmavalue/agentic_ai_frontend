@@ -88,11 +88,13 @@ const ScenarioRevenueDashboard = () => {
 
     const activeScenario = scenarios.find(s => s.id === activeScenarioId);
     
-    // Revenue Calculation for UI (current active)
     let totalRevenue = 0;
+    let totalAllottedArea = 0;
     const rowRevenues = [];
     
     if (activeScenario && activeScenario.productMixRows) {
+        totalAllottedArea = activeScenario.productMixRows.reduce((acc, row) => acc + (Number(row.allottedArea) || 0), 0);
+        
         activeScenario.productMixRows.forEach(row => {
             const ticketSize = Number(row.pointArea || 0) * Number(row.rate || 0);
             const inventory = Number(row.totalInventory || 0);
@@ -361,6 +363,9 @@ const ScenarioRevenueDashboard = () => {
                                     <tr>
                                         <th className="text-secondary fw-semibold border-0 py-3 ps-4">Asset Class</th>
                                         <th className="text-secondary fw-semibold border-0 py-3">Property Type</th>
+                                        <th className="text-secondary fw-semibold border-0 py-3">Unit Mix</th>
+                                        <th className="text-secondary fw-semibold border-0 py-3 text-end">Allotted Area (SQ FT)</th>
+                                        <th className="text-secondary fw-semibold border-0 py-3 text-end">Mix %</th>
                                         <th className="text-secondary fw-semibold border-0 py-3 text-end">Ticket Size</th>
                                         <th className="text-secondary fw-semibold border-0 py-3 text-center">Total Inventory</th>
                                         <th className="text-secondary fw-semibold border-0 py-3 text-end pe-4">Total Revenue</th>
@@ -371,6 +376,13 @@ const ScenarioRevenueDashboard = () => {
                                         <tr key={row.id || idx} style={{ borderBottom: idx === rowRevenues.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                             <td className="py-3 ps-4 fw-medium text-dark border-0">{row.assetClass}</td>
                                             <td className="py-3 text-muted border-0">{row.propertyType}</td>
+                                            <td className="py-3 text-muted border-0">{row.unitMix || '-'}</td>
+                                            <td className="py-3 text-end text-muted border-0">{row.allottedArea ? Number(row.allottedArea).toLocaleString() : '-'}</td>
+                                            <td className="py-3 text-end text-muted border-0">
+                                                {totalAllottedArea > 0 && row.allottedArea 
+                                                    ? ((Number(row.allottedArea) / totalAllottedArea) * 100).toFixed(1) + '%' 
+                                                    : '-'}
+                                            </td>
                                             <td className="py-3 text-end text-muted border-0">{currency} {formatCurrencyLocal(row.ticketSize)}</td>
                                             <td className="py-3 text-center fw-semibold border-0" style={{ color: '#0f172a' }}>{row.inventory || '-'}</td>
                                             <td className="py-3 text-end fw-bold pe-4 border-0" style={{ color: '#448C74' }}>{currency} {formatCurrencyLocal(row.rowRevenue)}</td>

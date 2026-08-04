@@ -155,6 +155,34 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
         );
     }
     const list = options && options.length > 0 ? options : DEFAULT_PROPERTY_TYPES;
+    const fullList = [...list, "Add Property Type"];
+    
+    const isCustomMode = value === "Add Property Type" || (value && !list.includes(value));
+
+    if (isCustomMode) {
+        return (
+            <div className="position-relative d-flex align-items-center" style={{ minWidth: '95px', ...style }}>
+                <input 
+                    type="text" 
+                    className="form-control pm-table-input shadow-none w-100" 
+                    value={value === "Add Property Type" ? "" : value} 
+                    onChange={onChange} 
+                    placeholder="Type property..."
+                    style={{ fontSize: '12px', padding: '4px 24px 4px 8px' }}
+                    autoFocus={value === "Add Property Type"}
+                />
+                <button 
+                    className="btn btn-sm text-muted position-absolute end-0 p-0 me-1 hover-opacity border-0" 
+                    style={{ zIndex: 10, background: 'transparent' }}
+                    onClick={() => onChange({ target: { value: list[0] || 'Flat' } })}
+                    title="Cancel"
+                >
+                    <FaTimes size={10} />
+                </button>
+            </div>
+        );
+    }
+
     return (
         <select
             className="form-select pm-table-select shadow-none"
@@ -162,7 +190,7 @@ const PropertyTypeSelect = ({ value, onChange, options = [], style, isLoading })
             onChange={onChange}
             style={{ minWidth: '95px', ...style }}
         >
-            {list.map((opt) => (
+            {fullList.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
             ))}
         </select>
@@ -181,6 +209,34 @@ const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading, prope
         );
     }
     const list = getUnitTypesForProperty(propertyType, dbPropertyUnitMap, options);
+    const fullList = [...list, "Add Unit Mix"];
+    
+    const isCustomMode = value === "Add Unit Mix" || (value && !list.includes(value));
+    
+    if (isCustomMode) {
+        return (
+            <div className="position-relative d-flex align-items-center" style={{ minWidth: '85px', ...style }}>
+                <input 
+                    type="text" 
+                    className="form-control pm-table-input shadow-none w-100" 
+                    value={value === "Add Unit Mix" ? "" : value} 
+                    onChange={onChange} 
+                    placeholder="Type unit..."
+                    style={{ fontSize: '12px', padding: '4px 24px 4px 8px' }}
+                    autoFocus={value === "Add Unit Mix"}
+                />
+                <button 
+                    className="btn btn-sm text-muted position-absolute end-0 p-0 me-1 hover-opacity border-0" 
+                    style={{ zIndex: 10, background: 'transparent' }}
+                    onClick={() => onChange({ target: { value: list[0] || ALL_UNITS_OPTION } })}
+                    title="Cancel"
+                >
+                    <FaTimes size={10} />
+                </button>
+            </div>
+        );
+    }
+
     const currentValue = value && list.includes(value) ? value : list[0] || ALL_UNITS_OPTION;
     return (
         <select
@@ -189,7 +245,7 @@ const UnitTypeSelect = ({ value, onChange, options = [], style, isLoading, prope
             onChange={onChange}
             style={{ minWidth: '85px', ...style }}
         >
-            {list.map((opt) => (
+            {fullList.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
             ))}
         </select>
