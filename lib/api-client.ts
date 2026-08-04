@@ -32,6 +32,8 @@ export const API_ROUTES = {
   adminInquiries: '/admin/inquiries',
   adminUpdateInquiryStatus: (inquiryId: number) => `/admin/inquiries/${inquiryId}/status`,
   adminDeleteInquiry: (inquiryId: number) => `/admin/inquiries/${inquiryId}`,
+  adminEnterpriseOffers: '/admin/enterprise-offers',
+  adminCancelEnterpriseOffer: (offerId: number) => `/admin/enterprise-offers/${offerId}`,
   // Enterprise Org
   enterpriseCreateOrg: '/enterprise/orgs',
   enterpriseMyOrg: '/enterprise/orgs/mine',
@@ -41,12 +43,18 @@ export const API_ROUTES = {
   enterpriseSendInvite: '/enterprise/orgs/mine/invites',
   enterpriseRevokeInvite: (inviteId: number) => `/enterprise/orgs/mine/invites/${inviteId}`,
   enterpriseRemoveMember: (userId: number) => `/enterprise/orgs/mine/members/${userId}`,
+  enterpriseSuspendMember: (userId: number) => `/enterprise/orgs/mine/members/${userId}/suspend`,
+  enterpriseUnsuspendMember: (userId: number) => `/enterprise/orgs/mine/members/${userId}/unsuspend`,
+  enterpriseBulkUploadMembers: '/enterprise/orgs/mine/members/bulk-upload',
+  enterpriseMemberTemplate: '/enterprise/orgs/mine/members/template',
   enterpriseMyOrgUsage: '/enterprise/orgs/mine/usage',
   enterprisePurchaseTokens: '/enterprise/orgs/mine/purchase-tokens',
   enterpriseInviteAccept: '/enterprise/invites/accept',
+  enterpriseMyOffer: '/enterprise/my-offer',
   // Payments
   paymentHistory: '/payments/history',
   adminPaymentHistory: '/payments/admin/all',
+  paymentCreateEnterpriseCheckoutSession: '/payments/create-enterprise-checkout-session',
   // Agent & Generation
   generationQuery: '/generation/query',
   generationUploadData: '/generation/upload-data',

@@ -3,12 +3,12 @@
 import React, { useState } from "react";
 import {
   Check, Coins, Zap, Building2, Mail, ArrowRight, Loader2,
-  Users, Phone, MessageSquare, ChevronDown, Shield, Globe
+  Users, Phone, MessageSquare, ChevronDown, Shield, Globe, CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useRouter } from "next/navigation";
-import { apiFetch, apiRequest } from "@/lib/api-client";
+import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
 
 // ─── Contact Form State ────────────────────────────────────────────────────────
 interface ContactForm {
@@ -66,6 +66,46 @@ export default function PricingPage() {
     text: string;
   } | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  // Custom Enterprise Offer state
+  const [enterpriseOffer, setEnterpriseOffer] = useState<{
+    id: number;
+    offered_price_inr: number;
+    offered_tokens: number;
+    org_name: string | null;
+    note: string | null;
+  } | null>(null);
+  const [payingEnterprise, setPayingEnterprise] = useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      apiFetch<{ has_offer: boolean; offer: any }>(API_ROUTES.enterpriseMyOffer)
+        .then((res) => {
+          if (res?.has_offer && res?.offer) {
+            setEnterpriseOffer(res.offer);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  const handlePayEnterpriseOffer = async () => {
+    if (!user) { router.push("/auth"); return; }
+    setPayingEnterprise(true);
+    try {
+      const data = await apiFetch<{ checkout_url: string }>(API_ROUTES.paymentCreateEnterpriseCheckoutSession, {
+        method: "POST",
+      });
+      if (data?.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        throw new Error("Checkout URL missing");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to start enterprise checkout.");
+      setPayingEnterprise(false);
+    }
+  };
 
   // Auto-scroll & expand contact form when hash is #enterprise-form or #enterprise-contact
   React.useEffect(() => {
@@ -141,6 +181,60 @@ export default function PricingPage() {
             Upgrade whenever you need more. International cards accepted.
           </p>
         </div>
+
+        {/* ─── CUSTOM ENTERPRISE OFFER BANNER (If issued by Admin) ───────────── */}
+        {enterpriseOffer && (
+          <div className={`mb-8 p-6 md:p-8 rounded-3xl border shadow-2xl relative overflow-hidden transition-all ${
+            isDark
+              ? "bg-gradient-to-r from-amber-950/70 via-slate-900 to-indigo-950/70 border-amber-500/40 text-slate-100"
+              : "bg-gradient-to-r from-amber-50 via-white to-indigo-50 border-amber-300 text-slate-900"
+          }`}>
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div className="space-y-3 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                  <Zap className="w-3.5 h-3.5" />
+                  Custom Enterprise Offer Ready
+                </div>
+                <h2 className="text-2xl font-black">
+                  {enterpriseOffer.org_name || "Enterprise Organization Plan"}
+                </h2>
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                  {enterpriseOffer.note || "Admin has generated a negotiated enterprise offer for your organization workspace."}
+                </p>
+                <div className="flex items-center gap-8 pt-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Token Allocation</span>
+                    <span className="text-xl font-black text-amber-500">{enterpriseOffer.offered_tokens.toLocaleString()} tokens</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Negotiated Price</span>
+                    <span className="text-xl font-black text-emerald-500">₹{enterpriseOffer.offered_price_inr.toLocaleString()} INR</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="self-center">
+                <button
+                  onClick={handlePayEnterpriseOffer}
+                  disabled={payingEnterprise}
+                  className="px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-black text-sm flex items-center gap-2 shadow-xl shadow-amber-500/25 transition-all disabled:opacity-50"
+                >
+                  {payingEnterprise ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Connecting to Stripe...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Pay ₹{enterpriseOffer.offered_price_inr.toLocaleString()} & Activate Enterprise Plan
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── Pricing Cards ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">

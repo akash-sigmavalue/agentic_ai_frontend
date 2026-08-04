@@ -22,8 +22,16 @@ const geistMono = Geist_Mono({
 });
  
 export const metadata: Metadata = {
-  title: "Sigmavalue AI Pilot | Intelligent Workspace",
+  title: "Sigmavalue OS | Intelligent Workspace",
   description: "Enterprise-grade AI control center for workflow visualization and geospatial analysis.",
+  icons: {
+    icon: [
+      { url: "/logo.png?v=2", type: "image/png" },
+      { url: "/favicon.ico?v=2" }
+    ],
+    shortcut: "/logo.png?v=2",
+    apple: "/logo.png?v=2",
+  },
 };
 
 export default function RootLayout({
@@ -38,6 +46,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="icon" href="/logo.png?v=2" type="image/png" />
+        <link rel="shortcut icon" href="/logo.png?v=2" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png?v=2" />
         <Script
           id="theme-initializer"
           strategy="beforeInteractive"

@@ -6,10 +6,11 @@ import {
   User as UserIcon, Mail, Shield, Coins, Building2, Zap, LogOut,
   ArrowRight, Users, Send, Trash2, RefreshCw, Edit3, Check, X,
   Clock, CheckCircle2, XCircle, Loader2, AlertTriangle, Crown, Receipt,
+  FileSpreadsheet, Upload, Download, PauseCircle, PlayCircle, Lock, Unlock,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
+import { apiFetch, apiRequest, API_ROUTES, API_BASE_URL } from "@/lib/api-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 interface OrgMember {
@@ -41,44 +42,38 @@ interface OrgDetail {
 // ─── Role Badge ─────────────────────────────────────────────────────────────────
 function RoleBadge({ role, accountType, orgRole, isDark }: { role: string; accountType?: string | null; orgRole?: string; isDark: boolean }) {
   if (role === "ADMIN") return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-violet-500/10 text-violet-300 border-violet-500/30" : "bg-violet-50 text-violet-700 border-violet-200"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-violet-500/10 text-violet-300 border-violet-500/30" : "bg-violet-50 text-violet-700 border-violet-200"
+      }`}>
       <Shield className="h-3 w-3" /> ADMIN
     </span>
   );
   if (orgRole === "OWNER") return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-amber-500/10 text-amber-300 border-amber-500/30" : "bg-amber-50 text-amber-700 border-amber-200"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-amber-500/10 text-amber-300 border-amber-500/30" : "bg-amber-50 text-amber-700 border-amber-200"
+      }`}>
       <Crown className="h-3 w-3" /> ORG OWNER
     </span>
   );
   if (orgRole === "EMPLOYEE") return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+      }`}>
       <Building2 className="h-3 w-3" /> EMPLOYEE
     </span>
   );
   if (accountType === "ENTERPRISE") return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+      }`}>
       <Building2 className="h-3 w-3" /> ENTERPRISE
     </span>
   );
   if (role === "PAID" || accountType === "INDIVIDUAL") return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border-emerald-200"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      }`}>
       <Zap className="h-3 w-3" /> INDIVIDUAL PRO
     </span>
   );
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${
-      isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"
-    }`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"
+      }`}>
       <Coins className="h-3 w-3" /> FREE TIER
     </span>
   );
@@ -87,10 +82,10 @@ function RoleBadge({ role, accountType, orgRole, isDark }: { role: string; accou
 // ─── Invite Status Badge ────────────────────────────────────────────────────────
 function InviteStatusBadge({ status, isDark }: { status: string; isDark: boolean }) {
   const map: Record<string, { color: string; icon: React.ReactNode }> = {
-    PENDING:  { color: isDark ? "bg-amber-950/60 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200", icon: <Clock className="w-3 h-3" /> },
+    PENDING: { color: isDark ? "bg-amber-950/60 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200", icon: <Clock className="w-3 h-3" /> },
     ACCEPTED: { color: isDark ? "bg-emerald-950/60 text-emerald-300 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <CheckCircle2 className="w-3 h-3" /> },
-    REVOKED:  { color: isDark ? "bg-rose-950/60 text-rose-300 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200", icon: <XCircle className="w-3 h-3" /> },
-    EXPIRED:  { color: isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-300", icon: <AlertTriangle className="w-3 h-3" /> },
+    REVOKED: { color: isDark ? "bg-rose-950/60 text-rose-300 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200", icon: <XCircle className="w-3 h-3" /> },
+    EXPIRED: { color: isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-300", icon: <AlertTriangle className="w-3 h-3" /> },
   };
   const { color, icon } = map[status] || map.EXPIRED;
   return (
@@ -104,11 +99,10 @@ function InviteStatusBadge({ status, isDark }: { status: string; isDark: boolean
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const isDark = useTheme();
   return (
-    <div className={`p-6 rounded-3xl border transition-colors ${
-      isDark
+    <div className={`p-6 rounded-3xl border transition-colors ${isDark
         ? "bg-slate-900/60 border-slate-800 text-slate-100"
         : "bg-white border-slate-200 text-slate-900 shadow-sm"
-    } ${className}`}>
+      } ${className}`}>
       {children}
     </div>
   );
@@ -133,6 +127,19 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
   const [inviteMsg, setInviteMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [removingUserId, setRemovingUserId] = useState<number | null>(null);
+  const [suspendingUserId, setSuspendingUserId] = useState<number | null>(null);
+
+  // Bulk Upload State
+  const [addMode, setAddMode] = useState<"single" | "bulk">("single");
+  const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [bulkUploadResult, setBulkUploadResult] = useState<{
+    added_count: number;
+    skipped_count: number;
+    message: string;
+    skipped_excel_base64?: string;
+    filename?: string;
+  } | null>(null);
 
   const fetchMembers = async () => {
     setLoadingMembers(true);
@@ -200,17 +207,90 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
     } finally { setRemovingUserId(null); }
   };
 
-  const handleRevokeInvite = async (inviteId: number) => {
+  const handleSuspendMember = async (userId: number, username: string) => {
+    if (!confirm(`Suspend ${username}'s account? They will no longer be able to use organization tokens.`)) return;
+    setSuspendingUserId(userId);
     try {
-      const res = await apiRequest(API_ROUTES.enterpriseRevokeInvite(inviteId), { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to revoke");
-      fetchInvites();
+      const res = await apiRequest(API_ROUTES.enterpriseSuspendMember(userId), { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to suspend member");
+      fetchMembers();
     } catch (e: any) {
       alert(e.message);
+    } finally { setSuspendingUserId(null); }
+  };
+
+  const handleUnsuspendMember = async (userId: number, username: string) => {
+    if (!confirm(`Reactivate ${username}'s account?`)) return;
+    setSuspendingUserId(userId);
+    try {
+      const res = await apiRequest(API_ROUTES.enterpriseUnsuspendMember(userId), { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to reactivate member");
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message);
+    } finally { setSuspendingUserId(null); }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      const a = document.createElement('a');
+      a.href = '/employee_bulk_upload_template.xlsx';
+      a.download = 'employee_bulk_upload_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e: any) {
+      alert("Could not download template file");
     }
   };
 
+  const handleBulkUpload = async () => {
+    if (!excelFile) return;
+    setUploadingExcel(true);
+    setBulkUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", excelFile);
+
+      const res = await apiRequest(API_ROUTES.enterpriseBulkUploadMembers, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Bulk upload failed");
+      setBulkUploadResult(data);
+      setExcelFile(null);
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message || "Bulk upload failed");
+    } finally {
+      setUploadingExcel(false);
+    }
+  };
+
+  const handleDownloadSkippedExcel = () => {
+    if (!bulkUploadResult?.skipped_excel_base64) return;
+    const byteCharacters = atob(bulkUploadResult.skipped_excel_base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = bulkUploadResult.filename || "skipped_employees.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   const activeMembers = members.filter(m => m.status === "ACTIVE");
+  const suspendedMembers = members.filter(m => m.status === "SUSPENDED");
+  const displayMembers = members.filter(m => m.status === "ACTIVE" || m.status === "SUSPENDED");
   const pendingInvites = invites.filter(i => i.status === "PENDING");
 
   return (
@@ -219,9 +299,8 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
       <Card>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4 min-w-0">
-            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${
-              isDark ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-600"
-            }`}>
+            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${isDark ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-600"
+              }`}>
               <Building2 className="w-6 h-6" />
             </div>
             <div className="min-w-0">
@@ -232,18 +311,16 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") handleRenameSave(); if (e.key === "Escape") setEditingName(false); }}
-                    className={`px-3 py-1.5 rounded-lg border text-sm font-bold focus:outline-none w-52 ${
-                      isDark ? "bg-slate-950 border-indigo-500 text-slate-100" : "bg-white border-indigo-500 text-slate-900"
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-bold focus:outline-none w-52 ${isDark ? "bg-slate-950 border-indigo-500 text-slate-100" : "bg-white border-indigo-500 text-slate-900"
+                      }`}
                   />
                   <button onClick={handleRenameSave} disabled={savingName}
                     className="p-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-all">
                     {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   </button>
                   <button onClick={() => setEditingName(false)}
-                    className={`p-1.5 rounded-lg transition-all ${
-                      isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}>
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}>
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -251,9 +328,8 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
                 <div className="flex items-center gap-2">
                   <h2 className={`text-lg font-black truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{orgName}</h2>
                   <button onClick={() => { setNameInput(orgName); setEditingName(true); }}
-                    className={`p-1 rounded-md transition-all ${
-                      isDark ? "text-slate-500 hover:text-slate-300 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                    }`}>
+                    className={`p-1 rounded-md transition-all ${isDark ? "text-slate-500 hover:text-slate-300 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      }`}>
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -281,64 +357,165 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
 
         {/* Status banner if suspended */}
         {initialStatus === "SUSPENDED" && (
-          <div className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-            isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
-          }`}>
+          <div className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
+            }`}>
             <AlertTriangle className="w-4 h-4 shrink-0" />
             This organization is currently SUSPENDED. Contact support to reactivate.
           </div>
         )}
       </Card>
 
-      {/* Invite New Employee */}
+      {/* Add Employee (Single Email or Bulk Excel Upload) */}
       <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <Send className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-          <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Add Member by Email</h3>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Add Employees</h3>
+          </div>
+          <div className={`p-1 rounded-xl border flex items-center gap-1 text-xs ${isDark ? "bg-slate-950 border-slate-800" : "bg-slate-100 border-slate-200"
+            }`}>
+            <button
+              onClick={() => { setAddMode("single"); setBulkUploadResult(null); }}
+              className={`px-3 py-1 rounded-lg font-bold transition-all ${addMode === "single"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              Single Email
+            </button>
+            <button
+              onClick={() => { setAddMode("bulk"); setInviteMsg(null); }}
+              className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all ${addMode === "bulk"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Bulk Excel Upload
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <input
-            type="email"
-            placeholder="employee@company.com"
-            value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
-            className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-medium focus:outline-none focus:border-indigo-500 ${
-              isDark ? "bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500" : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-            }`}
-          />
-          <button
-            onClick={handleSendInvite}
-            disabled={sendingInvite || !inviteEmail.trim()}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
-          >
-            {sendingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-            Add Member
-          </button>
-        </div>
+        {addMode === "single" ? (
+          <div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="employee@company.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
+                className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-medium focus:outline-none focus:border-indigo-500 ${isDark ? "bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500" : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                  }`}
+              />
+              <button
+                onClick={handleSendInvite}
+                disabled={sendingInvite || !inviteEmail.trim()}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+              >
+                {sendingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                Add Member
+              </button>
+            </div>
 
-        {inviteMsg && (
-          <div className={`mt-3 p-3 rounded-xl text-xs font-medium leading-relaxed ${
-            inviteMsg.type === "success"
-              ? isDark ? "bg-emerald-950/50 border border-emerald-800 text-emerald-300" : "bg-emerald-50 border border-emerald-200 text-emerald-700"
-              : isDark ? "bg-rose-950/50 border border-rose-800 text-rose-300" : "bg-rose-50 border border-rose-200 text-rose-700"
-          }`}>
-            {inviteMsg.text}
+            {inviteMsg && (
+              <div className={`mt-3 p-3 rounded-xl text-xs font-medium leading-relaxed ${inviteMsg.type === "success"
+                  ? isDark ? "bg-emerald-950/50 border border-emerald-800 text-emerald-300" : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                  : isDark ? "bg-rose-950/50 border border-rose-800 text-rose-300" : "bg-rose-50 border border-rose-200 text-rose-700"
+                }`}>
+                {inviteMsg.text}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+              <p className={isDark ? "text-slate-400" : "text-slate-600"}>
+                Upload an Excel file (.xlsx, .xls) containing employee emails in rows.
+              </p>
+              <button
+                onClick={handleDownloadTemplate}
+                className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all text-xs ${isDark ? "bg-slate-900 border-slate-700 text-indigo-400 hover:bg-slate-800" : "bg-slate-50 border-slate-300 text-indigo-600 hover:bg-slate-100"
+                  }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Excel Template
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={e => setExcelFile(e.target.files?.[0] || null)}
+                className={`flex-1 px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none ${isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-white border-slate-300 text-slate-700"
+                  }`}
+              />
+              <button
+                onClick={handleBulkUpload}
+                disabled={uploadingExcel || !excelFile}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+              >
+                {uploadingExcel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Upload & Process
+              </button>
+            </div>
+
+            {bulkUploadResult && (
+              <div className={`p-4 rounded-xl border space-y-3 ${isDark ? "bg-slate-950/70 border-slate-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                    Bulk Upload Completed
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    Total: {bulkUploadResult.total_processed}
+                  </span>
+                </div>
+                <div className="flex gap-4 text-xs font-bold">
+                  <div className={`px-3 py-1.5 rounded-lg border ${isDark ? "bg-emerald-950/50 border-emerald-800 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    }`}>
+                    ✓ Added: {bulkUploadResult.added_count}
+                  </div>
+                  <div className={`px-3 py-1.5 rounded-lg border ${bulkUploadResult.skipped_count > 0
+                      ? isDark ? "bg-amber-950/50 border-amber-800 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-700"
+                      : isDark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-600"
+                    }`}>
+                    ⚠ Skipped: {bulkUploadResult.skipped_count}
+                  </div>
+                </div>
+
+                {bulkUploadResult.skipped_count > 0 && bulkUploadResult.skipped_excel_base64 && (
+                  <div className="pt-2 border-t border-slate-800/40 flex items-center justify-between flex-wrap gap-2">
+                    <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      Emails not registered or unverified were safely skipped.
+                    </p>
+                    <button
+                      onClick={handleDownloadSkippedExcel}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Skipped Emails (.xlsx)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Card>
 
-      {/* Active Members */}
+      {/* Organization Members */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Active Members ({activeMembers.length})</h3>
+            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Organization Members ({displayMembers.length})
+            </h3>
           </div>
-          <button onClick={fetchMembers} className={`p-1.5 rounded-lg transition-all ${
-            isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-          }`}>
+          <button onClick={fetchMembers} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            }`}>
             <RefreshCw className={`w-3.5 h-3.5 ${loadingMembers ? "animate-spin" : ""}`} />
           </button>
         </div>
@@ -347,47 +524,80 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
           <div className="flex items-center justify-center py-6 text-slate-400 text-xs gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Loading members...
           </div>
-        ) : activeMembers.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-6">No active members yet. Send invites above.</p>
+        ) : displayMembers.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">No members yet. Add employees above.</p>
         ) : (
           <div className="space-y-2">
-            {activeMembers.map(m => (
-              <div key={m.user_id} className={`flex items-center justify-between p-3 rounded-xl border ${
-                isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
-              }`}>
+            {displayMembers.map(m => (
+              <div key={m.user_id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+                }`}>
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${
-                    isDark ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-700"
-                  }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${isDark ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-700"
+                    }`}>
                     {m.username.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{m.username}</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{m.username}</span>
+                      {m.status === "SUSPENDED" && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${isDark ? "bg-amber-950/80 text-amber-300 border-amber-800" : "bg-amber-100 text-amber-800 border-amber-300"
+                          }`}>
+                          SUSPENDED
+                        </span>
+                      )}
+                    </div>
                     <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{m.email || "No email"}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
-                    m.org_role === "OWNER"
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${m.org_role === "OWNER"
                       ? isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
                       : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"
-                  }`}>
+                    }`}>
                     {m.org_role}
                   </span>
                   {m.org_role !== "OWNER" && (
-                    <button
-                      onClick={() => handleRemoveMember(m.user_id, m.username)}
-                      disabled={removingUserId === m.user_id}
-                      className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${
-                        isDark ? "bg-rose-950/50 text-rose-400 hover:bg-rose-900/50 border-rose-800/60" : "bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
-                      }`}
-                      title="Remove member"
-                    >
-                      {removingUserId === m.user_id
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Trash2 className="w-3.5 h-3.5" />
-                      }
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {m.status === "ACTIVE" ? (
+                        <button
+                          onClick={() => handleSuspendMember(m.user_id, m.username)}
+                          disabled={suspendingUserId === m.user_id}
+                          className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-amber-950/50 text-amber-400 hover:bg-amber-900/50 border-amber-800/60" : "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200"
+                            }`}
+                          title="Suspend member account"
+                        >
+                          {suspendingUserId === m.user_id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <PauseCircle className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUnsuspendMember(m.user_id, m.username)}
+                          disabled={suspendingUserId === m.user_id}
+                          className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border-emerald-800/60" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200"
+                            }`}
+                          title="Reactivate member account"
+                        >
+                          {suspendingUserId === m.user_id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <PlayCircle className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRemoveMember(m.user_id, m.username)}
+                        disabled={removingUserId === m.user_id}
+                        className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-rose-950/50 text-rose-400 hover:bg-rose-900/50 border-rose-800/60" : "bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
+                          }`}
+                        title="Remove member"
+                      >
+                        {removingUserId === m.user_id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />
+                        }
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -403,9 +613,8 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
             <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Invite History</h3>
           </div>
-          <button onClick={fetchInvites} className={`p-1.5 rounded-lg transition-all ${
-            isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-          }`}>
+          <button onClick={fetchInvites} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            }`}>
             <RefreshCw className={`w-3.5 h-3.5 ${loadingInvites ? "animate-spin" : ""}`} />
           </button>
         </div>
@@ -419,9 +628,8 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
         ) : (
           <div className="space-y-2">
             {invites.map(inv => (
-              <div key={inv.id} className={`flex items-center justify-between p-3 rounded-xl border ${
-                isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
-              }`}>
+              <div key={inv.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+                }`}>
                 <div>
                   <div className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{inv.invited_email}</div>
                   <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
@@ -433,9 +641,8 @@ function OrgManagementSection({ orgId, initialName, initialBalance, initialStatu
                   {inv.status === "PENDING" && (
                     <button
                       onClick={() => handleRevokeInvite(inv.id)}
-                      className={`p-1.5 rounded-lg transition-all ${
-                        isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
+                      className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
                       title="Revoke invite"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -461,11 +668,10 @@ function EmployeeOrgCard({ activeOrg, isDark }: { activeOrg: NonNullable<ReturnT
       <div className="flex items-center gap-2 mb-4">
         <Building2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
         <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Your Organization</h3>
-        <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
-          isSuspended
+        <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-black uppercase border ${isSuspended
             ? isDark ? "bg-rose-950 text-rose-400 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200"
             : isDark ? "bg-emerald-950 text-emerald-400 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200"
-        }`}>
+          }`}>
           {activeOrg.org_status}
         </span>
       </div>
@@ -478,17 +684,15 @@ function EmployeeOrgCard({ activeOrg, isDark }: { activeOrg: NonNullable<ReturnT
           </div>
         </div>
 
-        <div className={`p-3 rounded-xl border flex items-center justify-between ${
-          isDark ? "bg-slate-950/60 border-slate-800/80" : "bg-slate-50 border-slate-200"
-        }`}>
+        <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? "bg-slate-950/60 border-slate-800/80" : "bg-slate-50 border-slate-200"
+          }`}>
           <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Shared Token Pool</span>
           <span className={`text-sm font-black ${isDark ? "text-indigo-300" : "text-indigo-600"}`}>{activeOrg.org_token_balance.toLocaleString()} tokens</span>
         </div>
 
         {isSuspended && (
-          <div className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${
-            isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
-          }`}>
+          <div className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
+            }`}>
             <AlertTriangle className="w-4 h-4 shrink-0" />
             Your organization is suspended. Contact your organization owner.
           </div>
@@ -532,9 +736,8 @@ function PaymentHistoryCard({ isDark }: { isDark: boolean }) {
           <Receipt className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
           <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Payment &amp; Billing History</h3>
         </div>
-        <button onClick={fetchHistory} className={`p-1.5 rounded-lg transition-all ${
-          isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-        }`}>
+        <button onClick={fetchHistory} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+          }`}>
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
@@ -548,9 +751,8 @@ function PaymentHistoryCard({ isDark }: { isDark: boolean }) {
       ) : (
         <div className="space-y-2">
           {payments.map((p) => (
-            <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
-              isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
-            }`}>
+            <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+              }`}>
               <div className="space-y-0.5">
                 <div className={`font-bold flex items-center gap-2 ${isDark ? "text-slate-200" : "text-slate-900"}`}>
                   <span>₹{p.amount_inr?.toLocaleString()}</span>
@@ -560,13 +762,12 @@ function PaymentHistoryCard({ isDark }: { isDark: boolean }) {
                   {new Date(p.created_at).toLocaleString()} · Session: {p.stripe_session_id?.slice(-12) || p.id}
                 </div>
               </div>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
-                p.status === "succeeded"
+              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${p.status === "succeeded"
                   ? isDark ? "bg-emerald-950 text-emerald-400 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                   : p.status === "pending"
                     ? isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
                     : isDark ? "bg-rose-950 text-rose-400 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200"
-              }`}>
+                }`}>
                 {p.status}
               </span>
             </div>
@@ -606,9 +807,8 @@ export default function ProfilePage() {
         {/* ─── Profile Banner ─────────────────────────────────────────────────── */}
         <div className={`p-7 rounded-3xl border flex flex-col sm:flex-row items-center gap-6 justify-between transition-colors ${bannerClass}`}>
           <div className="flex items-center gap-5">
-            <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center font-black text-2xl shrink-0 ${
-              isDark ? "bg-indigo-600/20 border-indigo-500/30 text-indigo-400" : "bg-indigo-50 border-indigo-200 text-indigo-600"
-            }`}>
+            <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center font-black text-2xl shrink-0 ${isDark ? "bg-indigo-600/20 border-indigo-500/30 text-indigo-400" : "bg-indigo-50 border-indigo-200 text-indigo-600"
+              }`}>
               {user.username.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -636,9 +836,8 @@ export default function ProfilePage() {
               <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 <Coins className={`h-4 w-4 ${isDark ? "text-indigo-400" : "text-indigo-500"}`} /> Personal Wallet
               </span>
-              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                isDark ? "bg-indigo-950 text-indigo-300 border-indigo-800" : "bg-indigo-50 text-indigo-700 border-indigo-200"
-              }`}>
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${isDark ? "bg-indigo-950 text-indigo-300 border-indigo-800" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                }`}>
                 PERSONAL
               </span>
             </div>
@@ -661,9 +860,8 @@ export default function ProfilePage() {
                 <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   <Building2 className={`h-4 w-4 ${isDark ? "text-amber-400" : "text-amber-500"}`} /> Organization Pool
                 </span>
-                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                  isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
-                }`}>
+                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
                   {user.active_org.org_role}
                 </span>
               </div>
@@ -675,9 +873,8 @@ export default function ProfilePage() {
               </p>
               {isOwner && (
                 <button onClick={() => alert("Contact Sigma Value support to add more org tokens.")}
-                  className={`w-full py-2.5 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                    isDark ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-600/30" : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
-                  }`}>
+                  className={`w-full py-2.5 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${isDark ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-600/30" : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                    }`}>
                   <Coins className="h-3.5 w-3.5" /> Request More Org Tokens
                 </button>
               )}
@@ -692,9 +889,8 @@ export default function ProfilePage() {
                 Need a company account with shared tokens for your whole team?
               </p>
               <button onClick={() => router.push("/pricing#enterprise")}
-                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                  isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-200" : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
-                }`}>
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-200" : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+                  }`}>
                 Learn About Enterprise <ArrowRight className="h-3.5 w-3.5" />
               </button>
             </Card>
@@ -742,27 +938,24 @@ export default function ProfilePage() {
         <Card>
           <h3 className={`text-xs font-black uppercase tracking-wider mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Current Plan Policy</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${
-              isDark
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
                 ? "bg-slate-900/90 border-slate-800"
                 : "bg-emerald-50/50 border-emerald-200/60 shadow-sm"
-            }`}>
+              }`}>
               <span className={`font-bold ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>🎁 Free Signup Grant</span>
               <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>10,000 tokens auto-credited on signup.</p>
             </div>
-            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${
-              isDark
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
                 ? "bg-slate-900/90 border-slate-800"
                 : "bg-indigo-50/50 border-indigo-200/60 shadow-sm"
-            }`}>
+              }`}>
               <span className={`font-bold ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>⚡ Individual Pack</span>
               <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>₹5,000 for 1,000,000 tokens.</p>
             </div>
-            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${
-              isDark
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
                 ? "bg-slate-900/90 border-slate-800"
                 : "bg-amber-50/50 border-amber-200/60 shadow-sm"
-            }`}>
+              }`}>
               <span className={`font-bold ${isDark ? "text-amber-400" : "text-amber-700"}`}>🏢 Enterprise Org</span>
               <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>Shared pool for multi-employee teams.</p>
             </div>
