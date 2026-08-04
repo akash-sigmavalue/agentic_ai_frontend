@@ -1291,7 +1291,20 @@ function MobileComparableRow({
   );
 }
 
-function ComparableTable({ comparables, droppedComparables, selectedComps, onToggle, onRestoreDropped, selectable, onUpdateCoordinates, onResetCoordinates }) {
+function ComparableTable({
+  comparables,
+  droppedComparables,
+  selectedComps,
+  onToggle,
+  onRestoreDropped,
+  selectable,
+  onUpdateCoordinates,
+  onResetCoordinates,
+  showComparableActionInfo,
+  onToggleComparableActionInfo,
+  listingCollapsed = false,
+  onToggleListingCollapsed,
+}) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showAllComparables, setShowAllComparables] = useState(false);
   const [sourceFilter, setSourceFilter] = useState("all"); // "all" | "Web" | "Internal DB" | "Dropped"
@@ -1388,6 +1401,9 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
     : showAllComparables
       ? `${filteredComparables.length} results`
       : `${nearbyComparables.length} within ${INITIAL_COMPARABLE_RADIUS_KM} km`;
+  const webCount = compsList.filter((c) => (c.data_source || "Web") === "Web").length;
+  const transactionCount = compsList.filter((c) => c.data_source === "Internal DB").length;
+  const stage3Summary = `Transaction - ${transactionCount} | Web - ${webCount}`;
   const allSelected = visibleComparables.length > 0 && visibleComparables.every(({ originalIndex }) => selectedComps?.has(originalIndex));
   const allDroppedSelected = visibleComparables.length > 0 && visibleComparables.every(({ comp }) => selectedDropped.has(comp));
 
@@ -1410,7 +1426,7 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
     }).filter(Boolean);
 
     return (
-      <div className="w-full sm:w-auto shrink-0 min-w-0 max-w-full">
+      <div className="w-full sm:w-auto sm:max-w-full shrink-0 min-w-0">
         {/* Mobile View: Vertical list to prevent horizontal overflow */}
         <div className="flex flex-col gap-1.5 w-full sm:hidden bg-bg-deep/80 p-1.5 rounded-xl border border-border/60">
           {tabs.map(({ opt, count, label, isTabDropped }) => (
@@ -1559,7 +1575,6 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
               <TableHeaderCell columnKey="distance_from_subject_km" label="Distance" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="map_search_lat" label="Lat ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="map_search_lng" label="Lng ✏️" align="right" className="text-warning" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
-              <TableHeaderCell columnKey="geocode_source" label="Coord Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               {isDroppedTab ? (
                 <>
                   <TableHeaderCell columnKey="drop_detail" label="Detail / Reason" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
@@ -1574,7 +1589,6 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                   <TableHeaderCell columnKey="comp.location_certainty" label="Location Certainty" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
                 </>
               )}
-              <TableHeaderCell columnKey="source_url" label="Source URL" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
               <TableHeaderCell columnKey="data_source" label="Source" className="whitespace-nowrap" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={indexedComparables} />
             </tr>
           </thead>
@@ -1646,30 +1660,6 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                       onSave={(newLng) => isDroppedTab ? onUpdateCoordinates?.(originalIndex, comp.map_search_lat, newLng, true) : onUpdateCoordinates?.(originalIndex, comp.map_search_lat, newLng)}
                     />
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    {(() => {
-                      const isOverride = comp.geocode_source === "user_override" || comp.original_map_search_lat !== undefined;
-                      const src = formatGeocodeSource(comp.geocode_source || (comp.data_source === "Internal DB" ? "internal_db" : null));
-                      return (
-                        <div className="inline-flex items-center gap-1.5">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${src.color}`}>
-                            {src.label}
-                          </span>
-                          {isOverride && (
-                            <button
-                              type="button"
-                              onClick={() => isDroppedTab ? onResetCoordinates?.(originalIndex, true) : onResetCoordinates?.(originalIndex)}
-                              title="Reset to original fetched coordinates"
-                              className="inline-flex items-center gap-0.5 rounded border border-border bg-bg-input px-1.5 py-0.5 text-[9px] font-bold text-text-dim hover:border-amber-500 hover:text-amber-400 transition cursor-pointer"
-                            >
-                              <span>↺</span>
-                              <span>Reset</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </td>
                   {isDroppedTab ? (
                     <>
                       <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[220px] truncate" title={comp.drop_reason || comp.drop_detail}>
@@ -1737,13 +1727,6 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                       </td>
                     </>
                   )}
-                  <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
-                    {comp.source_url ? (
-                      <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
-                        {comp.source_url}
-                      </a>
-                    ) : "—"}
-                  </td>
                   <td className="px-3 py-2.5">
                     {comp.isDropped ? (
                       <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">Dropped</span>
@@ -1783,13 +1766,13 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
   );
 
   const renderSearchInput = () => (
-    <div className="relative flex items-center w-full sm:w-auto sm:min-w-[140px] sm:max-w-[200px] flex-1">
+    <div className="relative flex items-center w-full sm:ml-auto sm:w-[220px] sm:min-w-[220px] sm:max-w-[260px] flex-1">
       <input
         type="text"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         placeholder="Search project or location..."
-        className="w-full rounded-lg border border-border bg-bg-deep px-2.5 py-1 text-[10px] text-text-primary outline-none transition focus:border-[#fb923c] placeholder:text-text-dim"
+        className="w-full rounded-xl border border-border bg-bg-deep px-3.5 py-2.5 text-[12px] font-medium text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] outline-none transition focus:border-[#fb923c] placeholder:text-text-dim"
       />
       {searchQuery && (
         <button
@@ -1806,50 +1789,98 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
   return (
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(251,146,60,0.06)] p-3 sm:px-4 sm:py-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-wrap">
-            {/* Title & Mobile top action controls */}
-            <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm shrink-0">🏘️</span>
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c] break-words">Comparable Projects Found</span>
-              </div>
-              <div className="flex items-center gap-2 sm:hidden shrink-0">
-                <span className="rounded-full border border-border bg-bg-deep/60 px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap">{visibleResultLabel}</span>
-                <button
-                  onClick={() => setIsMaximized(true)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-bg-card text-xs text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
-                  title="Maximize Table"
-                >
-                  ⛶
-                </button>
+        <div
+          onClick={() => onToggleListingCollapsed?.(!listingCollapsed)}
+          className="border-b border-border bg-[linear-gradient(180deg,rgba(251,146,60,0.08),rgba(251,146,60,0.03))] px-3 py-3 sm:px-4 sm:py-3 cursor-pointer select-none"
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+            <div className="min-w-0">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-sm">
+                🏘️
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                      Stage 3A - Comparable Discovery
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleListingCollapsed?.(!listingCollapsed);
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
+                      aria-label={listingCollapsed ? "Expand comparable discovery" : "Collapse comparable discovery"}
+                      title={listingCollapsed ? "Expand" : "Collapse"}
+                    >
+                      {listingCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    {!listingCollapsed && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleComparableActionInfo?.();
+                        }}
+                        className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[9px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
+                        aria-label="Show comparable selection tip"
+                        title="Show tip"
+                      >
+                        i
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] text-text-dim">
+                    {stage3Summary}
+                  </p>
+                  {!listingCollapsed && (
+                    <div
+                      className={`absolute left-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
+                        showComparableActionInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-[10px] text-text-secondary leading-relaxed">
+                        Please review and select comparable projects from the table below, then click <span className="font-semibold text-warning">&quot;Proceed to Fetch Listings&quot;</span>.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-
-            {/* Filter Tabs & Search Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:justify-end flex-wrap">
-              {renderTabBar()}
-              {renderSearchInput()}
-              <div className="hidden sm:flex items-center gap-2.5 ml-auto shrink-0">
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap">{visibleResultLabel}</span>
-                <button
-                  onClick={() => setIsMaximized(true)}
-                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
-                  title="Maximize Table"
-                >
-                  ⛶
-                </button>
-              </div>
+            <div className="hidden items-center gap-2.5 shrink-0 sm:flex sm:justify-self-end">
+              <span className="rounded-full border border-border bg-bg-deep/60 px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap">
+                {visibleResultLabel}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMaximized(true);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
+                title="Maximize Table"
+              >
+                ⛶
+              </button>
             </div>
           </div>
+          {!listingCollapsed && (
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {renderTabBar()}
+                {renderSearchInput()}
+              </div>
+            </div>
+          )}
         </div>
-        {renderTable("max-h-[360px] overflow-y-auto")}
+        {!listingCollapsed && renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-border bg-bg-card shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4 flex-wrap">
+            <div className="relative flex items-center justify-between gap-3 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
@@ -1857,14 +1888,18 @@ function ComparableTable({ comparables, droppedComparables, selectedComps, onTog
                   <p className="text-[10px] text-text-dim">{visibleResultLabel}</p>
                 </div>
               </div>
-              {renderTabBar()}
-              {renderSearchInput()}
-              <button
-                onClick={() => setIsMaximized(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
-              >
-                ×
-              </button>
+              <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:flex">
+                {renderTabBar()}
+              </div>
+              <div className="ml-auto flex items-center gap-3 shrink-0">
+                {renderSearchInput()}
+                <button
+                  onClick={() => setIsMaximized(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-4 custom-scrollbar">
               <div className="min-w-max border border-border rounded-2xl overflow-hidden">
@@ -5853,6 +5888,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [geocodeError, setGeocodeError] = useState("");
   const [showActionRequiredInfo, setShowActionRequiredInfo] = useState(false);
   const [showGeocodeTipInfo, setShowGeocodeTipInfo] = useState(false);
+  const [showComparableActionInfo, setShowComparableActionInfo] = useState(false);
   const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
@@ -5955,6 +5991,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   useEffect(() => {
     setShowGeocodeTipInfo(false);
   }, [gateStep, gateCollapsed]);
+
+  useEffect(() => {
+    setShowComparableActionInfo(false);
+  }, [pipelineDone, comparableData, listingData, isComparableSearchActive]);
 
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
@@ -7248,6 +7288,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     if (!comparableData || selectedComps.size === 0 || !subjectData || isListingStreaming) return;
 
     minimizeGate();
+    setCtaListingCollapsed(true);
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
     // ── Incremental Fetch: skip comps already fetched ──────────────────────────
@@ -10066,6 +10107,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         content={message.content}
                         forceCollapsed={stageDetailForceCollapsed || isComparableSearchActive || isListingStreaming}
                       />
+                    ) : message.meta === "comparable results" ? (
+                      null
                     ) : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling"))) ? (
                       <PropertyProfilingLiveCard
                         streamingNote={streamingNote}
@@ -10097,17 +10140,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     )}
                     {(message.comparables || message.dropped_comparables) && (
                       <div className="space-y-3">
-                        {pipelineDone && !isListingStreaming && !listingData && !isComparableSearchActive && (
-                          <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0 animate-in fade-in duration-200">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">??</span>
-                            <div>
-                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                              <span className="text-[10px] text-text-secondary leading-relaxed">
-                                Please review and select comparable projects from the table below, then click &quot;Proceed to Fetch Listings&quot;.
-                              </span>
-                            </div>
-                          </div>
-                        )}
                         <ComparableTable
                           comparables={message.comparables || []}
                           droppedComparables={message.dropped_comparables}
@@ -10117,10 +10149,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           onUpdateCoordinates={handleUpdateComparableCoords}
                           onResetCoordinates={handleResetComparableCoords}
                           selectable={pipelineDone && !isListingStreaming && !listingData}
+                          showComparableActionInfo={showComparableActionInfo}
+                          onToggleComparableActionInfo={() => setShowComparableActionInfo((prev) => !prev)}
+                          listingCollapsed={ctaListingCollapsed}
+                          onToggleListingCollapsed={setCtaListingCollapsed}
                         />
-                        {listingData && (
+                        {comparableData && (
                           <div className="flex items-center justify-between border-t border-border/20 pt-2.5">
-                            <span className="text-[10px] text-text-dim font-medium">Comparable selection is locked.</span>
+                            <span className="text-[10px] text-text-dim font-medium">
+                              {listingData ? "Comparable selection is locked." : "Review and adjust your comparable selection."}
+                            </span>
                             <button
                               type="button"
                               onClick={handleBackToComparables}
@@ -10488,12 +10526,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   </div>
                   {!ctaListingCollapsed && (
                     <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                      <p className="text-xs text-text-dim">
-                        {fetchedCompIds.size > 0
-                          ? "Only new comparables will be fetched. Previously fetched listings are preserved and merged."
-                          : "The listing pipeline will search for real listings for the subject property + your selected comparables."}
-                      </p>
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="ml-auto flex items-center gap-3 shrink-0">
                         {backupValuationState && (
                           <button
                             type="button"
