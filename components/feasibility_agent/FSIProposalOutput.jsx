@@ -387,15 +387,15 @@ const FSIProposalOutput = ({ data, landResults, zoningType, location }) => {
   const meansOfFinanceRows = [
     {
       key: "promoterEquityUnsecuredLoan",
-      label: "Promoter Equity and Unsecured Loan",
+      label: "Promoter Equity",
     },
     {
       key: "bankFinance",
-      label: "Bank Finance",
+      label: "Bank & Debt Finance",
     },
     {
       key: "salesCollection",
-      label: "Sales Collection",
+      label: "Customer Advances",
     },
     ...customFinanceFields.map((f) => ({
       key: f.key,

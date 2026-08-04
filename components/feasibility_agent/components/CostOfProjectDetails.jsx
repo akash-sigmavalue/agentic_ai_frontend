@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import { apiUrl } from "@/lib/api-client";
 
 const CostOfProjectDetails = () => {
@@ -47,6 +47,11 @@ const CostOfProjectDetails = () => {
                 if (parsed.scenarios && Array.isArray(parsed.scenarios)) {
                     loadedScenarios = parsed.scenarios;
                     setScenarios(loadedScenarios);
+                    if (parsed.activeScenarioId) {
+                        setActiveScenarioId(parsed.activeScenarioId);
+                    } else if (loadedScenarios.length > 0) {
+                        setActiveScenarioId(loadedScenarios[0].id);
+                    }
                 }
             }
         } catch (e) {}
@@ -59,14 +64,6 @@ const CostOfProjectDetails = () => {
                 setScenarioData(parsed);
             }
         } catch (e) {}
-
-        // Set initial active scenario if not set
-        setActiveScenarioId(prevId => {
-            if (prevId && loadedScenarios.some(s => s.id === prevId)) {
-                return prevId;
-            }
-            return loadedScenarios.length > 0 ? loadedScenarios[0].id : null;
-        });
     }, []);
 
     useEffect(() => {
@@ -89,6 +86,17 @@ const CostOfProjectDetails = () => {
         }
     }, [scenarioData]);
 
+    const handleScenarioSelect = (id) => {
+        setActiveScenarioId(id);
+        try {
+            localStorage.setItem('ProductMixScenarios', JSON.stringify({
+                scenarios,
+                activeScenarioId: id
+            }));
+            window.dispatchEvent(new Event('productMixScenariosUpdated'));
+        } catch (e) {}
+    };
+
     // Current active data
     const activeData = scenarioData[activeScenarioId] || defaultScenarioData;
     const fixedInputs = activeData.fixedInputs || defaultScenarioData.fixedInputs;
@@ -96,14 +104,22 @@ const CostOfProjectDetails = () => {
 
     const updateActiveData = (updates) => {
         if (!activeScenarioId) return;
-        setScenarioData(prev => ({
-            ...prev,
-            [activeScenarioId]: {
+        setScenarioData(prev => {
+            const currentScenario = {
                 ...defaultScenarioData,
                 ...(prev[activeScenarioId] || {}),
                 ...updates
-            }
-        }));
+            };
+            
+            const fixedSum = Object.values(currentScenario.fixedInputs || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+            const customSum = (currentScenario.customFields || []).reduce((acc, field) => acc + (Number(field.value) || 0), 0);
+            currentScenario.totalProjectCost = fixedSum + customSum;
+
+            return {
+                ...prev,
+                [activeScenarioId]: currentScenario
+            };
+        });
     };
 
     const handleFixedInputChange = (field, value) => {
@@ -500,7 +516,7 @@ const CostOfProjectDetails = () => {
                                 key={scenario.id}
                                 className={`scenario-card${isActive ? ' active' : ''}`}
                                 style={{ '--sc-color': color }}
-                                onClick={() => setActiveScenarioId(scenario.id)}
+                                onClick={() => handleScenarioSelect(scenario.id)}
                                 title={`Click to switch to ${scenario.name}`}
                             >
                                 <div className="scenario-card-icon" style={{ background: color }}>
@@ -529,7 +545,34 @@ const CostOfProjectDetails = () => {
                     {renderInput("Land Acquisition", fixedInputs.landAcquisition, (v) => handleFixedInputChange('landAcquisition', v))}
                 </div>
                 <div className="col-md-6">
-                    {renderInput("Land Leveling", fixedInputs.landLeveling, (v) => handleFixedInputChange('landLeveling', v))}
+                    {renderInput(
+                        <div className="d-flex align-items-center gap-2">
+                            <span>Land Leveling</span>
+                            <button 
+                                className="btn btn-sm d-flex align-items-center gap-1" 
+                                style={{ 
+                                    fontSize: '10px', 
+                                    padding: '2px 8px', 
+                                    borderRadius: '12px', 
+                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                                    color: '#fff', 
+                                    border: 'none',
+                                    boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                                    transition: 'all 0.2s ease-in-out',
+                                    fontWeight: '600'
+                                }}
+                                onClick={() => window.open('/elevation', '_blank')}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59,130,246,0.4)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(59,130,246,0.3)'; }}
+                                title="Open Elevation Agent"
+                            >
+                                <FaExternalLinkAlt size={9} />
+                                Elevation Agent
+                            </button>
+                        </div>, 
+                        fixedInputs.landLeveling, 
+                        (v) => handleFixedInputChange('landLeveling', v)
+                    )}
                 </div>
                 <div className="col-md-6">
                     {renderInput("Construction Cost", fixedInputs.constructionCost, (v) => handleFixedInputChange('constructionCost', v), "0", (
@@ -604,6 +647,15 @@ const CostOfProjectDetails = () => {
                     <FaPlus />
                     {customFields.length >= 10 ? 'Max 10 Fields Reached' : 'Add Custom Field'}
                 </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-top text-end">
+                <div className="d-inline-block px-4 py-3 rounded-4" style={{ backgroundColor: '#f8f9fa', border: '1px solid #e9ecef' }}>
+                    <div className="text-muted small fw-bold text-uppercase tracking-wider mb-1">Total Cost of Project</div>
+                    <div className="fs-3 fw-bolder text-dark">
+                        {currency} {Number(activeData.totalProjectCost || 0).toLocaleString()}
+                    </div>
+                </div>
             </div>
 
             {/* Add Field Modal */}
