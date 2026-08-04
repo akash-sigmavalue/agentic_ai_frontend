@@ -304,12 +304,23 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Fetch all tab counts on mount so header badges and refreshed tabs load immediately
+  useEffect(() => {
+    fetchUsers();
+    fetchOrgs();
+    fetchTransactions();
+    fetchPayments();
+    fetchInquiries();
+    fetchEnterpriseOffers();
+  }, []);
+
   useEffect(() => {
     if (activeTab === "users") fetchUsers();
     if (activeTab === "orgs") fetchOrgs();
     if (activeTab === "transactions") fetchTransactions();
     if (activeTab === "payments") fetchPayments();
     if (activeTab === "queries") fetchInquiries();
+    if (activeTab === "offers") fetchEnterpriseOffers();
   }, [activeTab]);
 
   // Promote user to Enterprise Owner

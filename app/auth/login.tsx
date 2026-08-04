@@ -183,7 +183,13 @@ export default function AuthPage() {
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => { setMounted(true); }, []);
-  useEffect(() => { if (user) router.push('/'); }, [user, router]);
+  useEffect(() => {
+    if (user) {
+      const redirectTarget = sessionStorage.getItem("sigmavalue_redirect") || "/valuation";
+      sessionStorage.removeItem("sigmavalue_redirect");
+      router.push(redirectTarget);
+    }
+  }, [user, router]);
 
   const clearMessages = useCallback(() => { setError(''); setSuccessMsg(''); }, []);
 

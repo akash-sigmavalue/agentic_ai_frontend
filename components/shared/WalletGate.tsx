@@ -61,7 +61,8 @@ export default function WalletGate({
     );
   }
 
-  if (!user) return null;
+  // Unauthenticated users can view the interface (prompt submit handles login redirect)
+  if (!user) return <>{children}</>;
 
   // ADMIN always passes through
   if (user.role === "ADMIN") return <>{children}</>;
