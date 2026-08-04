@@ -374,41 +374,53 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   return (
     <AgentShell>
       {captcha ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-bg-panel p-5 shadow-2xl">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">Action required</p>
-            <h2 className="mt-2 text-lg font-bold text-text-primary">Enter portal CAPTCHA</h2>
-            <p className="mt-2 text-sm text-text-secondary">
-              The browser session is paused. Enter the characters shown below to continue scraping.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 backdrop-blur-md">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rera-captcha-title"
+            className="max-h-[96vh] w-full max-w-5xl overflow-y-auto rounded-3xl border-2 border-cyan-400/70 bg-bg-panel p-6 shadow-[0_0_80px_rgba(34,211,238,0.3)] sm:p-8"
+          >
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">Action required — browser paused</p>
+            <h2 id="rera-captcha-title" className="mt-2 text-2xl font-black text-text-primary sm:text-3xl">
+              Enter the RERA portal CAPTCHA
+            </h2>
+            <p className="mt-3 text-base text-text-secondary">
+              Type the characters exactly as shown. Scraping will continue in the same browser immediately after submission.
             </p>
             {captcha.image ? (
-              <Image
-                src={captcha.image}
-                alt="CAPTCHA challenge"
-                width={800}
-                height={400}
-                unoptimized
-                className="mt-4 max-h-64 w-full rounded-xl border border-border bg-white object-contain"
-              />
+              <div className="mt-6 rounded-2xl border-2 border-cyan-400/40 bg-white p-3 sm:p-5">
+                <Image
+                  src={captcha.image}
+                  alt="CAPTCHA challenge"
+                  width={1600}
+                  height={700}
+                  priority
+                  unoptimized
+                  className="max-h-[55vh] min-h-52 w-full rounded-xl bg-white object-contain [image-rendering:auto]"
+                />
+              </div>
             ) : null}
-            <input
-              autoFocus
-              value={captchaValue}
-              onChange={(event) => setCaptchaValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void submitCaptcha();
-              }}
-              placeholder="Enter CAPTCHA"
-              className="mt-4 w-full rounded-xl border border-border bg-bg-card px-4 py-3 text-text-primary outline-none focus:border-cyan-400"
-            />
-            <button
-              type="button"
-              disabled={!captchaValue.trim() || captchaSubmitting}
-              onClick={() => void submitCaptcha()}
-              className="mt-3 w-full rounded-xl bg-cyan-400 px-4 py-3 text-sm font-black uppercase tracking-[0.14em] text-slate-950 disabled:opacity-50"
-            >
-              {captchaSubmitting ? "Submitting..." : "Submit and continue"}
-            </button>
+            <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                autoFocus
+                value={captchaValue}
+                onChange={(event) => setCaptchaValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void submitCaptcha();
+                }}
+                placeholder="Type CAPTCHA characters here"
+                className="w-full rounded-2xl border-2 border-border bg-bg-card px-5 py-4 text-xl font-bold tracking-[0.18em] text-text-primary outline-none focus:border-cyan-400"
+              />
+              <button
+                type="button"
+                disabled={!captchaValue.trim() || captchaSubmitting}
+                onClick={() => void submitCaptcha()}
+                className="rounded-2xl bg-cyan-400 px-8 py-4 text-sm font-black uppercase tracking-[0.14em] text-slate-950 disabled:opacity-50"
+              >
+                {captchaSubmitting ? "Submitting..." : "Submit and continue"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

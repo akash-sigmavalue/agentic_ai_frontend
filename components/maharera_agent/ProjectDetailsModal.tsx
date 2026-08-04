@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   X,
   Copy,
@@ -27,6 +27,16 @@ type ProjectDetailsModalProps = {
 export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [copied, setCopied] = useState(false);
+  const [openDocument, setOpenDocument] = useState<{ name: string; url: string } | null>(null);
+
+  useEffect(() => {
+    if (!openDocument) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenDocument(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [openDocument]);
 
   if (!isOpen || !data) return null;
 
@@ -36,12 +46,18 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
   const location = data.location_information || {};
   const config = data.project_configuration || {};
   const legal = data.legal_compliance || {};
-  const documents = data.documents || [];
+  const deepScrape = data.deep_scrape || {};
+  const documents = [
+    ...(Array.isArray(data.documents) ? data.documents : []),
+    ...(Array.isArray(deepScrape.documents) ? deepScrape.documents : []),
+  ].filter((doc: any, index: number, all: any[]) => {
+    const url = doc?.url || doc?.href;
+    return Boolean(url) && all.findIndex((item) => (item?.url || item?.href) === url) === index;
+  });
   const additional = data.additional_fields || {};
   const sourceUrl = data.source_url || data.SourceUrl || data["Source URL"] || "";
 
   // Grab deep scrape tables/sections
-  const deepScrape = data.deep_scrape || {};
   const rawSections = deepScrape.sections || deepScrape.tables || {};
 
   type TableSection = { title: string; rows: Record<string, unknown>[] };
@@ -230,6 +246,10 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
     link.download = `rera_project_${overview.rera_number || "details"}.json`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const showDocument = (name: string, url: string) => {
+    if (url) setOpenDocument({ name: name || "Project document", url });
   };
 
   // Compile Tab List
@@ -422,14 +442,14 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
                         </p>
                       </div>
                       {href && (
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => showDocument(text, href)}
+                          aria-label={`Open ${text}`}
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-bg-deep transition hover:bg-accent-light"
                         >
                           <ExternalLink className="h-4 w-4" />
-                        </a>
+                        </button>
                       )}
                     </div>
                   );
@@ -510,6 +530,38 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
           )}
         </div>
       </div>
+      {openDocument && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpenDocument(null);
+          }}
+          role="presentation"
+        >
+          <div
+            className="flex h-[95vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-border bg-bg-panel shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Document viewer: ${openDocument.name}`}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <p className="min-w-0 truncate text-sm font-bold text-text-primary" title={openDocument.name}>{openDocument.name}</p>
+              <div className="flex shrink-0 items-center gap-2">
+                <a href={openDocument.url} download target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-black uppercase text-bg-deep">
+                  <Download className="h-4 w-4" /> Download
+                </a>
+                <button type="button" onClick={() => setOpenDocument(null)} aria-label="Close document viewer" className="flex items-center gap-1.5 rounded-xl border border-border bg-bg-card px-3 py-2 text-xs font-black uppercase text-text-primary">
+                  <X className="h-4 w-4" /> Close
+                </button>
+              </div>
+            </div>
+            <iframe src={openDocument.url} title={openDocument.name} className="min-h-0 flex-1 bg-white" />
+            <p className="border-t border-border px-4 py-2 text-center text-[10px] text-text-dim">
+              If the RERA portal blocks embedded viewing, use Download to open the original document.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -570,6 +622,25 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
             <tr key={rIdx} className="hover:bg-white/[0.02] border-b border-border/40">
               {cols.map((col) => {
                 const cellVal = row[col];
+                const linkedValue =
+                  cellVal && typeof cellVal === "object" && !Array.isArray(cellVal)
+                    ? cellVal
+                    : null;
+                if (linkedValue?.url || linkedValue?.href) {
+                  const url = String(linkedValue.url || linkedValue.href);
+                  const label = String(linkedValue.text || col || "View document");
+                  return (
+                    <td key={col} className="px-4 py-3 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => showDocument(label, url)}
+                        className="font-bold text-accent transition hover:text-accent-light hover:underline"
+                      >
+                        👁️ View Document
+                      </button>
+                    </td>
+                  );
+                }
                 // Render view details links
                 if (String(cellVal).toLowerCase() === "view" || String(cellVal).toLowerCase() === "view photo") {
                   return (
