@@ -21,7 +21,13 @@ const CostOfProjectDetails = () => {
             landAcquisition: "",
             landLeveling: "",
             constructionCost: "",
-            marketingCost: ""
+            marketingCost: "",
+            approvalCost: "",
+            administrativeCost: "",
+            tdrCost: "",
+            financeCost: "",
+            miscellaneousCost: "",
+            constructionTimeline: ""
         },
         customFields: []
     };
@@ -111,7 +117,9 @@ const CostOfProjectDetails = () => {
                 ...updates
             };
             
-            const fixedSum = Object.values(currentScenario.fixedInputs || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+            const fixedSum = Object.entries(currentScenario.fixedInputs || {})
+                .filter(([key]) => key !== 'constructionTimeline')
+                .reduce((acc, [_, val]) => acc + (Number(val) || 0), 0);
             const customSum = (currentScenario.customFields || []).reduce((acc, field) => acc + (Number(field.value) || 0), 0);
             currentScenario.totalProjectCost = fixedSum + customSum;
 
@@ -205,14 +213,14 @@ const CostOfProjectDetails = () => {
         return colors[index % colors.length];
     };
 
-    const renderInput = (label, value, onChange, placeholder = "0", extraHeaderContent = null, extraFooterContent = null) => (
+    const renderInput = (label, value, onChange, placeholder = "0", extraHeaderContent = null, extraFooterContent = null, prefix = currency) => (
         <div className="field-wrapper-card">
             <div className="d-flex justify-content-between align-items-center mb-2">
                 <div className="field-label-text mb-0">{label}</div>
                 {extraHeaderContent}
             </div>
             <div className="pill-input-container">
-                <span className="currency-prefix">{currency}</span>
+                {prefix && <span className="currency-prefix">{prefix}</span>}
                 <input
                     type="text"
                     className="pill-input"
@@ -220,6 +228,7 @@ const CostOfProjectDetails = () => {
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     disabled={!activeScenarioId}
+                    style={!prefix ? { paddingLeft: '16px' } : undefined}
                 />
             </div>
             {extraFooterContent}
@@ -596,6 +605,24 @@ const CostOfProjectDetails = () => {
                 </div>
                 <div className="col-md-6">
                     {renderInput("Marketing Cost", fixedInputs.marketingCost, (v) => handleFixedInputChange('marketingCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("Approval Cost", fixedInputs.approvalCost, (v) => handleFixedInputChange('approvalCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("Administrative Cost", fixedInputs.administrativeCost, (v) => handleFixedInputChange('administrativeCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("TDR Cost", fixedInputs.tdrCost, (v) => handleFixedInputChange('tdrCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("Finance Cost", fixedInputs.financeCost, (v) => handleFixedInputChange('financeCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("Miscellaneous Cost", fixedInputs.miscellaneousCost, (v) => handleFixedInputChange('miscellaneousCost', v))}
+                </div>
+                <div className="col-md-6">
+                    {renderInput("Construction Timeline", fixedInputs.constructionTimeline, (v) => handleFixedInputChange('constructionTimeline', v), "e.g. 2.5", null, null, "Years")}
                 </div>
 
                 {customFields.map((field) => (
