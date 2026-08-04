@@ -305,18 +305,26 @@ const FSIProposalOutput = ({ data, landResults, zoningType, location }) => {
     }
   }, [data]);
 
+  const [customFinanceFields, setCustomFinanceFields] = useState([]);
+
   useEffect(() => {
+    const savedCustom = localStorage.getItem("meansOfFinanceCustomFields");
+    if (savedCustom) {
+      try {
+        const parsed = JSON.parse(savedCustom);
+        if (Array.isArray(parsed)) {
+          setCustomFinanceFields(parsed);
+        }
+      } catch (e) {}
+    }
+
     const saved = localStorage.getItem("meansOfFinanceData");
     if (!saved) return;
 
     try {
       const parsed = JSON.parse(saved);
-      setMeansOfFinanceData({
-        promoterEquityUnsecuredLoan: parsed.promoterEquityUnsecuredLoan || "",
-        bankFinance: parsed.bankFinance || "",
-        salesCollection: parsed.salesCollection || "",
-      });
-      setSavedMeansOfFinanceData(parsed);
+      setMeansOfFinanceData(parsed || {});
+      setSavedMeansOfFinanceData(parsed || {});
     } catch (error) {
       setSavedMeansOfFinanceData(null);
     }
@@ -376,10 +384,30 @@ const FSIProposalOutput = ({ data, landResults, zoningType, location }) => {
     }
   };
 
+  const meansOfFinanceRows = [
+    {
+      key: "promoterEquityUnsecuredLoan",
+      label: "Promoter Equity and Unsecured Loan",
+    },
+    {
+      key: "bankFinance",
+      label: "Bank Finance",
+    },
+    {
+      key: "salesCollection",
+      label: "Sales Collection",
+    },
+    ...customFinanceFields.map((f) => ({
+      key: f.key,
+      label: f.name,
+    })),
+  ];
+
   const getMeansOfFinanceTotal = (values = meansOfFinanceData) =>
-    (parseFloat(values.promoterEquityUnsecuredLoan) || 0) +
-    (parseFloat(values.bankFinance) || 0) +
-    (parseFloat(values.salesCollection) || 0);
+    meansOfFinanceRows.reduce(
+      (acc, row) => acc + (parseFloat(values[row.key]) || 0),
+      0
+    );
 
   const handleSaveMeansOfFinance = () => {
     const total = getMeansOfFinanceTotal();
@@ -396,20 +424,6 @@ const FSIProposalOutput = ({ data, landResults, zoningType, location }) => {
     setMeansOfFinanceError("");
   };
 
-  const meansOfFinanceRows = [
-    {
-      key: "promoterEquityUnsecuredLoan",
-      label: "Promoter Equity and Unsecured Loan",
-    },
-    {
-      key: "bankFinance",
-      label: "Bank Finance",
-    },
-    {
-      key: "salesCollection",
-      label: "Sales Collection",
-    },
-  ];
 
   const meansOfFinanceStyles = `
         .mean-finance-panel {
