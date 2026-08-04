@@ -696,8 +696,6 @@ const sidebarButtons = [
   { id: "market-analysis", label: "Market Research", subtitle: "Market trends", icon: FaChartLine },
   { id: "predictive-rate-sim", label: "Predictive Rate Simulator", subtitle: "Rate simulation", icon: FaChartBar },
   { id: "building", label: "Product Mix Design", subtitle: "Mix design", icon: FaCompassDrafting },
-  { id: "ticket-size", label: "Ticket Size Calculation", subtitle: "Mix and ticket sizing", icon: FaCompassDrafting },
-
   { id: "revenue-details", label: "Revenue", subtitle: "Detailed projection", icon: FaHandHoldingDollar },
   { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
   { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },

@@ -546,6 +546,8 @@ const ProductMixTicketSize = () => {
         window.addEventListener("landIdentificationSaved", syncFromStorage);
         // Also listen for 'landIdentificationUpdated' as a fallback alias
         window.addEventListener("landIdentificationUpdated", syncFromStorage);
+        // LandDetailsForm dispatches 'landAndFsiDetailsSaved'
+        window.addEventListener("landAndFsiDetailsSaved", syncFromStorage);
         // Re-sync when user navigates back to this tab/page
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") syncFromStorage();
@@ -555,6 +557,7 @@ const ProductMixTicketSize = () => {
             window.removeEventListener("storage", syncFromStorage);
             window.removeEventListener("landIdentificationSaved", syncFromStorage);
             window.removeEventListener("landIdentificationUpdated", syncFromStorage);
+            window.removeEventListener("landAndFsiDetailsSaved", syncFromStorage);
             document.removeEventListener("visibilitychange", syncFromStorage);
         };
     }, []);
@@ -1043,6 +1046,22 @@ const ProductMixTicketSize = () => {
         setProductMixRows(prev => prev.map(row => {
             if (row.id === id) {
                 const updatedRow = { ...row, [field]: value };
+                if (field === 'assetClass') {
+                    const filteredProps = dbPropertyTypes.filter(type => {
+                        const t = type.toLowerCase();
+                        if (value === 'Residential') return ['flat', 'villa'].includes(t);
+                        if (value === 'Commercial') return ['office', 'shop', 'retail shop', 'others'].includes(t);
+                        return t !== 'plot';
+                    });
+                    const newPropertyType = filteredProps.length > 0 ? filteredProps[0] : (value === 'Commercial' ? 'Office' : 'Flat');
+                    updatedRow.propertyType = newPropertyType;
+                    
+                    const validUnits = getUnitTypesForProperty(newPropertyType, dbPropertyUnitMap, dbUnitTypes);
+                    updatedRow.unitMix = validUnits[0] || '';
+                } else if (field === 'propertyType') {
+                    const validUnits = getUnitTypesForProperty(value, dbPropertyUnitMap, dbUnitTypes);
+                    updatedRow.unitMix = validUnits[0] || '';
+                }
                 if (updatedRow.allottedArea && updatedRow.pointArea) {
                     updatedRow.totalInventory = Math.floor(Number(updatedRow.allottedArea) / Number(updatedRow.pointArea));
                 } else {
