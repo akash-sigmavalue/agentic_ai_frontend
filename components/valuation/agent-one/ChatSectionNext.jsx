@@ -328,7 +328,7 @@ function summarizeEvent(event) {
   if (event.type === "listing_results") {
     return `[LISTINGS] Fetched ${event.content?.total_listings || 0} listings across ${event.content?.projects_processed || 0} projects.`;
   }
-  if (event.type === "listing_done") return "Listing fetch completed.";
+  if (event.type === "listing_done") return "";
   if (event.type === "extraction_verification") return event.content?.message || "Please verify the extracted attributes.";
   if (event.type === "factorial_start") return event.content?.message || "Analyzing project metrics...";
   if (event.type === "factorial_results") {
@@ -2254,7 +2254,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
 }
 
 // ── Listing Table ────────────────────────────────────────────────
-function ListingTable({ listings, dbTransactions }) {
+function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCollapsed }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
@@ -2334,9 +2334,6 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono text-text-secondary">{lst.bhk || "—"}</td>
           <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{lst.currency || "—"}</td>
           <td className="px-3 py-2 text-right font-mono text-text-primary whitespace-nowrap">{lst.price || "—"}</td>
-          <td className="px-3 py-2 text-right font-mono text-accent-light whitespace-nowrap">
-            {lst.price_per_sqft ? `${lst.price_per_sqft.toLocaleString()}` : "—"}
-          </td>
           <td className="px-3 py-2 text-right font-mono text-text-secondary whitespace-nowrap">{lst.area_sqft || "—"} {lst.area_sqft ? 'sqft' : ''}</td>
           <td className="px-3 py-2 text-text-dim">{lst.area_type || "—"}</td>
           <td className="px-3 py-2 text-center">
@@ -2352,28 +2349,11 @@ function ListingTable({ listings, dbTransactions }) {
           <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">
             {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
           </td>
-          <td className="px-3 py-2 text-center font-mono whitespace-nowrap">
-            {lst.website_authenticity_score !== undefined && lst.website_authenticity_score !== null ? (
-              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${lst.website_authenticity_score >= 90
-                ? "bg-success/20 text-success border border-success/30"
-                : lst.website_authenticity_score >= 70
-                  ? "bg-accent/20 text-accent border border-accent/30"
-                  : "bg-danger/20 text-danger border border-danger/30"
-                }`}>
-                {lst.website_authenticity_score}
-              </span>
-            ) : "—"}
-          </td>
-          <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
-            {lst.website_authenticity_category || "—"}
-          </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
               <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
             ) : lst.source_url ? (
-              <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
-                {lst.source_url}
-              </a>
+              <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400">web</span>
             ) : "—"}
           </td>
         </tr>
@@ -2393,7 +2373,6 @@ function ListingTable({ listings, dbTransactions }) {
             <TableHeaderCell columnKey="bhk" label="BHK" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="price" label="Price" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
-            <TableHeaderCell columnKey="price_per_sqft" label="Price/Sqft" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="area_sqft" label="Area" align="right" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="area_type" label="Area Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="is_subject" label="Role" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
@@ -2401,8 +2380,6 @@ function ListingTable({ listings, dbTransactions }) {
             <TableHeaderCell columnKey="total_floors" label="Total Floor" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="location" label="Location" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="transaction_date" label="Date" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
-            <TableHeaderCell columnKey="website_authenticity_score" label="Authenticity" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
-            <TableHeaderCell columnKey="website_authenticity_category" label="Site Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="_is_db" label="Source" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
           </tr>
         </thead>
@@ -2418,16 +2395,34 @@ function ListingTable({ listings, dbTransactions }) {
   return (
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
-        <div className="border-b border-border bg-[rgba(34,211,238,0.06)] px-4 py-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+        <div
+          className="border-b border-border bg-[rgba(34,211,238,0.06)] px-4 py-3 cursor-pointer select-none"
+          onClick={() => onToggleCollapsed?.(!collapsed)}
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm shrink-0">📊</span>
               <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400 shrink-0">Market Signal</span>
             </div>
-            <div className="flex items-center gap-3 shrink-0 ml-auto sm:ml-0">
+            <div className="flex items-center gap-3 justify-self-end shrink-0">
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap">{(listings || []).length} web + {dbRows.length} db records</span>
               <button
-                onClick={() => setIsMaximized(true)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapsed?.(!collapsed);
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10 text-cyan-400 transition hover:bg-cyan-400/20"
+                aria-label={collapsed ? "Expand Market Signal" : "Collapse Market Signal"}
+                title={collapsed ? "Expand" : "Collapse"}
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMaximized(true);
+                }}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-cyan-400 hover:text-cyan-400"
                 title="Maximize Table"
               >
@@ -2436,7 +2431,7 @@ function ListingTable({ listings, dbTransactions }) {
             </div>
           </div>
         </div>
-        {renderTable("max-h-[360px] overflow-y-auto")}
+        {!collapsed && renderTable("max-h-[360px] overflow-y-auto")}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
@@ -5889,6 +5884,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [showActionRequiredInfo, setShowActionRequiredInfo] = useState(false);
   const [showGeocodeTipInfo, setShowGeocodeTipInfo] = useState(false);
   const [showComparableActionInfo, setShowComparableActionInfo] = useState(false);
+  const [showListingFetchInfo, setShowListingFetchInfo] = useState(false);
+  const [showCleaningInfo, setShowCleaningInfo] = useState(false);
+  const [showFactorialInfo, setShowFactorialInfo] = useState(false);
+  const [marketSignalCollapsed, setMarketSignalCollapsed] = useState(false);
   const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
@@ -7654,7 +7653,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     next[targetIndex] = {
                       ...next[targetIndex],
                       role: "assistant",
-                      content: event.type === "error" ? summary : "Listing fetch completed.",
+                      content: event.type === "error" ? summary : "",
                       meta: event.type === "error" ? "error" : "listing done",
                     };
                   }
@@ -7814,6 +7813,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setCleaningStatusNote("Starting data cleaning pipeline...");
     setCurrentStage("Stage 3: Market Approach (Data Cleaning)");
     setProjectFetchStatuses({});
+    setMarketSignalCollapsed(true);
 
     setMessages((prev) => [
       ...prev,
@@ -9972,6 +9972,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const anyStreaming = isStreaming || isQuickEstimateStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming;
   const visibleMessages = messages.filter((message) => {
     const text = typeof message.content === "string" ? message.content.trim() : "";
+    if (
+      message.role === "assistant" &&
+      message.meta === "listing done" &&
+      !message.listings &&
+      !message.db_transactions
+    ) return false;
     return text !== "Pipeline paused for data clarification.";
   });
 
@@ -10238,6 +10244,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       <ListingTable
                         listings={message.listings || []}
                         dbTransactions={message.db_transactions || []}
+                        collapsed={marketSignalCollapsed}
+                        onToggleCollapsed={setMarketSignalCollapsed}
                       />
                     )}
                     {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
@@ -10491,7 +10499,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
               {/* ── Proceed to Listing Fetch CTA ────────────────── */}
               {pipelineDone && comparableData && comparableData.length > 0 && !listingData && dbTransactions.length === 0 && !cleanedData && !factorialData && !factorialAnalysisData && !isListingStreaming && (
-                <div className="mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
+                <div className="relative mb-3 overflow-hidden rounded-2xl border border-accent-light/30 bg-bg-card/95 shadow-panel">
                   <div
                     onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
                     className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
@@ -10505,8 +10513,27 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
                             Step 2 — Fetch Listings
                           </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowListingFetchInfo((prev) => !prev);
+                            }}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-accent-light/30 bg-accent-light/10 text-[10px] font-black text-accent-light leading-none transition hover:bg-accent-light/20 focus:outline-none focus:ring-2 focus:ring-accent-light/40"
+                            aria-label="Show listing fetch info"
+                            title="Show listing fetch info"
+                          >
+                            i
+                          </button>
                           {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
                         </div>
+                        {showListingFetchInfo && (
+                          <div className="mt-2 max-w-[340px] rounded-xl border border-accent-light/25 bg-bg-card/98 px-3 py-2 shadow-lg backdrop-blur-md">
+                            <p className="text-[10px] text-text-secondary leading-relaxed">
+                              The listing pipeline will search for realtimelistings for the subject property + your selected comparables.
+                            </p>
+                          </div>
+                        )}
                         <p className="mt-1 text-sm text-text-secondary">
                           {selectedComps.size > 0
                             ? (() => {
@@ -10517,12 +10544,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                               if (skipCount > 0) {
                                 return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
                               }
-                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch real sale/rent listings.`;
+                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch realtime sale/rent listings.`;
                             })()
                             : "Select at least one comparable from the table above to proceed."}
                         </p>
                       </div>
                     </div>
+                    {!ctaListingCollapsed && null}
                   </div>
                   {!ctaListingCollapsed && (
                     <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
@@ -10566,6 +10594,27 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
                             Step 3 — Clean Raw Listings
                           </p>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowCleaningInfo((prev) => !prev);
+                              }}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[10px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20 focus:outline-none focus:ring-2 focus:ring-[#fb923c]/40"
+                              aria-label="Show cleaning info"
+                              title="Show cleaning info"
+                            >
+                              i
+                            </button>
+                            {showCleaningInfo && (
+                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#fb923c]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                <p className="text-xs leading-relaxed text-slate-100">
+                                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                                </p>
+                              </div>
+                            )}
+                          </div>
                           {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
                         </div>
                         <p className="mt-1 text-sm text-text-secondary">
@@ -10575,14 +10624,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   </div>
                   {!ctaCleanCollapsed && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                      <p className="text-xs text-text-dim">
-                        The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                      </p>
+                    <div className="flex items-center gap-3 px-4 py-3 animate-in fade-in duration-200">
                       <button
                         type="button"
                         onClick={submitCleaning}
-                        className="shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
+                        className="ml-auto shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
                       >
                         Start Data Cleaning →
                       </button>
@@ -10607,6 +10653,27 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
                             Step 4 — Generate Factorial Table
                           </p>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowFactorialInfo((prev) => !prev);
+                              }}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#a78bfa]/30 bg-[#a78bfa]/10 text-[10px] font-black text-[#a78bfa] leading-none transition hover:bg-[#a78bfa]/20 focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40"
+                              aria-label="Show factorial info"
+                              title="Show factorial info"
+                            >
+                              i
+                            </button>
+                            {showFactorialInfo && (
+                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#a78bfa]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                <p className="text-xs leading-relaxed text-slate-100">
+                                  This will group data by project and calculate key rate statistics for valuation.
+                                </p>
+                              </div>
+                            )}
+                          </div>
                           {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
                         </div>
                         <p className="mt-1 text-sm text-text-secondary">
@@ -10618,10 +10685,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   </div>
                   {!ctaFactorialCollapsed && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 animate-in fade-in duration-200">
-                      <p className="text-xs text-text-dim">
-                        This will group data by project and calculate key rate statistics for valuation.
-                      </p>
+                    <div className="flex items-center justify-end gap-3 px-4 py-3 animate-in fade-in duration-200">
                       <button
                         type="button"
                         onClick={submitFactorial}
