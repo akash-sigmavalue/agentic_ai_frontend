@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { apiUrl } from "@/lib/api-client";
-import { downloadPDF as downloadValuationPDF } from "@/components/valuation/shared/ValuationReport";
 import {
   MessageSquareCode,
   Bot,
@@ -6055,6 +6054,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     onValuationResult?.(payload);
   };
 
+  const downloadValuationReport = async () => {
+    if (!valuationResult || typeof window === "undefined") return;
+    const { downloadPDF } = await import("@/components/valuation/shared/ValuationReport");
+    downloadPDF(valuationResult);
+  };
+
   const [marketSignalCollapsed, setMarketSignalCollapsed] = useState(false);
   const [cleanedTableCollapsed, setCleanedTableCollapsed] = useState(false);
   const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
@@ -10883,7 +10888,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     <div className="mb-3 flex justify-center">
                       <button
                         type="button"
-                        onClick={() => downloadValuationPDF(valuationResult)}
+                        onClick={downloadValuationReport}
                         className="inline-flex items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-5 py-3 text-xs font-black uppercase tracking-wider text-accent transition hover:bg-accent/20 hover:scale-[1.02] cursor-pointer"
                       >
                         <FileText className="h-4 w-4" />
