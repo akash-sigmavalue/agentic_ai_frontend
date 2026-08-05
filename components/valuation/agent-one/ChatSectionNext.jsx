@@ -546,7 +546,10 @@ const getRowValue = (row, columnKey) => {
       let counts = summary?.counts;
       if (typeof counts === 'string') counts = JSON.parse(counts);
       if (!counts || typeof counts !== 'object') return "";
-      return "{" + Object.entries(counts).map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+      return Object.entries(counts)
+        .filter(([, v]) => Number(v) > 0)
+        .map(([k, v]) => `${String(k).replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase())} - ${v}`)
+        .join("\n");
     } catch (e) {
       return "";
     }
@@ -2775,7 +2778,7 @@ function MobileCleanedRow({ lst, idx, activeTab, isRowPlot, plotAreaValue, rowAr
 }
 
 // ── Cleaned Data Table ──────────────────────────────────────────
-function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType, valuationApproach }) {
+function CleanedTable({ listings, reviewListings = [], droppedListings = [], onRecalculate, subjectPropertyType, valuationApproach, collapsed = false, onToggleCollapsed }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [fsiGlobal, setFsiGlobal] = useState("");
   const [ccGlobal, setCcGlobal] = useState("");
@@ -3133,16 +3136,34 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
   return (
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-cyan-500/5">
-        <div className="border-b border-white/[0.06] bg-[rgba(251,146,60,0.06)] px-4 py-3">
+        <div
+          className="border-b border-white/[0.06] bg-[rgba(251,146,60,0.06)] px-4 py-3 cursor-pointer select-none"
+          onClick={() => onToggleCollapsed?.(!collapsed)}
+        >
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
               {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
             </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapsed?.(!collapsed);
+              }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] transition hover:bg-[#fb923c]/20"
+              aria-label={collapsed ? "Expand cleaned table" : "Collapse cleaned table"}
+              title={collapsed ? "Expand" : "Collapse"}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
               <button
-                onClick={() => setIsMaximized(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMaximized(true);
+                }}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
                 title="Maximize Table"
               >
@@ -3151,7 +3172,8 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             </div>
           </div>
         </div>
-
+        {!collapsed && (
+          <>
         {/* ── Tab Bar ────────────────────────────────────── */}
         <div className="border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-1 sm:p-0.5 gap-1 sm:gap-0.5 w-full sm:w-max">
@@ -3221,6 +3243,8 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         )}
 
         {tableContent}
+          </>
+        )}
       </div>
 
       {isMaximized && typeof document !== "undefined" && createPortal(
@@ -3406,11 +3430,19 @@ function MobileFactorialRow({ row, index, selected, onToggle, fmt }) {
           {amenityCounts && typeof amenityCounts === "object" && (
             <div className="border-b border-white/[0.04] py-1.5">
               <p className="mb-1.5 text-[10px] uppercase tracking-wider text-text-dim">Nearby Amenities</p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-1">
                 {Object.entries(amenityCounts).map(([name, count]) => (
-                  <span key={name} className="rounded border border-border/40 bg-bg-input px-1.5 py-0.5 text-[9px] text-text-secondary">
-                    {name}: {count}
-                  </span>
+                  <div
+                    key={name}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-bg-input/55 px-2.5 py-1.5"
+                  >
+                    <span className="min-w-0 truncate text-[10px] font-medium text-text-secondary">
+                      {String(name).replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
+                    </span>
+                    <span className="shrink-0 text-[10px] font-bold text-accent-light">
+                      - {count}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -3654,16 +3686,36 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                             return <span className="text-text-dim block text-center">—</span>;
                           }
 
-                          const dictStr = "{" + Object.entries(counts).map(([k, v]) => `'${k}': ${v}`).join(', ') + "}";
+                          const entries = Object.entries(counts)
+                            .filter(([, v]) => Number(v) > 0)
+                            .map(([k, v]) => ({
+                              label: String(k)
+                                .replaceAll("_", " ")
+                                .replace(/\b\w/g, (match) => match.toUpperCase()),
+                              count: Number(v),
+                            }));
 
                           return (
-                            <div className="group relative">
-                              <div className="max-w-[200px] font-mono text-[9px] leading-relaxed text-text-dim bg-bg-deep/30 p-2 rounded-lg border border-border/30 break-words hover:text-accent hover:border-accent/30 transition-colors">
-                                {dictStr}
-                              </div>
-                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-header px-2 py-1 rounded text-[10px] border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                Categorical Amenity Distribution
-                              </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {entries.map((item) => (
+                                <span
+                                  key={item.label}
+                                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] ${
+                                    row.is_subject
+                                      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+                                      : "border-blue-500/35 bg-blue-500/10 text-blue-300"
+                                  }`}
+                                >
+                                  <span className="truncate uppercase">{item.label}</span>
+                                  <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${
+                                    row.is_subject
+                                      ? "bg-emerald-500/15 text-emerald-300"
+                                      : "bg-blue-500/15 text-blue-200"
+                                  }`}>
+                                    {item.count}
+                                  </span>
+                                </span>
+                              ))}
                             </div>
                           );
                         } catch (err) {
@@ -3940,24 +3992,89 @@ function ValuationResult({ data, currency = "INR" }) {
 // ── Amenity Cell Chips ────────────────────────────────────────────────────────
 function AmenityCellChips({ summary, isSubject }) {
   if (!summary || summary === "—") return <span className="text-text-dim text-[9px]">—</span>;
-  const chips = summary
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(s => {
-      const parts = s.split(":");
-      return { label: parts[0]?.trim(), count: parts[1]?.trim() };
-    })
-    .filter(c => c.label && c.count && c.count !== "0");
-  if (!chips.length) return <span className="text-text-dim text-[9px]">{summary}</span>;
+  let parsed = summary;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  let counts = parsed?.counts ?? parsed;
+  if (typeof counts === "string") {
+    try {
+      counts = JSON.parse(counts);
+    } catch {
+      counts = null;
+    }
+  }
+
+  if (!counts || typeof counts !== "object") {
+    const fallbackChips = String(summary)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const parts = s.split(":");
+        return { label: parts[0]?.trim(), count: parts[1]?.trim() };
+      })
+      .filter((c) => c.label && c.count && c.count !== "0");
+
+    if (!fallbackChips.length) return <span className="text-text-dim text-[9px]">{summary}</span>;
+
+    return (
+      <div className="flex flex-wrap justify-center gap-1 py-0.5">
+        {fallbackChips.map((c, i) => (
+          <span key={i} className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[8px] font-bold border ${isSubject ? "border-green-500/25 bg-green-500/10 text-green-400" : "border-blue-500/20 bg-blue-500/[0.07] text-blue-300"}`}>
+            <span className="opacity-70">{c.label}</span>
+            <span className="font-black">{c.count}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  const entries = Object.entries(counts)
+    .map(([key, value]) => ({
+      label: String(key)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase()),
+      count: Number(value) || 0,
+    }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  if (!entries.length) return <span className="text-text-dim text-[9px]">—</span>;
+
   return (
-    <div className="flex flex-wrap justify-center gap-1 py-0.5">
-      {chips.map((c, i) => (
-        <span key={i} className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[8px] font-bold border ${isSubject ? "border-green-500/25 bg-green-500/10 text-green-400" : "border-blue-500/20 bg-blue-500/[0.07] text-blue-300"}`}>
-          <span className="opacity-70">{c.label}</span>
-          <span className="font-black">{c.count}</span>
-        </span>
-      ))}
+    <div className="mx-auto max-w-[240px] text-left">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entries.slice(0, 4).map((item) => (
+          <span
+            key={item.label}
+            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] ${
+              isSubject
+                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+                : "border-blue-500/35 bg-blue-500/10 text-blue-300"
+            }`}
+          >
+            <span className="truncate uppercase">{item.label}</span>
+            <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${
+              isSubject
+                ? "bg-emerald-500/15 text-emerald-300"
+                : "bg-blue-500/15 text-blue-200"
+            }`}>
+              {item.count}
+            </span>
+          </span>
+        ))}
+      </div>
+      {entries.length > 4 && (
+        <p className="mt-1 text-[9px] text-text-dim">
+          +{entries.length - 4} more
+        </p>
+      )}
     </div>
   );
 }
@@ -4031,6 +4148,15 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
   const currencyCode = subjectData?.currency || "INR";
   const locale = currencyCode === "INR" ? "en-IN" : "en-US";
   const formatter = new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode, maximumFractionDigits: 0 });
+  const fmtCurrencyInUnits = (val) => {
+    if (val == null || Number.isNaN(Number(val))) return "—";
+    const num = Number(val);
+    const abs = Math.abs(num);
+    const sign = num < 0 ? "-" : "";
+    if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(abs % 10000000 === 0 ? 0 : 2)} Cr`;
+    if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(abs % 100000 === 0 ? 0 : 2)} Lakh`;
+    return formatter.format(num);
+  };
   const fmtRate = (v) => v != null ? formatter.format(Number(v)) : "—";
   const fmtPct = (v) => {
     if (v == null) return "—";
@@ -4785,7 +4911,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 <div className="w-full min-w-0 space-y-2 border-t border-border-soft pt-6">
                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Property Value</span>
                   <h2 className="font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)] sm:text-4xl">
-                    {formatter.format(exactValue)}
+                    {fmtCurrencyInUnits(exactValue)}
                   </h2>
                   {valueRange && (
                     <div className="w-full space-y-1.5 mt-1">
@@ -4813,15 +4939,15 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                       {/* Labels row */}
                       <div className="flex items-start justify-between">
                         <div className="flex flex-col items-start">
-                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.low)}</span>
+                          <span className="font-mono text-[10px] font-black text-accent/80">{fmtCurrencyInUnits(valueRange.low)}</span>
                           <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">Low</span>
                         </div>
                         <div className="flex flex-col items-center">
-                          <span className="font-mono text-[10px] font-black text-accent">{formatter.format(exactValue)}</span>
+                          <span className="font-mono text-[10px] font-black text-accent">{fmtCurrencyInUnits(exactValue)}</span>
                           <span className="text-[7px] font-bold uppercase tracking-widest text-accent/60">Point Est.</span>
                         </div>
                         <div className="flex flex-col items-end">
-                          <span className="font-mono text-[10px] font-black text-accent/80">{formatter.format(valueRange.high)}</span>
+                          <span className="font-mono text-[10px] font-black text-accent/80">{fmtCurrencyInUnits(valueRange.high)}</span>
                           <span className="text-[7px] font-bold uppercase tracking-widest text-text-dim">High</span>
                         </div>
                       </div>
@@ -4837,7 +4963,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
         })()}
 
 
-        {/* ── REASONING REPORT ──────────────────────────────────────── */}
+        {/* REASONING REPORT */}
         {raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-bg-input px-3 py-3 text-[9px] font-black uppercase tracking-wide text-text-dim transition-all hover:border-accent/40 hover:text-accent sm:px-4 sm:text-[10px] sm:tracking-widest">
@@ -5057,7 +5183,17 @@ function CostResultCard({ data, subjectData }) {
     maximumFractionDigits: 0,
   });
 
-  const fmt = (val) => val != null ? formatter.format(Number(val)) : "—";
+  const fmtCurrencyInUnits = (val) => {
+    if (val == null || Number.isNaN(Number(val))) return "—";
+    const num = Number(val);
+    const abs = Math.abs(num);
+    const sign = num < 0 ? "-" : "";
+    if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(abs % 10000000 === 0 ? 0 : 2)} Cr`;
+    if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(abs % 100000 === 0 ? 0 : 2)} Lakh`;
+    return formatter.format(num);
+  };
+
+  const fmt = fmtCurrencyInUnits;
   const fmtRate = (val) => val != null ? formatter.format(Number(val)) : "—";
 
   const DashboardContent = (
@@ -5888,6 +6024,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [showCleaningInfo, setShowCleaningInfo] = useState(false);
   const [showFactorialInfo, setShowFactorialInfo] = useState(false);
   const [marketSignalCollapsed, setMarketSignalCollapsed] = useState(false);
+  const [cleanedTableCollapsed, setCleanedTableCollapsed] = useState(false);
   const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
   // ── Collapse states for all interactive panels ────────────────
   const [gateCollapsed, setGateCollapsed] = useState(false);
@@ -8194,6 +8331,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
 
     setIsFactorialStreaming(true);
+    setCleanedTableCollapsed(true);
     setStreamingNote("Computing factorial rate table...");
     setFactorialStatusNote("Computing factorial rate table...");
     setCurrentStage("Stage 4: Factorial Rate Table");
@@ -9978,6 +10116,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       !message.listings &&
       !message.db_transactions
     ) return false;
+    if (
+      message.role === "assistant" &&
+      message.meta === "Live" &&
+      text.toLowerCase().startsWith("analyzing factorial data")
+    ) return false;
     return text !== "Pipeline paused for data clarification.";
   });
 
@@ -10248,7 +10391,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         onToggleCollapsed={setMarketSignalCollapsed}
                       />
                     )}
-                    {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} />}
+                    {message.cleaned_listings && <CleanedTable listings={message.cleaned_listings} reviewListings={message.review_listings || []} droppedListings={message.dropped_listings || []} onRecalculate={handleRecalculatePlotRates} subjectPropertyType={subjectData?.property_type} valuationApproach={subjectData?.recommended_approach} collapsed={cleanedTableCollapsed} onToggleCollapsed={setCleanedTableCollapsed} />}
                     {message.factorial_data && (
                       <div className="flex flex-col gap-3">
                         <FactorialTable
@@ -10513,27 +10656,29 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
                             Step 2 — Fetch Listings
                           </p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowListingFetchInfo((prev) => !prev);
-                            }}
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-accent-light/30 bg-accent-light/10 text-[10px] font-black text-accent-light leading-none transition hover:bg-accent-light/20 focus:outline-none focus:ring-2 focus:ring-accent-light/40"
-                            aria-label="Show listing fetch info"
-                            title="Show listing fetch info"
-                          >
-                            i
-                          </button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowListingFetchInfo((prev) => !prev);
+                              }}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-accent-light/30 bg-accent-light/10 text-[10px] font-black text-accent-light leading-none transition hover:bg-accent-light/20 focus:outline-none focus:ring-2 focus:ring-accent-light/40"
+                              aria-label="Show listing fetch info"
+                              title="Show listing fetch info"
+                            >
+                              i
+                            </button>
+                            {showListingFetchInfo && (
+                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-accent-light/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                <p className="text-xs leading-relaxed text-slate-100">
+                                  The listing pipeline will search for realtimelistings for the subject property + your selected comparables.
+                                </p>
+                              </div>
+                            )}
+                          </div>
                           {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
                         </div>
-                        {showListingFetchInfo && (
-                          <div className="mt-2 max-w-[340px] rounded-xl border border-accent-light/25 bg-bg-card/98 px-3 py-2 shadow-lg backdrop-blur-md">
-                            <p className="text-[10px] text-text-secondary leading-relaxed">
-                              The listing pipeline will search for realtimelistings for the subject property + your selected comparables.
-                            </p>
-                          </div>
-                        )}
                         <p className="mt-1 text-sm text-text-secondary">
                           {selectedComps.size > 0
                             ? (() => {
@@ -10667,8 +10812,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                               i
                             </button>
                             {showFactorialInfo && (
-                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#a78bfa]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
-                                <p className="text-xs leading-relaxed text-slate-100">
+                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-[#a78bfa]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                <p className="whitespace-normal text-xs leading-relaxed text-slate-100">
                                   This will group data by project and calculate key rate statistics for valuation.
                                 </p>
                               </div>

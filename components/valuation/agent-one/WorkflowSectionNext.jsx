@@ -256,6 +256,43 @@ function DetailRow({ label, value }) {
   );
 }
 
+function formatAmenitySummary(summary) {
+  if (!summary || summary === "—") return null;
+
+  let parsed = summary;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  let counts = parsed?.counts ?? parsed;
+  if (typeof counts === "string") {
+    try {
+      counts = JSON.parse(counts);
+    } catch {
+      counts = null;
+    }
+  }
+
+  if (!counts || typeof counts !== "object") return String(summary);
+
+  const entries = Object.entries(counts)
+    .map(([key, value]) => ({
+      label: String(key)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase()),
+      count: Number(value) || 0,
+    }))
+    .filter((item) => item.count > 0);
+
+  if (!entries.length) return null;
+
+  return entries.map((item) => `${item.label} - ${item.count}`).join("\n");
+}
+
 // ── Per-event structured detail panels ────────────────────────────────────────
 function countVisibleDroppedComparables(droppedComparables) {
   if (!Array.isArray(droppedComparables) || droppedComparables.length === 0) return 0;
@@ -526,9 +563,11 @@ function StepDetails({ step }) {
       const counts = subjectProj.amenity_summary.counts || {};
       const parts = Object.entries(counts)
         .filter(([_, cnt]) => cnt > 0)
-        .map(([cat, cnt]) => `${cat}: ${cnt}`);
+        .map(([cat, cnt]) => `${String(cat)
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (match) => match.toUpperCase())} - ${cnt}`);
       if (parts.length > 0) {
-        amenityText = parts.join(", ");
+        amenityText = parts.join("\n");
       }
     }
 
@@ -585,7 +624,7 @@ function StepDetails({ step }) {
             <DetailRow label="Road Type" value={subjectRow.road_type} />
             <DetailRow label="Nearest CBD" value={subjectRow.cbd_name ? `${subjectRow.cbd_name} (${subjectRow.cbd_nearest_km} km)` : (subjectRow.cbd_nearest_km ? `${subjectRow.cbd_nearest_km} km` : null)} />
             <DetailRow label="Built Density" value={subjectRow.builtup_density_score != null ? `Score: ${subjectRow.builtup_density_score}/10` : null} />
-            <DetailRow label="Amenities" value={subjectRow.amenity_summary} />
+            <DetailRow label="Amenities" value={formatAmenitySummary(subjectRow.amenity_summary)} />
           </>
         )}
       </div>
