@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { apiUrl } from "@/lib/api-client";
+import { downloadPDF as downloadValuationPDF } from "@/components/valuation/shared/ValuationReport";
 import {
   MessageSquareCode,
   Bot,
@@ -15,6 +16,8 @@ import {
   AlertTriangle,
   Database,
   CheckCircle,
+  FileText,
+  Download,
   ChevronDown,
   ChevronRight,
   Info,
@@ -4693,10 +4696,12 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                         </div>
                       </div>
 
-                      <div className="mt-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
-                        <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
-                        <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
-                      </div>
+                      {isSectionMaximized && (
+                        <div className="mt-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
+                          <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
+                          <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -4964,7 +4969,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
 
         {/* REASONING REPORT */}
-        {raw_markdown_report && (
+        {isSectionMaximized && raw_markdown_report && (
           <section>
             <button onClick={() => setShowReport(!showReport)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border-soft bg-bg-input px-3 py-3 text-[9px] font-black uppercase tracking-wide text-text-dim transition-all hover:border-accent/40 hover:text-accent sm:px-4 sm:text-[10px] sm:tracking-widest">
               <span className="flex min-w-0 items-center gap-2 text-left">🧾 <span className="break-words">Agent Reasoning Report</span></span>
@@ -4978,7 +4983,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           </section>
         )}
 
-        {reconciliation_note && (
+        {isSectionMaximized && reconciliation_note && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
             <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70 mb-1 font-semibold">Reconciliation Note</p>
             <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{reconciliation_note}</p>
@@ -5916,6 +5921,7 @@ function StageDetailCard({ content, forceCollapsed = false }) {
 
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
   const [messages, setMessages] = useState([]);
+  const [valuationResult, setValuationResult] = useState(null);
   const [input, setInput] = useState("");
   const [revertNotice, setRevertNotice] = useState("");
   const [backupValuationState, setBackupValuationState] = useState(null);
@@ -6023,6 +6029,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [showListingFetchInfo, setShowListingFetchInfo] = useState(false);
   const [showCleaningInfo, setShowCleaningInfo] = useState(false);
   const [showFactorialInfo, setShowFactorialInfo] = useState(false);
+
+  const publishValuationResult = (payload) => {
+    setValuationResult(payload);
+    onValuationResult?.(payload);
+  };
+
   const [marketSignalCollapsed, setMarketSignalCollapsed] = useState(false);
   const [cleanedTableCollapsed, setCleanedTableCollapsed] = useState(false);
   const [stageDetailForceCollapsed, setStageDetailForceCollapsed] = useState(false);
@@ -6235,7 +6247,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "cost_calculation_result") {
             setCostCalculationData(event.content);
             // Bubble cost valuation result up for the Report tab in Visual Layer
-            onValuationResult?.({
+            publishValuationResult({
               type: "cost",
               factorialAnalysis: factorialAnalysisData,
               costCalculation: event.content,
@@ -6568,7 +6580,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             setFactorialAnalysisData(analysis);
             setCostCalculationData(result.cost_calculation_data || null);
             setPipelineDone(true);
-            onValuationResult?.(valuationPayload);
+            publishValuationResult(valuationPayload);
             updateQuickEstimateProgress("complete", "Quick estimate valuation complete.");
             setMessages((prev) => [
               ...prev,
@@ -7093,6 +7105,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Pipeline sync and visual feedback
     onEventsReset?.("comparable_results");
+    setValuationResult(null);
     onValuationResult?.(null);
     setRevertNotice("⏪ Pipeline rewound to comparable selection");
   };
@@ -7127,7 +7140,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Reconstruct and restore valuationResult
     if (backupFactorialAnalysisData) {
-      onValuationResult?.({
+      publishValuationResult({
         type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
         factorialAnalysis: backupFactorialAnalysisData,
         subjectData: subjectDataRef.current || subjectData,
@@ -7374,7 +7387,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     });
 
     // Notify parent with updated valuation result
-    onValuationResult?.({
+    publishValuationResult({
       type: approach === "cost" ? "cost" : "market",
       factorialAnalysis: newFactorialAnalysis,
       subjectData: updatedSubjectData,
@@ -7409,7 +7422,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       setCostCalculationData(updatedCost);
     }
 
-    onValuationResult?.({
+    publishValuationResult({
       type: subjectData?.recommended_approach === "cost" ? "cost" : "market",
       factorialAnalysis: updatedData,
       subjectData: subjectDataRef.current || subjectData,
@@ -8293,6 +8306,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         setCostCalculationData(null);
         setNeedsFactorialRegeneration(true);
         setCtaFactorialCollapsed(false);
+        setValuationResult(null);
         onValuationResult?.(null);
         setMessages((prev) =>
           prev.filter((msg) =>
@@ -8514,7 +8528,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           if (event.type === "factorial_analysis_result" || event.type === "valuation_synthesis_result") {
             setFactorialAnalysisData(event.content);
             // Bubble valuation result up for the Report tab in Visual Layer
-            onValuationResult?.({
+            publishValuationResult({
               type: "market",
               factorialAnalysis: event.content,
               subjectData: subjectDataRef.current || subjectData,
@@ -10846,6 +10860,19 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               {/* ── Start New Valuation CTA ─────────────────────── */}
               {factorialAnalysisData && pipelineDone && !anyStreaming && (
                 <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  {valuationResult && (
+                    <div className="mb-3 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => downloadValuationPDF(valuationResult)}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-5 py-3 text-xs font-black uppercase tracking-wider text-accent transition hover:bg-accent/20 hover:scale-[1.02] cursor-pointer"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Report Download
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <div className="rounded-2xl border border-success/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.05),rgba(52,211,153,0.03))] p-5 flex flex-col items-center gap-4 shadow-panel text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-success/15 border border-success/30 text-2xl">🎉</div>
                     <div>

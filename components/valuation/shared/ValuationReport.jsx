@@ -1101,7 +1101,7 @@ function SlideFactorialTable({ valuationResult }) {
 }
 
 // ── PDF Download using browser print ────────────────────────────────────────
-function downloadPDF(valuationResult) {
+export function downloadPDF(valuationResult) {
   const { subjectData, factorialAnalysis, costCalculation, type, factorialData } = valuationResult;
   const logoBase64 = factorialAnalysis?.logo_base64 || costCalculation?.logo_base64;
 
