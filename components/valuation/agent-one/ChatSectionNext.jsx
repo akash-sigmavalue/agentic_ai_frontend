@@ -4527,7 +4527,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           {compRows.some(r => r.factor_reasoning) && (
             <div className="mt-6 space-y-4 ">
               <h4 className="text-[9px] font-black uppercase tracking-[0.16em] text-text-primary sm:tracking-[0.25em] ">Factor Adjustment Controls</h4>
-              <div className="grid min-w-0 grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-2 ">
+              <div className={`grid min-w-0 grid-cols-1 gap-3 sm:gap-4 ${isSectionMaximized ? "xl:grid-cols-2" : ""}`}>
                 {compRows.map((row, i) => {
                   const isModified = isProjectModified(row.project_name);
                   const isRowCapped = isCapped(row.project_name);
@@ -4537,8 +4537,8 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                   const cbdVal = row.factor_cbd ?? 0;
 
                   return (
-                    <div key={i} className=" ">
-                      <div className="w-[400px] min-h-[450px]  p-5 t-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
+                    <div key={i} className="min-w-0">
+                      <div className={`min-w-0 rounded-lg border border-slate-500/60 p-5 ${isSectionMaximized ? "min-h-[450px]" : "min-h-[180px] w-full"}`}>
                         <div className="mb-3 flex min-w-0 items-center justify-between gap-3  pb-2.5">
                           <div className="flex min-w-0 items-center gap-2 ">
                             <span className="truncate text-[11px] font-bold text-text-secondary" title={row.project_name}>{row.project_name}</span>
@@ -4697,7 +4697,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                       </div>
 
                       {isSectionMaximized && (
-                        <div className="mt-2 w-[400px] min-h-[180px] rounded-lg border border-slate-500/60 p-5">
+                        <div className="mt-2 min-h-[180px] w-full rounded-lg border border-slate-500/60 p-5">
                           <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block mb-1.5">Expert Baseline Reasoning:</span>
                           <p className="text-[10px] text-text-secondary leading-relaxed font-semibold">{row.factor_reasoning}</p>
                         </div>
@@ -7972,7 +7972,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         content: `Proceed to clean ${webCount} web listing(s) and merge with ${dbCount} Internal DB transaction(s).`,
         meta: "Now",
       },
-      { role: "assistant", content: "Running smart data cleaning pipeline...", meta: "Live" },
     ]);
 
 
