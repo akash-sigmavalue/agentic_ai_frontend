@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt } from 'react-icons/fa';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt, FaFileUpload, FaTimes, FaChevronDown, FaChevronUp, FaRobot, FaCheckCircle } from 'react-icons/fa';
 import { apiUrl } from "@/lib/api-client";
 
 const CostOfProjectDetails = () => {
@@ -14,6 +14,24 @@ const CostOfProjectDetails = () => {
     const [newFieldName, setNewFieldName] = useState("");
     const [newFieldDesc, setNewFieldDesc] = useState("");
     const [isFetchingConstruction, setIsFetchingConstruction] = useState(false);
+
+    // Document Agent - Approval Cost
+    const [approvalDocModal, setApprovalDocModal] = useState(false);
+    const [approvalDocMinimized, setApprovalDocMinimized] = useState(false);
+    const [approvalFiles, setApprovalFiles] = useState([]);
+    const [approvalQuery, setApprovalQuery] = useState("What is the total approval cost including government fees, NOC charges, and related regulatory costs? Provide the amount in local currency.");
+    const [approvalDocResult, setApprovalDocResult] = useState(null);
+    const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+    const approvalFileRef = useRef(null);
+
+    // Document Agent - TDR Cost
+    const [tdrDocModal, setTdrDocModal] = useState(false);
+    const [tdrDocMinimized, setTdrDocMinimized] = useState(false);
+    const [tdrFiles, setTdrFiles] = useState([]);
+    const [tdrQuery, setTdrQuery] = useState("What is the TDR (Transfer of Development Rights) cost per sqft and total TDR cost? Provide the amount in local currency.");
+    const [tdrDocResult, setTdrDocResult] = useState(null);
+    const [isProcessingTdr, setIsProcessingTdr] = useState(false);
+    const tdrFileRef = useRef(null);
 
     // Default structure for a blank scenario
     const defaultScenarioData = {
@@ -205,6 +223,97 @@ const CostOfProjectDetails = () => {
             setFetchedConstructionCost("N/A");
         } finally {
             setIsFetchingConstruction(false);
+        }
+    };
+
+    // --- Document Agent Handlers ---
+    const handleDocumentProceed = async (type) => {
+        const files = type === 'approval' ? approvalFiles : tdrFiles;
+        const query = type === 'approval' ? approvalQuery : tdrQuery;
+        const setProcessing = type === 'approval' ? setIsProcessingApproval : setIsProcessingTdr;
+        const setResult = type === 'approval' ? setApprovalDocResult : setTdrDocResult;
+
+        if (!files || files.length === 0) {
+            alert("Please upload at least one document.");
+            return;
+        }
+        setProcessing(true);
+        setResult(null);
+        try {
+            const formData = new FormData();
+            files.forEach(f => formData.append('files', f));
+            formData.append('query', query);
+            formData.append('cost_type', type === 'approval' ? 'approval_cost' : 'tdr_cost');
+
+            const res = await fetch(apiUrl("/document_agent/extract_cost"), {
+                method: "POST",
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!data.success) {
+                // Hard error (e.g. no text extracted from files)
+                setResult({ value: null, type: 'error', context: data.context || data.message || 'An error occurred.' });
+                return;
+            }
+
+            const answerText = data.answer || data.context || '';
+            if (data.extracted_value && data.extracted_value !== 'null') {
+                // Numeric cost extracted — auto-fill
+                const val = String(data.extracted_value);
+                setResult({ value: val, type: 'cost', context: answerText });
+                const field = type === 'approval' ? 'approvalCost' : 'tdrCost';
+                handleFixedInputChange(field, val.replace(/[^0-9.]/g, ''));
+            } else {
+                // General Q&A answer — show informational
+                setResult({ value: null, type: 'info', context: answerText });
+            }
+        } catch (err) {
+            setResult({ value: null, context: 'Error processing documents. Please try again.' });
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleFileChange = (type, e) => {
+        const newFiles = Array.from(e.target.files);
+        if (type === 'approval') {
+            setApprovalFiles(prev => [...prev, ...newFiles]);
+        } else {
+            setTdrFiles(prev => [...prev, ...newFiles]);
+        }
+        e.target.value = '';
+    };
+
+    const removeFile = (type, idx) => {
+        if (type === 'approval') {
+            setApprovalFiles(prev => prev.filter((_, i) => i !== idx));
+        } else {
+            setTdrFiles(prev => prev.filter((_, i) => i !== idx));
+        }
+    };
+
+    const openDocModal = (type) => {
+        if (type === 'approval') {
+            setApprovalDocModal(true);
+            setApprovalDocMinimized(false);
+            setApprovalDocResult(null);
+        } else {
+            setTdrDocModal(true);
+            setTdrDocMinimized(false);
+            setTdrDocResult(null);
+        }
+    };
+
+    const closeDocModal = (type) => {
+        if (type === 'approval') {
+            setApprovalDocModal(false);
+            setApprovalFiles([]);
+            setApprovalDocResult(null);
+        } else {
+            setTdrDocModal(false);
+            setTdrFiles([]);
+            setTdrDocResult(null);
         }
     };
 
@@ -501,6 +610,208 @@ const CostOfProjectDetails = () => {
                     from { opacity: 0; transform: scale(0.95); }
                     to { opacity: 1; transform: scale(1); }
                 }
+                /* Document Agent Popup */
+                .doc-agent-overlay {
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(15,23,42,0.55);
+                    z-index: 9998;
+                    backdrop-filter: blur(3px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .doc-agent-popup {
+                    background: #fff;
+                    border-radius: 20px;
+                    width: 560px;
+                    max-width: 96vw;
+                    box-shadow: 0 24px 48px -12px rgba(15,23,42,0.22), 0 0 0 1px rgba(15,23,42,0.06);
+                    overflow: hidden;
+                    animation: popupIn 0.22s cubic-bezier(0.4,0,0.2,1);
+                    display: flex;
+                    flex-direction: column;
+                }
+                .doc-agent-popup.minimized {
+                    width: 340px;
+                    border-radius: 16px;
+                    position: fixed;
+                    bottom: 28px;
+                    right: 28px;
+                    z-index: 9999;
+                }
+                @keyframes popupIn {
+                    from { opacity: 0; transform: scale(0.93) translateY(12px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                .doc-agent-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 18px 20px 14px;
+                    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                    color: #fff;
+                }
+                .doc-agent-header-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 15px;
+                    font-weight: 700;
+                    letter-spacing: -0.01em;
+                }
+                .doc-agent-header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .doc-agent-icon-btn {
+                    background: rgba(255,255,255,0.12);
+                    border: none;
+                    border-radius: 8px;
+                    color: #fff;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: background 0.15s;
+                    flex-shrink: 0;
+                }
+                .doc-agent-icon-btn:hover { background: rgba(255,255,255,0.22); }
+                .doc-agent-body {
+                    padding: 22px 22px 18px;
+                    flex: 1;
+                    overflow-y: auto;
+                    max-height: 72vh;
+                }
+                .doc-agent-section-label {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin-bottom: 10px;
+                }
+                .doc-upload-zone {
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 14px;
+                    padding: 22px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    background: #f8fafc;
+                    margin-bottom: 14px;
+                }
+                .doc-upload-zone:hover {
+                    border-color: #448C74;
+                    background: #f0fdf8;
+                }
+                .doc-file-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background: #f1f5f9;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 20px;
+                    padding: 4px 10px 4px 8px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: #334155;
+                    margin: 3px;
+                }
+                .doc-file-chip button {
+                    background: none;
+                    border: none;
+                    color: #94a3b8;
+                    cursor: pointer;
+                    line-height: 1;
+                    padding: 0;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                }
+                .doc-file-chip button:hover { color: #ef4444; }
+                .doc-query-textarea {
+                    width: 100%;
+                    border: 1px solid #dee2e6;
+                    border-radius: 12px;
+                    padding: 12px 14px;
+                    font-size: 13.5px;
+                    color: #334155;
+                    resize: vertical;
+                    min-height: 80px;
+                    outline: none;
+                    transition: border-color 0.2s;
+                    font-family: inherit;
+                }
+                .doc-query-textarea:focus { border-color: #448C74; box-shadow: 0 0 0 3px rgba(68,140,116,0.1); }
+                .doc-agent-footer {
+                    padding: 14px 22px 18px;
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                    border-top: 1px solid #f1f5f9;
+                }
+                .doc-agent-result {
+                    background: linear-gradient(135deg, #f0fdf8 0%, #ecfdf5 100%);
+                    border: 1px solid #bbf7d0;
+                    border-radius: 12px;
+                    padding: 14px 16px;
+                    margin-top: 14px;
+                    font-size: 13px;
+                    color: #064e3b;
+                    line-height: 1.6;
+                }
+                .doc-agent-result.error {
+                    background: #fff7ed;
+                    border-color: #fed7aa;
+                    color: #7c2d12;
+                }
+                .doc-agent-result.info {
+                    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+                    border-color: #bfdbfe;
+                    color: #1e3a5f;
+                }
+                .doc-proceed-btn {
+                    background: linear-gradient(135deg, #448C74 0%, #2d7a62 100%);
+                    color: #fff;
+                    border: none;
+                    border-radius: 22px;
+                    padding: 10px 26px;
+                    font-size: 14px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 7px;
+                    transition: all 0.18s;
+                    box-shadow: 0 4px 12px rgba(68,140,116,0.25);
+                }
+                .doc-proceed-btn:hover:not(:disabled) {
+                    transform: translateY(-1px);
+                    box-shadow: 0 6px 18px rgba(68,140,116,0.35);
+                }
+                .doc-proceed-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .doc-cancel-btn {
+                    background: #f1f5f9;
+                    color: #475569;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 22px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: background 0.15s;
+                }
+                .doc-cancel-btn:hover { background: #e2e8f0; }
+                .doc-minimized-bar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 14px 16px;
+                }
                 `}
             </style>
 
@@ -607,13 +918,29 @@ const CostOfProjectDetails = () => {
                     {renderInput("Marketing Cost", fixedInputs.marketingCost, (v) => handleFixedInputChange('marketingCost', v))}
                 </div>
                 <div className="col-md-6">
-                    {renderInput("Approval Cost", fixedInputs.approvalCost, (v) => handleFixedInputChange('approvalCost', v))}
+                    {renderInput("Approval Cost", fixedInputs.approvalCost, (v) => handleFixedInputChange('approvalCost', v), "0", (
+                        <button
+                            className="btn-fetch-pill"
+                            onClick={() => openDocModal('approval')}
+                            disabled={!activeScenarioId}
+                        >
+                            <FaRobot size={10} /> Fetch
+                        </button>
+                    ))}
                 </div>
                 <div className="col-md-6">
                     {renderInput("Administrative Cost", fixedInputs.administrativeCost, (v) => handleFixedInputChange('administrativeCost', v))}
                 </div>
                 <div className="col-md-6">
-                    {renderInput("TDR Cost", fixedInputs.tdrCost, (v) => handleFixedInputChange('tdrCost', v))}
+                    {renderInput("TDR Cost", fixedInputs.tdrCost, (v) => handleFixedInputChange('tdrCost', v), "0", (
+                        <button
+                            className="btn-fetch-pill"
+                            onClick={() => openDocModal('tdr')}
+                            disabled={!activeScenarioId}
+                        >
+                            <FaRobot size={10} /> Fetch
+                        </button>
+                    ))}
                 </div>
                 <div className="col-md-6">
                     {renderInput("Finance Cost", fixedInputs.financeCost, (v) => handleFixedInputChange('financeCost', v))}
@@ -733,6 +1060,236 @@ const CostOfProjectDetails = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Document Agent Popup - Approval Cost */}
+            {approvalDocModal && (
+                approvalDocMinimized ? (
+                    <div className="doc-agent-popup minimized" style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9999 }}>
+                        <div className="doc-agent-header" style={{ borderRadius: '16px' }}>
+                            <div className="doc-agent-header-title">
+                                <FaRobot size={14} />
+                                <span>Approval Cost — Document Agent</span>
+                            </div>
+                            <div className="doc-agent-header-actions">
+                                <button className="doc-agent-icon-btn" title="Maximize" onClick={() => setApprovalDocMinimized(false)}><FaChevronUp size={11} /></button>
+                                <button className="doc-agent-icon-btn" title="Close" onClick={() => closeDocModal('approval')}><FaTimes size={11} /></button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="doc-agent-overlay">
+                        <div className="doc-agent-popup">
+                            <div className="doc-agent-header">
+                                <div className="doc-agent-header-title">
+                                    <FaRobot size={15} />
+                                    <span>Approval Cost — Document Agent</span>
+                                </div>
+                                <div className="doc-agent-header-actions">
+                                    <button className="doc-agent-icon-btn" title="Minimize" onClick={() => setApprovalDocMinimized(true)}><FaChevronDown size={11} /></button>
+                                    <button className="doc-agent-icon-btn" title="Close" onClick={() => closeDocModal('approval')}><FaTimes size={12} /></button>
+                                </div>
+                            </div>
+                            <div className="doc-agent-body">
+                                {/* Section 1: Upload Documents */}
+                                <div className="mb-4">
+                                    <div className="doc-agent-section-label">📂 Section 1 — Upload Documents</div>
+                                    <div className="doc-upload-zone" onClick={() => approvalFileRef.current && approvalFileRef.current.click()}>
+                                        <FaFileUpload size={24} style={{ color: '#94a3b8', marginBottom: 8 }} />
+                                        <div style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Click to upload documents</div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>PDF, Word, Excel, Images — Multiple files allowed</div>
+                                    </div>
+                                    <input
+                                        ref={approvalFileRef}
+                                        type="file"
+                                        multiple
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => handleFileChange('approval', e)}
+                                    />
+                                    {approvalFiles.length > 0 && (
+                                        <div style={{ marginTop: 8 }}>
+                                            {approvalFiles.map((f, i) => (
+                                                <span key={i} className="doc-file-chip">
+                                                    📄 {f.name}
+                                                    <button onClick={() => removeFile('approval', i)} title="Remove"><FaTimes /></button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Section 2: User Query */}
+                                <div>
+                                    <div className="doc-agent-section-label">💬 Section 2 — Your Query</div>
+                                    <textarea
+                                        className="doc-query-textarea"
+                                        value={approvalQuery}
+                                        onChange={e => setApprovalQuery(e.target.value)}
+                                        placeholder="Enter your query about approval costs..."
+                                        rows={3}
+                                    />
+                                </div>
+                                {/* Result */}
+                                {approvalDocResult && (
+                                    <div className={`doc-agent-result${
+                                        approvalDocResult.type === 'cost' ? '' :
+                                        approvalDocResult.type === 'info' ? ' info' : ' error'
+                                    }`}>
+                                        {approvalDocResult.type === 'cost' ? (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                                    <FaCheckCircle style={{ color: '#059669', flexShrink: 0 }} />
+                                                    <strong>Extracted Value: {currency} {approvalDocResult.value}</strong>
+                                                </div>
+                                                {approvalDocResult.context && <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>{approvalDocResult.context}</div>}
+                                                <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontStyle: 'italic' }}>✅ Auto-filled in Approval Cost field</div>
+                                            </>
+                                        ) : approvalDocResult.type === 'info' ? (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                                    <FaRobot style={{ color: '#3b82f6', flexShrink: 0 }} />
+                                                    <strong style={{ color: '#1e40af' }}>Document Answer</strong>
+                                                </div>
+                                                <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{approvalDocResult.context}</div>
+                                            </>
+                                        ) : (
+                                            <><FaInfoCircle style={{ marginRight: 6, color: '#d97706' }} />{approvalDocResult.context}</>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="doc-agent-footer">
+                                <button className="doc-cancel-btn" onClick={() => closeDocModal('approval')}>Cancel</button>
+                                <button
+                                    className="doc-proceed-btn"
+                                    onClick={() => handleDocumentProceed('approval')}
+                                    disabled={isProcessingApproval || approvalFiles.length === 0}
+                                >
+                                    {isProcessingApproval ? (
+                                        <><div className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14, borderWidth: '0.15em' }} /> Processing...</>
+                                    ) : (
+                                        <><FaRobot size={12} /> Proceed</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            )}
+
+            {/* Document Agent Popup - TDR Cost */}
+            {tdrDocModal && (
+                tdrDocMinimized ? (
+                    <div className="doc-agent-popup minimized" style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9999 }}>
+                        <div className="doc-agent-header" style={{ borderRadius: '16px' }}>
+                            <div className="doc-agent-header-title">
+                                <FaRobot size={14} />
+                                <span>TDR Cost — Document Agent</span>
+                            </div>
+                            <div className="doc-agent-header-actions">
+                                <button className="doc-agent-icon-btn" title="Maximize" onClick={() => setTdrDocMinimized(false)}><FaChevronUp size={11} /></button>
+                                <button className="doc-agent-icon-btn" title="Close" onClick={() => closeDocModal('tdr')}><FaTimes size={11} /></button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="doc-agent-overlay">
+                        <div className="doc-agent-popup">
+                            <div className="doc-agent-header">
+                                <div className="doc-agent-header-title">
+                                    <FaRobot size={15} />
+                                    <span>TDR Cost — Document Agent</span>
+                                </div>
+                                <div className="doc-agent-header-actions">
+                                    <button className="doc-agent-icon-btn" title="Minimize" onClick={() => setTdrDocMinimized(true)}><FaChevronDown size={11} /></button>
+                                    <button className="doc-agent-icon-btn" title="Close" onClick={() => closeDocModal('tdr')}><FaTimes size={12} /></button>
+                                </div>
+                            </div>
+                            <div className="doc-agent-body">
+                                {/* Section 1: Upload Documents */}
+                                <div className="mb-4">
+                                    <div className="doc-agent-section-label">📂 Section 1 — Upload Documents</div>
+                                    <div className="doc-upload-zone" onClick={() => tdrFileRef.current && tdrFileRef.current.click()}>
+                                        <FaFileUpload size={24} style={{ color: '#94a3b8', marginBottom: 8 }} />
+                                        <div style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Click to upload documents</div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>PDF, Word, Excel, Images — Multiple files allowed</div>
+                                    </div>
+                                    <input
+                                        ref={tdrFileRef}
+                                        type="file"
+                                        multiple
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => handleFileChange('tdr', e)}
+                                    />
+                                    {tdrFiles.length > 0 && (
+                                        <div style={{ marginTop: 8 }}>
+                                            {tdrFiles.map((f, i) => (
+                                                <span key={i} className="doc-file-chip">
+                                                    📄 {f.name}
+                                                    <button onClick={() => removeFile('tdr', i)} title="Remove"><FaTimes /></button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Section 2: User Query */}
+                                <div>
+                                    <div className="doc-agent-section-label">💬 Section 2 — Your Query</div>
+                                    <textarea
+                                        className="doc-query-textarea"
+                                        value={tdrQuery}
+                                        onChange={e => setTdrQuery(e.target.value)}
+                                        placeholder="Enter your query about TDR costs..."
+                                        rows={3}
+                                    />
+                                </div>
+                                {/* Result */}
+                                {tdrDocResult && (
+                                    <div className={`doc-agent-result${
+                                        tdrDocResult.type === 'cost' ? '' :
+                                        tdrDocResult.type === 'info' ? ' info' : ' error'
+                                    }`}>
+                                        {tdrDocResult.type === 'cost' ? (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                                    <FaCheckCircle style={{ color: '#059669', flexShrink: 0 }} />
+                                                    <strong>Extracted Value: {currency} {tdrDocResult.value}</strong>
+                                                </div>
+                                                {tdrDocResult.context && <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>{tdrDocResult.context}</div>}
+                                                <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontStyle: 'italic' }}>✅ Auto-filled in TDR Cost field</div>
+                                            </>
+                                        ) : tdrDocResult.type === 'info' ? (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                                    <FaRobot style={{ color: '#3b82f6', flexShrink: 0 }} />
+                                                    <strong style={{ color: '#1e40af' }}>Document Answer</strong>
+                                                </div>
+                                                <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{tdrDocResult.context}</div>
+                                            </>
+                                        ) : (
+                                            <><FaInfoCircle style={{ marginRight: 6, color: '#d97706' }} />{tdrDocResult.context}</>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="doc-agent-footer">
+                                <button className="doc-cancel-btn" onClick={() => closeDocModal('tdr')}>Cancel</button>
+                                <button
+                                    className="doc-proceed-btn"
+                                    onClick={() => handleDocumentProceed('tdr')}
+                                    disabled={isProcessingTdr || tdrFiles.length === 0}
+                                >
+                                    {isProcessingTdr ? (
+                                        <><div className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14, borderWidth: '0.15em' }} /> Processing...</>
+                                    ) : (
+                                        <><FaRobot size={12} /> Proceed</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
             )}
         </div>
     );

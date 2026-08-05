@@ -44,9 +44,10 @@ const getScenarioColor = (index) => {
 const MeansOfFinance = () => {
   const [scenarios, setScenarios] = useState([]);
   const [activeScenarioId, setActiveScenarioId] = useState(null);
-  const [costProjectData, setCostProjectData] = useState({});
+  const [costProjectData, setCostProjectData] = useState(null);
   const [meansOfFinanceScenarioData, setMeansOfFinanceScenarioData] = useState({});
   
+  const [currency, setCurrency] = useState("₹");
   const [formData, setFormData] = useState({});
   const [amountData, setAmountData] = useState({});
   const [customFields, setCustomFields] = useState([]);
@@ -60,8 +61,29 @@ const MeansOfFinance = () => {
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldDesc, setNewFieldDesc] = useState("");
 
+  const getCurrencyFromStorage = () => {
+    try {
+      const savedLand = localStorage.getItem("Land Identification");
+      if (savedLand) {
+        const parsed = JSON.parse(savedLand);
+        const c = parsed.currency || parsed.currency_symbol;
+        if (c) return c === "INR" ? "₹" : c;
+      }
+      const savedLandForm = localStorage.getItem("landDetailsForm");
+      if (savedLandForm) {
+        const parsed = JSON.parse(savedLandForm);
+        const c = parsed.currency || parsed.currency_symbol;
+        if (c) return c === "INR" ? "₹" : c;
+      }
+    } catch (e) {}
+    return "₹";
+  };
+
   // Load all scenario & cost data from localStorage
   const loadData = useCallback(() => {
+    // 0. Load Currency
+    setCurrency(getCurrencyFromStorage());
+
     // 1. Load Scenarios
     let loadedScenarios = [];
     let currentActiveId = null;
@@ -242,10 +264,13 @@ const MeansOfFinance = () => {
 
   const formatCurrencyShort = (value) => {
     const num = parseFloat(value) || 0;
-    if (!num) return "₹ 0";
-    if (num >= 10000000) return `₹ ${(num / 10000000).toFixed(2)} Cr`;
-    if (num >= 100000) return `₹ ${(num / 100000).toFixed(2)} L`;
-    return `₹ ${new Intl.NumberFormat("en-IN").format(Math.round(num))}`;
+    if (!num) return `${currency} 0`;
+    if (currency === "₹" || currency === "INR") {
+      if (num >= 10000000) return `₹ ${(num / 10000000).toFixed(2)} Cr`;
+      if (num >= 100000) return `₹ ${(num / 100000).toFixed(2)} L`;
+      return `₹ ${new Intl.NumberFormat("en-IN").format(Math.round(num))}`;
+    }
+    return `${currency} ${new Intl.NumberFormat("en-US").format(Math.round(num))}`;
   };
 
   const getFinanceValue = (percentage, totalCost) =>
@@ -300,7 +325,7 @@ const MeansOfFinance = () => {
           syncedAmounts[row.key] = formatNumber((perc / 100) * activeTotalProjectCost);
         }
       });
-      setAmountData((prev) => ({ ...syncedAmounts, ...prev }));
+      setAmountData(syncedAmounts);
     }
   }, [activeTotalProjectCost, formData]);
 
@@ -718,7 +743,6 @@ const MeansOfFinance = () => {
         }
 
         .mean-finance-amount-input {
-          padding-left: 32px !important;
           padding-right: 14px !important;
         }
 
@@ -1115,7 +1139,7 @@ const MeansOfFinance = () => {
           <div className="parts-header-grid">
             <span>Funding Source</span>
             <span>Part 1: Percentage (%)</span>
-            <span>Part 2: Amount (₹)</span>
+            <span>Part 2: Amount ({currency})</span>
           </div>
 
           <div className="d-grid gap-3">
@@ -1170,12 +1194,15 @@ const MeansOfFinance = () => {
                       <span className="mean-finance-percent">%</span>
                     </div>
 
-                    {/* Part 2: Amount (₹) - Editable Bi-directionally */}
+                    {/* Part 2: Amount ({currency}) - Editable Bi-directionally */}
                     <div className="mean-finance-input-wrap">
-                      <span className="mean-finance-currency-prefix">₹</span>
+                      <span className="mean-finance-currency-prefix">{currency}</span>
                       <input
                         type="text"
                         className="form-control mean-finance-input mean-finance-amount-input"
+                        style={{
+                          paddingLeft: `${Math.max(34, (currency || "₹").length * 12 + 16)}px`,
+                        }}
                         value={
                           amountData[row.key] !== undefined
                             ? amountData[row.key]
@@ -1223,7 +1250,7 @@ const MeansOfFinance = () => {
               </div>
               <div className="total-amount-badge">
                 <span className="amount-currency-tag">Total Cost (CostProjectDetailsV1)</span>
-                <span>₹ {formatNumber(activeTotalProjectCost)}</span>
+                <span>{currency} {formatNumber(activeTotalProjectCost)}</span>
               </div>
             </div>
 
