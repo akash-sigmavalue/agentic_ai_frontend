@@ -1797,19 +1797,19 @@ function ComparableTable({
       <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel transition-all duration-300">
         <div
           onClick={() => onToggleListingCollapsed?.(!listingCollapsed)}
-          className="border-b border-border bg-[linear-gradient(180deg,rgba(251,146,60,0.08),rgba(251,146,60,0.03))] px-3 py-3 sm:px-4 sm:py-3 cursor-pointer select-none"
+          className="border-b border-border bg-[linear-gradient(180deg,rgba(251,146,60,0.08),rgba(251,146,60,0.03))] px-3 py-3 sm:px-5 sm:py-3 cursor-pointer select-none"
         >
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:gap-4">
             <div className="min-w-0">
               <div className="flex items-start gap-3 min-w-0">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-sm">
                 🏘️
                 </div>
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                  <div className="flex flex-nowrap items-center gap-1.5">
+                    <span className="inline-flex items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
                       Stage 3A - Comparable Discovery
-                    </p>
+                    </span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1829,7 +1829,7 @@ function ComparableTable({
                           e.stopPropagation();
                           onToggleComparableActionInfo?.();
                         }}
-                        className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[9px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
+                        className="inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[9px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
                         aria-label="Show comparable selection tip"
                         title="Show tip"
                       >
@@ -1855,7 +1855,7 @@ function ComparableTable({
                 </div>
               </div>
             </div>
-            <div className="hidden items-center gap-2.5 shrink-0 sm:flex sm:justify-self-end">
+            <div className={`hidden items-center gap-2.5 shrink-0 sm:justify-self-end ${listingCollapsed ? "sm:hidden" : "sm:flex"}`}>
               <span className="rounded-full border border-border bg-bg-deep/60 px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap">
                 {visibleResultLabel}
               </span>
@@ -2405,35 +2405,43 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
           className="border-b border-border bg-[rgba(34,211,238,0.06)] px-4 py-3 cursor-pointer select-none"
           onClick={() => onToggleCollapsed?.(!collapsed)}
         >
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm shrink-0">📊</span>
-              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400 shrink-0">Market Signal</span>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 min-w-0">
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm shrink-0">📊</span>
+              <div className="min-w-0">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400 shrink-0">
+                  Stage 3B - Market Signal
+                </span>
+                <span className="mt-1 block rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">{(listings || []).length} web + {dbRows.length} db records</span>
+              </div>
             </div>
-            <div className="flex items-center gap-3 justify-self-end shrink-0">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap">{(listings || []).length} web + {dbRows.length} db records</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleCollapsed?.(!collapsed);
-                }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10 text-cyan-400 transition hover:bg-cyan-400/20"
-                aria-label={collapsed ? "Expand Market Signal" : "Collapse Market Signal"}
-                title={collapsed ? "Expand" : "Collapse"}
-              >
-                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsMaximized(true);
-                }}
-                className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-cyan-400 hover:text-cyan-400"
-                title="Maximize Table"
-              >
-                ⛶
-              </button>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleCollapsed?.(!collapsed);
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10 text-cyan-400 transition hover:bg-cyan-400/20"
+                  aria-label={collapsed ? "Expand Market Signal" : "Collapse Market Signal"}
+                  title={collapsed ? "Expand" : "Collapse"}
+                >
+                  {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {!collapsed && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsMaximized(true);
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-cyan-400 hover:text-cyan-400"
+                    title="Maximize Table"
+                  >
+                    ⛶
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3143,35 +3151,43 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
           className="border-b border-white/[0.06] bg-[rgba(251,146,60,0.06)] px-4 py-3 cursor-pointer select-none"
           onClick={() => onToggleCollapsed?.(!collapsed)}
         >
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
-              {hasPlotData ? `Cleaned & ${derivedRateLabel} Valuation Data` : "Cleaned & Normalized Data"}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleCollapsed?.(!collapsed);
-              }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] transition hover:bg-[#fb923c]/20"
-              aria-label={collapsed ? "Expand cleaned table" : "Collapse cleaned table"}
-              title={collapsed ? "Expand" : "Collapse"}
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim">{listings.length} valid records</span>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 min-w-0">
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
+              <div className="min-w-0">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
+                  Stage 3C - Cleaned & Normalized Data
+                </span>
+                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">
+                  {listings.length} valid records
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsMaximized(true);
+                  onToggleCollapsed?.(!collapsed);
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
-                title="Maximize Table"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] transition hover:bg-[#fb923c]/20"
+                aria-label={collapsed ? "Expand cleaned table" : "Collapse cleaned table"}
+                title={collapsed ? "Expand" : "Collapse"}
               >
-                ⛶
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
+              {!collapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMaximized(true);
+                  }}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#fb923c] hover:text-[#fb923c]"
+                  title="Maximize Table"
+                >
+                  ⛶
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -3834,10 +3850,18 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
     <>
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.01] backdrop-blur-md shadow-2xl transition-all duration-300 hover:shadow-purple-500/5">
         <div className="border-b border-white/[0.06] bg-[rgba(167,139,250,0.06)] px-4 py-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap min-w-0">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(167,139,250,0.15)] text-sm shrink-0">📈</span>
-              <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.12em] text-[#a78bfa] sm:text-[11px] sm:tracking-[0.16em]">Comparable Project Metrics</span>
+              <div className="min-w-0">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#a78bfa]/30 bg-[rgba(167,139,250,0.12)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#a78bfa] sm:text-[11px] sm:tracking-[0.16em]">
+                  Stage 4 - Comparable Project Metrics
+                </span>
+                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap w-fit sm:text-[10px]">
+                  <span className="sm:hidden">{data.table.length} · {data.total_valid}</span>
+                  <span className="hidden sm:inline">{data.table.length} projects · {data.total_valid} listings</span>
+                </span>
+              </div>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 sm:ml-0">
               {selectedForComparison.size >= 2 && (
@@ -3848,10 +3872,6 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                   Compare {selectedForComparison.size}
                 </button>
               )}
-              <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap sm:text-[10px]">
-                <span className="sm:hidden">{data.table.length} · {data.total_valid}</span>
-                <span className="hidden sm:inline">{data.table.length} projects · {data.total_valid} listings</span>
-              </span>
               <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
             </div>
           </div>
@@ -3887,8 +3907,8 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(167,139,250,0.15)] text-lg">📈</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#a78bfa]">Comparable Project Metrics</h3>
-                  <p className="text-[10px] text-text-dim">{data.table.length} projects · {data.total_valid} listings · {currency}/{areaUnit}</p>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#a78bfa]">Stage 4 - Comparable Project Metrics</h3>
+                  <p className="text-[10px] text-text-dim">{data.table.length} projects · {data.total_valid} listings</p>
                 </div>
               </div>
               <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>
