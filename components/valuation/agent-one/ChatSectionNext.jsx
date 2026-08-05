@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -66,6 +66,7 @@ const QUICK_ESTIMATE_DEFAULTS = {
 };
 
 const QUICK_FIELD_CONFIG = {
+  property_type: { label: "Property Type", type: "select", options: ["apartment", "villa", "plot", "commercial_office", "retail", "building_land"] },
   project_name: { label: "Project", type: "text", placeholder: "Project or society name" },
   location_name: { label: "Location", type: "text", placeholder: "Locality or micro-market" },
   "sub-locality": { label: "Sub-locality", type: "text", placeholder: "Fetched micro-market pockets" },
@@ -5965,6 +5966,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     startedAt: null,
   });
   const [showQuickEstimateModal, setShowQuickEstimateModal] = useState(false);
+  const [showUserFormModal, setShowUserFormModal] = useState(false);
+  const [inputMode, setInputMode] = useState("user_form");
+  const [userFormValues, setUserFormValues] = useState({ ...QUICK_ESTIMATE_DEFAULTS });
   const [streamingNote, setStreamingNote] = useState("");
   const [listingStatusNote, setListingStatusNote] = useState("");
   const [cleaningStatusNote, setCleaningStatusNote] = useState("");
@@ -6135,6 +6139,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const prevListingDataRef = useRef(null);
   const prevCleanedDataRef = useRef(null);
   const prevFactorialDataRef = useRef(null);
+  const autoVerifyFormRef = useRef(false);
+  const subjectDataRef = useRef(null);
 
   useEffect(() => {
     if (listingData && !prevListingDataRef.current) {
@@ -6172,7 +6178,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const abortRef = useRef(null);
   const scrollRef = useRef(null);
   const markersRef = useRef([]);
-  const subjectDataRef = useRef(null);
 
   const selectedComparablePayload = () => {
     if (!comparableData) return [];
@@ -6415,7 +6420,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setProjectFetchStatuses({});
   };
 
-  const buildQuickEstimatePayload = () => {
+  const buildQuickEstimatePayload = (sourceValues = quickEstimateValues) => {
     const numericFields = [
       "salable_area_sqft",
       "builtup_area_sqft",
@@ -6430,9 +6435,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     ];
 
     const payload = {
-      ...quickEstimateValues,
-      age_years: quickEstimateValues.age_of_property,
-      construction_quality: quickEstimateValues.quality,
+      ...sourceValues,
+      age_years: sourceValues.age_of_property,
+      construction_quality: sourceValues.quality,
       listing_type: "sale",
       area_unit: "sqft",
     };
@@ -6479,7 +6484,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     setStreamingNote("");
     setQuickEstimateProgress({
       activeIndex: 0,
-      message: "Starting quick estimate...",
+      message: "Connecting to quick estimate stream...",
       detail: {},
       done: false,
       startedAt,
@@ -6655,6 +6660,29 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   };
 
   // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
+  const submitUserFormEstimate = async () => {
+    setShowUserFormModal(false);
+    
+    const payload = buildQuickEstimatePayload(userFormValues);
+    
+    autoVerifyFormRef.current = true;
+    setSubjectData(payload);
+    subjectDataRef.current = payload;
+    
+    const details = Object.entries(payload)
+      .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => {
+        const label = k.replaceAll("_", " ");
+        const titleCaseLabel = label.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        return `${titleCaseLabel}: ${v}`;
+      })
+      .join(", ");
+      
+    const prompt = `[SYSTEM: USER_FORM_SUBMISSION] Here are the verified property details: ${details}. The user has already verified these details. Do NOT ask for extraction verification. Proceed immediately to comparable search or cost calculation.`;
+    
+    submitQuestion(prompt, false, "Submitted property details via User Form.", true);
+  };
+
   const submitSubjectOnlyListingFetch = async () => {
     if (!subjectData || isListingStreaming) return;
 
@@ -8332,469 +8360,30 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         setCtaFactorialCollapsed(false);
         setValuationResult(null);
         onValuationResult?.(null);
-        setMessages((prev) =>
-          prev.filter((msg) =>
-            !msg.factorial_data &&
-            !msg.factorial_analysis_data &&
-            !msg.cost_calculation_data
-          )
-        );
       }
-
     } catch (error) {
-      setMessages((prev) => {
-        const next = [...prev];
-        const targetIndex = getCleanedListingsMessageIndex(next);
-        if (targetIndex >= 0) {
-          next[targetIndex] = {
-            ...next[targetIndex],
-            role: "assistant",
-            content: `Recalculate error: ${error.message}`,
-            meta: "Error",
-          };
-        }
-        return next;
-      });
+      if (error.name !== "AbortError") {
+        setMessages((prev) => {
+          const next = [...prev];
+          const targetIndex = getCleanedListingsMessageIndex(next);
+          if (targetIndex >= 0 && !next[targetIndex].meta?.includes("results")) {
+            next[targetIndex] = {
+              ...next[targetIndex],
+              role: "assistant",
+              content: `Connection error: ${error.message}`,
+              meta: "Error",
+            };
+          }
+          return next;
+        });
+      }
     } finally {
       setIsCleaningStreaming(false);
       setStreamingNote("");
     }
   };
 
-
-  // ── Proceed to Factorial Table (Step 4) ────────────────────────
-  const submitFactorial = async () => {
-    if (!cleanedData || cleanedData.length === 0 || !subjectData || isFactorialStreaming) return;
-
-    const selected = Array.from(selectedComps).map((i) => comparableData[i]);
-
-    setIsFactorialStreaming(true);
-    setCleanedTableCollapsed(true);
-    setStreamingNote("Computing factorial rate table...");
-    setFactorialStatusNote("Computing factorial rate table...");
-    setCurrentStage("Stage 4: Factorial Rate Table");
-    setProjectFetchStatuses({});
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: `Generate factorial rate table from ${cleanedData.length} cleaned listings.`, meta: "Now" },
-      { role: "assistant", content: "Computing rate statistics...", meta: "Live" },
-    ]);
-
-    try {
-      const response = await fetch(apiUrl("/factorial_stream"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cleaned_listings: cleanedData,
-          subject: subjectData,
-          comparables: selected,
-          currency: subjectData.currency,
-          area_unit: subjectData.area_unit || "sqft",
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`Factorial request failed with status ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() || "";
-
-        for (const chunk of chunks) {
-          if (!chunk.startsWith("data: ")) continue;
-          const event = JSON.parse(chunk.slice(6));
-
-          console.log("SSE EVENT:", event);
-          onEvent?.(event);
-          let summary = "Pipeline update received.";
-          if (event.type === "factorial_start") summary = event.content?.message || "Computing factorial table...";
-          else if (event.type === "factorial_results") summary = `📈 Factorial table ready — ${event.content?.table?.length || 0} projects.`;
-          else if (event.type === "factorial_done") summary = "Factorial rate table generated.";
-          else if (event.type === "error") summary = `Error: ${event.content}`;
-
-          setStreamingNote(summary);
-          setFactorialStatusNote(summary);
-
-          if (event.type === "factorial_results") {
-            setFactorialData(event.content);
-            setNeedsFactorialRegeneration(false);
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: "factorial results",
-                  factorial_data: event.content,
-                };
-              }
-              return next;
-            });
-          }
-
-          if (event.type === "factorial_done" || event.type === "error") {
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: event.type === "error" ? "error" : "factorial done",
-                };
-              }
-              return next;
-            });
-          }
-        }
-      }
-    } catch (error) {
-      setMessages((prev) => {
-        const next = [...prev];
-        if (next.length > 0) {
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            role: "assistant",
-            content: `Factorial table error message: ${error.message}`,
-            meta: "Error",
-          };
-        }
-        return next;
-      });
-    } finally {
-      setIsFactorialStreaming(false);
-      setStreamingNote("");
-      setFactorialStatusNote("");
-    }
-  };
-
-  const submitFactorialAnalysis = async (factData, subject, comps) => {
-    if (!factData || !subject || isFactorialAnalysisStreaming) return;
-
-    setIsFactorialAnalysisStreaming(true);
-    setStreamingNote("Sending factorial data to Agent for adjustment analysis...");
-    setAnalysisStatusNote("Sending factorial data to Agent for adjustment analysis...");
-    setCurrentStage("Stage 5: Agent Factorial Analysis");
-    setProjectFetchStatuses({});
-
-    try {
-      const response = await fetch(apiUrl("/factorial_analysis_stream"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          factorial_data: factData,
-          subject: subject,
-          comparables: comps,
-          radii: { road_m: 200, amenity_m: 2000, density_m: 500 }
-        })
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`Valuation Synthesis request failed with status ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() || "";
-
-        for (const chunk of chunks) {
-          if (!chunk.startsWith("data: ")) continue;
-          const event = JSON.parse(chunk.slice(6));
-
-          onEvent?.(event);
-          let summary = "Pipeline update received.";
-          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Running Valuation Synthesis...";
-          else if (event.type === "factorial_analysis_result" || event.type === "valuation_synthesis_result") summary = `🤖 Valuation Synthesis ready.`;
-          else if (event.type === "factorial_analysis_done") summary = "Valuation Synthesis completed.";
-          else if (event.type === "error") summary = `Error: ${event.content}`;
-
-          setStreamingNote(summary);
-          setAnalysisStatusNote(summary);
-
-          if (event.type === "factorial_analysis_start") {
-            setMessages((prev) => {
-              const next = [...prev];
-              const existingIndex = next.findIndex((m) =>
-                m.meta === "factorial analysis results" ||
-                m.meta === "factorial analysis done"
-              );
-              if (existingIndex !== -1) {
-                next[existingIndex] = { ...next[existingIndex], role: "assistant", content: summary, meta: "Live" };
-                return next;
-              }
-              return [...next, { role: "assistant", content: summary, meta: "Live" }];
-            });
-          }
-
-          if (event.type === "factorial_analysis_result" || event.type === "valuation_synthesis_result") {
-            setFactorialAnalysisData(event.content);
-            // Bubble valuation result up for the Report tab in Visual Layer
-            publishValuationResult({
-              type: "market",
-              factorialAnalysis: event.content,
-              subjectData: subjectDataRef.current || subjectData,
-              factorialData: factorialData,
-              timestamp: new Date().toISOString(),
-            });
-
-            // Handle audit stats
-            const usage = event.content?._token_usage;
-            if (usage) {
-              const total = usage.total_tokens || 0;
-              const model = usage.model || "gpt-4o";
-              setTokenStats((prev) => {
-                const nextModelBreakdown = { ...prev.model_breakdown };
-                const currentModelStats = nextModelBreakdown[model] || { prompt: 0, completion: 0, total: 0 };
-
-                const promptDiff = (usage.prompt_tokens || 0);
-                const completionDiff = (usage.completion_tokens || 0);
-
-                nextModelBreakdown[model] = {
-                  prompt: currentModelStats.prompt + promptDiff,
-                  completion: currentModelStats.completion + completionDiff,
-                  total: currentModelStats.total + total
-                };
-
-                const nextStageBreakdown = { ...prev.stage_breakdown };
-                const stageName = "Valuation Synthesis (Stage 5)";
-                const currentStageStats = nextStageBreakdown[stageName] || { prompt: 0, completion: 0, total: 0 };
-                nextStageBreakdown[stageName] = {
-                  prompt: currentStageStats.prompt + promptDiff,
-                  completion: currentStageStats.completion + completionDiff,
-                  total: currentStageStats.total + total
-                };
-
-                const addedCost = getModelCost(model, promptDiff, completionDiff);
-
-                return {
-                  ...prev,
-                  total_tokens: prev.total_tokens + total,
-                  model_breakdown: nextModelBreakdown,
-                  stage_breakdown: nextStageBreakdown,
-                  cost_usd: (prev.cost_usd || 0) + addedCost,
-                  last_stage_tokens: total,
-                  last_stage_name: "Valuation Synthesis (Stage 5)"
-                };
-              });
-            }
-
-            setMessages((prev) => {
-              const next = [...prev];
-              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
-              if (targetIndex !== -1) {
-                next[targetIndex] = {
-                  ...next[targetIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: "factorial analysis results",
-                  factorial_analysis_data: event.content,
-                };
-              }
-              return next;
-            });
-          }
-
-          if (event.type === "factorial_analysis_done" || event.type === "error") {
-            setMessages((prev) => {
-              const next = [...prev];
-              const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
-              if (targetIndex !== -1 && !next[targetIndex].meta?.includes("results")) {
-                next[targetIndex] = {
-                  ...next[targetIndex],
-                  role: "assistant",
-                  content: summary,
-                  meta: event.type === "error" ? "error" : "factorial analysis done",
-                };
-              }
-              return next;
-            });
-          }
-        }
-      }
-    } catch (error) {
-      setMessages((prev) => {
-        const next = [...prev];
-        const targetIndex = next.findIndex(m => m.meta === "Live" || m.meta === "factorial analysis results");
-        if (targetIndex !== -1) {
-          next[targetIndex] = {
-            ...next[targetIndex],
-            role: "assistant",
-            content: `Valuation Synthesis error: ${error.message}`,
-            meta: "Error",
-          };
-        }
-        return next;
-      });
-    } finally {
-      setIsFactorialAnalysisStreaming(false);
-      setStreamingNote("");
-      setAnalysisStatusNote("");
-    }
-  };
-
-
-  const buildGateInitialValues = (schemas, currentSubjectData, currentMapConfirmation) => {
-    const sData = currentSubjectData || subjectDataRef.current || {};
-    const mapConf = currentMapConfirmation || mapConfirmation || null;
-
-    const allExpectedFields = [
-      ...schemas.map(s => s.field),
-      "project_name",
-      "location_name",
-      "city_name",
-      "country",
-      "city",
-      "property_type",
-      "recommended_approach",
-      "lat",
-      "lng",
-      "coordinates",
-      "salable_area_sqft",
-      "builtup_area_sqft",
-      "plot_area_sqft",
-      "age_years",
-      "subject_floor",
-      "total_floors",
-      "facing",
-      "land_type",
-      "frontage",
-      "occupancy_status"
-    ];
-
-    const initVals = {};
-
-    // Fill defaults from schemas
-    schemas.forEach(s => {
-      let dVal = s.default;
-      if (s.field === "property_type" && dVal) {
-        const hasOpt = s.options?.some(o => (typeof o === 'object' ? o.value : o) === dVal);
-        if (!hasOpt) dVal = "";
-      }
-      if (dVal !== undefined && dVal !== null && dVal !== "") {
-        initVals[s.field] = dVal;
-      }
-    });
-
-    // Autofill from sData (extracted from query)
-    allExpectedFields.forEach(field => {
-      if (initVals[field] === undefined || initVals[field] === null || initVals[field] === "") {
-        // Handle city_name: also check legacy 'city' key from backend
-        let valFromData = sData[field] !== undefined ? sData[field] : (sData.entities ? sData.entities[field] : undefined);
-        if (field === "city_name" && (valFromData === undefined || valFromData === null || valFromData === "")) {
-          valFromData = sData["city"] || (sData.entities ? sData.entities["city"] : undefined);
-        }
-        if (valFromData !== undefined && valFromData !== null && valFromData !== "") {
-          if (!(field === "project_name" && valFromData === "Subject Property")) {
-            if (field === "coordinates" && typeof valFromData === 'object') {
-              if (valFromData.lat && valFromData.lng) {
-                initVals[field] = `${valFromData.lat}, ${valFromData.lng}`;
-              }
-            } else if (typeof valFromData !== 'object') {
-              initVals[field] = valFromData;
-            }
-          }
-        }
-      }
-    });
-
-    // Fallback/custom fields mapping
-    if (!initVals["lat"] || Number(initVals["lat"]) === 0) {
-      if (mapConf?.lat) {
-        initVals["lat"] = mapConf.lat;
-      } else if (sData.coordinates?.lat) {
-        initVals["lat"] = sData.coordinates.lat;
-      } else if (sData.lat) {
-        initVals["lat"] = sData.lat;
-      }
-    }
-    if (!initVals["lng"] || Number(initVals["lng"]) === 0) {
-      if (mapConf?.lng) {
-        initVals["lng"] = mapConf.lng;
-      } else if (sData.coordinates?.lng) {
-        initVals["lng"] = sData.coordinates.lng;
-      } else if (sData.lng) {
-        initVals["lng"] = sData.lng;
-      }
-    }
-
-    if (!initVals["coordinates"]) {
-      if (initVals["lat"] && initVals["lng"]) {
-        initVals["coordinates"] = `${initVals["lat"]}, ${initVals["lng"]}`;
-      } else if (sData.coordinates) {
-        if (typeof sData.coordinates === 'string') {
-          initVals["coordinates"] = sData.coordinates;
-        } else if (typeof sData.coordinates === 'object' && sData.coordinates.lat && sData.coordinates.lng) {
-          initVals["coordinates"] = `${sData.coordinates.lat}, ${sData.coordinates.lng}`;
-        }
-      }
-    }
-
-    // Area fields fallback mapping
-    const propType = (gateValues["property_type"] || sData.property_type || "").toLowerCase().trim();
-
-    const extractedSalable = sData.salable_area_sqft || sData.entities?.salable_area_sqft || "";
-    const extractedBuiltup = sData.builtup_area_sqft || sData.entities?.builtup_area_sqft || "";
-    const extractedPlot = sData.plot_area_sqft || sData.entities?.plot_area_sqft || "";
-
-    const primaryArea = extractedBuiltup || extractedSalable || extractedPlot;
-
-    if (primaryArea) {
-      if (propType === "villa" || propType === "building_land") {
-        initVals["builtup_area_sqft"] = extractedBuiltup || extractedSalable || "";
-        initVals["plot_area_sqft"] = extractedPlot || ""; // Do NOT fall back to salable/builtup for villa plot area
-      } else if (propType === "plot") {
-        initVals["plot_area_sqft"] = extractedPlot || primaryArea;
-      } else {
-        // apartment, retail, commercial_office
-        initVals["salable_area_sqft"] = extractedSalable || primaryArea;
-      }
-
-      // Keep other fields filled if extracted specifically
-      if (extractedSalable) initVals["salable_area_sqft"] = extractedSalable;
-      if (extractedBuiltup) initVals["builtup_area_sqft"] = extractedBuiltup;
-      if (extractedPlot) initVals["plot_area_sqft"] = extractedPlot;
-    }
-
-    const sublocalityText = formatSublocalities(sData);
-    if (sublocalityText) {
-      initVals["sub-locality"] = sublocalityText;
-    }
-
-    // Ensure all expected fields are strings/numbers, not undefined
-    allExpectedFields.forEach(field => {
-      if (initVals[field] === undefined || initVals[field] === null || typeof initVals[field] === 'object') {
-        initVals[field] = "";
-      }
-    });
-
-    return initVals;
-  };
-
-
-  const submitQuestion = async (question, isContinuation = false, uiDisplayOverride = null) => {
+  const submitQuestion = async (question, isContinuation = false, uiDisplayOverride = null, isUserFormSubmission = false) => {
     const trimmed = question.trim();
     if (!trimmed || isStreaming) return;
 
@@ -10190,6 +9779,34 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     document.body
   ) : null;
 
+  const userFormModal = showUserFormModal && typeof document !== "undefined" ? createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-bg-deep/80 p-4 backdrop-blur-md animate-in fade-in duration-300 md:p-8"
+      onClick={() => setShowUserFormModal(false)}
+    >
+      <div
+        className="relative w-full max-w-2xl animate-in zoom-in-95 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setShowUserFormModal(false)}
+          className="absolute right-4 top-3 z-10 rounded-xl border border-border bg-bg-input p-2 text-text-secondary transition hover:bg-accent/10 hover:text-accent cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <UserFormWizardPanel
+          values={userFormValues}
+          onChange={setUserFormValues}
+          onSubmit={submitUserFormEstimate}
+          disabled={anyStreaming}
+          apiUrl={apiUrl}
+        />
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <>
       <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
@@ -10255,6 +9872,28 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     {prompt}
                   </button>
                 ))}
+              </div>
+              <div className="mt-5 flex w-full max-w-lg flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setShowUserFormModal(true)}
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-wider transition ${inputMode === "user_form"
+                    ? "border-accent/40 bg-accent/15 text-accent shadow-[0_0_14px_rgba(34,211,238,0.12)]"
+                    : "border-border bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
+                    }`}
+                >
+                  User Form
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode("describe_ai")}
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-wider transition ${inputMode === "describe_ai"
+                    ? "border-warning/40 bg-warning/15 text-warning shadow-[0_0_14px_rgba(251,146,60,0.12)]"
+                    : "border-border bg-bg-card text-text-secondary hover:border-warning/30 hover:text-text-primary"
+                    }`}
+                >
+                  Describe with AI
+                </button>
               </div>
 
 
@@ -11206,7 +10845,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             </button>
           </div>
 
-          {messages.length === 0 && (
+          {messages.length === 0 && inputMode === "describe_ai" && (
             <div className="relative mt-2.5">
               <div className="absolute inset-[-1px] rounded-2xl bg-[linear-gradient(90deg,var(--accent),var(--accent-purple),var(--accent))] bg-[length:200%_100%] opacity-30 blur-sm animate-flow-bg" />
               <div className="relative flex items-end gap-3 rounded-2xl border border-border bg-bg-dark px-4 py-3">
@@ -11235,10 +10874,461 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               </div>
             </div>
           )}
+          {messages.length === 0 && inputMode === "user_form" && (
+            <div className="relative mt-2.5 overflow-hidden rounded-2xl border border-warning/25 bg-gradient-to-br from-warning/10 via-bg-card to-bg-deep px-4 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-warning/30 bg-warning/15 text-warning">
+                  ✨
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-warning">User Form</p>
+                  <p className="mt-1 text-sm text-text-secondary leading-relaxed">
+                    Chat input is disabled in this mode. Switch to Describe with AI to enable the conversational composer.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
       {quickEstimateModal}
+      {userFormModal}
     </>
+  );
+}
+
+function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
+  const [activeSection, setActiveSection] = useState(0);
+  const [maxReachedSection, setMaxReachedSection] = useState(0);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
+  const [geocodeFetched, setGeocodeFetched] = useState(false);
+  const propertyType = values.property_type || "apartment";
+  const isCostCapable = propertyType === "villa" || propertyType === "building_land";
+
+  const fetchCoordinates = async () => {
+    const locName = values.location_name?.trim() || "";
+    const projName = values.project_name?.trim() || "";
+    const country = values.country?.trim() || "India";
+
+    if (!locName) {
+      setGeocodeError("Please enter a locality name first (e.g. Sus, Pune).");
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError("");
+
+    try {
+      const response = await fetch(apiUrl("/geocode"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location_name: locName, project_name: projName, country }),
+      });
+
+      if (!response.ok) throw new Error("Failed to contact geocoder API.");
+
+      const result = await response.json();
+      if (result.lat && result.lng) {
+        onChange({
+          ...values,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          coordinates: `${result.lat}, ${result.lng}`,
+        });
+        setGeocodeError("");
+        setGeocodeFetched(true);
+      } else if (result.error) {
+        setGeocodeError(`Error: ${result.error}. Please adjust the Location Name and try again.`);
+      } else {
+        setGeocodeError("Coordinates not found. Please enter them manually or check location name.");
+      }
+    } catch (err) {
+      setGeocodeError(`Failed to fetch coordinates: ${err.message}`);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Auto-fetch when user reaches the Coordinates section
+  useEffect(() => {
+    if (activeSection === 1 && !geocodeFetched && !values.lat) {
+      fetchCoordinates();
+    }
+  }, [activeSection]);
+
+  const updateField = (field, value) => {
+    const next = { ...values, [field]: value };
+    if (field === "property_type") {
+      next.recommended_approach = value === "building_land" ? "cost" : "market";
+    }
+    onChange(next);
+  };
+
+  const sections = useMemo(() => {
+    const dynamicSpecFields = {
+      apartment: ["salable_area_sqft", "configuration", "floor", "age_of_property"],
+      villa: ["plot_area_sqft", "builtup_area_sqft", "construction_rate_per_sqft", "age_of_property"],
+      plot: ["plot_area_sqft", "land_type", "frontage"],
+      commercial_office: ["salable_area_sqft", "occupancy_status", "floor"],
+      retail: ["salable_area_sqft", "frontage", "occupancy_status"],
+      building_land: ["plot_area_sqft", "builtup_area_sqft", "building_type", "age_of_property"],
+    };
+
+    const specFields = dynamicSpecFields[propertyType] || dynamicSpecFields.apartment;
+
+    return [
+      {
+        title: "Section 1 • Project Details",
+        items: ["property_type", "project_name", "location_name", "city_name", "country"],
+      },
+      {
+        title: "Section 2 • Coordinates",
+        items: [],
+      },
+      {
+        title: "Section 3 • Property Specifications",
+        items: specFields,
+      },
+      {
+        title: "Section 4 • Valuation Settings",
+        items: ["recommended_approach", "facing", "quality"],
+      },
+      {
+        title: "Section 5 • Review",
+        items: [],
+      },
+      {
+        title: "Section 6 • Generate",
+        items: [],
+      },
+    ];
+  }, [propertyType]);
+
+  const sectionRequirements = [
+    ["property_type", "project_name", "location_name", "city_name", "country"],
+    [], // Coordinates — optional, no hard requirements
+    propertyType === "plot" ? sections[2].items.filter(f => f !== "frontage") : sections[2].items,
+    ["recommended_approach", "facing", "quality"],
+    [],
+    [],
+  ];
+
+  const isSectionComplete = (index) => {
+    // Last section (Generate) is never "complete" — never show a tick
+    if (index === sections.length - 1) return false;
+    // Coordinates section — complete only when lat+lng are filled
+    if (index === 1) return !!(values.lat && values.lng);
+    return sectionRequirements[index].every((field) => {
+      const value = values[field];
+      return value !== undefined && value !== null && String(value).trim() !== "";
+    });
+  };
+
+  // A section is openable only if the user has actually reached it via Next clicks
+  const canOpenSection = (index) => index <= maxReachedSection;
+  const currentFields = sections[activeSection]?.items || [];
+
+  const renderField = (field) => {
+    const config = QUICK_FIELD_CONFIG[field];
+    if (!config && field !== "recommended_approach") return null;
+    const isRequired = sectionRequirements[activeSection].includes(field);
+    if (field === "recommended_approach") {
+      return (
+        <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
+          <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Approach *</span>
+          <select
+            value={values.recommended_approach}
+            onChange={(event) => updateField("recommended_approach", event.target.value)}
+            disabled={!isCostCapable && values.recommended_approach === "market"}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
+          >
+            <option value="market">Market Approach</option>
+            {isCostCapable && <option value="cost">Cost Approach</option>}
+          </select>
+        </label>
+      );
+    }
+
+    return (
+      <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
+        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">
+          {config.label}{isRequired ? " *" : ""}
+        </span>
+        {config.type === "select" ? (
+          <select
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+          >
+            <option value="" disabled>Select...</option>
+            {(config.options || []).map((option) => (
+              <option key={option} value={option} style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>
+                {option.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={config.type}
+            value={values[field] ?? ""}
+            onChange={(event) => updateField(field, event.target.value)}
+            placeholder={config.placeholder}
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
+          />
+        )}
+      </label>
+    );
+  };
+
+  const reviewSummary = [
+    ["Property Type", values.property_type],
+    ["Project Name", values.project_name],
+    ["Location", values.location_name],
+    ["City", values.city_name],
+    ["Country", values.country],
+    ["Approach", values.recommended_approach],
+    ["Facing", values.facing],
+    ["Quality", values.quality],
+  ];
+
+  return (
+    <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel md:max-h-[calc(100dvh-4rem)]">
+      <div className="w-[240px] shrink-0 border-r border-border/70 bg-bg-deep/40 p-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Sections</p>
+        <div className="mt-4 space-y-2">
+          {sections.map((section, index) => {
+            const locked = !canOpenSection(index);
+            const current = index === activeSection;
+            const complete = isSectionComplete(index);
+            const prefix = current ? "➜" : complete ? "✓" : "○";
+            return (
+              <button
+                key={section.title}
+                type="button"
+                onClick={() => {
+                  if (!locked) setActiveSection(index);
+                }}
+                disabled={locked}
+                className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                  current
+                    ? "border-accent/40 bg-accent/15 text-accent"
+                    : locked
+                      ? "border-border/40 bg-bg-input/40 text-text-dim opacity-60 cursor-not-allowed"
+                      : "border-border/60 bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
+                }`}
+              >
+                <span className="mt-0.5 text-[10px] font-black">{prefix}</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] leading-relaxed">
+                  {section.title.replace(/^Section \d+ • /, "")}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-accent/15 bg-accent/5 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">{sections[activeSection].title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+                Step-by-step wizard for structured property input.
+              </p>
+            </div>
+            <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+              {activeSection + 1} / {sections.length}
+            </div>
+          </div>
+        </div>
+
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          {activeSection === 0 && (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
+                <div className="mb-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Property Type</p>
+                  <p className="mt-1 text-[11px] text-text-dim">Choose the property category first to unlock relevant fields.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {renderField("property_type")}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {["project_name", "location_name", "city_name", "country"].map(renderField)}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 1 && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Auto-detected Coordinates</p>
+                    <p className="mt-1 text-[11px] text-text-dim leading-relaxed">
+                      Coordinates are auto-fetched from the location you entered. You can edit them manually or refresh.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchCoordinates}
+                    disabled={isGeocoding}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-warning transition hover:bg-warning/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isGeocoding ? (
+                      <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
+                    {isGeocoding ? "Fetching…" : "🔄 Refresh"}
+                  </button>
+                </div>
+
+                {isGeocoding && (
+                  <div className="flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-3 py-2.5">
+                    <svg className="h-3.5 w-3.5 animate-spin text-accent" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <p className="text-[10px] text-accent font-semibold">Fetching coordinates from location…</p>
+                  </div>
+                )}
+
+                {geocodeError && (
+                  <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2.5">
+                    <p className="text-[10px] font-bold text-red-400 leading-relaxed">⚠️ {geocodeError}</p>
+                    <p className="mt-1 text-[9px] text-text-dim">You can enter coordinates manually below.</p>
+                  </div>
+                )}
+
+                {values.lat && values.lng && !isGeocoding && !geocodeError && (
+                  <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-3 py-2">
+                    <span className="text-green-400 text-xs">✓</span>
+                    <p className="text-[10px] font-semibold text-green-400">Coordinates found: {values.lat}, {values.lng}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                    <input
+                      type="text"
+                      value={values.lat ?? ""}
+                      onChange={(e) => onChange({ ...values, lat: e.target.value, coordinates: e.target.value && values.lng ? `${e.target.value}, ${values.lng}` : values.coordinates })}
+                      placeholder="e.g. 19.0760"
+                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                    <input
+                      type="text"
+                      value={values.lng ?? ""}
+                      onChange={(e) => onChange({ ...values, lng: e.target.value, coordinates: values.lat && e.target.value ? `${values.lat}, ${e.target.value}` : values.coordinates })}
+                      placeholder="e.g. 72.8777"
+                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 2 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {currentFields.map(renderField)}
+            </div>
+          )}
+
+          {activeSection === 3 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {currentFields.map(renderField)}
+            </div>
+          )}
+
+          {activeSection === 4 && (
+            <div className="space-y-2 rounded-2xl border border-border/70 bg-bg-deep/30 p-4">
+              {reviewSummary.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-3 border-b border-border/40 py-2 last:border-0">
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-text-dim">{label}</span>
+                  <span className="text-sm font-semibold text-text-primary text-right">{value || "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeSection === 5 && (
+            <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-4">
+              <p className="text-[11px] text-text-secondary leading-relaxed">
+                Review is complete. Click the button below to generate the valuation.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-border/40 bg-bg-card/90 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({ ...QUICK_ESTIMATE_DEFAULTS });
+                  setActiveSection(0);
+                  setMaxReachedSection(0);
+                  setGeocodeError("");
+                  setGeocodeFetched(false);
+                }}
+                className="rounded-xl border border-border/40 bg-bg-input/20 px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-dim transition hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection((prev) => Math.max(0, prev - 1))}
+                disabled={activeSection === 0}
+                className="rounded-xl border border-border bg-bg-input px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary transition hover:border-accent/30 hover:text-text-primary disabled:opacity-40"
+              >
+                Previous
+              </button>
+            </div>
+            {activeSection < 5 ? (
+              <button
+                type="button"
+                disabled={!isSectionComplete(activeSection)}
+                className="rounded-xl bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                onClick={() => {
+                  if (isSectionComplete(activeSection)) {
+                    const next = Math.min(5, activeSection + 1);
+                    setActiveSection(next);
+                    setMaxReachedSection(prev => Math.max(prev, next));
+                  }
+                }}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={disabled}
+                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Zap className="h-4 w-4" />
+                Get Valuation
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
