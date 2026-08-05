@@ -687,6 +687,7 @@ import SupplyDemandAnalysis from "./components/SupplyDemandAnalysis";
 import LandIdentification from "./LandIdentification";
 import RegulatoryIntelligence from "./RegulatoryIntelligence";
 import ScenarioRevenueDashboard from "./components/ScenarioRevenueDashboard";
+import FeasibilityIrrSection from "./components/FeasibilityIrrSection";
 import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
@@ -699,6 +700,7 @@ const sidebarButtons = [
   { id: "revenue-details", label: "Revenue", subtitle: "Detailed projection", icon: FaHandHoldingDollar },
   { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
   { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
+  { id: "irr-calculator", label: "IRR Calculator", subtitle: "Cash inflow & IRR", icon: FaCalculator },
   { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
   { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
 ];
@@ -858,6 +860,7 @@ const Index = () => {
         { id: "revenue-details", elementId: "section-revenue-heading" },
         { id: "cost-details", elementId: "section-cost-heading" },
         { id: "means-finance", elementId: "section-means-finance-heading" },
+        { id: "irr-calculator", elementId: "section-irr-calculator-heading" },
         { id: "cashflows", elementId: "section-cashflows" },
       ];
 
@@ -976,6 +979,9 @@ const Index = () => {
                       } else if (btn.id === "means-finance") {
                         setActiveSection(btn.id);
                         document.getElementById("section-means-finance-heading")?.scrollIntoView({ behavior: "smooth" });
+                      } else if (btn.id === "irr-calculator") {
+                        setActiveSection(btn.id);
+                        document.getElementById("section-irr-calculator-heading")?.scrollIntoView({ behavior: "smooth" });
                       } else if (btn.id === "cashflows") {
                         navigate("/irr");
                       } else if (btn.id === "predictive-rate-sim") {
@@ -1963,6 +1969,22 @@ const Index = () => {
 
             <div className="col-12 fade-in-up stagger-7">
               <MeansOfFinance />
+            </div>
+
+            {/* IRR Calculator Section */}
+            <div
+              id="section-irr-calculator-heading"
+              className="text-center mb-4 mt-5 fade-in-up"
+              style={{ scrollMarginTop: "120px" }}
+            >
+              <h1 className="display-5 fw-bold text-dark mb-1">
+                <FaCalculator className="me-3" style={{ color: "#448C74" }} />
+                IRR Calculator
+              </h1>
+            </div>
+
+            <div id="section-irr-calculator" className="col-12 fade-in-up stagger-7 mb-4">
+              <FeasibilityIrrSection />
             </div>
 
             {/* Dashboard Buttons */}

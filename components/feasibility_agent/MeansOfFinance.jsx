@@ -78,8 +78,8 @@ const MeansOfFinance = () => {
     } catch (e) {}
 
     setActiveScenarioId((prev) => {
-      if (prev && loadedScenarios.some((s) => s.id === prev)) return prev;
-      return currentActiveId;
+      const targetId = currentActiveId || prev;
+      return targetId && loadedScenarios.some((s) => s.id === targetId) ? targetId : null;
     });
 
     // 2. Load CostProjectDetailsV1 Payload
@@ -130,36 +130,49 @@ const MeansOfFinance = () => {
     };
   }, [loadData]);
 
-  // Synchronize active scenario data whenever activeScenarioId or scenario maps change
+  // Synchronize active scenario data whenever activeScenarioId changes
+  const lastSyncedScenario = React.useRef(null);
+
   useEffect(() => {
     if (!activeScenarioId) {
       // Load fallback legacy values if no scenarios exist
       try {
         const savedData = localStorage.getItem("meansOfFinanceData");
-        setFormData(savedData ? JSON.parse(savedData) : {});
+        const parsedData = savedData ? JSON.parse(savedData) : {};
+        setFormData(prev => JSON.stringify(prev) === JSON.stringify(parsedData) ? prev : parsedData);
       } catch (e) {}
 
       try {
         const savedCustom = localStorage.getItem("meansOfFinanceCustomFields");
-        setCustomFields(savedCustom ? JSON.parse(savedCustom) : []);
+        const parsedCustom = savedCustom ? JSON.parse(savedCustom) : [];
+        setCustomFields(prev => JSON.stringify(prev) === JSON.stringify(parsedCustom) ? prev : parsedCustom);
       } catch (e) {}
       return;
     }
 
     const scenarioMeans = meansOfFinanceScenarioData[activeScenarioId];
     if (scenarioMeans) {
-      setFormData(scenarioMeans.formData || {});
-      setCustomFields(scenarioMeans.customFields || []);
+      if (lastSyncedScenario.current !== activeScenarioId) {
+        setFormData(scenarioMeans.formData || {});
+        setCustomFields(scenarioMeans.customFields || []);
+        lastSyncedScenario.current = activeScenarioId;
+      }
     } else {
-      // Try fallback to legacy flat keys if scenario-specific entry not created yet
-      try {
-        const savedData = localStorage.getItem("meansOfFinanceData");
-        const savedCustom = localStorage.getItem("meansOfFinanceCustomFields");
-        setFormData(savedData ? JSON.parse(savedData) : {});
-        setCustomFields(savedCustom ? JSON.parse(savedCustom) : []);
-      } catch (e) {
-        setFormData({});
-        setCustomFields([]);
+      if (lastSyncedScenario.current !== activeScenarioId) {
+        // Try fallback to legacy flat keys if scenario-specific entry not created yet
+        try {
+          const savedData = localStorage.getItem("meansOfFinanceData");
+          const savedCustom = localStorage.getItem("meansOfFinanceCustomFields");
+          const parsedData = savedData ? JSON.parse(savedData) : {};
+          const parsedCustom = savedCustom ? JSON.parse(savedCustom) : [];
+          setFormData(parsedData);
+          setCustomFields(parsedCustom);
+        } catch (e) {
+          setFormData({});
+          setCustomFields([]);
+        }
+        // Do NOT set lastSyncedScenario.current here, so that when scenarioMeans arrives from localStorage, it can sync.
+        // However, if the user starts typing, auto-save will create scenarioMeans, and it will sync once and set the ref.
       }
     }
   }, [activeScenarioId, meansOfFinanceScenarioData]);
