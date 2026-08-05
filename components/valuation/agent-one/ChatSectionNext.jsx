@@ -6053,6 +6053,46 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const [showCleaningInfo, setShowCleaningInfo] = useState(false);
   const [showFactorialInfo, setShowFactorialInfo] = useState(false);
 
+  // ── Gate Wizard Helper ─────────────────────────────────────────
+  // Builds a flat { field: value } map for the gate wizard.
+  // Strategy:
+  //   1. Seed ALL scalar, non-null values from subjectObj into vals
+  //      (covers project_name, location_name, city_name, property_type,
+  //       area fields, etc. — regardless of what `fields` schema contains)
+  //   2. Overlay field.default for any schema field still missing a value
+  //   3. Inject lat/lng from mapConfirmation if not already set
+  const buildGateInitialValues = (fields, subjectObj, mapConf) => {
+    const vals = {};
+
+    // Pass 1 – full subject seed: write every known scalar value from subjectObj
+    if (subjectObj && typeof subjectObj === 'object') {
+      Object.entries(subjectObj).forEach(([k, v]) => {
+        if (v === null || v === undefined || v === '') return;
+        if (typeof v === 'object') return; // skip nested objects / arrays
+        vals[k] = v;
+      });
+    }
+
+    // Pass 2 – schema defaults: fill in anything still missing from field.default
+    if (Array.isArray(fields)) {
+      fields.forEach(({ field, default: defaultVal }) => {
+        if (!field) return;
+        if (vals[field] === undefined && defaultVal !== undefined && defaultVal !== null) {
+          vals[field] = defaultVal;
+        }
+      });
+    }
+
+    // Pass 3 – geocoded coordinates from mapConfirmation
+    if (mapConf?.lat && mapConf?.lng) {
+      if (vals.lat === undefined) vals.lat = mapConf.lat;
+      if (vals.lng === undefined) vals.lng = mapConf.lng;
+      if (vals.coordinates === undefined) vals.coordinates = `${mapConf.lat}, ${mapConf.lng}`;
+    }
+
+    return vals;
+  };
+
   const publishValuationResult = (payload) => {
     setValuationResult(payload);
     onValuationResult?.(payload);
@@ -6186,6 +6226,140 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
   const handleCalculateRate = (factData) => {
     submitFactorialAnalysis(factData || factorialData, subjectData, selectedComparablePayload());
+  };
+
+  const submitFactorialAnalysis = async (factData, subject, comparables) => {
+    if (!factData || !subject || isFactorialAnalysisStreaming) return;
+
+    setIsFactorialAnalysisStreaming(true);
+    setStreamingNote("Analyzing factorial data...");
+    setAnalysisStatusNote("Analyzing factorial data...");
+    setCurrentStage("Stage 5: Rate Analysis");
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: `Calculate final subject rate from factorial table (${factData?.table?.length || 0} projects).`,
+        meta: "Now",
+      },
+      {
+        role: "assistant",
+        content: "Analyzing factorial data...",
+        meta: "Live",
+      },
+    ]);
+
+    try {
+      const response = await fetch(apiUrl("/factorial_analysis_stream"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          factorial_data: factData,
+          subject,
+          comparables,
+          currency: subject.currency,
+          area_unit: subject.area_unit || "sqft",
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Rate analysis failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Rate analysis update received.";
+          if (event.type === "factorial_analysis_start") summary = event.content?.message || "Analyzing factorial data...";
+          else if (event.type === "factorial_analysis_result") summary = `✅ Rate analysis complete — subject rate calculated.`;
+          else if (event.type === "factorial_analysis_done") summary = "Rate analysis finished.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+          setAnalysisStatusNote(summary);
+          addLog(summary, event.type === "error" ? "error" : "info");
+
+          if (event.type === "factorial_analysis_result") {
+            const analysis = {
+              ...event.content,
+              subject_final_rate: event.content?.subject_final_rate ?? event.content?.subject_final_plot_rate,
+            };
+            setFactorialAnalysisData(analysis);
+            publishValuationResult({
+              type: subject?.recommended_approach === "cost" ? "cost" : "market",
+              factorialAnalysis: analysis,
+              subjectData: subjectDataRef.current || subject,
+              factorialData: factData,
+              costCalculation: null,
+              timestamp: new Date().toISOString(),
+            });
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "rate analysis results",
+                  factorial_analysis_data: analysis,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "factorial_analysis_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "rate analysis done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Rate analysis error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsFactorialAnalysisStreaming(false);
+      setStreamingNote("");
+      setAnalysisStatusNote("");
+    }
   };
 
   const handleCostCalculate = async () => {
@@ -6372,8 +6546,14 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   }, [externalFactorialData]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingNote, showTokenBreakdown, gateActive, mapConfirmation, approachChoiceNeeded]);
+    // Only auto-scroll to bottom while the pipeline is actively streaming.
+    // Firing on every state change (gateActive, mapConfirmation, etc.) caused
+    // the window to jump upward when stable UI panels were toggled.
+    const isAnyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || isCostCalculating || isQuickEstimateStreaming;
+    if (isAnyStreaming || streamingNote) {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, streamingNote, isStreaming, isListingStreaming, isCleaningStreaming, isFactorialStreaming, isFactorialAnalysisStreaming, isCostCalculating, isQuickEstimateStreaming]);
 
   const clearInteractiveState = () => {
     setClarificationPrompt("");
@@ -8380,6 +8560,131 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     } finally {
       setIsCleaningStreaming(false);
       setStreamingNote("");
+    }
+  };
+
+  const submitFactorial = async () => {
+    if (!cleanedData || cleanedData.length === 0 || !subjectData || isFactorialStreaming) return;
+
+    const selected = Array.from(selectedComps).map((i) => comparableData[i]).filter(Boolean);
+
+    setIsFactorialStreaming(true);
+    setNeedsFactorialRegeneration(false);
+    setCtaFactorialCollapsed(true);
+    setStreamingNote("Building factorial rate table...");
+    setFactorialStatusNote("Building factorial rate table...");
+    setCurrentStage("Stage 4: Factorial Rate Table");
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: `Generate factorial rate table from ${cleanedData.length} cleaned listing(s).`,
+        meta: "Now",
+      },
+      {
+        role: "assistant",
+        content: "Computing rate statistics per project...",
+        meta: "Live",
+      },
+    ]);
+
+    try {
+      const response = await fetch(apiUrl("/factorial_stream"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cleaned_listings: cleanedData,
+          subject: subjectData,
+          comparables: selected,
+          currency: subjectData.currency,
+          area_unit: subjectData.area_unit || "sqft",
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Factorial request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
+          const event = JSON.parse(chunk.slice(6));
+
+          onEvent?.(event);
+          let summary = "Pipeline update received.";
+          if (event.type === "factorial_start") summary = event.content?.message || "Computing factorial table...";
+          else if (event.type === "factorial_results") summary = `📈 Factorial table ready — ${event.content?.table?.length || 0} projects.`;
+          else if (event.type === "factorial_done") summary = "Factorial rate table generated.";
+          else if (event.type === "error") summary = `Error: ${event.content}`;
+
+          setStreamingNote(summary);
+          setFactorialStatusNote(summary);
+
+          if (event.type === "factorial_results") {
+            setFactorialData(event.content);
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: "factorial results",
+                  factorial_data: event.content,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.type === "factorial_done" || event.type === "error") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && !next[lastIndex].meta?.includes("results")) {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  role: "assistant",
+                  content: summary,
+                  meta: event.type === "error" ? "error" : "factorial done",
+                };
+              }
+              return next;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            role: "assistant",
+            content: `Factorial table error: ${error.message}`,
+            meta: "Error",
+          };
+        }
+        return next;
+      });
+    } finally {
+      setIsFactorialStreaming(false);
+      setStreamingNote("");
+      setFactorialStatusNote("");
     }
   };
 
