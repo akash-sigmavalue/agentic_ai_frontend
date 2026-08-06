@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Upload, Send, FileText, Image, Loader2, Download, CloudUpload, X, Trash2, FileSpreadsheet } from "lucide-react";
+import { Check, Upload, Send, FileText, Image, Loader2, Download, CloudUpload, X, Trash2, FileSpreadsheet, Sparkles, HelpCircle, AlertCircle, CheckCircle2 } from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -11,6 +11,7 @@ import {
   highlightRectsRequest,
   parseApiError,
   uploadDocumentRequest,
+  validateDocumentsRequest,
 } from "../../lib/user_input/api-client";
 import type { GraphNodeId, PipelineDurations } from "../../types/agents";
 import type { AskResult, Chunk, HighlightRect, HighlightResponse, TokenUsage, UploadResult } from "../../types/api";
@@ -284,6 +285,7 @@ export default function DocumentReader() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [askResult, setAskResult] = useState<AskResult | null>(null);
   const [busy, setBusy] = useState<"upload" | "ask" | null>(null);
+  const [busyMode, setBusyMode] = useState<"standard" | "vlm" | null>(null);
   const [error, setError] = useState("");
   const [activeNode, setActiveNode] = useState<GraphNodeId | null>(null);
   const [stageDurations, setStageDurations] = useState<PipelineDurations>({});
@@ -302,6 +304,18 @@ export default function DocumentReader() {
   const answerContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [initialSuggestions, setInitialSuggestions] = useState<string[]>([]);
+  const [vlmModal, setVlmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "error" | "verify";
+    detectedElements?: string[];
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "error",
+  });
 
   const [leftWidth, setLeftWidth] = useState(24);
   const [rightWidth, setRightWidth] = useState(30);
@@ -366,22 +380,70 @@ export default function DocumentReader() {
   const isActiveDocx = activeFileSource?.toLowerCase().endsWith(".docx");
   const isActiveImage = activeFileSource && /\.(png|jpe?g|webp|bmp)$/i.test(activeFileSource);
 
-  async function uploadDocument(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleProcessWithMode(mode: "standard" | "vlm", skipValidation = false) {
     if (files.length === 0) {
       setError("Please select at least one file (PDF, DOCX, or image).");
       return;
     }
 
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+
+    if (mode === "vlm" && !skipValidation) {
+      setBusy("upload");
+      setBusyMode("vlm");
+      setError("");
+      try {
+        const valRes = await validateDocumentsRequest(formData);
+        if (!valRes.ok) {
+          const errMsg = await parseApiError(valRes);
+          setVlmModal({
+            isOpen: true,
+            title: "Plain Text Document Detected",
+            message: errMsg || "This document contains plain text only and can be processed via standard OCR. Please use the 'Process Documents' button.",
+            type: "error",
+          });
+          setBusy(null);
+          setBusyMode(null);
+          return;
+        }
+        const valData = await valRes.json();
+        if (!valData.can_process_vlm || valData.only_plain_text) {
+          setVlmModal({
+            isOpen: true,
+            title: "VLM Processing Guardrail",
+            message: valData.reason || "This document contains plain text only and can be processed via standard OCR. Please use the 'Process Documents' button.",
+            type: "error",
+          });
+          setBusy(null);
+          setBusyMode(null);
+          return;
+        }
+
+        setVlmModal({
+          isOpen: true,
+          title: "Verify VLM Document Processing",
+          message: "The document contains visual drawings or figures suitable for VLM embedding. Would you like to proceed with VLM Processing?",
+          type: "verify",
+          detectedElements: valData.detected_visual_elements || [],
+        });
+        setBusy(null);
+        setBusyMode(null);
+        return;
+      } catch (err: any) {
+        console.warn("Validation check error:", err);
+      }
+    }
+
     setBusy("upload");
+    setBusyMode(mode);
     setError("");
     setAskResult(null);
     setActiveNode(null);
     setStageDurations({});
     setTotalDuration(null);
 
-    const formData = new FormData();
-    files.forEach((f) => formData.append("files", f));
+    formData.append("processing_mode", mode);
 
     try {
       const response = await uploadDocumentRequest(formData);
@@ -410,7 +472,13 @@ export default function DocumentReader() {
       setError(err instanceof Error ? `${err.message} (${API_BASE_URL})` : "Upload failed.");
     } finally {
       setBusy(null);
+      setBusyMode(null);
     }
+  }
+
+  async function uploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await handleProcessWithMode("standard");
   }
 
   async function handleAsk(questionText: string) {
@@ -1135,7 +1203,12 @@ export default function DocumentReader() {
         <div className="flex flex-col gap-5 min-h-0" style={{ width: `${leftWidth}%` }}>
           <div className="shrink-0 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm">
             <form onSubmit={uploadDocument} className="space-y-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Document Upload</label>
+                <div className="flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 border border-purple-200 shadow-2xs">
+                  <span>⭐ Dual Engine</span>
+                </div>
+              </div>
               
               <div className="flex flex-col xl:flex-row gap-4">
                 {/* Left Drop Zone */}
@@ -1216,29 +1289,87 @@ export default function DocumentReader() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mt-2">
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setFiles([])}
                   disabled={files.length === 0 || busy === "upload"}
-                  className="flex items-center gap-2 px-2 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-40 transition-colors"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                   Clear All
                 </button>
-                <button
-                  type="submit"
-                  disabled={busy === "upload" || files.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  {busy === "upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  {busy === "upload" ? "Processing..." : "Process Documents"}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {/* Button 1: Process VLM */}
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => handleProcessWithMode("vlm")}
+                      disabled={busy === "upload" || files.length === 0}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+                      title="Process VLM: Specially designed for visual documents (images, floor plans, graphs, charts, diagrams)."
+                    >
+                      {busy === "upload" && busyMode === "vlm" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {busy === "upload" && busyMode === "vlm" ? "Processing VLM..." : "Process VLM"}
+                    </button>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col w-56 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl z-50 pointer-events-none">
+                      <span className="font-bold text-purple-300">✨ Process VLM Mode</span>
+                      <span className="text-slate-300">Specially designed for VLM (Visual Language Models). Processes visual documents such as images, floor plans, graphs, charts, and diagrams.</span>
+                    </div>
+                  </div>
+
+                  {/* Button 2: Process Documents */}
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => handleProcessWithMode("standard")}
+                      disabled={busy === "upload" || files.length === 0}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      title="Process Documents: Processes text documents, scanned PDFs, and text with normal context via OCR & standard embedding."
+                    >
+                      {busy === "upload" && busyMode === "standard" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" />
+                      )}
+                      {busy === "upload" && busyMode === "standard" ? "Processing..." : "Process Documents"}
+                    </button>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover:flex flex-col w-56 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl z-50 pointer-events-none">
+                      <span className="font-bold text-blue-300">⚙️ Process Documents Mode</span>
+                      <span className="text-slate-300">Processes text documents, scanned PDFs, and text with normal context via OCR & standard embedding.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
             {uploadResult && (
-              <div className="mt-4 rounded-lg bg-green-50 p-2 text-center text-xs font-medium text-green-700">
-                ✓ Processed {uploadResult.chunk_count} chunks
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-200 p-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  {uploadResult.processing_mode === "vlm" ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 px-2 py-0.5 font-bold text-purple-800 border border-purple-200">
+                      ✨ VLM Engine
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 font-bold text-blue-800 border border-blue-200">
+                      ⚙️ Standard Engine
+                    </span>
+                  )}
+                  <span className="font-medium text-slate-700">✓ Indexed {uploadResult.chunk_count} chunks</span>
+                </div>
+                {uploadResult.processing_mode === "vlm" && uploadResult.vlm_cost_usd !== undefined && (
+                  <div className="flex items-center gap-1.5 text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                    <span>💰 VLM Cost: ${uploadResult.vlm_cost_usd} USD</span>
+                    <span className="text-[10px] text-purple-500">({uploadResult.vlm_tokens} Tokens)</span>
+                  </div>
+                )}
               </div>
             )}
             {busy === "ask" && <StepperPipelineGraph active={activeNode} ready={Boolean(uploadResult)} durations={stageDurations} totalDuration={totalDuration} />}
@@ -1528,6 +1659,80 @@ export default function DocumentReader() {
           </div>
         </div>
       </div>
+
+      {/* VLM Verification & Guardrail Modal */}
+      {vlmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-3">
+              {vlmModal.type === "error" ? (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 shrink-0">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-purple-600 shrink-0">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+              )}
+              <div>
+                <h3 className="text-base font-bold text-slate-800">{vlmModal.title}</h3>
+                <p className="text-xs text-slate-500">Document Processing Guardrail</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-4 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+              {vlmModal.message}
+            </p>
+
+            {vlmModal.detectedElements && vlmModal.detectedElements.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-slate-700 mb-2">Detected Visual Elements:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {vlmModal.detectedElements.map((el, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 border border-purple-200">
+                      <CheckCircle2 className="h-3 w-3 text-purple-500" />
+                      {el}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              {vlmModal.type === "error" ? (
+                <button
+                  type="button"
+                  onClick={() => setVlmModal({ ...vlmModal, isOpen: false })}
+                  className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-900 transition-colors"
+                >
+                  Understood
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setVlmModal({ ...vlmModal, isOpen: false })}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVlmModal({ ...vlmModal, isOpen: false });
+                      handleProcessWithMode("vlm", true);
+                    }}
+                    className="rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center gap-1.5"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Confirm & Process VLM
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
