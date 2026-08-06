@@ -673,7 +673,7 @@ export default function HomePage() {
         {/* ── Hero Section ─────────────────────────────────── */}
         <HeroSection hasUser={Boolean(user)} isDark={isDark} />
         <RoleBanner mounted={mounted} user={user} isAdmin={isAdmin} />
-        <SuperAgentSection />
+        <SuperAgentSection isDark={isDark} />
         <PricingSection
           disabledNotice={disabledNotice}
           hasUser={Boolean(user)}
