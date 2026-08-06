@@ -25,7 +25,7 @@ import {
   SlidersHorizontal,
   FileText,
   FastForward
-} from "lucide-react";
+, Maximize2, Minimize2} from "lucide-react";
 
 // ── Stage metadata matching ACTUAL backend pipeline ───────────────────────────
 const STAGE_META = {
@@ -935,7 +935,7 @@ function EmptyState() {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function WorkflowSectionNext({ events = [] }) {
+export default function WorkflowSectionNext({ events = [], isMaximized, onToggleMaximize }) {
   const workflow = useMemo(() => buildWorkflowFromEvents(events), [events]);
   const stages = useMemo(() => groupByStage(workflow.nodes), [workflow.nodes]);
   const isEmpty = stages.length === 0;
@@ -975,6 +975,14 @@ export default function WorkflowSectionNext({ events = [] }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
           {!isEmpty && (
             <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
               5 MAIN STAGES

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useRef, useCallback } from "react";
-import { Building2, Bot, Map, Workflow } from "lucide-react";
+import { Building2, Bot, Map, Workflow, Maximize2 } from "lucide-react";
 
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
@@ -35,6 +35,14 @@ export default function HomePage() {
   const [leftWidth, setLeftWidth] = useState(33); // 33%
   const [middleWidth, setMiddleWidth] = useState(34); // 34%
   const containerRef = useRef(null);
+
+  // Maximize/Minimize state
+  const [maximizedPanels, setMaximizedPanels] = useState([]);
+  const toggleMaximize = useCallback((panelId) => {
+    setMaximizedPanels((prev) => 
+      prev.includes(panelId) ? prev.filter((id) => id !== panelId) : [...prev, panelId]
+    );
+  }, []);
 
   const handleEventsReset = useCallback((keepUpToEventType) => {
     setEvents((prev) => {
@@ -197,51 +205,102 @@ export default function HomePage() {
             {renderCompactNavigation("assistant")}
           </div>
 
-          <section ref={containerRef} className="grid h-full min-h-0 flex-1 grid-cols-1 gap-4 min-[1071px]:grid-cols-3">
-            {/* Chat section */}
-            <div className="min-h-0 min-w-0 relative">
-              <TokenAccessGate featureName="Valuation Agent">
-                <ChatSection
-                  onClear={() => {
-                    setEvents([]);
-                    setMarkers([]);
-                    setValuationResult(null);
-                  }}
-                  onEvent={(event) => setEvents((prev) => [...prev, event])}
-                  onEventsReset={handleEventsReset}
-                  onMarkersUpdate={(m) => {
-                    setMarkers(m);
-                  }}
-                  factorialData={factorialData}
-                  onValuationResult={setValuationResult}
-                  events={events}
-                  setEvents={setEvents}
-                />
-              </TokenAccessGate>
-            </div>
-
-            {/* Workflow Section */}
-            <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0`}>
-              {renderCompactBrandHeader()}
-              <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
-              <div className="min-h-0 flex-1">
-                <WorkflowSection events={events} />
+          <section ref={containerRef} className={`h-full min-h-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'grid grid-cols-1 min-[1071px]:grid-cols-3'}`}>
+            
+            {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
+            {maximizedPanels.length > 0 && (
+              <div className="hidden shrink-0 gap-4 min-[1071px]:flex">
+                {!maximizedPanels.includes("assistant") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Bot className="h-5 w-5 text-accent" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">AI Assistant</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("assistant")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+                {!maximizedPanels.includes("workflow") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Workflow className="h-5 w-5 text-success" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Agentic Execution Flow</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("workflow")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+                {!maximizedPanels.includes("visual") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Map className="h-5 w-5 text-accent-purple" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Visual Layer</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("visual")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Map Section */}
-            <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0`}>
-              {renderCompactBrandHeader()}
-              <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
-              <div className="min-h-0 flex-1">
-                <MapSection
-                  markers={markers}
-                  factorialData={factorialData}
-                  onDensityUpdate={setDensityUpdates}
-                  onAmenityUpdate={setAmenityUpdates}
-                  onRoadUpdate={setRoadUpdates}
-                  valuationResult={valuationResult}
-                />
+            {/* Main Content Area */}
+            <div className={`min-h-0 min-w-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col min-[1071px]:flex-row' : 'contents'}`}>
+              {/* Chat section */}
+              <div className={`relative min-h-0 min-w-0 overflow-hidden h-full ${maximizedPanels.length > 0 ? (maximizedPanels.includes("assistant") ? 'flex-1' : 'hidden min-[1071px]:hidden') : ''}`}>
+                <TokenAccessGate featureName="Valuation Agent">
+                  <ChatSection
+                    isMaximized={maximizedPanels.includes("assistant")}
+                    onToggleMaximize={() => toggleMaximize("assistant")}
+                    onClear={() => {
+                      setEvents([]);
+                      setMarkers([]);
+                      setValuationResult(null);
+                    }}
+                    onEvent={(event) => setEvents((prev) => [...prev, event])}
+                    onEventsReset={handleEventsReset}
+                    onMarkersUpdate={(m) => {
+                      setMarkers(m);
+                    }}
+                    factorialData={factorialData}
+                    onValuationResult={setValuationResult}
+                    events={events}
+                    setEvents={setEvents}
+                  />
+                </TokenAccessGate>
+              </div>
+
+              {/* Workflow Section */}
+              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 overflow-hidden flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("workflow") ? 'flex-1' : 'min-[1071px]:!hidden') : ''}`}>
+                {renderCompactBrandHeader()}
+                <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
+                <div className="min-h-0 flex-1">
+                  <WorkflowSection 
+                    events={events} 
+                    isMaximized={maximizedPanels.includes("workflow")}
+                    onToggleMaximize={() => toggleMaximize("workflow")}
+                  />
+                </div>
+              </div>
+
+              {/* Map Section */}
+              <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("visual") ? 'flex-1' : 'min-[1071px]:!hidden') : ''}`}>
+                {renderCompactBrandHeader()}
+                <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
+                <div className="min-h-0 flex-1">
+                  <MapSection
+                    markers={markers}
+                    factorialData={factorialData}
+                    onDensityUpdate={setDensityUpdates}
+                    onAmenityUpdate={setAmenityUpdates}
+                    onRoadUpdate={setRoadUpdates}
+                    valuationResult={valuationResult}
+                    isMaximized={maximizedPanels.includes("visual")}
+                    onToggleMaximize={() => toggleMaximize("visual")}
+                  />
+                </div>
               </div>
             </div>
           </section>

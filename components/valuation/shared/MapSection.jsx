@@ -7,40 +7,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 import ValuationReport from "@/components/valuation/shared/ValuationReport";
-import {
-  Map as MapIcon,
-  Loader2,
-  ClipboardList,
-  Building2,
-  Building,
-  Milestone,
-  Star,
-  Sparkles,
-  HeartPulse,
-  Stethoscope,
-  GraduationCap,
-  School,
-  Bus,
-  Train,
-  Flower,
-  Trees,
-  ShoppingBag,
-  ShoppingCart,
-  Cpu,
-  Utensils,
-  Shield,
-  Flame,
-  Info,
-  Laptop,
-  Store,
-  Compass,
-  FileText,
-  Minimize2,
-  Maximize2,
-  RotateCw,
-  SlidersHorizontal,
-  Settings
-} from "lucide-react";
+import { Map as MapIcon, Loader2, ClipboardList, Building2, Building, Milestone, Star, Sparkles, HeartPulse, Stethoscope, GraduationCap, School, Bus, Train, Flower, Trees, ShoppingBag, ShoppingCart, Cpu, Utensils, Shield, Flame, Info, Laptop, Store, Compass, FileText, Minimize2, Maximize2, RotateCw, SlidersHorizontal, Settings } from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -239,7 +206,7 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   return null;
 }
 
-export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, valuationResult }) {
+export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, valuationResult, isMaximized, onToggleMaximize }) {
   const [activeTheme, setActiveTheme] = useState("dark");
   const [panelView, setPanelView] = useState("map"); // "map" | "report"
 
@@ -259,7 +226,6 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
     return () => observer.disconnect();
   }, []);
 
-  const [isMaximized, setIsMaximized] = useState(false);
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
@@ -632,7 +598,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   const mapContent = (
     <div className={`transition-all duration-300 flex flex-col ${isMaximized
-      ? "fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-[0_0_50px_rgba(0,0,0,0.6)]"
+      ? "w-full h-full flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       }`}>
       <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-input px-4 py-3 shrink-0">
@@ -644,7 +610,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             {typeof primaryMarker?.lat === 'number' ? primaryMarker.lat.toFixed(5) : Number(primaryMarker?.lat || 0).toFixed(5)}, {typeof primaryMarker?.lng === 'number' ? primaryMarker.lng.toFixed(5) : Number(primaryMarker?.lng || 0).toFixed(5)}
           </span>
           <button
-            onClick={() => setIsMaximized(!isMaximized)}
+            onClick={onToggleMaximize}
             className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep cursor-pointer"
             title={isMaximized ? "Close Fullscreen" : "Maximize Map"}
           >
@@ -664,7 +630,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       </div>
       <div className="w-full flex-1 relative z-0">
         <MapContainer
-          key={activeTheme}
+          key="leaflet-map-instance"
           center={center}
           zoom={15}
           style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
@@ -1114,7 +1080,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   );
 
   return (
-    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
+    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm flex flex-col h-full">
       <div className="panel-header-shell min-h-[68px] flex-nowrap border-b border-border/60">
         <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
@@ -1122,7 +1088,15 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
           <div className="flex items-center whitespace-nowrap rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
             <button
               onClick={() => setPanelView("map")}
@@ -1163,8 +1137,8 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
           {/* Inline controls panel relocated to floating settings overlay inside mapContent */}
 
           {markers.length > 0 ? (
-            <div className={isMaximized ? "hidden" : "relative w-full shrink-0"}>
-              {typeof window !== 'undefined' && isMaximized ? createPortal(mapContent, document.body) : mapContent}
+            <div className={`relative w-full flex flex-col ${isMaximized ? "flex-1 min-h-[500px]" : "shrink-0"}`}>
+              {mapContent}
             </div>
           ) : (
             <div className="relative flex min-h-[400px] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-dashed border-border bg-bg-card shadow-inner">

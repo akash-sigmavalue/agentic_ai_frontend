@@ -29,6 +29,8 @@ import {
   Loader2,
   Terminal,
   Cpu,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -5939,7 +5941,7 @@ function StageDetailCard({ content, forceCollapsed = false }) {
   );
 }
 
-export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents }) {
+export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents, isMaximized, onToggleMaximize }) {
   const [messages, setMessages] = useState([]);
   const [valuationResult, setValuationResult] = useState(null);
   const [input, setInput] = useState("");
@@ -6551,7 +6553,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     // the window to jump upward when stable UI panels were toggled.
     const isAnyStreaming = isStreaming || isListingStreaming || isCleaningStreaming || isFactorialStreaming || isFactorialAnalysisStreaming || isCostCalculating || isQuickEstimateStreaming;
     if (isAnyStreaming || streamingNote) {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({
+          top: scrollRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      }
     }
   }, [messages, streamingNote, isStreaming, isListingStreaming, isCleaningStreaming, isFactorialStreaming, isFactorialAnalysisStreaming, isCostCalculating, isQuickEstimateStreaming]);
 
@@ -10114,8 +10121,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
   return (
     <>
-      <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-        <div className="panel-header-shell min-h-[68px] border-b border-border/60">
+      <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm flex flex-col h-full">
+        <div className="panel-header-shell min-h-[68px] shrink-0 border-b border-border/60">
           <div className="panel-title-shell">
             <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
               <MessageSquareCode className="h-5 w-5 text-accent" />
@@ -10143,10 +10150,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <span className="hidden sm:inline">Edit Details</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={onToggleMaximize}
+              className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+              title={isMaximized ? "Restore" : "Maximize"}
+            >
+              {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center py-6">
               <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
@@ -11126,8 +11141,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   </div>
                 </div>
               )}
-
-              <div ref={scrollRef} />
             </div>
           )}
         </div>
