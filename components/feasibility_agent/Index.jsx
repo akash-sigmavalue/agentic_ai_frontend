@@ -1944,17 +1944,7 @@ const Index = () => {
               <CostOfProjectDetails />
             </div>
 
-            {/* Section 3: Cost Details */}
-            <div id="section-cost-details" className="col-12 fade-in-up stagger-7">
-              <div className="row g-4">
-                <div className="col-lg-8">
-                  <CostForm onSave={handleCostSave} />
-                </div>
-                <div className="col-lg-4">
-                  <CostOutput data={costData} />
-                </div>
-              </div>
-            </div>
+            {/* Old Cost Details sections removed */}
 
             <div
               id="section-means-finance-heading"

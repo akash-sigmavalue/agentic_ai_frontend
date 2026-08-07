@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { FaSearch, FaSave } from "react-icons/fa";
+import { FaSearch, FaSave, FaChartBar } from "react-icons/fa";
 import { apiUrl } from "@/lib/api-client";
 import CashflowAnalysis from "./CashflowAnalysis";
+import CostOutflowSimulationModal from "./CostOutflowSimulationModal";
 
 // ─── Constants ───────────────────────────────────────────────────────────
 const FIXED_COST_LABELS = {
@@ -34,6 +35,7 @@ const FeasibilityIrrSection = () => {
 
   // Comparable Projects State
   const [isComparableModalOpen, setIsComparableModalOpen] = useState(false);
+  const [isCostOutflowModalOpen, setIsCostOutflowModalOpen] = useState(false);
   const [comparableLoading, setComparableLoading] = useState(false);
   const [comparableResult, setComparableResult] = useState(null);
   const [comparableError, setComparableError] = useState(null);
@@ -65,6 +67,41 @@ const FeasibilityIrrSection = () => {
   // Metric List V2 State
   const [metricListV2, setMetricListV2] = useState(null);
   const [isMetricListV2Open, setIsMetricListV2Open] = useState(false);
+
+  const handleApplyCostOutflow = useCallback((yearlyPercentages) => {
+    let maxYear = 0;
+    Object.values(yearlyPercentages).forEach(yearsObj => {
+      Object.keys(yearsObj).forEach(y => {
+        const yearNum = parseInt(y, 10);
+        if (!isNaN(yearNum) && yearNum > maxYear) {
+          maxYear = yearNum;
+        }
+      });
+    });
+
+    setFormData(prev => {
+      const updated = { ...prev };
+      if (!updated[selectedScenario]) updated[selectedScenario] = {};
+      Object.entries(yearlyPercentages).forEach(([key, years]) => {
+        updated[selectedScenario][key] = { ...updated[selectedScenario][key], ...years };
+      });
+      
+      setProjectDurations(prevDur => {
+        const curDur = prevDur[selectedScenario] || 1;
+        const finalDur = Math.max(curDur, maxYear);
+        const nextDurs = { ...prevDur, [selectedScenario]: finalDur };
+        localStorage.setItem("irrFormV2", JSON.stringify({ 
+          projectDurations: nextDurs, 
+          formData: updated, 
+          timestamp: new Date().toISOString(), 
+          source: "costOutflowSimulation" 
+        }));
+        return nextDurs;
+      });
+
+      return updated;
+    });
+  }, [selectedScenario]);
 
   // ── Load dynamic scenario data ─────────────────────────────────────────────
   const loadDynamicData = useCallback(() => {
@@ -624,7 +661,26 @@ const FeasibilityIrrSection = () => {
             })}
           </div>
           
-          <div className="d-flex justify-content-end mt-3 mb-2">
+          <div className="d-flex justify-content-end gap-2 mt-3 mb-2">
+            <button 
+              type="button" 
+              className="btn d-inline-flex align-items-center gap-2 px-4 py-2" 
+              style={{
+                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '12px',
+                fontWeight: '600',
+                fontSize: '13px',
+                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(15, 23, 42, 0.35)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.25)'; }}
+              onClick={() => setIsCostOutflowModalOpen(true)}
+            >
+              <FaChartBar size={14} /> Predict Cost Cash Outflow
+            </button>
             <button 
               type="button" 
               className="btn d-inline-flex align-items-center gap-2 px-4 py-2" 
@@ -1265,6 +1321,14 @@ const FeasibilityIrrSection = () => {
           </div>
         </div>
       )}
+
+      {/* Predict Cost Cash Outflow Modal */}
+      <CostOutflowSimulationModal
+        isOpen={isCostOutflowModalOpen}
+        onClose={() => setIsCostOutflowModalOpen(false)}
+        onApply={handleApplyCostOutflow}
+        selectedScenario={selectedScenario}
+      />
     </div>
   );
 };

@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt, FaFileUpload, FaTimes, FaChevronDown, FaChevronUp, FaRobot, FaCheckCircle } from 'react-icons/fa';
 import { apiUrl } from "@/lib/api-client";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const CostOfProjectDetails = () => {
     const [currency, setCurrency] = useState("INR");
     const [scenarios, setScenarios] = useState([]);
     const [activeScenarioId, setActiveScenarioId] = useState(null);
     const [scenarioData, setScenarioData] = useState({});
-    const [fetchedConstructionCost, setFetchedConstructionCost] = useState(null);
-    
+    const [constructionCostData, setConstructionCostData] = useState(null);
+    const [constructionCostMinimized, setConstructionCostMinimized] = useState(false);
     // UI states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newFieldName, setNewFieldName] = useState("");
@@ -191,6 +193,8 @@ const CostOfProjectDetails = () => {
 
     const handleFetchConstructionCost = async () => {
         setIsFetchingConstruction(true);
+        setConstructionCostMinimized(false);
+        setConstructionCostData(null);
         try {
             const savedLand = localStorage.getItem("Land Identification");
             let location = "";
@@ -210,17 +214,28 @@ const CostOfProjectDetails = () => {
             });
 
             const data = await res.json();
-            if (data.success && data.construction_cost_per_sqft) {
-                setFetchedConstructionCost(String(data.construction_cost_per_sqft));
+            if (data.success && (data.low_range || data.mid_range || data.high_range)) {
                 if (data.currency_symbol) {
                     setCurrency(data.currency_symbol);
                 }
+                setConstructionCostData({
+                    currency: data.currency_symbol || currency,
+                    low_range: data.low_range || {},
+                    mid_range: data.mid_range || {},
+                    high_range: data.high_range || {},
+                    sources: data.sources || [],
+                    location: data.location_resolved || location || city || country || 'the specified location',
+                    data_freshness: data.data_freshness || null,
+                });
+                setConstructionCostMinimized(false);
             } else {
-                setFetchedConstructionCost("N/A");
+                setConstructionCostData({ error: data.error || 'Could not retrieve construction cost data.' });
+                setConstructionCostMinimized(false);
             }
         } catch (error) {
             console.error("Fetch construction cost error:", error);
-            setFetchedConstructionCost("N/A");
+            setConstructionCostData({ error: 'Network error. Please try again.' });
+            setConstructionCostMinimized(false);
         } finally {
             setIsFetchingConstruction(false);
         }
@@ -240,32 +255,50 @@ const CostOfProjectDetails = () => {
         setProcessing(true);
         setResult(null);
         try {
+            // 1. Upload Documents
             const formData = new FormData();
             files.forEach(f => formData.append('files', f));
-            formData.append('query', query);
-            formData.append('cost_type', type === 'approval' ? 'approval_cost' : 'tdr_cost');
 
-            const res = await fetch(apiUrl("/document_agent/extract_cost"), {
+            const uploadRes = await fetch(apiUrl("/user-input/documents"), {
                 method: "POST",
                 body: formData,
             });
-            const data = await res.json();
-
-            if (!data.success) {
-                // Hard error (e.g. no text extracted from files)
-                setResult({ value: null, type: 'error', context: data.context || data.message || 'An error occurred.' });
+            
+            if (!uploadRes.ok) {
+                setResult({ value: null, type: 'error', context: 'Failed to upload documents.' });
                 return;
             }
+            await uploadRes.json();
 
-            const answerText = data.answer || data.context || '';
-            if (data.extracted_value && data.extracted_value !== 'null') {
-                // Numeric cost extracted — auto-fill
-                const val = String(data.extracted_value);
-                setResult({ value: val, type: 'cost', context: answerText });
+            // 2. Ask Question
+            const enhancedQuery = `${query}\nIMPORTANT: If you find a numeric cost, include it in your response exactly like this: [COST: 12345] (replace 12345 with the numeric value).`;
+            
+            const askRes = await fetch(apiUrl("/user-input/ask"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    question: enhancedQuery,
+                    session_id: `cost-extraction-${type}-${Date.now()}`,
+                }),
+            });
+            
+            if (!askRes.ok) {
+                setResult({ value: null, type: 'error', context: 'Failed to extract cost from documents.' });
+                return;
+            }
+            
+            const data = await askRes.json();
+            const answerText = data.answer || data.response || data.output || data.content || (typeof data === 'string' ? data : JSON.stringify(data));
+            
+            // Try to extract [COST: 12345]
+            const costMatch = answerText.match(/\[COST:\s*([0-9.,]+)\]/i);
+            
+            if (costMatch && costMatch[1]) {
+                const val = costMatch[1].replace(/[^0-9.]/g, '');
+                setResult({ value: val, type: 'cost', context: answerText.replace(costMatch[0], '').trim() });
                 const field = type === 'approval' ? 'approvalCost' : 'tdrCost';
-                handleFixedInputChange(field, val.replace(/[^0-9.]/g, ''));
+                handleFixedInputChange(field, val);
             } else {
-                // General Q&A answer — show informational
                 setResult({ value: null, type: 'info', context: answerText });
             }
         } catch (err) {
@@ -812,6 +845,52 @@ const CostOfProjectDetails = () => {
                     justify-content: space-between;
                     padding: 14px 16px;
                 }
+                .doc-agent-markdown p { margin-bottom: 8px; }
+                .doc-agent-markdown p:last-child { margin-bottom: 0; }
+                .doc-agent-markdown table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 8px; font-size: 12px; }
+                .doc-agent-markdown th, .doc-agent-markdown td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+                .doc-agent-markdown th { background: #f8fafc; font-weight: 700; color: #334155; }
+                .doc-agent-markdown ul, .doc-agent-markdown ol { padding-left: 20px; margin-bottom: 8px; }
+                .doc-agent-markdown code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #e11d48; }
+                .construction-cost-result-card {
+                    background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
+                    border: 1px solid #e0f2fe;
+                    border-radius: 14px;
+                    padding: 14px 16px;
+                }
+                .const-rate-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 12px;
+                    margin-bottom: 12px;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    border: 1px solid #e2e8f0;
+                }
+                .const-rate-table thead tr {
+                    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+                    color: #fff;
+                }
+                .const-rate-table th {
+                    padding: 8px 10px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.04em;
+                    text-transform: uppercase;
+                }
+                .const-rate-table tbody tr {
+                    border-bottom: 1px solid #f1f5f9;
+                    transition: background 0.15s;
+                }
+                .const-rate-table tbody tr:hover { background: #f8fafc; }
+                .const-rate-table td { padding: 9px 10px; vertical-align: middle; }
+                .const-rate-sources {
+                    padding: 10px 12px;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 10px;
+                    margin-top: 4px;
+                }
                 `}
             </style>
 
@@ -894,25 +973,146 @@ const CostOfProjectDetails = () => {
                         (v) => handleFixedInputChange('landLeveling', v)
                     )}
                 </div>
-                <div className="col-md-6">
-                    {renderInput("Construction Cost", fixedInputs.constructionCost, (v) => handleFixedInputChange('constructionCost', v), "0", (
+                <div className="col-md-6" style={{ position: 'relative' }}>
+                    {renderInput(
+                        <div className="d-flex align-items-center gap-2">
+                            <span>Construction Cost</span>
+                            {constructionCostMinimized && constructionCostData && !constructionCostData.error && (
+                                <button
+                                    className="btn btn-sm d-flex align-items-center gap-1"
+                                    onClick={() => setConstructionCostMinimized(false)}
+                                    style={{
+                                        fontSize: '10px',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        background: '#e0f2fe',
+                                        color: '#0369a1',
+                                        border: '1px solid #bae6fd',
+                                        fontWeight: '600'
+                                    }}
+                                    title="View Estimated Rates"
+                                >
+                                    <FaRobot size={10} /> View Estimated Rates
+                                </button>
+                            )}
+                        </div>,
+                        fixedInputs.constructionCost, 
+                        (v) => handleFixedInputChange('constructionCost', v), 
+                        "0", 
+                        (
                         <button 
                             className="btn-fetch-pill" 
                             onClick={handleFetchConstructionCost}
                             disabled={isFetchingConstruction || !activeScenarioId}
                         >
-                            {isFetchingConstruction ? (
-                                <><div className="spinner-border spinner-border-sm" role="status" style={{ width: '10px', height: '10px', borderWidth: '0.15em' }} /> Fetching...</>
-                            ) : (
-                                <><FaSyncAlt size={10} /> Fetch</>
-                            )}
+                            <><FaSyncAlt size={10} /> Fetch</>
                         </button>
-                    ), fetchedConstructionCost ? (
-                        <div className="mt-2 text-muted fade-in-up" style={{ fontSize: '12px' }}>
-                            <FaInfoCircle className="me-1 text-primary" style={{ marginTop: '-2px' }} />
-                            AI Estimated Rate: <strong>{fetchedConstructionCost === "N/A" ? "N/A" : `${currency} ${fetchedConstructionCost}`}</strong> / sqft
+                    ))}
+                    
+                    {(isFetchingConstruction || (constructionCostData && !constructionCostMinimized)) && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                            zIndex: 1040,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backdropFilter: 'blur(3px)'
+                        }}>
+                            <div className="fade-in-up" style={{
+                                width: '100%',
+                                maxWidth: '600px',
+                                background: '#fff',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                                padding: '24px',
+                                position: 'relative',
+                                maxHeight: '90vh',
+                                overflowY: 'auto'
+                            }}>
+                                {isFetchingConstruction ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', gap: 16 }}>
+                                        <div className="spinner-border" style={{ width: '3rem', height: '3rem', color: '#0369a1' }} role="status"></div>
+                                        <div style={{ fontSize: 16, fontWeight: 600, color: '#334155' }}>Analyzing Live Market Data...</div>
+                                        <div style={{ fontSize: 13, color: '#64748b', textAlign: 'center' }}>Searching construction rates for the selected location and crawling trusted real estate sources. This takes a few seconds...</div>
+                                    </div>
+                                ) : constructionCostData.error ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, fontSize: 12, color: '#92400e', flex: 1 }}>
+                                            <FaInfoCircle />
+                                            <span>{constructionCostData.error}</span>
+                                        </div>
+                                        <button 
+                                            className="btn btn-link text-muted p-0 ms-3" 
+                                            onClick={() => setConstructionCostData(null)}
+                                        >
+                                            <FaTimes size={18} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏗️ AI Estimated Rates — {constructionCostData.location}</span>
+                                            {constructionCostData.data_freshness && (
+                                                <span style={{ fontSize: 10, fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: 8, border: '1px solid #bae6fd' }}>
+                                                    🟢 Live Data · {constructionCostData.data_freshness}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <button 
+                                                className="btn btn-link text-muted p-0" 
+                                                onClick={() => setConstructionCostMinimized(true)}
+                                            >
+                                                <FaTimes size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <table className="const-rate-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Range</th>
+                                                <th>Rate / sqft</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[
+                                                { key: 'low_range', label: '🟢 Low', badge: '#dcfce7', badgeText: '#166534', data: constructionCostData.low_range },
+                                                { key: 'mid_range', label: '🟡 Mid', badge: '#fef9c3', badgeText: '#854d0e', data: constructionCostData.mid_range },
+                                                { key: 'high_range', label: '🔴 High', badge: '#fee2e2', badgeText: '#991b1b', data: constructionCostData.high_range },
+                                            ].map(({ key, label, badge, badgeText, data }) => data && data.rate ? (
+                                                <tr key={key}>
+                                                    <td><span style={{ background: badge, color: badgeText, padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>{label}</span></td>
+                                                    <td style={{ fontWeight: 700, color: '#0f172a' }}>{constructionCostData.currency} {Number(data.rate).toLocaleString()}</td>
+                                                    <td style={{ color: '#64748b', fontSize: 12 }}>{data.description}</td>
+                                                </tr>
+                                            ) : null)}
+                                        </tbody>
+                                    </table>
+                                    {constructionCostData.sources && constructionCostData.sources.length > 0 && (
+                                        <div className="const-rate-sources" style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>📎 Sources — Live Crawled Pages</div>
+                                            {constructionCostData.sources.map((src, i) => (
+                                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 11, marginBottom: 4 }}>
+                                                    <span title="Live-crawled page" style={{ flexShrink: 0, marginTop: 1 }}>✅</span>
+                                                    <a href={src.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline', wordBreak: 'break-all', lineHeight: 1.4 }}>{src.title || src.url}</a>
+                                                    {src.trust_score && <span style={{ flexShrink: 0, fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>({Math.round(src.trust_score * 100)}% trust)</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            </div>
                         </div>
-                    ) : null)}
+                    )}
                 </div>
                 <div className="col-md-6">
                     {renderInput("Marketing Cost", fixedInputs.marketingCost, (v) => handleFixedInputChange('marketingCost', v))}
@@ -1141,7 +1341,11 @@ const CostOfProjectDetails = () => {
                                                     <FaCheckCircle style={{ color: '#059669', flexShrink: 0 }} />
                                                     <strong>Extracted Value: {currency} {approvalDocResult.value}</strong>
                                                 </div>
-                                                {approvalDocResult.context && <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>{approvalDocResult.context}</div>}
+                                                {approvalDocResult.context && (
+                                                    <div className="doc-agent-markdown" style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{approvalDocResult.context}</ReactMarkdown>
+                                                    </div>
+                                                )}
                                                 <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontStyle: 'italic' }}>✅ Auto-filled in Approval Cost field</div>
                                             </>
                                         ) : approvalDocResult.type === 'info' ? (
@@ -1150,7 +1354,9 @@ const CostOfProjectDetails = () => {
                                                     <FaRobot style={{ color: '#3b82f6', flexShrink: 0 }} />
                                                     <strong style={{ color: '#1e40af' }}>Document Answer</strong>
                                                 </div>
-                                                <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{approvalDocResult.context}</div>
+                                                <div className="doc-agent-markdown" style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65 }}>
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{approvalDocResult.context}</ReactMarkdown>
+                                                </div>
                                             </>
                                         ) : (
                                             <><FaInfoCircle style={{ marginRight: 6, color: '#d97706' }} />{approvalDocResult.context}</>
@@ -1256,7 +1462,11 @@ const CostOfProjectDetails = () => {
                                                     <FaCheckCircle style={{ color: '#059669', flexShrink: 0 }} />
                                                     <strong>Extracted Value: {currency} {tdrDocResult.value}</strong>
                                                 </div>
-                                                {tdrDocResult.context && <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>{tdrDocResult.context}</div>}
+                                                {tdrDocResult.context && (
+                                                    <div className="doc-agent-markdown" style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{tdrDocResult.context}</ReactMarkdown>
+                                                    </div>
+                                                )}
                                                 <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontStyle: 'italic' }}>✅ Auto-filled in TDR Cost field</div>
                                             </>
                                         ) : tdrDocResult.type === 'info' ? (
@@ -1265,7 +1475,9 @@ const CostOfProjectDetails = () => {
                                                     <FaRobot style={{ color: '#3b82f6', flexShrink: 0 }} />
                                                     <strong style={{ color: '#1e40af' }}>Document Answer</strong>
                                                 </div>
-                                                <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{tdrDocResult.context}</div>
+                                                <div className="doc-agent-markdown" style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.65 }}>
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{tdrDocResult.context}</ReactMarkdown>
+                                                </div>
                                             </>
                                         ) : (
                                             <><FaInfoCircle style={{ marginRight: 6, color: '#d97706' }} />{tdrDocResult.context}</>
