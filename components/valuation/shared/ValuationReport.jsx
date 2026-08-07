@@ -264,8 +264,8 @@ function SlideReportMap({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="mb-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Geospatial Distribution</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Subject & Comparable Properties Map</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80">Geospatial Distribution</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Subject & Comparable Properties Map</h3>
         <p className="text-[9px] text-text-dim mt-0.5 font-semibold">Showing subject property and selected comparable projects in the micro-market</p>
       </div>
 
@@ -326,7 +326,7 @@ function SlideReportMap({ valuationResult }) {
 
         {/* Legend / Properties List */}
         <div className="flex-1 min-h-[150px] lg:min-h-0 flex flex-col border border-border-soft bg-bg-card/40 rounded-xl p-3 overflow-hidden">
-          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-text-dim mb-2 shrink-0 border-b border-border-soft pb-1">Map Legend & Distances</p>
+          <p className="text-[8px] font-black uppercase tracking-[0.05em] text-text-dim mb-2 shrink-0 border-b border-border-soft pb-1">Map Legend & Distances</p>
           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
             {markers.map((m, idx) => (
               <div
@@ -417,8 +417,8 @@ function SlideCover({ valuationResult }) {
                 </div>
               )}
               <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.3em] text-accent/80">Sigmavalue AI</p>
-                <h1 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-primary">
+                <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80">Sigmavalue AI</p>
+                <h1 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">
                   Valuation Certificate
                 </h1>
               </div>
@@ -462,7 +462,7 @@ function SlideCover({ valuationResult }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_60%)]" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-400/90 mb-1.5">
+            <p className="text-[9px] font-black uppercase tracking-[0.05em] text-emerald-400/90 mb-1.5">
               {type === "cost" ? "Cost Approach Value" : "Property Valuation"}
             </p>
             <p className="font-mono text-4xl font-black text-white drop-shadow-[0_0_24px_rgba(16,185,129,0.4)] tracking-wide">
@@ -476,7 +476,7 @@ function SlideCover({ valuationResult }) {
           </div>
           {factorialAnalysis?.subject_rate_range && (
             <div className="text-right bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl">
-              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-text-dim mb-1">Rate Range</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.05em] text-text-dim mb-1">Rate Range</p>
               <p className="text-[13px] font-black text-emerald-400 font-mono">
                 {fmtCurrency(factorialAnalysis.subject_rate_range.low, formatter)}
                 <span className="text-text-dim mx-1.5">—</span>
@@ -490,7 +490,7 @@ function SlideCover({ valuationResult }) {
 
       {/* Property Summary Grid */}
       <div className="rounded-2xl border border-border-soft bg-bg-card/80 p-4 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-text-dim mb-3">Subject Property Details</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-text-dim mb-3">Subject Property Details</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2">
           {[
             ["Type", subjectData?.property_type?.replace(/_/g, " ").toUpperCase()],
@@ -525,7 +525,7 @@ function SlideCover({ valuationResult }) {
               ⚠
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-400/90 mb-1">
+              <p className="text-[8px] font-black uppercase tracking-[0.05em] text-amber-400/90 mb-1">
                 Limited Comparable Market Evidence
               </p>
               <p className="text-[9px] text-amber-200/80 leading-relaxed font-medium">
@@ -561,8 +561,8 @@ function SlideComparableGrid({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="mb-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · Valuation Synthesis Engine</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Per-Comparable Adjustment Grid</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80">Stage 5 · Valuation Synthesis Engine</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Per-Comparable Adjustment Grid</h3>
         <p className="text-[9px] text-text-dim mt-0.5">Each spatial factor capped at ±5% · Total adjustment capped at ±20%</p>
       </div>
 
@@ -669,7 +669,7 @@ function SlideComparableGrid({ valuationResult }) {
 
       {/* Spatial Attribute Legend & Remarks */}
       <div className="mt-4 rounded-xl border border-border-soft bg-bg-card/40 p-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-accent/80 mb-2 border-b border-border-soft pb-1">Spatial Attributes Legend & Reference Guide</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80 mb-2 border-b border-border-soft pb-1">Spatial Attributes Legend & Reference Guide</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Road */}
           <div className="space-y-1">
@@ -739,8 +739,8 @@ function SlideBlending({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar space-y-4">
       <div className="shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 5 · Rate Reconciliation</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Blending & Final Rate Derivation</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80">Stage 5 · Rate Reconciliation</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Blending & Final Rate Derivation</h3>
       </div>
 
       {/* Confidence-weighted blending table */}
@@ -847,7 +847,7 @@ function SlideBlending({ valuationResult }) {
         <div className="absolute inset-0 bg-gradient-to-r from-green-500/[0.04] to-transparent" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[8px] font-black uppercase tracking-[0.3em] text-green-400/80 mb-1">Derived Rate</p>
+            <p className="text-[8px] font-black uppercase tracking-[0.05em] text-green-400/80 mb-1">Derived Rate</p>
             <p className="font-mono text-2xl font-black text-text-primary">
               {fmtCurrency(finalRate, formatter)}
             </p>
@@ -855,7 +855,7 @@ function SlideBlending({ valuationResult }) {
           </div>
           {area > 0 && (
             <div className="text-right">
-              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-accent/80 mb-1">Final Property Value</p>
+              <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80 mb-1">Final Property Value</p>
               <p className="font-mono text-2xl font-black text-accent drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">
                 {fmtCurrency(finalRate * area, formatter)}
               </p>
@@ -874,7 +874,7 @@ function SlideBlending({ valuationResult }) {
             </svg>
           </div>
           <div>
-            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-400 mb-1">Limited Market Evidence</p>
+            <p className="text-[8px] font-black uppercase tracking-[0.05em] text-amber-400 mb-1">Limited Market Evidence</p>
             <p className="text-[9px] text-amber-200/80 leading-relaxed">{factorialAnalysis.limited_data_note}</p>
           </div>
         </div>
@@ -906,8 +906,8 @@ function SlideReasoning({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar space-y-4">
       <div className="shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent-purple/80">Stage 5 · Agent Reasoning</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">AI Agent Reasoning & Audit</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent-purple/80">Stage 5 · Agent Reasoning</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">AI Agent Reasoning & Audit</h3>
       </div>
 
       {/* Reasoning stages */}
@@ -927,7 +927,7 @@ function SlideReasoning({ valuationResult }) {
       {/* Per-project reports if available */}
       {projectReports.length > 0 && (
         <div className="shrink-0">
-          <p className="text-[8px] font-black uppercase tracking-[0.25em] text-text-dim mb-2">Per-Comparable Scoring Reports</p>
+          <p className="text-[8px] font-black uppercase tracking-[0.05em] text-text-dim mb-2">Per-Comparable Scoring Reports</p>
           <div className="space-y-2">
             {projectReports.slice(0, 4).map((r, i) => (
               <div key={i} className="rounded-xl border border-border-soft bg-bg-input/40 px-3 py-2">
@@ -992,8 +992,8 @@ function SlideCostApproach({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar space-y-3">
       <div className="shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-green-400/80">Traditional Cost Approach</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Depreciated Replacement Cost Method</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-green-400/80">Traditional Cost Approach</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Depreciated Replacement Cost Method</h3>
         <p className="text-[9px] text-text-dim mt-0.5">Land Component + Depreciated Structure · Audit-Backed</p>
       </div>
 
@@ -1060,8 +1060,8 @@ function SlideFactorialTable({ valuationResult }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="mb-3 shrink-0">
-        <p className="text-[8px] font-black uppercase tracking-[0.25em] text-accent/80">Stage 4 · Rate Grid</p>
-        <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-text-primary">Comparable Rate Table</h3>
+        <p className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/80">Stage 4 · Rate Grid</p>
+        <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Comparable Rate Table</h3>
         <p className="text-[9px] text-text-dim mt-0.5">{table.length} comparable projects · {totalValid} valid listings analyzed</p>
       </div>
 
@@ -1144,29 +1144,29 @@ export function downloadPDF(valuationResult) {
   .page { padding: 40px; max-width: 900px; margin: 0 auto; }
   .header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 20px; border-bottom: 3px solid #0891b2; margin-bottom: 24px; }
   .brand { display: flex; flex-direction: column; gap: 2px; }
-  .brand-name { font-size: 18px; font-weight: 900; color: #0891b2; letter-spacing: 0.1em; text-transform: uppercase; }
-  .brand-sub { font-size: 9px; color: #64748b; letter-spacing: 0.2em; text-transform: uppercase; }
+  .brand-name { font-size: 18px; font-weight: 900; color: #0891b2; letter-spacing: 0.04em; text-transform: uppercase; }
+  .brand-sub { font-size: 9px; color: #64748b; letter-spacing: 0.05em; text-transform: uppercase; }
   .doc-title { text-align: right; }
   .doc-title h1 { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; }
   .doc-title .date { font-size: 9px; color: #64748b; margin-top: 4px; }
   .cert-no { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; margin-top: 4px; }
 
   .section { margin-bottom: 24px; }
-  .section-title { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.25em; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
+  .section-title { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
   
   .hero-box { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #16a34a; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-  .hero-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3em; color: #16a34a; margin-bottom: 4px; }
+  .hero-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #16a34a; margin-bottom: 4px; }
   .hero-value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 900; color: #0f172a; }
   .hero-sub { font-size: 9px; color: #64748b; margin-top: 4px; }
-  .confidence-badge { padding: 6px 12px; border-radius: 20px; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; background: ${confidence === "High" ? "#dcfce7" : confidence === "Low" ? "#fef2f2" : "#fffbeb"}; color: ${confidence === "High" ? "#16a34a" : confidence === "Low" ? "#dc2626" : "#d97706"}; border: 1px solid ${confidence === "High" ? "#86efac" : confidence === "Low" ? "#fca5a5" : "#fcd34d"}; }
+  .confidence-badge { padding: 6px 12px; border-radius: 20px; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; background: ${confidence === "High" ? "#dcfce7" : confidence === "Low" ? "#fef2f2" : "#fffbeb"}; color: ${confidence === "High" ? "#16a34a" : confidence === "Low" ? "#dc2626" : "#d97706"}; border: 1px solid ${confidence === "High" ? "#86efac" : confidence === "Low" ? "#fca5a5" : "#fcd34d"}; }
 
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 16px; }
   .info-item { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding: 5px 0; }
-  .info-label { font-size: 9px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+  .info-label { font-size: 9px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
   .info-value { font-size: 9px; font-weight: 700; color: #334155; text-align: right; }
 
   table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 16px; }
-  th { background: #f8fafc; color: #64748b; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; text-align: left; font-size: 8px; }
+  th { background: #f8fafc; color: #64748b; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; text-align: left; font-size: 8px; }
   td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
   tr.subject-row { background: #eff6ff; }
   tr.subject-row td { font-weight: 700; }
@@ -1176,11 +1176,11 @@ export function downloadPDF(valuationResult) {
   .text-right { text-align: right; }
   .text-center { text-align: center; }
   .step-box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; }
-  .step-label { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #64748b; margin-bottom: 4px; }
+  .step-label { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
   .step-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 900; }
   .step-formula { font-size: 8px; color: #94a3b8; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
   .reasoning-box { background: #f8fafc; border-left: 3px solid #0891b2; padding: 10px 14px; border-radius: 0 8px 8px 0; margin-bottom: 10px; }
-  .reasoning-label { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #0891b2; margin-bottom: 4px; }
+  .reasoning-label { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #0891b2; margin-bottom: 4px; }
   .reasoning-text { font-size: 9px; color: #475569; line-height: 1.6; }
   .disclaimer { font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px; line-height: 1.7; }
   .page-break { page-break-before: always; }
@@ -1248,7 +1248,7 @@ export function downloadPDF(valuationResult) {
     <div style="background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; gap: 12px; align-items: flex-start;">
       <div style="font-size: 18px; line-height: 1;">⚠</div>
       <div>
-        <div style="font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #b45309; margin-bottom: 4px;">Limited Comparable Market Evidence</div>
+        <div style="font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #b45309; margin-bottom: 4px;">Limited Comparable Market Evidence</div>
         <div style="font-size: 9px; color: #78350f; line-height: 1.7;">${factorialAnalysis.limited_evidence_note || "Due to limited comparable market evidence, the valuation has been derived using the best available data for the subject property. For a detailed expert review and enhanced valuation assessment, please contact our team."}</div>
       </div>
     </div>
@@ -1280,7 +1280,7 @@ export function downloadPDF(valuationResult) {
     <div class="section-title">2. Property Location & Comparable Distribution Map</div>
     <div id="print-map" style="height: 350px; width: 100%; border: 1px solid #cbd5e1; border-radius: 12px; margin-top: 10px; margin-bottom: 15px;"></div>
     
-    <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; margin-bottom: 8px;">Map Legend & Key Details</div>
+    <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; margin-bottom: 8px;">Map Legend & Key Details</div>
     
     <div class="map-legend" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px; line-height: 1.4;">
       <!-- Subject property item -->
@@ -1398,7 +1398,7 @@ export function downloadPDF(valuationResult) {
     <p style="font-size:8px;color:#94a3b8;">Each spatial factor capped at ±5% · Total adjustment capped at ±20% per comparable</p>
     
     <div style="margin-top: 15px; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc;">
-      <div style="font-size: 8.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: #475569; margin-bottom: 8px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">
+      <div style="font-size: 8.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin-bottom: 8px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">
         Spatial Attributes Legend & Reference Guide
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 8px; line-height: 1.4; color: #475569;">
@@ -1455,7 +1455,7 @@ export function downloadPDF(valuationResult) {
         const details = factorialAnalysis.valuation_details || {};
         return `
       <div style="border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:15px; background:#f8fafc;">
-        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
+        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing: 0.04em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
           Confidence-Weighted Blending
         </div>
         
@@ -1502,7 +1502,7 @@ export function downloadPDF(valuationResult) {
       <!-- Spatial factor impact summary -->
       ${details.attribute_weights ? `
       <div style="border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:15px;">
-        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
+        <div style="font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing: 0.04em; color:#475569; margin-bottom:10px; border-bottom:1px dashed #cbd5e1; padding-bottom:6px;">
           Spatial Factor Weights & Net Impact
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -1543,7 +1543,7 @@ export function downloadPDF(valuationResult) {
     </div>`).join("")}
     ${factorialAnalysis.reconciliation_note ? `
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-top:12px;">
-      <div style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.2em;color:#d97706;margin-bottom:4px;">Reconciliation Note</div>
+      <div style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing: 0.05em;color:#d97706;margin-bottom:4px;">Reconciliation Note</div>
       <div style="font-size:9px;color:#475569;line-height:1.6;">${factorialAnalysis.reconciliation_note}</div>
     </div>` : ""}
   </div>` : ""}
@@ -1681,7 +1681,7 @@ export default function ValuationReport({ valuationResult }) {
           <FileText className="h-8 w-8 text-accent/60" />
         </div>
         <div>
-          <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary mb-2">
+          <h3 className="font-display text-base font-bold uppercase tracking-[0.04em] text-text-primary mb-2">
             Report Pending
           </h3>
           <p className="text-sm leading-6 text-text-secondary max-w-[280px]">

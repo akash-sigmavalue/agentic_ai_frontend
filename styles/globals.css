@@ -96,6 +96,11 @@
 .text-2xl, [class*="text-2xl"] { font-size: 26px !important; }
 .text-3xl, [class*="text-3xl"] { font-size: 32px !important; }
 
+/* Letter-Spacing Overrides — tighten uppercase labels globally */
+.tracking-wider { letter-spacing: 0.05em !important; }
+.tracking-widest { letter-spacing: 0.08em !important; }
+
+
 @layer utilities {
   .glass {
     background: var(--header-bg);

@@ -602,7 +602,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       }`}>
       <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-input px-4 py-3 shrink-0">
-        <span className="font-display text-[11px] uppercase tracking-[0.14em] text-accent-light">
+        <span className="font-display text-[11px] uppercase tracking-[0.04em] text-accent-light">
           {isMaximized ? "Fullscreen Map View" : "Subject Property Location"}
         </span>
         <div className="flex items-center gap-4">
@@ -882,7 +882,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             <div className="absolute top-3 right-3 z-[1000] w-[340px] max-h-[85%] overflow-y-auto custom-scrollbar rounded-2xl border border-white/[0.08] bg-bg-card/95 backdrop-blur-xl p-5 shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col gap-4 text-xs text-left animate-in slide-in-from-top-3 duration-300">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
-                <span className="font-display text-[10px] font-black uppercase tracking-[0.2em] text-[#22d3ee] flex items-center gap-1.5">
+                <span className="font-display text-[10px] font-black uppercase tracking-[0.05em] text-[#22d3ee] flex items-center gap-1.5">
                   <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
                   Map Layer Settings
                 </span>
@@ -1148,7 +1148,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/25 text-accent-light shadow-md animate-pulse">
                   <Compass className="h-8 w-8 text-accent" />
                 </div>
-                <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
+                <h3 className="font-display text-base font-bold uppercase tracking-[0.04em] text-text-primary">
                   Property Location Pending
                 </h3>
                 <p className="mt-3.5 text-sm leading-6 text-text-secondary">
@@ -1175,7 +1175,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                 {typeof window !== 'undefined' ? createPortal(
                   <div className="fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_0_100px_rgba(0,0,0,0.9)] flex flex-col">
                     <div className="flex items-center justify-between border-b border-border bg-bg-input px-5 py-4 shrink-0">
-                      <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-accent-light">
+                      <span className="font-display text-xs font-bold uppercase tracking-[0.04em] text-accent-light">
                         Fullscreen {mapMode === "amenity" ? "Amenities" : mapMode === "density" ? "Built-up Density" : mapMode === "cbd" ? "CBD Proximity" : "Road Infrastructure"} Table
                       </span>
                       <button
@@ -1203,7 +1203,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               <div className="flex shrink-0 flex-col rounded-2xl border border-border bg-bg-card p-3 shadow-panel">
                 <div className="mb-3 flex shrink-0 flex-col gap-3 border-b border-border/40 pb-3">
                   <div className="flex min-w-0 items-start gap-2">
-                    <h3 className="font-display text-sm font-bold uppercase tracking-[0.14em] text-text-primary flex items-center gap-2">
+                    <h3 className="font-display text-sm font-bold uppercase tracking-[0.04em] text-text-primary flex items-center gap-2">
                       <span className="text-accent shrink-0">
                         {mapMode === "amenity" ? (
                           <ClipboardList className="h-4.5 w-4.5" />
@@ -1366,7 +1366,7 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
       {/* Combined summary table across all projects */}
       {allCbds.length > 0 && (
         <div className="flex flex-col gap-2 rounded-2xl border border-border/40 p-4 bg-bg-deep/30">
-          <h4 className="font-display text-[11px] uppercase tracking-[0.14em] text-text-dim border-b border-white/5 pb-2 mb-1 flex items-center gap-1.5">
+          <h4 className="font-display text-[11px] uppercase tracking-[0.04em] text-text-dim border-b border-white/5 pb-2 mb-1 flex items-center gap-1.5">
             <Building className="h-3.5 w-3.5 text-accent" /> All Identified CBDs — Summary
           </h4>
           <table className="w-full text-left text-[10px]">

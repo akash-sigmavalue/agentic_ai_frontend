@@ -1547,7 +1547,7 @@ function ComparableTable({
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className="w-full min-w-max text-left text-xs">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim bg-[#161922]">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim bg-[#161922]">
               {selectable && (
                 <th className="px-3 py-2.5 font-semibold bg-[#161922]">
                   <input
@@ -1758,13 +1758,13 @@ function ComparableTable({
       )}
       {hasHiddenComparables && (
         <div className="flex items-center justify-between gap-3 border-t border-border bg-bg-input/40 px-4 py-3">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-text-dim">
             {showAllComparables ? "Showing all comparable projects" : `${hiddenComparableCount} farther project(s) hidden`}
           </span>
           <button
             type="button"
             onClick={() => setShowAllComparables((prev) => !prev)}
-            className="rounded-lg border border-[#fb923c]/35 bg-[#fb923c]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#fb923c] transition hover:border-[#fb923c] hover:bg-[#fb923c]/15"
+            className="rounded-lg border border-[#fb923c]/35 bg-[#fb923c]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[#fb923c] transition hover:border-[#fb923c] hover:bg-[#fb923c]/15"
           >
             {showAllComparables ? `Show within ${INITIAL_COMPARABLE_RADIUS_KM} km` : "Show more"}
           </button>
@@ -1801,29 +1801,17 @@ function ComparableTable({
           onClick={() => onToggleListingCollapsed?.(!listingCollapsed)}
           className="border-b border-border bg-[linear-gradient(180deg,rgba(251,146,60,0.08),rgba(251,146,60,0.03))] px-3 py-3 sm:px-5 sm:py-3 cursor-pointer select-none"
         >
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:gap-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3 sm:gap-4">
             <div className="min-w-0">
               <div className="flex items-start gap-3 min-w-0">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-sm">
-                🏘️
+                  🏘️
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-nowrap items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
+                    <span className="inline-flex items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#fb923c]">
                       Stage 3A - Comparable Discovery
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleListingCollapsed?.(!listingCollapsed);
-                      }}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
-                      aria-label={listingCollapsed ? "Expand comparable discovery" : "Collapse comparable discovery"}
-                      title={listingCollapsed ? "Expand" : "Collapse"}
-                    >
-                      {listingCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </button>
                     {!listingCollapsed && (
                       <button
                         type="button"
@@ -1844,9 +1832,8 @@ function ComparableTable({
                   </p>
                   {!listingCollapsed && (
                     <div
-                      className={`absolute left-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
-                        showComparableActionInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
-                      }`}
+                      className={`absolute left-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${showComparableActionInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                        }`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <p className="text-[10px] text-text-secondary leading-relaxed">
@@ -1872,6 +1859,20 @@ function ComparableTable({
                 ⛶
               </button>
             </div>
+            <div className="flex items-center shrink-0 self-start mt-0.5 ml-auto">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleListingCollapsed?.(!listingCollapsed);
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20"
+                aria-label={listingCollapsed ? "Expand comparable discovery" : "Collapse comparable discovery"}
+                title={listingCollapsed ? "Expand" : "Collapse"}
+              >
+                {listingCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           {!listingCollapsed && (
             <div className="mt-3 flex flex-col gap-3">
@@ -1892,7 +1893,7 @@ function ComparableTable({
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">Comparable Projects Detail</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-[#fb923c]">Comparable Projects Detail</h3>
                   <p className="text-[10px] text-text-dim">{visibleResultLabel}</p>
                 </div>
               </div>
@@ -1995,7 +1996,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
       <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className="w-full min-w-max text-left text-xs">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
               {selectable && (
                 <th className="px-3 py-2.5 font-semibold">
                   <input
@@ -2128,7 +2129,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-sm">⚠️</span>
-              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-400">
+              <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-amber-400">
                 {dropList.length} Dropped Project{dropList.length !== 1 ? "s" : ""} — Click to Review
               </span>
             </div>
@@ -2177,7 +2178,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
                   <button
                     type="button"
                     onClick={handleRestoreSelected}
-                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400 transition hover:border-emerald-500 hover:bg-emerald-500/20"
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.04em] text-emerald-400 transition hover:border-emerald-500 hover:bg-emerald-500/20"
                   >
                     ✓ Restore Selected ({selectedDropped.size})
                   </button>
@@ -2205,7 +2206,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-lg">⚠️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-amber-400">Dropped Comparable Projects</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-amber-400">Dropped Comparable Projects</h3>
                   <p className="text-[10px] text-text-dim">{dropList.length} projects filtered out — review and restore if needed</p>
                 </div>
               </div>
@@ -2318,7 +2319,7 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
     <>
       {rows.length > 0 && (
         <tr>
-          <td colSpan="100" className="bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">
+          <td colSpan="100" className="bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.05em] text-text-dim">
             {label} ({rows.length})
           </td>
         </tr>
@@ -2373,7 +2374,7 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
     <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full min-w-max text-left text-xs">
         <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+          <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
@@ -2411,7 +2412,7 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
             <div className="flex items-start gap-2 min-w-0">
               <span className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm shrink-0">📊</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-400 shrink-0">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] text-cyan-400 shrink-0">
                   Stage 3B - Market Signal
                 </span>
                 <span className="mt-1 block rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">{(listings || []).length} web + {dbRows.length} db records</span>
@@ -2457,7 +2458,7 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">Market Signal</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-cyan-400">Market Signal</h3>
                   <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
@@ -2497,7 +2498,7 @@ function TransactionTable({ transactions }) {
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full min-w-max text-left text-xs">
         <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+          <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
             <TableHeaderCell columnKey="property_type_raw" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
             <TableHeaderCell columnKey="property_type" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
@@ -2550,7 +2551,7 @@ function TransactionTable({ transactions }) {
         <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-400">Transactions</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</span>
             <div className="ml-auto flex items-center gap-3">
               <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
               <button
@@ -2571,7 +2572,7 @@ function TransactionTable({ transactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">Transactions</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</h3>
                   <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
                 </div>
               </div>
@@ -2914,7 +2915,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
       <div className={`hidden sm:block overflow-x-auto overflow-y-auto custom-scrollbar ${isMaximized ? '' : 'max-h-[500px]'}`}>
         <table className="w-full text-left text-xs relative">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
               <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               <TableHeaderCell columnKey="cleaned_currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -3157,7 +3158,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
             <div className="flex items-start gap-2 min-w-0">
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#fb923c]">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#fb923c]">
                   Stage 3C - Cleaned & Normalized Data
                 </span>
                 <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">
@@ -3195,75 +3196,75 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
         </div>
         {!collapsed && (
           <>
-        {/* ── Tab Bar ────────────────────────────────────── */}
-        <div className="border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-1 sm:p-0.5 gap-1 sm:gap-0.5 w-full sm:w-max">
-            <button
-              onClick={() => setActiveTab("valid")}
-              className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
-            >
-              ✅ Valid ({listings.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("outliers")}
-              className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
-            >
-              ⚠️ Outliers ({reviewListings.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("dropped")}
-              className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
-            >
-              ❌ Dropped ({droppedListings.length})
-            </button>
-          </div>
-        </div>
+            {/* ── Tab Bar ────────────────────────────────────── */}
+            <div className="border-b border-white/[0.06] bg-bg-deep/30 px-4 py-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-1 sm:p-0.5 gap-1 sm:gap-0.5 w-full sm:w-max">
+                <button
+                  onClick={() => setActiveTab("valid")}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                >
+                  ✅ Valid ({listings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("outliers")}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                >
+                  ⚠️ Outliers ({reviewListings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("dropped")}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                >
+                  ❌ Dropped ({droppedListings.length})
+                </button>
+              </div>
+            </div>
 
-        {showPlotControls && onRecalculate && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
-            <input
-              type="number"
-              step="0.1"
-              placeholder="FSI"
-              value={fsiGlobal}
-              onChange={e => setFsiGlobal(e.target.value)}
-              className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
-            />
-            <input
-              type="number"
-              placeholder="Construction Cost (₹/sqft)"
-              value={ccGlobal}
-              onChange={e => setCcGlobal(e.target.value)}
-              className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
-            />
-            <div className="h-4 w-px bg-border mx-2" />
-            <button
-              onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
-              className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
-            >
-              Apply All & Recalculate
-            </button>
-            {Object.keys(rowOverrides).length > 0 && (
-              <>
+            {showPlotControls && onRecalculate && (
+              <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="FSI"
+                  value={fsiGlobal}
+                  onChange={e => setFsiGlobal(e.target.value)}
+                  className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                />
+                <input
+                  type="number"
+                  placeholder="Construction Cost (₹/sqft)"
+                  value={ccGlobal}
+                  onChange={e => setCcGlobal(e.target.value)}
+                  className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                />
+                <div className="h-4 w-px bg-border mx-2" />
                 <button
-                  onClick={() => onRecalculate("", "", rowOverrides, "edited")}
-                  className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                  onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
+                  className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
                 >
-                  Recalculate Edits
+                  Apply All & Recalculate
                 </button>
-                <button
-                  onClick={() => setRowOverrides({})}
-                  className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
-                >
-                  Reset Edits
-                </button>
-              </>
+                {Object.keys(rowOverrides).length > 0 && (
+                  <>
+                    <button
+                      onClick={() => onRecalculate("", "", rowOverrides, "edited")}
+                      className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                    >
+                      Recalculate Edits
+                    </button>
+                    <button
+                      onClick={() => setRowOverrides({})}
+                      className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+                    >
+                      Reset Edits
+                    </button>
+                  </>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {tableContent}
+            {tableContent}
           </>
         )}
       </div>
@@ -3275,7 +3276,7 @@ function CleanedTable({ listings, reviewListings = [], droppedListings = [], onR
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🧹</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#fb923c]">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-[#fb923c]">
                     {hasPlotData ? `Normalized Listing & ${derivedRateLabel} Data` : "Normalized Listing Data"}
                   </h3>
                   {showPlotControls && onRecalculate && (
@@ -3542,7 +3543,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className="w-full min-w-max text-left text-xs">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-text-dim">
+            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
               <th className="px-4 py-3 font-semibold w-10">
                 <span className="sr-only">Select</span>
               </th>
@@ -3721,18 +3722,16 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
                               {entries.map((item) => (
                                 <span
                                   key={item.label}
-                                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] ${
-                                    row.is_subject
-                                      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
-                                      : "border-blue-500/35 bg-blue-500/10 text-blue-300"
-                                  }`}
+                                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.04em] ${row.is_subject
+                                    ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+                                    : "border-blue-500/35 bg-blue-500/10 text-blue-300"
+                                    }`}
                                 >
                                   <span className="truncate uppercase">{item.label}</span>
-                                  <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${
-                                    row.is_subject
-                                      ? "bg-emerald-500/15 text-emerald-300"
-                                      : "bg-blue-500/15 text-blue-200"
-                                  }`}>
+                                  <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${row.is_subject
+                                    ? "bg-emerald-500/15 text-emerald-300"
+                                    : "bg-blue-500/15 text-blue-200"
+                                    }`}>
                                     {item.count}
                                   </span>
                                 </span>
@@ -3856,7 +3855,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(167,139,250,0.15)] text-sm shrink-0">📈</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-[#a78bfa]/30 bg-[rgba(167,139,250,0.12)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#a78bfa] sm:text-[11px] sm:tracking-[0.16em]">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#a78bfa]/30 bg-[rgba(167,139,250,0.12)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[#a78bfa] sm:text-[11px] sm:tracking-[0.05em]">
                   Stage 4 - Comparable Project Metrics
                 </span>
                 <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap w-fit sm:text-[10px]">
@@ -3883,7 +3882,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
 
       <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent-light">Ready For Final Rate</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent-light">Ready For Final Rate</p>
           <p className="mt-1 text-xs text-text-dim">Review the Comparable Project Metrics and map factors, then calculate the saleable-area rate.</p>
         </div>
         <button
@@ -3909,7 +3908,7 @@ function FactorialTable({ data, onCalculateRate, isCalculatingRate = false, canC
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(167,139,250,0.15)] text-lg">📈</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-[#a78bfa]">Stage 4 - Comparable Project Metrics</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-[#a78bfa]">Stage 4 - Comparable Project Metrics</h3>
                   <p className="text-[10px] text-text-dim">{data.table.length} projects · {data.total_valid} listings</p>
                 </div>
               </div>
@@ -3957,7 +3956,7 @@ function ValuationResult({ data, currency = "INR" }) {
               🎯
             </span>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#10b981]">
+              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#10b981]">
                 Final Valuation
               </p>
               <p className="text-[10px] text-text-dim">
@@ -4078,18 +4077,16 @@ function AmenityCellChips({ summary, isSubject }) {
         {entries.slice(0, 4).map((item) => (
           <span
             key={item.label}
-            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] ${
-              isSubject
-                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
-                : "border-blue-500/35 bg-blue-500/10 text-blue-300"
-            }`}
+            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.04em] ${isSubject
+              ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+              : "border-blue-500/35 bg-blue-500/10 text-blue-300"
+              }`}
           >
             <span className="truncate uppercase">{item.label}</span>
-            <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${
-              isSubject
-                ? "bg-emerald-500/15 text-emerald-300"
-                : "bg-blue-500/15 text-blue-200"
-            }`}>
+            <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${isSubject
+              ? "bg-emerald-500/15 text-emerald-300"
+              : "bg-blue-500/15 text-blue-200"
+              }`}>
               {item.count}
             </span>
           </span>
@@ -4356,7 +4353,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-lg sm:h-10 sm:w-10 sm:text-xl">🛡️</div>
           <div className="min-w-0">
-            <h2 className="break-words text-[10px] font-black uppercase tracking-[0.16em] text-text-primary sm:tracking-[0.3em]">Valuation Synthesis</h2>
+            <h2 className="break-words text-[10px] font-black uppercase tracking-[0.05em] text-text-primary sm:tracking-[0.05em]">Stage 5 - Valuation Synthesis</h2>
             <p className="mt-0.5 break-words text-[8px] leading-relaxed text-text-dim opacity-60 sm:uppercase sm:tracking-widest">Comparable adjustments and confidence-weighted valuation</p>
             {/* <div className={`flex min-h-9 items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-center text-[8px] font-black uppercase tracking-wide sm:px-3 sm:text-[9px] sm:tracking-widest ${confidence === "High" ? "border-green-500/30 bg-green-500/10 text-green-400" : confidence === "Low" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>
               <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "currentColor" }}></span>
@@ -4418,7 +4415,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 ⚠
               </div>
               <div className="flex-1 min-w-0">
-                <p className="mb-1.5 break-words text-[9px] font-black uppercase leading-relaxed tracking-[0.12em] text-amber-400 sm:tracking-[0.25em]">
+                <p className="mb-1.5 break-words text-[9px] font-black uppercase leading-relaxed tracking-[0.04em] text-amber-400 sm:tracking-[0.05em]">
                   Limited Comparable Market Evidence — Subject-Only Valuation
                 </p>
                 <p className="text-[10px] text-amber-200/80 leading-relaxed">
@@ -4435,7 +4432,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           <div className="mb-4 flex min-w-0 items-start gap-3 sm:items-center">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 border border-accent/30 text-sm">⚖️</span>
             <div className="min-w-0">
-              <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.12em] text-text-primary sm:text-[11px] sm:tracking-[0.2em]">Per-Comparable Factor Adjustments</h3>
+              <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.04em] text-text-primary sm:text-[11px] sm:tracking-[0.05em]">Per-Comparable Factor Adjustments</h3>
               <p className="mt-0.5 break-words text-[9px] leading-relaxed text-text-dim">Each factor ±5% · Total cap ±{(capLimit * 100).toFixed(0)}% · {subjectListings} subject listings</p>
             </div>
           </div>
@@ -4548,7 +4545,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           {/* Factor breakdown and adjustment sliders */}
           {compRows.some(r => r.factor_reasoning) && (
             <div className="mt-6 space-y-4 ">
-              <h4 className="text-[9px] font-black uppercase tracking-[0.16em] text-text-primary sm:tracking-[0.25em] ">Factor Adjustment Controls</h4>
+              <h4 className="text-[9px] font-black uppercase tracking-[0.05em] text-text-primary sm:tracking-[0.05em] ">Factor Adjustment Controls</h4>
               <div className={`grid min-w-0 grid-cols-1 gap-3 sm:gap-4 ${isSectionMaximized ? "xl:grid-cols-2" : ""}`}>
                 {compRows.map((row, i) => {
                   const isModified = isProjectModified(row.project_name);
@@ -4738,7 +4735,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-purple/20 border border-accent-purple/30 text-sm">🧪</span>
               <div className="min-w-0 ">
-                <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.12em] text-text-primary sm:text-[11px] sm:tracking-[0.25em]">Appraisal Blending & Weights</h3>
+                <h3 className="break-words text-[10px] font-black uppercase leading-relaxed tracking-[0.04em] text-text-primary sm:text-[11px] sm:tracking-[0.05em]">Appraisal Blending & Weights</h3>
                 <p className="mt-0.5 text-[8px] leading-relaxed text-text-dim opacity-60 sm:uppercase sm:tracking-widest">Adjust confidence weight balance for final valuation</p>
               </div>
             </div>
@@ -4874,7 +4871,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-green-500/[0.03] to-transparent" />
 
               <div className="w-full min-w-0 space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/80 font-black">Derived Rate</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.05em] text-green-400/80 font-black">Derived Rate</span>
                 <div className="flex items-baseline gap-1">
                   <h2 className="min-w-0 font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_12px_rgba(34,197,94,0.3)] sm:text-4xl">
                     {fmtRate(finalRate)}
@@ -4884,7 +4881,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
                 {rateRange && (
                   <div className="w-full max-w-xs mt-1 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-[0.22em] text-green-400/70">Indicative Rate Band</span>
+                      <span className="text-[8px] font-black uppercase tracking-[0.05em] text-green-400/70">Indicative Rate Band</span>
                       <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
                     </div>
                     {/* Track */}
@@ -4936,14 +4933,14 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
 
               {selectedArea > 0 && (
                 <div className="w-full min-w-0 space-y-2 border-t border-border-soft pt-6">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent/80 font-black">Property Value</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.05em] text-accent/80 font-black">Property Value</span>
                   <h2 className="font-mono text-2xl font-black text-text-primary drop-shadow-[0_0_16px_rgba(167,139,250,0.4)] sm:text-4xl">
                     {fmtCurrencyInUnits(exactValue)}
                   </h2>
                   {valueRange && (
                     <div className="w-full space-y-1.5 mt-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-black uppercase tracking-[0.22em] text-accent/70">Indicative Value Band</span>
+                        <span className="text-[8px] font-black uppercase tracking-[0.05em] text-accent/70">Indicative Value Band</span>
                         <span className="text-[8px] font-bold uppercase tracking-widest text-text-dim opacity-60">{rangeLabel}</span>
                       </div>
                       {/* Track */}
@@ -5024,7 +5021,7 @@ function FactoringResultCard({ data, area_unit, subjectData, onUpdateData }) {
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/20 text-lg">🛡️</span>
             <div className="min-w-0">
-              <p className="truncate text-[9px] font-black uppercase tracking-[0.12em] text-text-primary sm:text-[10px] sm:tracking-[0.3em]">Valuation Synthesis</p>
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.04em] text-text-primary sm:text-[10px] sm:tracking-[0.05em]">Valuation Synthesis</p>
               <p className="hidden truncate text-[8px] font-semibold uppercase tracking-widest text-text-dim opacity-50 sm:block">Per-comparable adjustment → Confidence-weighted blend</p>
             </div>
           </div>
@@ -5114,7 +5111,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
           🏗️
         </div>
         <div>
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-text-primary">Cost Approach Parameters</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.05em] text-text-primary">Cost Approach Parameters</h3>
           <p className="text-[8px] text-text-dim mt-0.5 uppercase tracking-widest font-bold opacity-50">Please enter cost-specific details for subject project</p>
         </div>
       </div>
@@ -5145,7 +5142,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
 
           return (
             <label key={inp.field} className="flex flex-col gap-1.5">
-              <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">
+              <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.05em] text-text-dim leading-tight">
                 {label}
               </span>
               <input
@@ -5166,7 +5163,7 @@ function CostInputsForm({ schema, values, onChange, onSubmit, isCalculating, sub
       <button
         onClick={onSubmit}
         disabled={isCalculating}
-        className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
+        className="w-full rounded-2xl bg-gradient-to-r from-warning to-amber-500 py-3.5 text-xs font-black uppercase tracking-[0.05em] text-bg-deep shadow-lg shadow-warning/10 transition duration-300 hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none"
       >
         {isCalculating ? "Calculating Cost Valuation..." : (submitLabel || "Execute Cost Approach Calculation")}
       </button>
@@ -5234,7 +5231,7 @@ function CostResultCard({ data, subjectData }) {
           <div className="flex items-center gap-5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
             <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Cost Approach Valuation Appraisal</h2>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.05em] text-white">Cost Approach Valuation Appraisal</h2>
               <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Land + Depreciated Structure Method</p>
             </div>
           </div>
@@ -5247,7 +5244,7 @@ function CostResultCard({ data, subjectData }) {
             </button>
             <div className="flex items-center gap-1.5 rounded-xl border border-success/20 bg-success/5 px-3 py-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"></span>
-              <span className="text-[9px] font-black uppercase tracking-[0.14em] text-success">Verified Audit</span>
+              <span className="text-[9px] font-black uppercase tracking-[0.04em] text-success">Verified Audit</span>
             </div>
           </div>
         </div>
@@ -5255,7 +5252,7 @@ function CostResultCard({ data, subjectData }) {
 
       <div className="p-8 space-y-8">
         <section className="space-y-4">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-text-primary">Appraisal Step Calculation Audit</h3>
+          <h3 className="text-[11px] font-black uppercase tracking-[0.05em] text-text-primary">Appraisal Step Calculation Audit</h3>
 
           <div className="grid gap-4 md:grid-cols-2">
             {/* Step 1 */}
@@ -5334,7 +5331,7 @@ function CostResultCard({ data, subjectData }) {
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
 
           <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
-            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-success/70">Final Cost Approach Villa Value</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.05em] text-success/70">Final Cost Approach Villa Value</span>
 
             <div className="space-y-1">
               <h1 className="font-mono text-5xl font-black text-text-primary drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
@@ -5449,7 +5446,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
               </span>
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">
                 AI Quick Estimate Running
               </p>
               <p className="mt-1 text-xs text-text-secondary">
@@ -5511,9 +5508,9 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                    <p className={`text-[11px] font-bold uppercase tracking-[0.04em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
                       }`}>
-                      <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                      <p className={`text-[11px] font-bold uppercase tracking-[0.04em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
                         }`}>
                         {stage.label}
                       </p>
@@ -5538,7 +5535,7 @@ function QuickEstimateProgressPanel({ progress, includeCost, propertyLabel, loca
           <div className="overflow-hidden rounded-xl border border-accent/20 bg-bg-input/40 animate-in fade-in slide-in-from-bottom-2 duration-400">
             <div className="flex items-center gap-2 border-b border-accent/15 bg-accent/5 px-3.5 py-2">
               <span className="text-accent text-[10px]">◈</span>
-              <p className="text-[9px] font-black uppercase tracking-[0.22em] text-accent">
+              <p className="text-[9px] font-black uppercase tracking-[0.05em] text-accent">
                 Selected Comparables
               </p>
               <span className="ml-auto rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[8px] font-bold text-accent">
@@ -5638,7 +5635,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
 
     return (
       <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">
+        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">
           {config.label}{isRequired ? " *" : ""}
         </span>
         {config.type === "select" ? (
@@ -5675,7 +5672,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
               <Zap className="h-5 w-5 text-accent" />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">AI Quick Estimate</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">AI Quick Estimate</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                 Enter the subject details once and get a direct valuation result.
               </p>
@@ -5691,7 +5688,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
         <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Property Information</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Property Information</p>
               <p className="mt-1 text-[11px] text-text-dim">Start with the identity fields, then add the remaining details.</p>
             </div>
             <div className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
@@ -5705,7 +5702,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
-            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Property Type</span>
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Property Type</span>
             <select
               value={propertyType}
               onChange={(event) => updateField("property_type", event.target.value)}
@@ -5720,7 +5717,7 @@ function QuickEstimatePanel({ values, onChange, onSubmit, disabled }) {
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Approach</span>
+            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach</span>
             <select
               value={values.recommended_approach}
               onChange={(event) => updateField("recommended_approach", event.target.value)}
@@ -5766,7 +5763,7 @@ function PropertyProfilingLiveCard({ streamingNote, isStreaming }) {
             <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
           </div>
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-400 ml-1">
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-slate-400 ml-1">
             Stage 1 • Property Profiling Status
           </span>
         </div>
@@ -5884,10 +5881,10 @@ function StageDetailCard({ content, forceCollapsed = false }) {
       <div className="flex items-start justify-between gap-3 border-b border-warning/15 bg-warning/5 px-4 py-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-warning">
+            <span className="inline-flex items-center rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.05em] text-warning">
               {parsed.title}
             </span>
-            <span className="inline-flex items-center rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-success">
+            <span className="inline-flex items-center rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.04em] text-success">
               Verified
             </span>
           </div>
@@ -5917,17 +5914,16 @@ function StageDetailCard({ content, forceCollapsed = false }) {
                   key={`${field.key}-${field.value}`}
                   className="rounded-xl border border-border/60 bg-bg-deep/40 px-3 py-2.5"
                 >
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-text-dim">
+                  <p className="text-[9px] font-black uppercase tracking-[0.05em] text-text-dim">
                     {field.label}
                   </p>
                   <p
-                    className={`mt-1 text-sm font-semibold leading-snug ${
-                      isBoolean
-                        ? field.value.toLowerCase() === "true"
-                          ? "text-success"
-                          : "text-warning"
-                        : "text-text-primary"
-                    } ${isCoordinateField ? "font-mono text-[12px]" : ""}`}
+                    className={`mt-1 text-sm font-semibold leading-snug ${isBoolean
+                      ? field.value.toLowerCase() === "true"
+                        ? "text-success"
+                        : "text-warning"
+                      : "text-text-primary"
+                      } ${isCoordinateField ? "font-mono text-[12px]" : ""}`}
                   >
                     {isBoolean ? (field.value.toLowerCase() === "true" ? "Yes" : "No") : field.value}
                   </p>
@@ -6068,9 +6064,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     // Pass 1 – full subject seed: write every known scalar value from subjectObj
     if (subjectObj && typeof subjectObj === 'object') {
+      const oq = subjectObj._original_query || originalQuestion || "";
+      const oqLow = oq.toLowerCase().trim();
       Object.entries(subjectObj).forEach(([k, v]) => {
         if (v === null || v === undefined || v === '') return;
         if (typeof v === 'object') return; // skip nested objects / arrays
+        if (typeof v === 'string') {
+          const vLow = v.toLowerCase().trim();
+          if (vLow && oqLow && (vLow === oqLow || (vLow.length > 30 && oqLow.includes(vLow)))) return;
+        }
         vals[k] = v;
       });
     }
@@ -6849,13 +6851,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   // ── Subject-Only Listing Fetch (no comparables found anywhere) ───
   const submitUserFormEstimate = async () => {
     setShowUserFormModal(false);
-    
+
     const payload = buildQuickEstimatePayload(userFormValues);
-    
+
     autoVerifyFormRef.current = true;
     setSubjectData(payload);
     subjectDataRef.current = payload;
-    
+
     const details = Object.entries(payload)
       .filter(([_, v]) => v !== undefined && v !== null && v !== "")
       .map(([k, v]) => {
@@ -6864,9 +6866,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         return `${titleCaseLabel}: ${v}`;
       })
       .join(", ");
-      
+
     const prompt = `[SYSTEM: USER_FORM_SUBMISSION] Here are the verified property details: ${details}. The user has already verified these details. Do NOT ask for extraction verification. Proceed immediately to comparable search or cost calculation.`;
-    
+
     submitQuestion(prompt, false, "Submitted property details via User Form.", true);
   };
 
@@ -8914,7 +8916,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 }
                 return true;
               })
-              .map(([k, v]) => ({ field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: v }));
+              .map(([k, v]) => {
+                let defVal = v;
+                if (typeof v === 'string') {
+                  const oq = ents?._original_query || originalQuestion || "";
+                  const oqLow = oq.toLowerCase().trim();
+                  const vLow = v.toLowerCase().trim();
+                  if (vLow && oqLow && (vLow === oqLow || (vLow.length > 30 && oqLow.includes(vLow)))) {
+                    defVal = "";
+                  }
+                }
+                return { field: k, label: k.replaceAll("_", " "), type: typeof v === "number" ? "number" : "text", default: defVal };
+              });
             if (ents.coordinates && typeof ents.coordinates === 'object') {
               if (ents.coordinates.lat) fields.push({ field: "lat", label: "Latitude", type: "number", default: ents.coordinates.lat });
               if (ents.coordinates.lng) fields.push({ field: "lng", label: "Longitude", type: "number", default: ents.coordinates.lng });
@@ -9536,7 +9549,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     if (schema.type === "select" || (schema.options && schema.options.length > 0)) {
       return (
         <label key={schema.field} className="flex flex-col gap-1 sm:gap-1.5 min-w-[140px] sm:min-w-[170px] flex-1">
-          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">
+          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.05em] text-text-dim leading-tight">
             {schema.label || humanizeFieldName(schema.field)}
             {isRequired && <span className="text-danger ml-0.5">*</span>}
             {isFilled && <span className="ml-1 inline-flex items-center rounded-full bg-success/20 px-1 sm:px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success"><span className="sm:hidden">✓</span><span className="hidden sm:inline">Autofilled</span></span>}
@@ -9561,7 +9574,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
     return (
       <label key={schema.field} className="flex flex-col gap-1 sm:gap-1.5 min-w-[140px] sm:min-w-[170px] flex-1">
-        <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim flex items-center gap-1 leading-tight">
+        <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.05em] text-text-dim flex items-center gap-1 leading-tight">
           {schema.label || humanizeFieldName(schema.field)}
           {isRequired && <span className="text-danger ml-0.5">*</span>}
           {isFilled && <span className="inline-flex items-center rounded-full bg-success/20 px-1 sm:px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-success"><span className="sm:hidden">✓</span><span className="hidden sm:inline">Autofilled</span></span>}
@@ -9579,7 +9592,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
             {sublocalityItems.map((item) => (
               <span
                 key={item}
-                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-info"
               >
                 {item}
               </span>
@@ -9740,42 +9753,41 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           className="border-b border-warning/15 bg-warning/5 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer select-none shrink-0"
         >
           <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-sm sm:text-base">
-              {currentMeta.icon}
-            </div>
-            <div className="relative">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">
-                  {gateTitle}
-                </p>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowActionRequiredInfo((prev) => !prev);
-                  }}
-                  className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-[9px] font-black text-warning leading-none transition hover:bg-warning/20"
-                  aria-label="Show action required details"
-                  title="Show action required details"
+            <div className="flex items-center gap-3">
+              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-warning/20 bg-warning/10 text-sm sm:text-base">
+                {currentMeta.icon}
+              </div>
+              <div className="relative">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-warning">
+                    {gateTitle}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowActionRequiredInfo((prev) => !prev);
+                    }}
+                    className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-[9px] font-black text-warning leading-none transition hover:bg-warning/20"
+                    aria-label="Show action required details"
+                    title="Show action required details"
+                  >
+                    i
+                  </button>
+                  {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
+                </div>
+                <div
+                  className={`absolute left-0 top-full z-30 mt-2 w-[280px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${showActionRequiredInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                    }`}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  i
-                </button>
-                {gateCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
-              </div>
-              <div
-                className={`absolute left-0 top-full z-30 mt-2 w-[280px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
-                  showActionRequiredInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
-                }`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
-                <span className="mt-1 block text-[10px] text-text-secondary leading-relaxed">
-                  Please review and verify the subject property parameters for Gate {visualStep} to proceed.
-                </span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.05em] text-warning block">Action Required</span>
+                  <span className="mt-1 block text-[10px] text-text-secondary leading-relaxed">
+                    Please review and verify the subject property parameters for Gate {visualStep} to proceed.
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
             <button
               type="button"
               onClick={(e) => {
@@ -9796,7 +9808,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <button
                   key={g.step}
                   onClick={() => gateStep > g.step && setGateStep(g.step)}
-                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.04em] transition
                     ${g.step === gateStep
                       ? "bg-warning text-bg-deep shadow"
                       : g.step < gateStep
@@ -9902,9 +9914,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                             i
                           </button>
                           <div
-                            className={`absolute right-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${
-                              showGeocodeTipInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
-                            }`}
+                            className={`absolute right-0 top-full z-30 mt-2 w-[320px] rounded-xl border border-warning/25 bg-bg-card/98 p-3 shadow-lg backdrop-blur-md transition-all duration-200 ${showGeocodeTipInfo ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1"
+                              }`}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <p className="text-[10px] text-text-dim leading-relaxed">
@@ -9924,7 +9935,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
                         <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">Latitude</span>
+                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.05em] text-text-dim leading-tight">Latitude</span>
                           <input
                             type="text"
                             value={gateValues["lat"] ?? ""}
@@ -9941,7 +9952,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           />
                         </label>
                         <label className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
-                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.16em] text-text-dim leading-tight">Longitude</span>
+                          <span className="pl-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-tight sm:tracking-[0.05em] text-text-dim leading-tight">Longitude</span>
                           <input
                             type="text"
                             value={gateValues["lng"] ?? ""}
@@ -10167,7 +10178,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
                 <Bot className="h-8 w-8 text-accent" />
               </div>
-              <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
+              <h3 className="font-display text-base font-bold uppercase tracking-[0.04em] text-text-primary">
                 Start A Valuation Conversation
               </h3>
               <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
@@ -10228,9 +10239,15 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               {visibleMessages.map((message, index) => (
                 <div
                   key={`${message.role}-${index}`}
-                  className={`animate-slide-in ${message.role === "user" ? "ml-8" : "mr-8"}`}
+                  className={`animate-slide-in ${(message.role === "user" && parseStageDetailMessage(message.content)) ||
+                    message.meta === "comparable results" ||
+                    message.content === "Running property profiling..." ||
+                    (message.role === "assistant" && message.meta === "Live" && message.content?.toLowerCase()?.includes("property profiling"))
+                    ? ""
+                    : message.role === "user" ? "ml-8" : "mr-8"
+                    }`}
                 >
-                  <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.22em] text-text-dim">
+                  <p className="mb-1.5 px-1 text-[10px] uppercase tracking-[0.05em] text-text-dim">
                     {message.role === "user" && parseStageDetailMessage(message.content)
                       ? STAGE_PROFILING_TITLE
                       : message.role === "user"
@@ -10243,9 +10260,9 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         ? "p-0 bg-transparent border-0 shadow-none"
                         : message.role === "user"
                           ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
-                        : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
-                          ? "p-0 bg-transparent border-0 shadow-none"
-                          : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
+                          : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
+                            ? "p-0 bg-transparent border-0 shadow-none"
+                            : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
                     }
                   >
                     {message.role === "user" && parseStageDetailMessage(message.content) ? (
@@ -10266,7 +10283,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     )}
                     {message.meta === "quick estimate result" && (message.sub_locality || (Array.isArray(message.sub_locality_list) && message.sub_locality_list.length > 0)) && (
                       <div className="mt-3 rounded-2xl border border-info/20 bg-info/5 px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-info">Fetched Sub-locality</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-info">Fetched Sub-locality</p>
                         {message.sub_locality && (
                           <p className="mt-1 text-sm font-medium text-text-primary">{message.sub_locality}</p>
                         )}
@@ -10275,7 +10292,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                             {message.sub_locality_list.map((item) => (
                               <span
                                 key={item}
-                                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+                                className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-info"
                               >
                                 {item}
                               </span>
@@ -10458,7 +10475,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                             <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
                             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
                           </div>
-                          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-slate-500 ml-1">Listing Fetch Status</span>
+                          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-slate-500 ml-1">Listing Fetch Status</span>
                         </div>
                         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
@@ -10498,7 +10515,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         return (
                           <div className="border-t border-border/30 bg-bg-card/80 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
                             <div className="border-b border-border/30 bg-accent-light/5 px-3 py-2 flex items-center justify-between">
-                              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-accent-light font-mono">Live Fetch Status</span>
+                              <span className="text-[9px] font-black uppercase tracking-[0.05em] text-accent-light font-mono">Live Fetch Status</span>
                               <span className="text-[9px] text-text-dim font-mono">
                                 ({Object.values(projectFetchStatuses).filter(s => s === "done").length}/{Object.keys(projectFetchStatuses).length} done)
                               </span>
@@ -10571,7 +10588,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   {isCleaningStreaming && (
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 shadow-xl overflow-hidden backdrop-blur-md">
                       <div className="flex items-center justify-between gap-3 border-b border-emerald-500/10 bg-emerald-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-emerald-300">Cleaning Status</span>
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-emerald-300">Cleaning Status</span>
                         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 select-none">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse shadow-[0_0_6px_#86efac]" />
                           Processing
@@ -10589,7 +10606,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   {isFactorialStreaming && (
                     <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 shadow-xl overflow-hidden backdrop-blur-md">
                       <div className="flex items-center justify-between gap-3 border-b border-purple-500/10 bg-purple-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-purple-300">Factorial Table Status</span>
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-purple-300">Factorial Table Status</span>
                         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-300 select-none">
                           <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse shadow-[0_0_6px_#c084fc]" />
                           Processing
@@ -10607,7 +10624,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   {isFactorialAnalysisStreaming && (
                     <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 shadow-xl overflow-hidden backdrop-blur-md">
                       <div className="flex items-center justify-between gap-3 border-b border-pink-500/10 bg-pink-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-pink-300">Factorial Analysis Status</span>
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-pink-300">Factorial Analysis Status</span>
                         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-300 select-none">
                           <span className="h-1.5 w-1.5 rounded-full bg-pink-300 animate-pulse shadow-[0_0_6px_#f9a8d4]" />
                           Processing
@@ -10644,52 +10661,56 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     onClick={() => setCtaListingCollapsed(!ctaListingCollapsed)}
                     className="border-b border-accent-light/15 bg-accent-light/5 px-4 py-3 cursor-pointer select-none"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
-                        <FileSearch className="h-5 w-5 text-accent-light" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-light">
-                            Step 2 — Fetch Listings
-                          </p>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowListingFetchInfo((prev) => !prev);
-                              }}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-accent-light/30 bg-accent-light/10 text-[10px] font-black text-accent-light leading-none transition hover:bg-accent-light/20 focus:outline-none focus:ring-2 focus:ring-accent-light/40"
-                              aria-label="Show listing fetch info"
-                              title="Show listing fetch info"
-                            >
-                              i
-                            </button>
-                            {showListingFetchInfo && (
-                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-accent-light/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
-                                <p className="text-xs leading-relaxed text-slate-100">
-                                  The listing pipeline will search for realtimelistings for the subject property + your selected comparables.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
+                    <div className="flex items-start justify-between w-full gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-light/20 bg-accent-light/10 text-base font-semibold text-accent-light">
+                          <FileSearch className="h-5 w-5 text-accent-light" />
                         </div>
-                        <p className="mt-1 text-sm text-text-secondary">
-                          {selectedComps.size > 0
-                            ? (() => {
-                              const selected = Array.from(selectedComps).map(i => comparableData[i]);
-                              const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
-                              const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
-                              const newCount = selected.length - skipCount;
-                              if (skipCount > 0) {
-                                return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
-                              }
-                              return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch realtime sale/rent listings.`;
-                            })()
-                            : "Select at least one comparable from the table above to proceed."}
-                        </p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent-light">
+                              Step 2 — Fetch Listings
+                            </p>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowListingFetchInfo((prev) => !prev);
+                                }}
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-accent-light/30 bg-accent-light/10 text-[10px] font-black text-accent-light leading-none transition hover:bg-accent-light/20 focus:outline-none focus:ring-2 focus:ring-accent-light/40"
+                                aria-label="Show listing fetch info"
+                                title="Show listing fetch info"
+                              >
+                                i
+                              </button>
+                              {showListingFetchInfo && (
+                                <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-accent-light/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                  <p className="text-xs leading-relaxed text-slate-100">
+                                    The listing pipeline will search for realtimelistings for the subject property + your selected comparables.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-1 text-sm text-text-secondary">
+                            {selectedComps.size > 0
+                              ? (() => {
+                                const selected = Array.from(selectedComps).map(i => comparableData[i]);
+                                const getCompId = c => String(c.project_id || c.id || c.project_name || "").trim();
+                                const skipCount = selected.filter(c => fetchedCompIds.has(getCompId(c))).length;
+                                const newCount = selected.length - skipCount;
+                                if (skipCount > 0) {
+                                  return `${selected.length} comparable(s) selected — ${newCount} new (will fetch) · ${skipCount} already fetched (will skip).`;
+                                }
+                                return `${selected.length} of ${comparableData.length} comparable(s) selected. Click below to fetch realtime sale/rent listings.`;
+                              })()
+                              : "Select at least one comparable from the table above to proceed."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0 mt-0.5">
+                        {ctaListingCollapsed ? <ChevronRight className="h-4 w-4 text-accent-light" /> : <ChevronDown className="h-4 w-4 text-accent-light" />}
                       </div>
                     </div>
                     {!ctaListingCollapsed && null}
@@ -10727,41 +10748,45 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
                     className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
-                        <Sparkles className="h-5 w-5 text-[#fb923c]" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#fb923c]">
-                            Step 3 — Clean Raw Listings
-                          </p>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowCleaningInfo((prev) => !prev);
-                              }}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[10px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20 focus:outline-none focus:ring-2 focus:ring-[#fb923c]/40"
-                              aria-label="Show cleaning info"
-                              title="Show cleaning info"
-                            >
-                              i
-                            </button>
-                            {showCleaningInfo && (
-                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#fb923c]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
-                                <p className="text-xs leading-relaxed text-slate-100">
-                                  The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
+                    <div className="flex items-start justify-between w-full gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
+                          <Sparkles className="h-5 w-5 text-[#fb923c]" />
                         </div>
-                        <p className="mt-1 text-sm text-text-secondary">
-                          {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
-                        </p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#fb923c]">
+                              Step 3 — Clean Raw Listings
+                            </p>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowCleaningInfo((prev) => !prev);
+                                }}
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[10px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20 focus:outline-none focus:ring-2 focus:ring-[#fb923c]/40"
+                                aria-label="Show cleaning info"
+                                title="Show cleaning info"
+                              >
+                                i
+                              </button>
+                              {showCleaningInfo && (
+                                <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#fb923c]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                  <p className="text-xs leading-relaxed text-slate-100">
+                                    The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-1 text-sm text-text-secondary">
+                            {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0 mt-0.5">
+                        {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
                       </div>
                     </div>
                   </div>
@@ -10786,43 +10811,47 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     onClick={() => setCtaFactorialCollapsed(!ctaFactorialCollapsed)}
                     className="border-b border-[#a78bfa]/15 bg-[#a78bfa]/5 px-4 py-3 cursor-pointer select-none"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
-                        <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#a78bfa]">
-                            Step 4 — Generate Factorial Table
-                          </p>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowFactorialInfo((prev) => !prev);
-                              }}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#a78bfa]/30 bg-[#a78bfa]/10 text-[10px] font-black text-[#a78bfa] leading-none transition hover:bg-[#a78bfa]/20 focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40"
-                              aria-label="Show factorial info"
-                              title="Show factorial info"
-                            >
-                              i
-                            </button>
-                            {showFactorialInfo && (
-                              <div className="absolute left-1/2 top-full z-30 mt-2 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-[#a78bfa]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
-                                <p className="whitespace-normal text-xs leading-relaxed text-slate-100">
-                                  This will group data by project and calculate key rate statistics for valuation.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
+                    <div className="flex items-start justify-between w-full gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#a78bfa]/20 bg-[#a78bfa]/10 text-base font-semibold text-[#a78bfa]">
+                          <TrendingUp className="h-5 w-5 text-[#a78bfa]" />
                         </div>
-                        <p className="mt-1 text-sm text-text-secondary">
-                          {needsFactorialRegeneration
-                            ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
-                            : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
-                        </p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#a78bfa]">
+                              Step 4 — Generate Factorial Table
+                            </p>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowFactorialInfo((prev) => !prev);
+                                }}
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#a78bfa]/30 bg-[#a78bfa]/10 text-[10px] font-black text-[#a78bfa] leading-none transition hover:bg-[#a78bfa]/20 focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40"
+                                aria-label="Show factorial info"
+                                title="Show factorial info"
+                              >
+                                i
+                              </button>
+                              {showFactorialInfo && (
+                                <div className="absolute left-1/2 top-full z-30 mt-2 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-[#a78bfa]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
+                                  <p className="whitespace-normal text-xs leading-relaxed text-slate-100">
+                                    This will group data by project and calculate key rate statistics for valuation.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-1 text-sm text-text-secondary">
+                            {needsFactorialRegeneration
+                              ? "Plot-rate inputs changed. Regenerate the factorial summary table before calculating the final rate."
+                              : `${cleanedData.length} cleaned listings ready. Generate the factorial summary table (Avg/Median/P90) per project.`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0 mt-0.5">
+                        {ctaFactorialCollapsed ? <ChevronRight className="h-4 w-4 text-[#a78bfa]" /> : <ChevronDown className="h-4 w-4 text-[#a78bfa]" />}
                       </div>
                     </div>
                   </div>
@@ -10896,7 +10925,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Map Confirmation</p>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-warning">Map Confirmation</p>
                             {mapCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
                           </div>
                           <p className="mt-1 text-sm text-text-secondary">{mapConfirmation.message}</p>
@@ -10917,7 +10946,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
                         <div>
-                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.05em] text-warning block">Action Required</span>
                           <span className="text-[10px] text-text-secondary leading-relaxed">
                             Verify the marked location of the subject property on the Map panel. Choose 'Location Is Correct' or input coordinates to adjust.
                           </span>
@@ -10930,7 +10959,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           className="rounded-xl bg-success px-4 py-2.5 text-sm font-semibold text-bg-deep transition hover:brightness-110 shrink-0"
                         >Location Is Correct</button>
                         <label className="flex min-w-[240px] flex-1 flex-col gap-1.5">
-                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Correct Lat, Lng</span>
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.05em] text-text-dim">Correct Lat, Lng</span>
                           <input
                             type="text"
                             value={clarificationValues.coordinates || ""}
@@ -10963,7 +10992,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-warning">Approach Selection</p>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-warning">Approach Selection</p>
                           {approachCollapsed ? <ChevronRight className="h-4 w-4 text-warning" /> : <ChevronDown className="h-4 w-4 text-warning" />}
                         </div>
                         <p className="mt-1 text-sm text-text-secondary">{approachChoiceNeeded.question}</p>
@@ -10975,7 +11004,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       <div className="rounded-xl border border-warning/35 bg-warning/5 px-3 py-2.5 flex items-start gap-2.5 animate-pulse shadow-[inset_0_1px_1px_rgba(251,146,60,0.1)] shrink-0">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning text-xs">⚠️</span>
                         <div>
-                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-warning block">Action Required</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.05em] text-warning block">Action Required</span>
                           <span className="text-[10px] text-text-secondary leading-relaxed">
                             Select the recommended valuation methodology or choose a custom approach override to proceed.
                           </span>
@@ -10988,7 +11017,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                           className="rounded-xl border border-warning bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning transition hover:bg-warning/20 shrink-0"
                         >Proceed with {humanizeFieldName(approachChoiceNeeded.recommended_approach)} Approach</button>
                         <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
-                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.16em] text-text-dim">Or Override Approach</span>
+                          <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.05em] text-text-dim">Or Override Approach</span>
                           <select
                             value={clarificationValues.override_approach || ""}
                             onChange={(e) => setClarificationValues({ ...clarificationValues, override_approach: e.target.value })}
@@ -11019,7 +11048,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   <div className="mb-4 flex items-center justify-between border-b border-border/40 pb-3">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-accent animate-pulse" />
-                      <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-text-primary">Token Intelligence</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-[0.05em] text-text-primary">Token Intelligence</h3>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] uppercase tracking-widest text-text-dim font-semibold">Estimated Cost</p>
@@ -11146,7 +11175,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         </div>
 
         <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-text-dim">
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.05em] text-text-dim">
             <span className="truncate pr-4">{currentStage}</span>
             <button
               type="button"
@@ -11199,7 +11228,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                   ✨
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-warning">User Form</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.05em] text-warning">User Form</p>
                   <p className="mt-1 text-sm text-text-secondary leading-relaxed">
                     Chat input is disabled in this mode. Switch to Describe with AI to enable the conversational composer.
                   </p>
@@ -11355,7 +11384,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
     if (field === "recommended_approach") {
       return (
         <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-          <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Approach *</span>
+          <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach *</span>
           <select
             value={values.recommended_approach}
             onChange={(event) => updateField("recommended_approach", event.target.value)}
@@ -11371,7 +11400,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
 
     return (
       <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">
+        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">
           {config.label}{isRequired ? " *" : ""}
         </span>
         {config.type === "select" ? (
@@ -11414,7 +11443,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
   return (
     <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel md:max-h-[calc(100dvh-4rem)]">
       <div className="w-[240px] shrink-0 border-r border-border/70 bg-bg-deep/40 p-4">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Sections</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Sections</p>
         <div className="mt-4 space-y-2">
           {sections.map((section, index) => {
             const locked = !canOpenSection(index);
@@ -11429,16 +11458,15 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
                   if (!locked) setActiveSection(index);
                 }}
                 disabled={locked}
-                className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left transition ${
-                  current
-                    ? "border-accent/40 bg-accent/15 text-accent"
-                    : locked
-                      ? "border-border/40 bg-bg-input/40 text-text-dim opacity-60 cursor-not-allowed"
-                      : "border-border/60 bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
-                }`}
+                className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left transition ${current
+                  ? "border-accent/40 bg-accent/15 text-accent"
+                  : locked
+                    ? "border-border/40 bg-bg-input/40 text-text-dim opacity-60 cursor-not-allowed"
+                    : "border-border/60 bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
+                  }`}
               >
                 <span className="mt-0.5 text-[10px] font-black">{prefix}</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] leading-relaxed">
+                <span className="text-[10px] font-bold uppercase tracking-[0.04em] leading-relaxed">
                   {section.title.replace(/^Section \d+ • /, "")}
                 </span>
               </button>
@@ -11451,7 +11479,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
         <div className="shrink-0 border-b border-accent/15 bg-accent/5 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">{sections[activeSection].title}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">{sections[activeSection].title}</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                 Step-by-step wizard for structured property input.
               </p>
@@ -11467,7 +11495,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
             <div className="space-y-3">
               <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
                 <div className="mb-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Property Type</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Property Type</p>
                   <p className="mt-1 text-[11px] text-text-dim">Choose the property category first to unlock relevant fields.</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -11485,7 +11513,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
               <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Auto-detected Coordinates</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Auto-detected Coordinates</p>
                     <p className="mt-1 text-[11px] text-text-dim leading-relaxed">
                       Coordinates are auto-fetched from the location you entered. You can edit them manually or refresh.
                     </p>
@@ -11536,7 +11564,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Latitude</span>
+                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Latitude</span>
                     <input
                       type="text"
                       value={values.lat ?? ""}
@@ -11546,7 +11574,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.16em] text-text-dim">Longitude</span>
+                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Longitude</span>
                     <input
                       type="text"
                       value={values.lng ?? ""}
@@ -11576,7 +11604,7 @@ function UserFormWizardPanel({ values, onChange, onSubmit, disabled, apiUrl }) {
             <div className="space-y-2 rounded-2xl border border-border/70 bg-bg-deep/30 p-4">
               {reviewSummary.map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-3 border-b border-border/40 py-2 last:border-0">
-                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-text-dim">{label}</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.05em] text-text-dim">{label}</span>
                   <span className="text-sm font-semibold text-text-primary text-right">{value || "—"}</span>
                 </div>
               ))}
