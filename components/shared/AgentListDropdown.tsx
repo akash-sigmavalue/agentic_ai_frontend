@@ -73,7 +73,7 @@ const agentLayers: AgentLayer[] = [
       { name: "Land/GIS", icon: MapPinned, href: '/visualization_agent', key: 'visualization_agent' },
       { name: "Elevation Agent", icon: MapPinned, href: '/elevation', key: 'elevation' },  
       { name: "Valuation", icon: BarChart3, href: "/valuation", key: 'valuation' },
-      { name: "Market Research", icon: Search, key: 'market_research' },
+      { name: "Market Research", icon: Search, href: "/market_research", key: 'market_research' },
       { name: "Physical AI", icon: Bot, key: 'physical_ai' },
       { name: "Feasibility", icon: ClipboardCheck, href: "/feasibility", key: 'feasibility' },
     ],
