@@ -18,6 +18,13 @@ export function uploadDocumentRequest(formData: FormData) {
   });
 }
 
+export function validateDocumentsRequest(formData: FormData) {
+  return apiRequest("/user-input/documents/validate", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export function askQuestionStreamRequest(question: string, session_id?: string) {
   return fetch(`${API_BASE_URL}/user-input/ask/stream`, {
     method: "POST",
