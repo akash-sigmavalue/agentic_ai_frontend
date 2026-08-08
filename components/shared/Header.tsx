@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Cpu, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon, Shield, Lock, Zap, Menu, X } from 'lucide-react';
+import { Cpu, Home, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon, Shield, Lock, Zap, Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
@@ -83,31 +83,18 @@ const Header = () => {
       {/* Desktop Navigation Links */}
       <div className="hidden lg:flex items-center gap-6">
         <div className="flex items-center gap-3">
-          {user?.role === 'ADMIN' ? (
-            <Link
-              href="/portfolio-management"
-              className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${pathname === '/portfolio-management'
-                ? isDark
-                  ? 'bg-indigo-950 border-indigo-800'
-                  : 'bg-indigo-50 border-indigo-200'
-                : pillClass
-                }`}
-            >
-              <LayoutDashboard className={`h-4 w-4 transition-colors ${pathname === '/portfolio-management' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
-              <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/portfolio-management' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>SOLUTION</span>
-            </Link>
-          ) : (
-            <div className="relative group/tooltip">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border cursor-not-allowed select-none opacity-40 ${pillClass}`}>
-                <Lock className="h-4 w-4 text-slate-400" />
-                <span className={`text-[10px] font-black uppercase tracking-widest ${pillTextClass}`}>SOLUTION</span>
-              </div>
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 w-52 scale-95 opacity-0 pointer-events-none group-hover/tooltip:scale-100 group-hover/tooltip:opacity-100 transition-all duration-200 z-[1002] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 p-3 shadow-xl backdrop-blur-md text-[10px] leading-relaxed text-slate-600 dark:text-slate-400 font-bold text-center">
-                <span className="text-[#525ceb] block mb-1 font-extrabold tracking-wider">ADMINISTRATOR ONLY</span>
-                Please contact your administrator to request access to the Solution Workspace.
-              </div>
-            </div>
-          )}
+          <Link
+            href="/"
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all cursor-pointer group ${pathname === '/'
+              ? isDark
+                ? 'bg-indigo-950 border-indigo-800'
+                : 'bg-indigo-50 border-indigo-200'
+              : pillClass
+              }`}
+          >
+            <Home className={`h-4 w-4 transition-colors ${pathname === '/' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`} />
+            <span className={`text-[10px] font-black uppercase tracking-widest ${pathname === '/' ? (isDark ? 'text-indigo-300' : 'text-indigo-700') : pillTextClass}`}>HOME</span>
+          </Link>
 
           <Link
             href="/pricing"
@@ -264,28 +251,18 @@ const Header = () => {
               <span>Pricing Plans</span>
             </Link>
 
-            {/* Solution Workspace */}
-            {user?.role === 'ADMIN' ? (
-              <Link
-                href="/portfolio-management"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs transition-all ${isDark
-                  ? "bg-indigo-950/50 border-indigo-900 text-indigo-300"
-                  : "bg-indigo-50 border-indigo-200 text-indigo-900 shadow-sm"
-                  }`}
-              >
-                <LayoutDashboard className="w-4 h-4 text-indigo-500" />
-                <span>Solution Workspace</span>
-              </Link>
-            ) : (
-              <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs opacity-60 ${isDark
-                ? "bg-slate-900/50 border-slate-800 text-slate-500"
-                : "bg-slate-100 border-slate-200 text-slate-400"
-                }`}>
-                <Lock className="w-4 h-4 text-slate-400" />
-                <span>Solution Workspace (Admin Only)</span>
-              </div>
-            )}
+            {/* Home */}
+            <Link
+              href="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-bold text-xs transition-all ${isDark
+                ? "bg-indigo-950/50 border-indigo-900 text-indigo-300"
+                : "bg-indigo-50 border-indigo-200 text-indigo-900 shadow-sm"
+                }`}
+            >
+              <Home className="w-4 h-4 text-indigo-500" />
+              <span>Home</span>
+            </Link>
 
             {/* Admin Panel */}
             {user?.role === 'ADMIN' && (

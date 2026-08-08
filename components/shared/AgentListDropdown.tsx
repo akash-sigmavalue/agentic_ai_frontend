@@ -16,7 +16,10 @@ import {
   FolderKanban,
   Globe2,
   Handshake,
+  Home,
+  Lightbulb,
   LineChart,
+  LayoutDashboard,
   Lock,
   MapPinned,
   MonitorCog,
@@ -81,6 +84,7 @@ const agentLayers: AgentLayer[] = [
       { name: "Market Research", icon: Search, key: "market_research" },
       { name: "Physical AI", icon: Bot, key: "physical_ai" },
       { name: "Feasibility", icon: ClipboardCheck, href: "/feasibility", key: "feasibility" },
+      { name: "Value Creation Agent", icon: Lightbulb, key: "value_creation" },
     ],
   },
   {
@@ -92,9 +96,9 @@ const agentLayers: AgentLayer[] = [
     accent: "text-indigo-600 border-indigo-100 bg-indigo-50 dark:text-indigo-400 dark:border-indigo-900 dark:bg-indigo-950/50",
     soft: "from-indigo-500/10 to-sky-500/10",
     agents: [
-      { name: "User Input (Docs/Images)", icon: FileText, href: "/user_input", key: "user_input" },
-      { name: "Web Data", icon: Globe2, href: "/web_search", key: "web_search" },
-      { name: "Data Retriever Agent", icon: Server, href: "/data_retrieval", key: "data_retrieval" },
+      { name: "Document Intelligence Agent", icon: FileText, href: "/user_input", key: "user_input" },
+      { name: "Live Data Intelligence Agent", icon: Globe2, href: "/web_search", key: "web_search" },
+      { name: "Transaction Intelligence Agent", icon: Server, href: "/data_retrieval", key: "data_retrieval" },
       { name: "Analytics", icon: LineChart, key: "analytics" },
       { name: "Legal", icon: Scale, key: "legal" },
     ],
@@ -108,10 +112,12 @@ const agentLayers: AgentLayer[] = [
     accent: "text-violet-600 border-violet-100 bg-violet-50 dark:text-violet-400 dark:border-violet-900 dark:bg-violet-950/50",
     soft: "from-violet-500/10 to-fuchsia-500/10",
     agents: [
-      { name: "UI Creation", icon: MonitorCog, href: "/ui_creation", key: "ui_creation" },
+      { name: "Portfolio Management Agent", icon: LayoutDashboard, href: "/portfolio-management", key: "portfolio_management" },
+      { name: "Generative Interface", icon: MonitorCog, href: "/ui_creation", key: "ui_creation" },
+      { name: "Autonomous Relationship Agent", icon: Handshake, key: "crm" },
+      { name: "Autonomous Real Estate ERP Agent", icon: Building2, key: "erp" },
+      { name: "Property Management Agent", icon: Home, key: "property_mgmt" },
       { name: "Solution Engine", icon: Settings, key: "solution_engine" },
-      { name: "CRM", icon: Handshake, key: "crm" },
-      { name: "ERP", icon: Building2, key: "erp" },
       { name: "Project Management", icon: FolderKanban, key: "project_mgmt" },
     ],
   },
@@ -398,6 +404,8 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                   );
                 })}
               </div>
+
+
             </div>
           </div>
         </div>

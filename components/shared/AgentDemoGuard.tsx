@@ -158,6 +158,19 @@ export const AGENT_INFO_MAP: Record<string, AgentInfo> = {
     ],
     gradient: "from-cyan-600 to-blue-700",
   },
+  portfolio_management: {
+    title: "Portfolio Management Agent",
+    category: "Solution Creation & Portfolio",
+    subtitle: "Turn property analysis into executable asset workflows",
+    description: "Manage property portfolios, track asset resolution, build custom workflows, and automate enterprise real estate execution.",
+    features: [
+      "Portfolio Asset Resolution & Tracking",
+      "Automated Workflow Execution",
+      "Multi-Property Valuation Aggregation",
+      "Executive Reports & Asset Analytics",
+    ],
+    gradient: "from-indigo-600 to-violet-600",
+  },
 };
 
 import { useTheme } from "@/hooks/use-theme";
