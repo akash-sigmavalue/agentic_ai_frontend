@@ -81,7 +81,7 @@ const agentLayers: AgentLayer[] = [
       { name: "Land/GIS", icon: MapPinned, href: "/visualization_agent", key: "visualization_agent" },
       { name: "Elevation Agent", icon: MapPinned, href: "/elevation", key: "elevation" },
       { name: "Valuation", icon: BarChart3, href: "/valuation", key: "valuation" },
-      { name: "Market Research", icon: Search, key: "market_research" },
+      { name: "Market Research", icon: Search, href: "/market_research", key: "market_research" },
       { name: "Physical AI", icon: Bot, key: "physical_ai" },
       { name: "Feasibility", icon: ClipboardCheck, href: "/feasibility", key: "feasibility" },
       { name: "Value Creation Agent", icon: Lightbulb, key: "value_creation" },
@@ -265,9 +265,9 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
             </button>
           </div>
 
-          <div className="grid max-h-[420px] grid-cols-[250px_1fr] overflow-y-auto">
+          <div className="grid max-h-[380px] grid-cols-[220px_1fr] overflow-y-auto">
             {/* Left Column: Layer Tabs */}
-            <div className={`space-y-2 p-3 border-r ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-[#f8fafc]"
+            <div className={`space-y-1.5 p-2.5 border-r ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-[#f8fafc]"
               }`}>
               {agentLayers.map((layer) => {
                 const Icon = layer.icon;
@@ -278,7 +278,7 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                     key={layer.id}
                     type="button"
                     onClick={() => setActiveAgentLayerId(layer.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer ${isActive
+                    className={`flex w-full items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all duration-200 cursor-pointer ${isActive
                         ? isDark
                           ? "border-violet-800 bg-violet-950/60 shadow-sm"
                           : "border-indigo-200 bg-white shadow-md"
@@ -288,19 +288,19 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                       }`}
                   >
                     <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getLayerIconBadgeClass(
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${getLayerIconBadgeClass(
                         layer.id,
                         isActive,
                         isDark
                       )}`}
                     >
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+                      <span className="block text-[9px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
                         {layer.layer}
                       </span>
-                      <span className={`mt-0.5 block text-sm font-extrabold leading-5 ${isDark ? "text-slate-100" : "text-slate-900"
+                      <span className={`mt-0.5 block text-xs font-extrabold leading-4 ${isDark ? "text-slate-100" : "text-slate-900"
                         }`}>
                         {layer.title}
                       </span>
@@ -311,31 +311,31 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
             </div>
 
             {/* Right Column: Layer Details & Agents */}
-            <div className={isDark ? `bg-gradient-to-br ${activeAgentLayer.soft} p-4` : "bg-gradient-to-br from-white via-indigo-50/50 to-slate-50 p-4"}>
-              <div className="flex items-start gap-3">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${getLayerIconBadgeClass(
+            <div className={isDark ? `bg-gradient-to-br ${activeAgentLayer.soft} p-3` : "bg-gradient-to-br from-white via-indigo-50/50 to-slate-50 p-3"}>
+              <div className="flex items-start gap-2.5">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${getLayerIconBadgeClass(
                   activeAgentLayer.id,
                   true,
                   isDark
                 )}`}>
-                  <ActiveAgentLayerIcon className="h-5 w-5" />
+                  <ActiveAgentLayerIcon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                     {activeAgentLayer.layer}
                   </p>
-                  <h4 className={`mt-1 text-lg font-black tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"
+                  <h4 className={`mt-0.5 text-sm font-black tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"
                     }`}>
                     {activeAgentLayer.title}
                   </h4>
-                  <p className={`mt-1 max-w-xl text-sm font-medium leading-6 ${isDark ? "text-slate-300" : "text-slate-600"
+                  <p className={`mt-0.5 max-w-xl text-xs font-medium leading-5 ${isDark ? "text-slate-300" : "text-slate-600"
                     }`}>
                     {activeAgentLayer.description}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-1.5">
                 {activeAgentLayer.agents.map((agent) => {
                   const AgentIcon = agent.icon;
                   const allowed = isAgentAllowed(agent.key);
@@ -347,7 +347,7 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                       type="button"
                       onClick={() => handleAgentClick(agent.href)}
                       title={!allowed && agent.key ? "Click to view Demo Video & Contact Us" : undefined}
-                      className={`flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left shadow-sm transition-all ${hasHref
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left shadow-sm transition-all ${hasHref
                           ? isDark
                             ? "bg-slate-900/90 border-slate-800 hover:bg-slate-800 hover:border-violet-500/40 text-slate-100 cursor-pointer"
                             : "bg-white border-slate-200/90 hover:bg-indigo-50 hover:border-indigo-300 text-slate-900 font-extrabold cursor-pointer"
@@ -356,21 +356,21 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                             : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-default"
                         }`}
                     >
-                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${getAgentIconBadgeClass(
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${getAgentIconBadgeClass(
                         activeAgentLayer.id,
                         hasHref,
                         isDark
                       )}`}>
-                        <AgentIcon className="h-[18px] w-[18px]" />
+                        <AgentIcon className="h-3.5 w-3.5" />
                       </span>
-                      <span className={`flex-1 break-words text-xs sm:text-sm leading-snug ${hasHref
+                      <span className={`flex-1 break-words text-[11px] leading-snug ${hasHref
                           ? isDark ? "text-slate-100 font-bold" : "text-slate-900 font-extrabold"
                           : isDark ? "text-slate-400 font-medium" : "text-slate-700 font-bold"
                         }`}>
                         {agent.name}
                       </span>
                       {hasHref && !allowed && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 border ${isDark
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider shrink-0 border ${isDark
                             ? "bg-violet-950 border-violet-800 text-violet-300"
                             : "bg-violet-100 border-violet-200 text-violet-800"
                           }`}>
@@ -378,7 +378,7 @@ export default function AgentListDropdown({ onNavigate }: AgentListDropdownProps
                         </span>
                       )}
                       {!hasHref && (
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 border ${isDark
+                        <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider shrink-0 border ${isDark
                             ? "bg-slate-800 border-slate-700 text-slate-400"
                             : "bg-slate-200 border-slate-300 text-slate-600"
                           }`}>

@@ -145,6 +145,19 @@ export const AGENT_INFO_MAP: Record<string, AgentInfo> = {
     ],
     gradient: "from-violet-600 to-fuchsia-600",
   },
+  market_research: {
+    title: "Data Lake Market Research Agent",
+    category: "Market Intelligence",
+    subtitle: "4-Stage AI pipeline for property rate analysis & micro-market trends",
+    description: "Run a comprehensive 4-stage modular market research pipeline powered by OpenAI and AWS Bedrock — covering property rate benchmarking, micro-market trend analysis, appreciation potential scoring, and final investment synthesis.",
+    features: [
+      "Property Rate Point Analysis (OpenAI + Bedrock)",
+      "Rate Trend Micro-Market Intelligence",
+      "Appreciation Potential Forecasting",
+      "Final Investment Synthesis Report",
+    ],
+    gradient: "from-blue-500 to-purple-600",
+  },
   connector: {
     title: "Enterprise Connectors & API Agent",
     category: "Integration Engine",
