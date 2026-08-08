@@ -5,6 +5,7 @@ import ChatSection from '@/components/visualization_agent/ChatSection';
 import WorkflowSection from '@/components/visualization_agent/WorkflowSection';
 import MapSection from '@/components/visualization_agent/MapSection';
 import ResizeHandle from '@/components/shared/ResizeHandle';
+import RoleGuard from '@/components/shared/RoleGuard';
 import type {
   Module1IntentOutput,
   Module2Output,
@@ -33,7 +34,7 @@ const EXPANDED_PANEL_WIDTHS = {
 };
 type PanelKey = keyof typeof EXPANDED_PANEL_WIDTHS;
 
-export default function VisualizationAgentPage() {
+function VisualizationAgentContent() {
   const [panelWidths, setPanelWidths] = useState(DEFAULT_PANEL_WIDTHS);
   const [expandedPanel, setExpandedPanel] = useState<PanelKey | null>(null);
   const [isDragging, setIsDragging] = useState<'chat' | 'workflow' | null>(null);
@@ -351,5 +352,13 @@ export default function VisualizationAgentPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function VisualizationAgentPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN']} agentKey="visualization_agent">
+      <VisualizationAgentContent />
+    </RoleGuard>
   );
 }

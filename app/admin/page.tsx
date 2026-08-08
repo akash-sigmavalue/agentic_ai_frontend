@@ -1,303 +1,1638 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  ShieldCheck, Users, CheckCircle2, XCircle, Clock, RefreshCw,
-  Loader2, AlertCircle, ChevronDown, Filter, BarChart3, Mail,
-  User as UserIcon, Calendar,
-} from 'lucide-react';
-import RoleGuard from '@/components/shared/RoleGuard';
-import { apiFetch, apiRequest, apiUrl, API_ROUTES } from '@/lib/api-client';
+  Users,
+  Building2,
+  Receipt,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Building,
+  PlusCircle,
+  XCircle,
+  CheckCircle2,
+  Coins,
+  Loader2,
+  AlertTriangle,
+  Zap,
+  ExternalLink,
+  Crown,
+  X,
+  MessageSquare,
+  Mail,
+  Phone,
+  Clock,
+  Trash2,
+  Eye,
+  Filter,
+} from "lucide-react";
+import AdminOnlyGate from "@/components/shared/AdminOnlyGate";
+import { apiFetch, apiRequest, API_ROUTES } from "@/lib/api-client";
+import { useTheme } from "@/hooks/use-theme";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-interface RedemptionRequest {
+interface AdminUser {
+  id: number;
+  username: string;
+  email: string | null;
+  role: string;
+  account_type: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  personal_token_balance: number;
+  active_org_id: number | null;
+  active_org_name: string | null;
+  active_org_role: string | null;
+}
+
+interface AdminOrg {
+  id: number;
+  name: string;
+  owner_user_id: number;
+  owner_username: string;
+  org_token_balance: number;
+  status: string;
+  created_at: string;
+  active_member_count: number;
+}
+
+interface AdminTransaction {
+  id: number;
+  wallet_type: string;
+  wallet_owner_id: number;
+  amount: number;
+  type: string;
+  agent_id: number | null;
+  created_at: string;
+}
+
+interface AdminContactInquiry {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  team_size: string | null;
+  message: string | null;
+  status: string;
+  created_at: string;
+}
+
+interface AdminEnterpriseOffer {
   id: number;
   user_id: number;
   username: string;
-  email: string | null;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  requested_at: string;
-  reviewed_at: string | null;
-  admin_remark: string | null;
+  user_email: string | null;
+  created_by_admin_id: number | null;
+  offered_price_inr: number;
+  offered_tokens: number;
+  org_name: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+  paid_at: string | null;
 }
 
-type FilterStatus = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED';
+export default function AdminDashboardPage() {
+  const isDark = useTheme();
+  const [activeTab, setActiveTab] = useState<"users" | "orgs" | "transactions" | "payments" | "queries" | "offers">("users");
 
-// ── Helper components ──────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const cfg: Record<string, { color: string; icon: React.ReactNode }> = {
-    PENDING:  { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: <Clock className="h-3 w-3" /> },
-    APPROVED: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3 w-3" /> },
-    REJECTED: { color: 'bg-red-50 text-red-700 border-red-200', icon: <XCircle className="h-3 w-3" /> },
-  };
-  const c = cfg[status] ?? cfg['PENDING'];
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${c.color}`}>
-      {c.icon}
-      {status.charAt(0) + status.slice(1).toLowerCase()}
-    </span>
-  );
-}
+  // Custom Enterprise Offers State
+  const [enterpriseOffers, setEnterpriseOffers] = useState<AdminEnterpriseOffer[]>([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [offerTargetUser, setOfferTargetUser] = useState<AdminUser | null>(null);
+  const [offerPrice, setOfferPrice] = useState("50000");
+  const [offerTokens, setOfferTokens] = useState("50000000");
+  const [offerOrgName, setOfferOrgName] = useState("");
+  const [offerNote, setOfferNote] = useState("");
+  const [creatingOffer, setCreatingOffer] = useState(false);
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
-
-// ── Admin Panel Page ───────────────────────────────────────────────────────────
-function AdminPanelContent() {
-  const [requests, setRequests] = useState<RedemptionRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterStatus>('ALL');
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [actionError, setActionError] = useState('');
-  const [actionSuccess, setActionSuccess] = useState('');
-  const [rejectRemark, setRejectRemark] = useState<Record<number, string>>({});
-
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
-    setActionError('');
+  const fetchEnterpriseOffers = async () => {
+    setLoadingOffers(true);
     try {
-      const url = filter === 'ALL'
-        ? API_ROUTES.adminRedemptionRequests
-        : `${API_ROUTES.adminRedemptionRequests}?status=${filter}`;
-      const data = await apiFetch<RedemptionRequest[]>(url);
-      setRequests(data);
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Failed to load requests.');
+      const data = await apiFetch<AdminEnterpriseOffer[]>(API_ROUTES.adminEnterpriseOffers);
+      setEnterpriseOffers(data);
+    } catch {
+      // ignore
     } finally {
-      setLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
-
-  const handleApprove = async (id: number) => {
-    setActionLoading(id);
-    setActionError('');
-    setActionSuccess('');
-    try {
-      const res = await apiRequest(`/admin/redemption-requests/${id}/approve`, { method: 'POST' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || 'Approve failed.');
-      }
-      setActionSuccess(`Request #${id} approved successfully!`);
-      await fetchRequests();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
-    } finally {
-      setActionLoading(null);
+      setLoadingOffers(false);
     }
   };
 
-  const handleReject = async (id: number) => {
-    setActionLoading(id);
-    setActionError('');
-    setActionSuccess('');
+  const handleCreateOffer = async () => {
+    if (!offerTargetUser) { alert("Please select a user."); return; }
+    const price = parseInt(offerPrice, 10);
+    const tokens = parseInt(offerTokens, 10);
+    if (isNaN(price) || price <= 0) { alert("Invalid price."); return; }
+    if (isNaN(tokens) || tokens <= 0) { alert("Invalid tokens."); return; }
+
+    setCreatingOffer(true);
     try {
-      const res = await apiRequest(`/admin/redemption-requests/${id}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ remark: rejectRemark[id] || '' }),
+      const res = await apiRequest(API_ROUTES.adminEnterpriseOffers, {
+        method: "POST",
+        body: JSON.stringify({
+          user_id: offerTargetUser.id,
+          offered_price_inr: price,
+          offered_tokens: tokens,
+          org_name: offerOrgName.trim() || undefined,
+          note: offerNote.trim() || undefined,
+        }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || 'Reject failed.');
-      }
-      setActionSuccess(`Request #${id} rejected.`);
-      setRejectRemark(prev => { const n = { ...prev }; delete n[id]; return n; });
-      await fetchRequests();
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : 'Action failed.');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to create offer.");
+
+      alert(data.message || "Custom Enterprise Offer created!");
+      setShowOfferModal(false);
+      setOfferTargetUser(null);
+      setOfferOrgName("");
+      setOfferNote("");
+      fetchEnterpriseOffers();
+    } catch (e: any) {
+      alert(e.message);
     } finally {
-      setActionLoading(null);
+      setCreatingOffer(false);
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
+  const handleCancelOffer = async (offerId: number) => {
+    if (!confirm("Cancel this enterprise offer?")) return;
+    try {
+      const res = await apiRequest(API_ROUTES.adminCancelEnterpriseOffer(offerId), { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to cancel offer");
+      fetchEnterpriseOffers();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  // User Queries (Contact Inquiries) state
+  const [inquiries, setInquiries] = useState<AdminContactInquiry[]>([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [inquirySearch, setInquirySearch] = useState("");
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<string>("ALL");
+  const [selectedInquiry, setSelectedInquiry] = useState<AdminContactInquiry | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [deletingInquiryId, setDeletingInquiryId] = useState<number | null>(null);
+
+  // Payments state
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+
+  const fetchPayments = async () => {
+    setLoadingPayments(true);
+    try {
+      const data = await apiFetch<any[]>(API_ROUTES.adminPaymentHistory);
+      setPayments(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingPayments(false);
+    }
+  };
+
+  // Users state
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [userSearch, setUserSearch] = useState("");
+
+  // Promote Modal state
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [initialTokens, setInitialTokens] = useState("10000000"); // Default 10M
+  const [promoting, setPromoting] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
+
+  // Orgs state
+  const [orgs, setOrgs] = useState<AdminOrg[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
+
+  // Set org balance modal state
+  const [selectedOrg, setSelectedOrg] = useState<AdminOrg | null>(null);
+  const [newBalance, setNewBalance] = useState("");
+  const [updatingOrg, setUpdatingOrg] = useState(false);
+
+  // Transactions state
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
+  const [loadingTx, setLoadingTx] = useState(false);
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const data = await apiFetch<AdminUser[]>(API_ROUTES.adminUsers);
+      setUsers(data);
+    } catch (err: any) {
+      console.error("Failed to load users", err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const fetchOrgs = async () => {
+    setLoadingOrgs(true);
+    try {
+      const data = await apiFetch<AdminOrg[]>(API_ROUTES.adminOrgs);
+      setOrgs(data);
+    } catch (err: any) {
+      console.error("Failed to load orgs", err);
+    } finally {
+      setLoadingOrgs(false);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    setLoadingTx(true);
+    try {
+      const data = await apiFetch<AdminTransaction[]>(API_ROUTES.adminTransactions);
+      setTransactions(data);
+    } catch (err: any) {
+      console.error("Failed to load transactions", err);
+    } finally {
+      setLoadingTx(false);
+    }
+  };
+
+  const fetchInquiries = async () => {
+    setLoadingInquiries(true);
+    try {
+      const data = await apiFetch<AdminContactInquiry[]>(API_ROUTES.adminInquiries);
+      setInquiries(data);
+    } catch (err: any) {
+      console.error("Failed to load contact inquiries", err);
+    } finally {
+      setLoadingInquiries(false);
+    }
+  };
+
+  const handleUpdateStatus = async (inquiryId: number, newStatus: string) => {
+    setUpdatingStatusId(inquiryId);
+    try {
+      const url = API_ROUTES.adminUpdateInquiryStatus(inquiryId);
+      const res = await apiRequest(url, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      setInquiries((prev) =>
+        prev.map((item) => (item.id === inquiryId ? { ...item, status: newStatus } : item))
+      );
+      if (selectedInquiry && selectedInquiry.id === inquiryId) {
+        setSelectedInquiry((prev) => (prev ? { ...prev, status: newStatus } : null));
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update status");
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const handleDeleteInquiry = async (inquiryId: number) => {
+    if (!confirm("Are you sure you want to delete this user query?")) return;
+    setDeletingInquiryId(inquiryId);
+    try {
+      const url = API_ROUTES.adminDeleteInquiry(inquiryId);
+      const res = await apiRequest(url, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete inquiry");
+      setInquiries((prev) => prev.filter((item) => item.id !== inquiryId));
+      if (selectedInquiry && selectedInquiry.id === inquiryId) {
+        setSelectedInquiry(null);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to delete inquiry");
+    } finally {
+      setDeletingInquiryId(null);
+    }
+  };
+
+  // Fetch all tab counts on mount so header badges and refreshed tabs load immediately
+  useEffect(() => {
+    fetchUsers();
+    fetchOrgs();
+    fetchTransactions();
+    fetchPayments();
+    fetchInquiries();
+    fetchEnterpriseOffers();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "users") fetchUsers();
+    if (activeTab === "orgs") fetchOrgs();
+    if (activeTab === "transactions") fetchTransactions();
+    if (activeTab === "payments") fetchPayments();
+    if (activeTab === "queries") fetchInquiries();
+    if (activeTab === "offers") fetchEnterpriseOffers();
+  }, [activeTab]);
+
+  // Promote user to Enterprise Owner
+  const handlePromote = async () => {
+    if (!selectedUser) return;
+    setPromoting(true);
+    setPromoteError(null);
+    setPromoteSuccess(null);
+
+    try {
+      const tokensNum = parseInt(initialTokens, 10);
+      if (isNaN(tokensNum) || tokensNum < 0) {
+        throw new Error("Invalid token amount");
+      }
+
+      const url = API_ROUTES.adminPromoteEnterprise(selectedUser.id);
+      const res = await apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({ initial_org_tokens: tokensNum }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to promote user.");
+      }
+
+      const data = await res.json();
+      setPromoteSuccess(data.message || "User promoted to Enterprise Owner!");
+      fetchUsers();
+      setTimeout(() => {
+        setSelectedUser(null);
+        setPromoteSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setPromoteError(err.message);
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+  // Set Org Balance
+  const handleSetBalance = async () => {
+    if (!selectedOrg) return;
+    setUpdatingOrg(true);
+    try {
+      const bal = parseInt(newBalance, 10);
+      if (isNaN(bal) || bal < 0) throw new Error("Invalid balance");
+
+      const url = API_ROUTES.adminSetOrgBalance(selectedOrg.id);
+      const res = await apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({ new_balance: bal }),
+      });
+      if (!res.ok) throw new Error("Failed to set balance");
+
+      fetchOrgs();
+      setSelectedOrg(null);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpdatingOrg(false);
+    }
+  };
+
+  // Toggle Suspend / Activate
+  const handleToggleSuspend = async (org: AdminOrg) => {
+    const isSuspended = org.status === "SUSPENDED";
+    const route = isSuspended
+      ? API_ROUTES.adminActivateOrg(org.id)
+      : API_ROUTES.adminSuspendOrg(org.id);
+
+    try {
+      const res = await apiRequest(route, { method: "POST" });
+      if (!res.ok) throw new Error("Action failed");
+      fetchOrgs();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+      (u.email && u.email.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
+  const filteredInquiries = inquiries.filter((inq) => {
+    const matchesSearch =
+      inq.name.toLowerCase().includes(inquirySearch.toLowerCase()) ||
+      inq.email.toLowerCase().includes(inquirySearch.toLowerCase()) ||
+      (inq.company && inq.company.toLowerCase().includes(inquirySearch.toLowerCase())) ||
+      (inq.message && inq.message.toLowerCase().includes(inquirySearch.toLowerCase()));
+
+    const matchesStatus =
+      inquiryStatusFilter === "ALL" ||
+      inq.status.toUpperCase() === inquiryStatusFilter.toUpperCase();
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Explicit theme variables to guarantee ZERO color bleeding
+  const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
+  const cardClass = isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-sm text-slate-900";
+  const tableHeaderClass = isDark ? "bg-slate-900/90 text-slate-400 border-slate-800" : "bg-slate-100 text-slate-700 border-slate-200 font-black";
+  const tableRowClass = isDark ? "hover:bg-slate-800/40 border-slate-800/60 text-slate-200" : "hover:bg-slate-50 border-slate-200 text-slate-800";
+  const inputClass = isDark
+    ? "bg-slate-900 border-slate-800 text-slate-100 placeholder-slate-500"
+    : "bg-white border-slate-300 text-slate-900 placeholder-slate-400 shadow-sm";
+  const buttonSecClass = isDark
+    ? "bg-slate-900 text-slate-200 border-slate-800 hover:bg-slate-800"
+    : "bg-white text-slate-800 border-slate-300 hover:bg-slate-100 shadow-sm font-bold";
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-24 pb-12 px-4">
-      <div className="max-w-5xl mx-auto space-y-6">
-
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-200">
-              <ShieldCheck className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Admin Panel</h1>
-              <p className="text-sm text-slate-400">Token Redemption Requests</p>
-            </div>
-          </div>
-          <button
-            onClick={fetchRequests}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:text-slate-900 transition-all"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </button>
-        </div>
-
-        {/* ── Stats ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: 'Total Requests', value: requests.length, icon: <BarChart3 className="h-5 w-5" />, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
-            { label: 'Pending', value: pendingCount, icon: <Clock className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50 border-amber-100' },
-            { label: 'Approved', value: requests.filter(r => r.status === 'APPROVED').length, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-          ].map(({ label, value, icon, color }) => (
-            <div key={label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-              <div className={`h-10 w-10 rounded-xl border flex items-center justify-center ${color}`}>
-                {icon}
+    <AdminOnlyGate>
+      <div className={`min-h-screen pt-24 px-4 sm:px-6 lg:px-8 pb-16 transition-colors font-sans ${bgClass}`}>
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header & Title */}
+          {/* ── HEADER & TABS (Headline on top row, Tabs bar on second row) ─── */}
+          <div className="space-y-5 border-b border-slate-200 dark:border-slate-800 pb-6">
+            {/* Row 1: Headline & Subtitle */}
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-indigo-600/20 text-indigo-500 border border-indigo-500/30 shrink-0">
+                <ShieldCheck className="w-7 h-7" />
               </div>
               <div>
-                <p className="text-2xl font-black text-slate-900">{value}</p>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{label}</p>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight">Admin Management Hub</h1>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                  Manage users, Enterprise organizations, token audit trail, and user contact queries.
+                </p>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* ── Action feedback ── */}
-        {actionSuccess && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium">
-            <CheckCircle2 className="h-4 w-4 shrink-0" /> {actionSuccess}
-          </div>
-        )}
-        {actionError && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
-            <AlertCircle className="h-4 w-4 shrink-0" /> {actionError}
-          </div>
-        )}
+            {/* Row 2: Navigation Tabs Bar */}
+            <div className={`flex items-center gap-2 p-1.5 rounded-2xl border overflow-x-auto max-w-full w-fit ${
+              isDark ? "bg-slate-900/80 border-slate-800" : "bg-slate-200/80 border-slate-300 shadow-sm"
+            }`}>
+              <button
+                type="button"
+                onClick={() => setActiveTab("users")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "users"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Users ({users.length})
+              </button>
 
-        {/* ── Filter ── */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-2 flex-wrap">
-          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as FilterStatus[]).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                filter === f
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              {f === 'ALL' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab("orgs")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "orgs"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                Organizations ({orgs.length})
+              </button>
 
-        {/* ── Requests Table ── */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+              <button
+                type="button"
+                onClick={() => setActiveTab("transactions")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "transactions"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <Receipt className="w-4 h-4" />
+                Token Audit
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("payments")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "payments"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <Zap className="w-4 h-4 text-amber-500" />
+                Fiat Payments ({payments.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("queries")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "queries"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-emerald-500" />
+                User Queries ({inquiries.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("offers")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === "offers"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : isDark
+                    ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-300/60"
+                }`}
+              >
+                <Coins className="w-4 h-4 text-amber-400" />
+                Enterprise Offers ({enterpriseOffers.length})
+              </button>
             </div>
-          ) : requests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users className="h-12 w-12 text-slate-200 mb-3" />
-              <p className="text-sm font-bold text-slate-500">No requests found</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {filter !== 'ALL' ? `No ${filter.toLowerCase()} requests.` : 'No token redemption requests yet.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/80">
-                    {['User', 'Email', 'Requested', 'Status', 'Actions'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((req, i) => (
-                    <tr key={req.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                            <UserIcon className="h-4 w-4 text-indigo-500" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900 text-xs">{req.username}</p>
-                            <p className="text-[10px] text-slate-400">ID #{req.user_id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                          <Mail className="h-3 w-3 text-slate-300 shrink-0" />
-                          {req.email ?? '—'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                          <Calendar className="h-3 w-3 text-slate-300 shrink-0" />
-                          {formatDate(req.requested_at)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={req.status} />
-                      </td>
-                      <td className="px-4 py-4">
-                        {req.status === 'PENDING' ? (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleApprove(req.id)}
-                                disabled={actionLoading === req.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-all disabled:opacity-60"
+          </div>
+
+          {/* ── TAB 1: USERS DIRECTORY ─────────────────────────────────────────── */}
+          {activeTab === "users" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="relative w-full sm:max-w-md">
+                  <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by username or email..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:border-indigo-500 transition-colors ${inputClass}`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchUsers}
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? "animate-spin" : ""}`} />
+                  Refresh Directory
+                </button>
+              </div>
+
+              {/* Fully Responsive Scrollable Table */}
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">User</th>
+                        <th className="p-4">Role</th>
+                        <th className="p-4">Account Type</th>
+                        <th className="p-4">Personal Balance</th>
+                        <th className="p-4">Active Organization</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingUsers ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading user directory...
+                          </td>
+                        </tr>
+                      ) : filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            No users found.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsers.map((u) => (
+                          <tr key={u.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-bold">
+                              <div className={isDark ? "text-slate-100 font-bold" : "text-slate-900 font-extrabold"}>
+                                {u.username}
+                              </div>
+                              <div className={isDark ? "text-[11px] text-slate-400 font-normal" : "text-[11px] text-slate-600 font-medium"}>
+                                {u.email || "No email"}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wider uppercase border ${
+                                  u.role === "ADMIN"
+                                    ? isDark
+                                      ? "bg-violet-950/80 text-violet-300 border-violet-800"
+                                      : "bg-violet-100 text-violet-800 border-violet-300 font-bold"
+                                    : u.role === "PAID"
+                                    ? isDark
+                                      ? "bg-emerald-950/80 text-emerald-300 border-emerald-800"
+                                      : "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
+                                    : isDark
+                                    ? "bg-slate-800 text-slate-300 border-slate-700"
+                                    : "bg-slate-200 text-slate-800 border-slate-300 font-bold"
+                                }`}
                               >
-                                {actionLoading === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleReject(req.id)}
-                                disabled={actionLoading === req.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold hover:bg-red-100 transition-all disabled:opacity-60"
-                              >
-                                {actionLoading === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                                Reject
-                              </button>
-                            </div>
-                            <input
-                              placeholder="Optional remark for rejection..."
-                              value={rejectRemark[req.id] ?? ''}
-                              onChange={e => setRejectRemark(prev => ({ ...prev, [req.id]: e.target.value }))}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[11px] text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-400">
-                            {req.reviewed_at ? formatDate(req.reviewed_at) : '—'}
-                            {req.admin_remark && (
-                              <p className="mt-1 text-slate-500 italic">"{req.admin_remark}"</p>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className={`p-4 font-semibold ${isDark ? "text-slate-300" : "text-slate-800 font-bold"}`}>
+                              {u.account_type || "—"}
+                            </td>
+                            <td className={`p-4 font-bold ${isDark ? "text-indigo-400" : "text-indigo-700 font-black"}`}>
+                              {u.personal_token_balance.toLocaleString()} tokens
+                            </td>
+                            <td className="p-4">
+                              {u.active_org_name ? (
+                                <div className={`flex items-center gap-1.5 ${isDark ? "text-slate-200" : "text-slate-800 font-bold"}`}>
+                                  <Building className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span>{u.active_org_name}</span>
+                                  <span className={`text-[10px] uppercase ${isDark ? "text-slate-400" : "text-slate-600 font-semibold"}`}>
+                                    ({u.active_org_role})
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className={isDark ? "text-slate-500" : "text-slate-600 font-medium"}>None</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right whitespace-nowrap">
+                              <span className={isDark ? "text-slate-500 text-xs" : "text-slate-400 text-xs font-medium"}>
+                                —
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* ── TAB 2: ORGANIZATIONS ───────────────────────────────────────────── */}
+          {activeTab === "orgs" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={fetchOrgs}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingOrgs ? "animate-spin" : ""}`} />
+                  Refresh Orgs
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {loadingOrgs ? (
+                  <div className="col-span-full p-12 text-center text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                    Loading organizations...
+                  </div>
+                ) : orgs.length === 0 ? (
+                  <div className="col-span-full p-12 text-center text-slate-500">
+                    No organizations created yet. Promote a user to Enterprise Owner to get started.
+                  </div>
+                ) : (
+                  orgs.map((org) => (
+                    <div
+                      key={org.id}
+                      className={`p-6 rounded-3xl border space-y-4 relative overflow-hidden transition-all ${cardClass}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className={`font-black text-base ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                            {org.name}
+                          </h3>
+                          <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                            Owner: <strong>{org.owner_username}</strong>
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                            org.status === "ACTIVE"
+                              ? isDark
+                                ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                                : "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
+                              : isDark
+                              ? "bg-rose-950 text-rose-300 border-rose-800"
+                              : "bg-rose-100 text-rose-800 border-rose-300 font-bold"
+                          }`}
+                        >
+                          {org.status}
+                        </span>
+                      </div>
+
+                      <div className={`p-4 rounded-2xl border space-y-2 ${
+                        isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200 shadow-inner"
+                      }`}>
+                        <div className="flex justify-between text-xs items-center">
+                          <span className={isDark ? "text-slate-400" : "text-slate-600 font-bold"}>
+                            Shared Token Pool:
+                          </span>
+                          <span className={`font-black ${isDark ? "text-indigo-400" : "text-indigo-700 text-sm"}`}>
+                            {org.org_token_balance.toLocaleString()} tokens
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs items-center">
+                          <span className={isDark ? "text-slate-400" : "text-slate-600 font-bold"}>
+                            Active Members:
+                          </span>
+                          <span className={`font-black ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                            {org.active_member_count}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrg(org);
+                            setNewBalance(org.org_token_balance.toString());
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all text-center ${
+                            isDark
+                              ? "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30"
+                              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                          }`}
+                        >
+                          Set Balance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSuspend(org)}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                            org.status === "ACTIVE"
+                              ? isDark
+                                ? "bg-rose-950/40 text-rose-300 border border-rose-800 hover:bg-rose-900/40"
+                                : "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
+                              : isDark
+                              ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800 hover:bg-emerald-900/40"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
+                          }`}
+                        >
+                          {org.status === "ACTIVE" ? "Suspend" : "Activate"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 3: TOKEN AUDIT TRANSACTIONS ───────────────────────────────── */}
+          {activeTab === "transactions" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={fetchTransactions}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingTx ? "animate-spin" : ""}`} />
+                  Refresh Audit Trail
+                </button>
+              </div>
+
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">Tx ID</th>
+                        <th className="p-4">Wallet Type</th>
+                        <th className="p-4">Owner ID</th>
+                        <th className="p-4">Type</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingTx ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading audit trail...
+                          </td>
+                        </tr>
+                      ) : transactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            No token transactions recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        transactions.map((tx) => (
+                          <tr key={tx.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-mono font-bold text-slate-600 dark:text-slate-400">#{tx.id}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                isDark
+                                  ? "bg-slate-800 text-slate-300 border-slate-700"
+                                  : "bg-slate-100 text-slate-800 border-slate-300"
+                              }`}>
+                                {tx.wallet_type}
+                              </span>
+                            </td>
+                            <td className={`p-4 font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{tx.wallet_owner_id}</td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                  tx.type === "SIGNUP_GRANT"
+                                    ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                                    : tx.type === "PURCHASE"
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                    : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                                }`}
+                              >
+                                {tx.type}
+                              </span>
+                            </td>
+                            <td className="p-4 font-bold">
+                              <span className={tx.amount >= 0 ? (isDark ? "text-emerald-400" : "text-emerald-700 font-extrabold") : (isDark ? "text-rose-400" : "text-rose-700 font-extrabold")}>
+                                {tx.amount >= 0 ? "+" : ""}{tx.amount.toLocaleString()} tokens
+                              </span>
+                            </td>
+                            <td className={`p-4 whitespace-nowrap ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                              {new Date(tx.created_at).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 4: FIAT PAYMENTS ──────────────────────────────────────────── */}
+          {activeTab === "payments" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={fetchPayments}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingPayments ? "animate-spin" : ""}`} />
+                  Refresh Payments
+                </button>
+              </div>
+
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">Tx ID</th>
+                        <th className="p-4">User ID</th>
+                        <th className="p-4">Email</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4">Tokens Credited</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingPayments ? (
+                        <tr>
+                          <td colSpan={7} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading fiat payment records...
+                          </td>
+                        </tr>
+                      ) : payments.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-12 text-center text-slate-500">
+                            No Stripe fiat payment transactions recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        payments.map((p) => (
+                          <tr key={p.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-mono font-bold text-slate-600 dark:text-slate-400">#{p.id}</td>
+                            <td className={`p-4 font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{p.user_id}</td>
+                            <td className={`p-4 ${isDark ? "text-slate-300" : "text-slate-800 font-semibold"}`}>{p.customer_email || "—"}</td>
+                            <td className={`p-4 font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                              ₹{(p.amount_inr || 0).toLocaleString()}
+                            </td>
+                            <td className={`p-4 font-black ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                              +{(p.tokens_credited || 0).toLocaleString()}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                                p.status === "succeeded"
+                                  ? isDark
+                                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                    : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  : p.status === "pending"
+                                  ? isDark
+                                    ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                    : "bg-amber-100 text-amber-800 border-amber-300"
+                                  : isDark
+                                  ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                                  : "bg-rose-100 text-rose-800 border-rose-300"
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              {p.receipt_url ? (
+                                <a
+                                  href={p.receipt_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                                >
+                                  View Receipt <ExternalLink className="w-3 h-3" />
+                                </a>
+                              ) : (
+                                <span className={isDark ? "text-slate-600" : "text-slate-400"}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 5: USER QUERIES (CONTACT FORM SUBMISSIONS) ─────────────── */}
+          {activeTab === "queries" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:max-w-xl">
+                  <div className="relative w-full sm:flex-1">
+                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email, company, or query..."
+                      value={inquirySearch}
+                      onChange={(e) => setInquirySearch(e.target.value)}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:border-indigo-500 transition-colors ${inputClass}`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
+                    <select
+                      value={inquiryStatusFilter}
+                      onChange={(e) => setInquiryStatusFilter(e.target.value)}
+                      className={`w-full sm:w-auto px-3 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:border-indigo-500 cursor-pointer ${inputClass}`}
+                    >
+                      <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">All Statuses</option>
+                      <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">New</option>
+                      <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Contacted</option>
+                      <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">In Progress</option>
+                      <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Resolved</option>
+                      <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Archived</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchInquiries}
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${buttonSecClass}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingInquiries ? "animate-spin" : ""}`} />
+                  Refresh Queries
+                </button>
+              </div>
+
+              {/* Fully Responsive Scrollable Table */}
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[850px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">Date & ID</th>
+                        <th className="p-4">User Details</th>
+                        <th className="p-4">Company & Phone</th>
+                        <th className="p-4">User Query Message</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingInquiries ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading user queries...
+                          </td>
+                        </tr>
+                      ) : filteredInquiries.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-500">
+                            No user queries found.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredInquiries.map((inq) => (
+                          <tr key={inq.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              <div className={`font-extrabold ${isDark ? "text-slate-200" : "text-slate-900"}`}>#{inq.id}</div>
+                              <div className={`text-[10px] mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                                {inq.created_at ? new Date(inq.created_at).toLocaleString() : "—"}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className={`font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{inq.name}</div>
+                              <a
+                                href={`mailto:${inq.email}`}
+                                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 mt-0.5"
+                              >
+                                <Mail className="w-3 h-3 shrink-0" />
+                                {inq.email}
+                              </a>
+                            </td>
+                            <td className="p-4">
+                              <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                                {inq.company || "Individual"}
+                              </div>
+                              {inq.phone && (
+                                <div className={`text-[11px] flex items-center gap-1 mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                                  <Phone className="w-3 h-3 shrink-0" />
+                                  {inq.phone}
+                                </div>
+                              )}
+                              {inq.team_size && (
+                                <div className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>Team: {inq.team_size}</div>
+                              )}
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              <p className={`line-clamp-2 font-normal leading-relaxed ${isDark ? "text-slate-300" : "text-slate-800"}`}>
+                                {inq.message || "No message content"}
+                              </p>
+                            </td>
+                            <td className="p-4">
+                              <select
+                                value={inq.status}
+                                disabled={updatingStatusId === inq.id}
+                                onChange={(e) => handleUpdateStatus(inq.id, e.target.value)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border cursor-pointer focus:outline-none transition-colors ${
+                                  inq.status === "NEW"
+                                    ? isDark
+                                      ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                      : "bg-amber-100 text-amber-800 border-amber-300"
+                                    : inq.status === "CONTACTED" || inq.status === "IN_PROGRESS"
+                                    ? isDark
+                                      ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                                      : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                                    : inq.status === "RESOLVED"
+                                    ? isDark
+                                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                      : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                    : isDark
+                                    ? "bg-slate-800 text-slate-400 border-slate-700"
+                                    : "bg-slate-200 text-slate-800 border-slate-300"
+                                }`}
+                              >
+                                <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">NEW</option>
+                                <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">CONTACTED</option>
+                                <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">IN PROGRESS</option>
+                                <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">RESOLVED</option>
+                                <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">ARCHIVED</option>
+                              </select>
+                            </td>
+                            <td className="p-4 text-right whitespace-nowrap space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedInquiry(inq)}
+                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  isDark
+                                    ? "bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                                }`}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Query
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInquiry(inq.id)}
+                                disabled={deletingInquiryId === inq.id}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${
+                                  isDark
+                                    ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                    : "bg-rose-600 text-white hover:bg-rose-700 shadow-md"
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── MODAL 1: PROMOTE USER TO ENTERPRISE OWNER ─────────────────────── */}
+          {selectedUser && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+                  <div>
+                    <h3 className="text-lg font-black">Promote to Enterprise Owner</h3>
+                    <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                      User: <strong>{selectedUser.username}</strong> ({selectedUser.email})
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(null)}
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {promoteError && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold">
+                      {promoteError}
+                    </div>
+                  )}
+
+                  {promoteSuccess && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                      {promoteSuccess}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-700"}`}>
+                      Initial Organization Tokens
+                    </label>
+                    <input
+                      type="number"
+                      value={initialTokens}
+                      onChange={(e) => setInitialTokens(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:border-indigo-500 ${inputClass}`}
+                      placeholder="10000000"
+                    />
+                    <p className={`text-[11px] mt-1.5 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                      Default is 10,000,000 tokens for the organization's shared token pool.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(null)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePromote}
+                    disabled={promoting}
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {promoting ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Promoting…</>
+                    ) : (
+                      "Confirm Promotion"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── MODAL 2: SET ORG BALANCE ──────────────────────────────────────── */}
+          {selectedOrg && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+              <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+                  <div>
+                    <h3 className="text-lg font-black">Set Organization Token Pool</h3>
+                    <p className={`text-xs mt-1 ${isDark ? "text-slate-400" : "text-slate-600 font-medium"}`}>
+                      Organization: <strong>{selectedOrg.name}</strong>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrg(null)}
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-700"}`}>
+                      New Token Balance
+                    </label>
+                    <input
+                      type="number"
+                      value={newBalance}
+                      onChange={(e) => setNewBalance(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:border-indigo-500 ${inputClass}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrg(null)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSetBalance}
+                    disabled={updatingOrg}
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {updatingOrg ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Updating…</>
+                    ) : (
+                      "Save Balance"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── MODAL 3: VIEW FULL USER QUERY DETAILS ───────────────────────────── */}
+          {selectedInquiry && (
+            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+              <div className={`relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
+                <div className={`flex items-center justify-between border-b pb-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                        isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                      }`}>
+                        Query #{selectedInquiry.id}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
+                        selectedInquiry.status === "NEW"
+                          ? isDark
+                            ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                            : "bg-amber-100 text-amber-800 border-amber-300"
+                          : selectedInquiry.status === "RESOLVED"
+                          ? isDark
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                            : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : isDark
+                          ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                          : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                      }`}>
+                        {selectedInquiry.status}
+                      </span>
+                    </div>
+                    <h3 className={`text-xl font-black mt-2 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{selectedInquiry.name}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInquiry(null)}
+                    className={`p-2 rounded-xl transition-colors ${
+                      isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Email Address</span>
+                    <a
+                      href={`mailto:${selectedInquiry.email}`}
+                      className={`block font-bold hover:underline ${isDark ? "text-indigo-400" : "text-indigo-600"}`}
+                    >
+                      {selectedInquiry.email}
+                    </a>
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Company & Team</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                      {selectedInquiry.company || "Individual / Not specified"}
+                    </div>
+                    {selectedInquiry.team_size && (
+                      <div className={isDark ? "text-slate-400" : "text-slate-600 font-medium"}>Team Size: {selectedInquiry.team_size}</div>
+                    )}
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Phone Number</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                      {selectedInquiry.phone || "Not provided"}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>Submitted At</span>
+                    <div className={`font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                      {selectedInquiry.created_at ? new Date(selectedInquiry.created_at).toLocaleString() : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className={`block text-xs font-extrabold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                    Full User Query / Message
+                  </label>
+                  <div className={`p-5 rounded-2xl border text-sm leading-relaxed whitespace-pre-wrap font-sans ${
+                    isDark ? "bg-slate-950 border-slate-800 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-900 font-medium"
+                  }`}>
+                    {selectedInquiry.message || "No message content submitted."}
+                  </div>
+                </div>
+
+                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t ${
+                  isDark ? "border-slate-800" : "border-slate-200"
+                }`}>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className={`text-xs font-bold ${isDark ? "text-slate-400" : "text-slate-700"}`}>Status:</span>
+                    <select
+                      value={selectedInquiry.status}
+                      onChange={(e) => handleUpdateStatus(selectedInquiry.id, e.target.value)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold focus:outline-none ${inputClass}`}
+                    >
+                      <option value="NEW" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">NEW</option>
+                      <option value="CONTACTED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">CONTACTED</option>
+                      <option value="IN_PROGRESS" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">IN PROGRESS</option>
+                      <option value="RESOLVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">RESOLVED</option>
+                      <option value="ARCHIVED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">ARCHIVED</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <a
+                      href={`mailto:${selectedInquiry.email}?subject=Re: Sigmavalue AI Pilot Inquiry`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      Reply to User
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedInquiry(null)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                        isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 6: CUSTOM ENTERPRISE OFFERS ───────────────────────────────── */}
+          {activeTab === "offers" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-amber-500" />
+                  <h3 className={`text-sm font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                    Custom Negotiated Enterprise Offers & Invoicing
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOfferModal(true)}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  + Issue Custom Enterprise Offer
+                </button>
+              </div>
+
+              <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardClass}`}>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-black uppercase tracking-wider ${tableHeaderClass}`}>
+                        <th className="p-4">Target User</th>
+                        <th className="p-4">Negotiated Price</th>
+                        <th className="p-4">Token Allocation</th>
+                        <th className="p-4">Organization Name</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">Issued At</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs font-medium">
+                      {loadingOffers ? (
+                        <tr>
+                          <td colSpan={7} className="p-12 text-center text-slate-500">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
+                            Loading enterprise offers...
+                          </td>
+                        </tr>
+                      ) : enterpriseOffers.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-12 text-center text-slate-500">
+                            No custom enterprise offers created yet. Click "+ Issue Custom Enterprise Offer" above to start.
+                          </td>
+                        </tr>
+                      ) : (
+                        enterpriseOffers.map((o) => (
+                          <tr key={o.id} className={`transition-colors ${tableRowClass}`}>
+                            <td className="p-4 font-bold">
+                              <div className={isDark ? "text-slate-100" : "text-slate-900 font-extrabold"}>
+                                {o.username}
+                              </div>
+                              <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                {o.user_email || "No email"}
+                              </div>
+                            </td>
+                            <td className="p-4 font-black text-emerald-500">
+                              ₹{o.offered_price_inr.toLocaleString()} INR
+                            </td>
+                            <td className="p-4 font-black text-amber-400">
+                              {o.offered_tokens.toLocaleString()} tokens
+                            </td>
+                            <td className="p-4 font-semibold">
+                              {o.org_name || "—"}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase border ${
+                                o.status === "PAID"
+                                  ? isDark ? "bg-emerald-950 text-emerald-300 border-emerald-800" : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  : o.status === "PENDING"
+                                  ? isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-100 text-amber-800 border-amber-300"
+                                  : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-200 text-slate-700 border-slate-300"
+                              }`}>
+                                {o.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-400 text-[11px]">
+                              {new Date(o.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="p-4 text-right">
+                              {o.status === "PENDING" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelOffer(o.id)}
+                                  className={`p-1.5 rounded-lg border transition-all ${
+                                    isDark ? "bg-rose-950/50 text-rose-400 hover:bg-rose-900/50 border-rose-800/60" : "bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
+                                  }`}
+                                  title="Cancel offer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── CREATE CUSTOM ENTERPRISE OFFER MODAL ──────────────────────────── */}
+          {showOfferModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+              <div className={`w-full max-w-lg rounded-3xl border p-6 space-y-5 shadow-2xl ${
+                isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-base font-black">Issue Custom Enterprise Offer</h3>
+                  </div>
+                  <button onClick={() => setShowOfferModal(false)} className={`p-1.5 rounded-lg ${isDark ? "hover:bg-slate-800" : "hover:bg-slate-100"}`}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs font-medium">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-400">Target User Account</label>
+                    <select
+                      value={offerTargetUser?.id || ""}
+                      onChange={(e) => {
+                        const u = users.find(x => x.id === parseInt(e.target.value, 10));
+                        setOfferTargetUser(u || null);
+                        if (u && !offerOrgName) {
+                          setOfferOrgName(`${u.username}'s Organization`);
+                        }
+                      }}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border font-bold focus:outline-none ${inputClass}`}
+                    >
+                      <option value="">-- Select Free Tier Target User --</option>
+                      {users
+                        .filter((u) => u.role === "FREE" && !u.active_org_id && !u.active_org_name && u.account_type !== "INDIVIDUAL" && u.account_type !== "ENTERPRISE")
+                        .map((u) => (
+                          <option key={u.id} value={u.id} className="bg-white dark:bg-slate-900">
+                            {u.username} ({u.email || "No email"}) — Free Tier
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-400">Negotiated Price (INR ₹)</label>
+                      <input
+                        type="number"
+                        placeholder="50000"
+                        value={offerPrice}
+                        onChange={(e) => setOfferPrice(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border font-bold focus:outline-none ${inputClass}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-400">Token Grant Allocation</label>
+                      <input
+                        type="number"
+                        placeholder="50000000"
+                        value={offerTokens}
+                        onChange={(e) => setOfferTokens(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border font-bold focus:outline-none ${inputClass}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-400">Organization Workspace Name</label>
+                    <input
+                      type="text"
+                      placeholder="Acme Corp Enterprise"
+                      value={offerOrgName}
+                      onChange={(e) => setOfferOrgName(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border font-bold focus:outline-none ${inputClass}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-400">Contract Note / Terms (Optional)</label>
+                    <textarea
+                      placeholder="Special 1-year custom Enterprise Tier contract agreed on sales call."
+                      rows={3}
+                      value={offerNote}
+                      onChange={(e) => setOfferNote(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border font-medium focus:outline-none ${inputClass}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowOfferModal(false)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold ${isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-700"}`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateOffer}
+                    disabled={creatingOffer || !offerTargetUser}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                  >
+                    {creatingOffer ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-amber-300" />}
+                    Generate Custom Offer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
-    </main>
-  );
-}
-
-export default function AdminPage() {
-  return (
-    <RoleGuard allowedRoles={['ADMIN']}>
-      <AdminPanelContent />
-    </RoleGuard>
+    </AdminOnlyGate>
   );
 }
