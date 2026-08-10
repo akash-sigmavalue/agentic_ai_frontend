@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import Image from "next/image";
-import { Database, Globe2, Maximize2, RotateCcw, Server } from "lucide-react";
+import { Check, Copy, Database, ExternalLink, Eye, Globe2, Loader2, Maximize2, RefreshCw, RotateCcw, Server, ShieldCheck, Tv } from "lucide-react";
 import ActivityLog from "./ActivityLog";
 import AgentShell from "./AgentShell";
 import BadgeList from "./BadgeList";
@@ -43,6 +43,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   const [currentBrowserUrl, setCurrentBrowserUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"results" | "browser">("results");
   const [isMaximized, setIsMaximized] = useState(false);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
   const activeSourceRef = useRef<EventSource | null>(null);
 
   const normalizedApiBaseUrl = useMemo(() => normalizeApiBase(apiBaseUrl), [apiBaseUrl]);
@@ -164,6 +165,9 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
           case "portal_resolved":
             addBadge("Portal", message.state || "-");
             addBadge("URL", message.portal_url || "-", "url");
+            if (message.portal_url) {
+              setCurrentBrowserUrl(message.portal_url);
+            }
             break;
           case "plan_ready":
             logLine(`Plan ready - ${message.query_understanding || ""} (${message.step_count || 0} steps)`, "step");
@@ -180,9 +184,11 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
           case "step_started":
             logLine(`Step ${message.step} ${message.action || ""} - ${message.description || ""}`, "step");
             setWorkflowStatuses((current) => ({ ...current, [String(message.step)]: "running" }));
+            setActiveAction(message.description || `Step ${message.step}: ${message.action || "Processing"}`);
             break;
           case "step_done":
             setWorkflowStatuses((current) => ({ ...current, [String(message.step)]: "done" }));
+            setActiveAction(null);
             break;
           case "step_failed":
             logLine(`Step ${message.step} failed: ${message.error || ""}`, "error");
@@ -190,14 +196,16 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
             break;
           case "screenshot":
             setScreenshot(message.image || null);
-            if (message.portal_url) {
+            if (message.portal_url && message.portal_url !== "about:blank") {
               setCurrentBrowserUrl(message.portal_url);
             }
             break;
           case "data_extracted":
             logLine(`+${message.record_count || 0} records extracted`, "data");
             setResults((current) => current.concat(message.data || []));
-            setActiveTab("results");
+            // Keep the browser mirror on screen while the agent is still
+            // working. Users can inspect each portal transition in real time
+            // and switch to Results whenever they choose.
             break;
           case "captcha_required":
             setCaptcha({
@@ -463,35 +471,64 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
       ) : null}
 
       {isMaximized && (
-        <div className="fixed inset-0 z-[110] flex flex-col bg-black/95 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-[110] flex flex-col bg-slate-950/95 p-4 backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-border/40 pb-3 mb-3">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-rose-500" />
-                <span className="h-3 w-3 rounded-full bg-amber-500" />
-                <span className="h-3 w-3 rounded-full bg-emerald-500" />
+                <span className="h-3 w-3 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                <span className="h-3 w-3 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+                <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
               </div>
-              <span className="text-xs font-mono text-text-secondary truncate max-w-xl bg-bg-card px-3 py-1 rounded border border-border">
-                {currentBrowserUrl || "Not navigating"}
+              <span className="text-xs font-mono text-cyan-300 truncate max-w-xl bg-bg-card px-3 py-1.5 rounded-xl border border-border flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                {currentBrowserUrl || "http://rera.telangana.gov.in"}
               </span>
             </div>
-            <button
-              onClick={() => setIsMaximized(false)}
-              className="px-4 py-2 text-xs font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl hover:bg-rose-500/30 transition"
-            >
-              Minimize / Close
-            </button>
+            <div className="flex items-center gap-3">
+              {currentBrowserUrl && (
+                <a
+                  href={currentBrowserUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-text-primary bg-bg-card border border-border rounded-xl transition"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in New Tab
+                </a>
+              )}
+              <button
+                onClick={() => setIsMaximized(false)}
+                className="px-4 py-2 text-xs font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl hover:bg-rose-500/30 transition"
+              >
+                Close Fullscreen
+              </button>
+            </div>
           </div>
-          <div className="flex-1 min-h-0 flex items-center justify-center bg-bg-deep/40 rounded-2xl overflow-hidden border border-border/40">
+          <div className="flex-1 min-h-0 flex items-center justify-center bg-slate-900/60 rounded-2xl overflow-hidden border border-border/40 relative p-2">
+            {activeAction && (
+              <div className="absolute top-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-slate-950/90 text-cyan-300 border border-cyan-500/50 text-xs font-bold shadow-2xl backdrop-blur-md animate-pulse">
+                <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+                <span>{activeAction}</span>
+              </div>
+            )}
             {screenshot ? (
               <img
                 src={screenshot}
                 alt="Live browser screenshot"
-                className="max-h-full max-w-full object-contain"
+                className="max-h-full max-w-full rounded-xl object-contain shadow-2xl border border-border/40"
+              />
+            ) : currentBrowserUrl ? (
+              <iframe
+                src={currentBrowserUrl}
+                title="Full Live RERA View"
+                className="w-full h-full border-0 rounded-xl bg-white"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
               />
             ) : (
-              <div className="text-center text-text-dim">
-                <p>No browser session active or no screenshots received yet.</p>
+              <div className="text-center text-text-dim p-8">
+                <Globe2 className="h-10 w-10 mx-auto text-cyan-400 mb-3" />
+                <p className="text-sm font-bold text-text-primary">No active browser session frames received yet.</p>
+                <p className="text-xs text-text-dim mt-1">Start an agent crawl or browser test to view live activity.</p>
               </div>
             )}
           </div>
@@ -604,6 +641,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
                   screenshot={screenshot}
                   currentBrowserUrl={currentBrowserUrl}
                   busy={busy}
+                  activeAction={activeAction}
                   onMaximize={() => setIsMaximized(true)}
                 />
               )}
@@ -660,65 +698,169 @@ function BrowserWindow({
   screenshot,
   currentBrowserUrl,
   busy,
+  activeAction,
   onMaximize,
 }: {
   screenshot: string | null;
   currentBrowserUrl: string | null;
   busy: boolean;
+  activeAction: string | null;
   onMaximize: () => void;
 }) {
+  const [viewMode, setViewMode] = useState<"stream" | "iframe">("stream");
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyUrl = () => {
+    if (currentBrowserUrl) {
+      void navigator.clipboard.writeText(currentBrowserUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
-    <div className="panel-shell h-full min-h-[400px] flex flex-col">
-      <div className="panel-header-shell shrink-0 flex items-center justify-between pr-4">
+    <div className="panel-shell h-full min-h-[400px] flex flex-col overflow-hidden rounded-2xl border border-border bg-bg-panel/90 shadow-2xl backdrop-blur-xl">
+      {/* Header Bar */}
+      <div className="panel-header-shell shrink-0 flex items-center justify-between px-4 py-3 border-b border-border bg-bg-card/40">
         <div className="panel-title-shell flex items-center gap-3">
           <div className="flex gap-1.5 shrink-0">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
           </div>
-          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-text-dim">Embedded Browser</span>
+          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-text-primary flex items-center gap-2">
+            Embedded Live Browser
+            {busy && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold tracking-normal">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+                STREAMING LIVE
+              </span>
+            )}
+          </span>
         </div>
-        <button
-          type="button"
-          onClick={onMaximize}
-          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.12em] bg-bg-card hover:bg-border/20 text-text-secondary hover:text-text-primary px-2.5 py-1.5 rounded-xl border border-border transition"
-        >
-          <Maximize2 className="h-3 w-3 animate-pulse" />
-          Maximize
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Mode Switcher */}
+          <div className="flex bg-bg-deep/80 p-0.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider">
+            <button
+              type="button"
+              onClick={() => setViewMode("stream")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                viewMode === "stream"
+                  ? "bg-accent text-slate-950 font-black shadow-sm"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              <Tv className="h-3 w-3" />
+              Stream
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("iframe")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                viewMode === "iframe"
+                  ? "bg-accent text-slate-950 font-black shadow-sm"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              <Eye className="h-3 w-3" />
+              Interactive
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onMaximize}
+            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.12em] bg-bg-card hover:bg-border/20 text-text-secondary hover:text-text-primary px-2.5 py-1.5 rounded-xl border border-border transition"
+            title="Maximize browser window"
+          >
+            <Maximize2 className="h-3 w-3" />
+            Maximize
+          </button>
+        </div>
       </div>
 
-      {/* Browser address bar */}
-      <div className="px-4 py-2 bg-bg-deep/20 border-b border-border flex items-center gap-2">
-        <div className="flex items-center gap-1.5 text-text-dim">
-          <Globe2 className="h-3.5 w-3.5" />
+      {/* Address bar */}
+      <div className="px-4 py-2 bg-bg-deep/30 border-b border-border flex items-center gap-2">
+        <div className="flex items-center gap-1.5 text-emerald-400 shrink-0" title="Secure connection">
+          <ShieldCheck className="h-3.5 w-3.5" />
         </div>
-        <div className="flex-1 bg-bg-card border border-border px-3 py-1 rounded-lg text-xs font-mono text-text-secondary truncate">
-          {currentBrowserUrl || "http://rera.maharashtra.gov.in (inactive)"}
+
+        <div className="flex-1 min-w-0 flex items-center bg-bg-card border border-border px-3 py-1 rounded-lg text-xs font-mono text-text-secondary truncate">
+          <span className="truncate flex-1 text-text-primary">{currentBrowserUrl || "about:blank"}</span>
         </div>
-        <span className="flex h-2 w-2 relative">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${busy ? "bg-cyan-400" : "bg-transparent"}`}></span>
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${busy ? "bg-cyan-400" : "bg-text-dim"}`}></span>
-        </span>
+
+        {currentBrowserUrl && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyUrl}
+              className="p-1.5 rounded-lg border border-border bg-bg-card hover:bg-border/20 text-text-secondary hover:text-text-primary transition"
+              title="Copy URL"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            </button>
+            <a
+              href={currentBrowserUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="p-1.5 rounded-lg border border-border bg-bg-card hover:bg-border/20 text-text-secondary hover:text-text-primary transition"
+              title="Open portal in new tab"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 min-h-0 relative bg-bg-deep/45 p-2 flex items-center justify-center overflow-auto custom-scrollbar">
-        {screenshot ? (
-          <img
-            src={screenshot}
-            alt="Agent Browser Frame"
-            className="max-h-full max-w-full rounded-lg border border-border object-contain shadow-2xl transition-all duration-300"
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center text-center p-6 max-w-sm">
-            <div className="p-4 rounded-full bg-bg-card border border-border mb-3 text-text-dim">
-              <Globe2 className="h-8 w-8 stroke-[1.5]" />
+      <div className="flex-1 min-h-0 relative bg-slate-950/80 p-2 flex items-center justify-center overflow-hidden">
+        {activeAction && (
+          <div className="absolute top-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold shadow-lg backdrop-blur-md animate-pulse">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+            <span className="truncate max-w-xs">{activeAction}</span>
+          </div>
+        )}
+
+        {viewMode === "stream" ? (
+          screenshot ? (
+            <div className="relative w-full h-full flex items-center justify-center overflow-auto custom-scrollbar">
+              <img
+                src={screenshot}
+                alt="Live agent browser activity frame"
+                className="max-h-full max-w-full rounded-lg border border-border/60 object-contain shadow-2xl transition-all duration-200"
+              />
             </div>
-            <h3 className="text-sm font-black text-text-primary uppercase tracking-wider">Browser Sandbox Ready</h3>
-            <p className="text-xs text-text-dim mt-2 leading-relaxed">
-              Start the agent or run a browser test to project the automated chrome session inside this frontend window.
-            </p>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center p-6 max-w-sm">
+              <div className="p-4 rounded-full bg-bg-card border border-border mb-3 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
+                <Globe2 className="h-8 w-8 stroke-[1.5]" />
+              </div>
+              <h3 className="text-sm font-black text-text-primary uppercase tracking-wider">
+                {busy ? "Connecting Live Stream..." : "Browser Sandbox Ready"}
+              </h3>
+              <p className="text-xs text-text-dim mt-2 leading-relaxed">
+                {busy
+                  ? "Launching Playwright browser session and capturing live portal frames..."
+                  : "Click 'Run agent' or 'Browser test' to project real-time browser activity directly into this window."}
+              </p>
+            </div>
+          )
+        ) : (
+          <div className="w-full h-full relative rounded-lg overflow-hidden border border-border/60 bg-white">
+            {currentBrowserUrl ? (
+              <iframe
+                src={currentBrowserUrl}
+                title="Live RERA Portal Frame"
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center p-6 text-center text-slate-800">
+                <Globe2 className="h-8 w-8 text-slate-400 mb-2" />
+                <p className="text-xs font-semibold">No active portal URL to display interactively.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
