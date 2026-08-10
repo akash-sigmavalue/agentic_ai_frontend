@@ -324,7 +324,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
 }) => {
   const router = useRouter();
   const [isAgentsOpen, setIsAgentsOpen] = useState(false);
-  const [activeAgentLayerId, setActiveAgentLayerId] = useState(agentLayers[0].id);
+  const [activeAgentLayerId, setActiveAgentLayerId] = useState(AGENT_LAYERS[0].id);
   const [activeView, setActiveView] = useState<'workflow' | 'module2'>('workflow');
   const { nodes, edges } = useMemo(() => buildWorkflowGraph(moduleOutput), [moduleOutput]);
   const hasWorkflow = nodes.length > 0;
@@ -332,7 +332,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   const skippedCount = nodes.filter((node) => getStepStatus(node.data.step) === 'skipped').length;
 
   const activeAgentLayer =
-    agentLayers.find((layer) => layer.id === activeAgentLayerId) ?? agentLayers[0];
+    AGENT_LAYERS.find((layer) => layer.id === activeAgentLayerId) ?? AGENT_LAYERS[0];
   const ActiveAgentLayerIcon = activeAgentLayer.icon;
 
   return (
@@ -435,7 +435,7 @@ const WorkflowSection: React.FC<WorkflowSectionProps> = ({
 
             <div className="grid max-h-[420px] grid-cols-1 overflow-y-auto md:grid-cols-[250px_1fr]">
               <div className="space-y-2 border-b border-slate-100 bg-white p-3 md:border-b-0 md:border-r">
-                {agentLayers.map((layer) => {
+                {AGENT_LAYERS.map((layer) => {
                   const Icon = layer.icon;
                   const isActive = activeAgentLayer.id === layer.id;
 
