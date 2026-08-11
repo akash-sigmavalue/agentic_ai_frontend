@@ -72,8 +72,10 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [isAutoplay, setIsAutoplay] = useState(true);
+  const [expandedCapabilitiesAgentIndex, setExpandedCapabilitiesAgentIndex] = useState<number | null>(null);
 
   const total = AGENTS.length;
+  const areCapabilitiesExpanded = expandedCapabilitiesAgentIndex === activeIndex;
 
   const handlePrev = useCallback(() => setActiveIndex((i) => (i - 1 + total) % total), [total]);
   const handleNext = useCallback(() => setActiveIndex((i) => (i + 1) % total), [total]);
@@ -495,26 +497,43 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
 
             {/* Capability chips */}
             <div className="flex flex-wrap gap-[6px] px-[20px] pt-[11px] pb-[14px]">
-              {activeAgent.capabilities.slice(0, 5).map((c, i) => (
-                <span
-                  key={i}
-                  className={`rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors ${
-                    isDark
-                      ? 'border-[rgba(135,117,255,0.22)] bg-[rgba(116,98,255,0.10)] text-[#b8b4f0] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.20)]'
-                      : 'border-indigo-200/80 bg-indigo-50/80 text-indigo-800 hover:border-indigo-300 hover:bg-indigo-100/70'
-                  }`}
-                >
-                  {c}
-                </span>
-              ))}
+              <div id={`agent-capabilities-${activeIndex}`} className="contents">
+                {activeAgent.capabilities
+                  .slice(0, areCapabilitiesExpanded ? activeAgent.capabilities.length : 5)
+                  .map((c, i) => (
+                    <span
+                      key={i}
+                      className={`rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors ${
+                        isDark
+                          ? 'border-[rgba(135,117,255,0.22)] bg-[rgba(116,98,255,0.10)] text-[#b8b4f0] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.20)]'
+                          : 'border-indigo-200/80 bg-indigo-50/80 text-indigo-800 hover:border-indigo-300 hover:bg-indigo-100/70'
+                      }`}
+                    >
+                      {c}
+                    </span>
+                  ))}
+              </div>
               {activeAgent.capabilities.length > 5 && (
-                <span
-                  className={`rounded-full border px-[9px] py-[4px] text-[10px] ${
-                    isDark ? 'border-[rgba(135,117,255,0.14)] text-[#505880]' : 'border-slate-200 text-slate-400'
+                <button
+                  type="button"
+                  aria-expanded={areCapabilitiesExpanded}
+                  aria-controls={`agent-capabilities-${activeIndex}`}
+                  onClick={() => {
+                    setIsAutoplay(false);
+                    setExpandedCapabilitiesAgentIndex((currentIndex) =>
+                      currentIndex === activeIndex ? null : activeIndex
+                    );
+                  }}
+                  className={`cursor-pointer rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                    isDark
+                      ? 'border-[rgba(135,117,255,0.28)] text-[#a8afd2] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.16)]'
+                      : 'border-slate-300 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700'
                   }`}
                 >
-                  +{activeAgent.capabilities.length - 5} more
-                </span>
+                  {areCapabilitiesExpanded
+                    ? 'Show less'
+                    : `+${activeAgent.capabilities.length - 5} more`}
+                </button>
               )}
             </div>
 
