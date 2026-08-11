@@ -72,11 +72,17 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [isAutoplay, setIsAutoplay] = useState(true);
+  const [expandedCapabilitiesAgentIndex, setExpandedCapabilitiesAgentIndex] = useState<number | null>(null);
 
   const total = AGENTS.length;
+  const areCapabilitiesExpanded = expandedCapabilitiesAgentIndex === activeIndex;
 
   const handlePrev = useCallback(() => setActiveIndex((i) => (i - 1 + total) % total), [total]);
   const handleNext = useCallback(() => setActiveIndex((i) => (i + 1) % total), [total]);
+  const handleAgentSelect = useCallback((index: number) => {
+    setIsAutoplay(false);
+    setActiveIndex(index);
+  }, []);
 
   useEffect(() => {
     if (isHovered || !isAutoplay) return;
@@ -94,15 +100,16 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
   }, [handlePrev, handleNext]);
 
   const pillRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const pillContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Smooth scroll active mobile pill into center view whenever activeIndex changes
+  // Center the active mobile pill without scrolling the page viewport horizontally.
   useEffect(() => {
+    const container = pillContainerRef.current;
     const activePill = pillRefs.current[activeIndex];
-    if (activePill) {
-      activePill.scrollIntoView({
+    if (container && activePill) {
+      container.scrollTo({
+        left: activePill.offsetLeft - (container.clientWidth - activePill.offsetWidth) / 2,
         behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center',
       });
     }
   }, [activeIndex]);
@@ -239,7 +246,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                 </defs>
                 {AGENTS.map((_, idx) => {
                   const offsetIdx = (idx - activeIndex + total) % total;
-                  const angleDeg = -90 + (offsetIdx * (360 / total));
+                  const angleDeg = 90 + (offsetIdx * (360 / total));
                   const rad = (angleDeg * Math.PI) / 180;
                   const x = 50 + Math.cos(rad) * 46;
                   const y = 50 + Math.sin(rad) * 46;
@@ -313,7 +320,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
             {AGENTS.map((agent, idx) => {
               const isActive = idx === activeIndex;
               const offsetIdx = (idx - activeIndex + total) % total;
-              const angleDeg = -90 + (offsetIdx * (360 / total));
+              const angleDeg = 90 + (offsetIdx * (360 / total));
               const rad = (angleDeg * Math.PI) / 180;
 
               const x = 50 + Math.cos(rad) * 46;
@@ -327,8 +334,10 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
               const zIndex = isBehind ? Math.floor(20 + sinVal * 10) : Math.floor(45 + sinVal * 20);
 
               return (
-                <div
+                <button
                   key={`mini-${idx}`}
+                  type="button"
+                  aria-label={`Show ${agent.name}`}
                   className={`max-md:hidden absolute flex min-h-[62px] w-[148px] max-lg:w-[132px] cursor-pointer items-start gap-[9px] rounded-[12px] p-[10px_11px] backdrop-blur-[14px] origin-center will-change-transform transition-all duration-300 ${
                     isDark
                       ? 'border border-[rgba(126,110,255,0.32)] bg-[linear-gradient(145deg,rgba(14,23,61,0.95),rgba(7,13,40,0.82))] text-[#f7f8ff] shadow-[0_14px_38px_rgba(0,0,0,0.35)] hover:border-[rgba(160,140,255,0.85)] hover:shadow-[0_18px_48px_rgba(0,0,0,0.45),0_0_26px_rgba(100,75,255,0.35)]'
@@ -338,12 +347,15 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                     left: `${x}%`,
                     top: `${y}%`,
                     transform: `translate(-50%, -50%) translateZ(${zDepth}px) scale(${scale})`,
-                    opacity: isActive ? 0 : isBehind ? 0.48 : 1,
+                    opacity: isBehind ? 0.48 : 1,
                     pointerEvents: isActive ? 'none' : 'auto',
                     zIndex: zIndex,
                     transition: 'left 0.5s ease, top 0.5s ease, opacity 0.4s ease, transform 0.5s ease',
                   }}
-                  onClick={() => setActiveIndex(idx)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    handleAgentSelect(idx);
+                  }}
                 >
                   <div
                     className={`flex h-[30px] w-[30px] shrink-0 place-items-center justify-center rounded-[10px] ${
@@ -362,14 +374,17 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                       ● ACTIVE
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
           {/* ── End 3D orbit stage ── */}
 
           {/* ── Mobile Agent Quick Scroll Pills ── */}
-          <div className="hidden max-md:flex w-full overflow-x-auto gap-2 py-2 px-1 scrollbar-none snap-x">
+          <div
+            ref={pillContainerRef}
+            className="hidden max-md:flex w-full max-w-full overflow-x-auto gap-2 py-2 px-1 scrollbar-none snap-x"
+          >
             {AGENTS.map((agent, idx) => {
               const isActive = idx === activeIndex;
               const PillIcon = agent.icon;
@@ -377,7 +392,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                 <button
                   key={`pill-${idx}`}
                   ref={(el) => { pillRefs.current[idx] = el; }}
-                  onClick={() => setActiveIndex(idx)}
+                  onClick={() => handleAgentSelect(idx)}
                   className={`flex shrink-0 items-center gap-2 px-3 py-2 rounded-full border text-xs font-semibold transition-all snap-center ${
                     isActive
                       ? isDark
@@ -482,26 +497,43 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
 
             {/* Capability chips */}
             <div className="flex flex-wrap gap-[6px] px-[20px] pt-[11px] pb-[14px]">
-              {activeAgent.capabilities.slice(0, 5).map((c, i) => (
-                <span
-                  key={i}
-                  className={`rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors ${
-                    isDark
-                      ? 'border-[rgba(135,117,255,0.22)] bg-[rgba(116,98,255,0.10)] text-[#b8b4f0] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.20)]'
-                      : 'border-indigo-200/80 bg-indigo-50/80 text-indigo-800 hover:border-indigo-300 hover:bg-indigo-100/70'
-                  }`}
-                >
-                  {c}
-                </span>
-              ))}
+              <div id={`agent-capabilities-${activeIndex}`} className="contents">
+                {activeAgent.capabilities
+                  .slice(0, areCapabilitiesExpanded ? activeAgent.capabilities.length : 5)
+                  .map((c, i) => (
+                    <span
+                      key={i}
+                      className={`rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors ${
+                        isDark
+                          ? 'border-[rgba(135,117,255,0.22)] bg-[rgba(116,98,255,0.10)] text-[#b8b4f0] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.20)]'
+                          : 'border-indigo-200/80 bg-indigo-50/80 text-indigo-800 hover:border-indigo-300 hover:bg-indigo-100/70'
+                      }`}
+                    >
+                      {c}
+                    </span>
+                  ))}
+              </div>
               {activeAgent.capabilities.length > 5 && (
-                <span
-                  className={`rounded-full border px-[9px] py-[4px] text-[10px] ${
-                    isDark ? 'border-[rgba(135,117,255,0.14)] text-[#505880]' : 'border-slate-200 text-slate-400'
+                <button
+                  type="button"
+                  aria-expanded={areCapabilitiesExpanded}
+                  aria-controls={`agent-capabilities-${activeIndex}`}
+                  onClick={() => {
+                    setIsAutoplay(false);
+                    setExpandedCapabilitiesAgentIndex((currentIndex) =>
+                      currentIndex === activeIndex ? null : activeIndex
+                    );
+                  }}
+                  className={`cursor-pointer rounded-full border px-[9px] py-[4px] text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                    isDark
+                      ? 'border-[rgba(135,117,255,0.28)] text-[#a8afd2] hover:border-[rgba(135,117,255,0.48)] hover:bg-[rgba(116,98,255,0.16)]'
+                      : 'border-slate-300 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700'
                   }`}
                 >
-                  +{activeAgent.capabilities.length - 5} more
-                </span>
+                  {areCapabilitiesExpanded
+                    ? 'Show less'
+                    : `+${activeAgent.capabilities.length - 5} more`}
+                </button>
               )}
             </div>
 
