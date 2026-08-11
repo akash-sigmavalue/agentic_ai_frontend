@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { FaChartBar, FaTimes, FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaSpinner, FaEdit, FaSave, FaUndo, FaArrowRight, FaArrowLeft, FaCode, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiUrl } from "@/lib/api-client";
@@ -156,6 +157,41 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editedPct, simResult]);
 
+  const handleSaveDistribution = () => {
+    if (!simResult || !allRowsValid) return;
+    const updatedResult = JSON.parse(JSON.stringify(simResult));
+    
+    for (const row of updatedResult.cost_rows) {
+      const code = row.cost_code;
+      if (editedPct[code]) {
+        for (const [idxStr, pctVal] of Object.entries(editedPct[code])) {
+          const idx = parseInt(idxStr, 10);
+          if (row.allocations[idx] && typeof pctVal === 'number') {
+            row.allocations[idx].percentage = pctVal;
+            row.allocations[idx].amount = (pctVal / 100) * row.total_amount;
+          }
+        }
+      }
+    }
+    
+    if (updatedResult.annual_totals) {
+      const grandTotal = updatedResult.cost_rows.reduce((sum, r) => sum + r.total_amount, 0);
+      for (let i = 0; i < updatedResult.annual_totals.length; i++) {
+        let yearTotal = 0;
+        for (const row of updatedResult.cost_rows) {
+          if (row.allocations[i]) {
+            yearTotal += row.allocations[i].amount;
+          }
+        }
+        updatedResult.annual_totals[i].total_outflow = yearTotal;
+        updatedResult.annual_totals[i].share_of_total_cost = grandTotal > 0 ? (yearTotal / grandTotal) * 100 : 0;
+      }
+    }
+    
+    setSimResult(updatedResult);
+    setEditMode(false);
+  };
+
   // ── Apply to IRR ──────────────────────────────────────────────────────────
   const handleApply = () => {
     if (!simResult || !allRowsValid) return;
@@ -178,7 +214,9 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
 
   if (!isOpen) return null;
 
-  return (
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
     <div style={styles.overlay}>
       <div style={styles.modal}>
         {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -261,6 +299,7 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
               computedAmount={computedAmount}
               allRowsValid={allRowsValid}
               onApply={handleApply}
+              onSaveDistribution={handleSaveDistribution}
               onReSimulate={() => { setStep(3); setSimResult(null); }}
             />
           )}
@@ -292,7 +331,8 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
       </div>
 
       <style>{modalCss}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -480,7 +520,7 @@ const StepSimulate = ({ simLoading, simError, progressMsg, onSimulate, hasErrors
 );
 
 // ─── Step 4: Review & Apply ───────────────────────────────────────────────────
-const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handlePctChange, rowTotal, computedAmount, allRowsValid, onApply, onReSimulate }) => {
+const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handlePctChange, rowTotal, computedAmount, allRowsValid, onApply, onSaveDistribution, onReSimulate }) => {
   const yearLabels = result.year_labels || [];
   const confidence = Math.round((result.overall_confidence || 0) * 100);
   const confColor = confidence >= 75 ? "#10b981" : confidence >= 50 ? "#f59e0b" : "#ef4444";
@@ -710,7 +750,7 @@ const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handle
           </button>
         ) : (
           <>
-            <button style={allRowsValid ? styles.btnSuccess : styles.btnDisabled} disabled={!allRowsValid} onClick={() => setEditMode(false)}>
+            <button style={allRowsValid ? styles.btnSuccess : styles.btnDisabled} disabled={!allRowsValid} onClick={onSaveDistribution}>
               <FaSave size={12} style={{ marginRight: 5 }} /> Save Distribution
             </button>
             <button style={styles.btnSecondary} onClick={() => { setEditMode(false); }}>

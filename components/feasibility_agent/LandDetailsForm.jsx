@@ -929,9 +929,13 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
   }, []);
 
   const handleV3InputChange = (field, value) => {
+    let processedValue = value;
+    if (field === "permissibleFSI_FAR" || field === "grossFloorArea") {
+      processedValue = processedValue.replace(/,/g, "");
+    }
     setV3FormData((prev) => ({
       ...prev,
-      [field]: value,
+      [field]: processedValue,
     }));
   };
 
@@ -943,8 +947,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
     const responseToSave = overrideResponse !== undefined ? overrideResponse : webAgentResponse;
 
     const payload = {
-      permissibleFSI_FAR: dataToSave.permissibleFSI_FAR || "",
-      grossFloorArea: dataToSave.grossFloorArea || "",
+      permissibleFSI_FAR: dataToSave.permissibleFSI_FAR !== "" && dataToSave.permissibleFSI_FAR != null ? Number(dataToSave.permissibleFSI_FAR) : null,
+      grossFloorArea: dataToSave.grossFloorArea !== "" && dataToSave.grossFloorArea != null ? Number(dataToSave.grossFloorArea) : null,
       webAgentQuery: queryToSave || "",
       webAgentStatus: statusToSave || "idle",
       webAgentResponse: responseToSave || "",
@@ -978,8 +982,8 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
       try {
         const parsed = JSON.parse(savedV3);
         setV3FormData({
-          permissibleFSI_FAR: parsed.permissibleFSI_FAR || "",
-          grossFloorArea: parsed.grossFloorArea || "",
+          permissibleFSI_FAR: parsed.permissibleFSI_FAR != null ? parsed.permissibleFSI_FAR : "",
+          grossFloorArea: parsed.grossFloorArea != null ? parsed.grossFloorArea : "",
         });
         if (parsed.webAgentStatus) setWebAgentStatus(parsed.webAgentStatus);
         if (parsed.webAgentResponse) setWebAgentResponse(parsed.webAgentResponse);
@@ -1098,6 +1102,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
   };
 
   const handleInputChange = (field, value) => {
+    let processedValue = value;
+    if (field === "netPlotArea" && typeof value === "string") {
+      processedValue = value.replace(/,/g, "");
+    }
+
     if (field === "latitude" || field === "longitude") {
       loadedPlanningCoordsRef.current = "";
       planningAdvisoryRequestRef.current += 1;
@@ -1123,7 +1132,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
 
     setFormData((prev) => ({
       ...prev,
-      [field]: value,
+      [field]: processedValue,
       ...((field === "latitude" || field === "longitude")
         ? { fetched_location: "", planningAdvisory: "" }
         : {}),
@@ -1353,7 +1362,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
     }
 
     const results = calculateResults();
-    localStorage.setItem("landDetailsForm", JSON.stringify(formData));
+    const payloadToSave = {
+      ...formData,
+      netPlotArea: formData.netPlotArea !== "" && formData.netPlotArea != null ? Number(formData.netPlotArea) : null
+    };
+    localStorage.setItem("landDetailsForm", JSON.stringify(payloadToSave));
     localStorage.setItem("landDetailsResults", JSON.stringify(results));
     localStorage.setItem("zoningType", formData.zoningType);
 
@@ -1377,7 +1390,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
 
   const handleUpdate = () => {
     const results = calculateResults();
-    localStorage.setItem("landDetailsForm", JSON.stringify(formData));
+    const payloadToSave = {
+      ...formData,
+      netPlotArea: formData.netPlotArea !== "" && formData.netPlotArea != null ? Number(formData.netPlotArea) : null
+    };
+    localStorage.setItem("landDetailsForm", JSON.stringify(payloadToSave));
     localStorage.setItem("landDetailsResults", JSON.stringify(results));
     localStorage.setItem("zoningType", formData.zoningType);
 

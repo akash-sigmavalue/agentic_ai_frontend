@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { FaSearch, FaSave, FaChartBar } from "react-icons/fa";
+import { createPortal } from "react-dom";
+import { FaSearch, FaSave, FaChartBar, FaMapMarkerAlt, FaTrashAlt, FaExclamationTriangle, FaCoins, FaBuilding, FaChevronDown, FaChevronUp, FaTimes, FaInfoCircle, FaCheckSquare, FaMoneyBillWave, FaMagic, FaCheckCircle, FaLock, FaChartPie } from "react-icons/fa";
 import { apiUrl } from "@/lib/api-client";
 import CashflowAnalysis from "./CashflowAnalysis";
 import CostOutflowSimulationModal from "./CostOutflowSimulationModal";
@@ -36,6 +37,8 @@ const FeasibilityIrrSection = () => {
   // Comparable Projects State
   const [isComparableModalOpen, setIsComparableModalOpen] = useState(false);
   const [isCostOutflowModalOpen, setIsCostOutflowModalOpen] = useState(false);
+  const [selectedSimMode, setSelectedSimMode] = useState('inflow'); // 'inflow' | 'outflow'
+  const [activeScenarioPill, setActiveScenarioPill] = useState(null); // which pill is open
   const [comparableLoading, setComparableLoading] = useState(false);
   const [comparableResult, setComparableResult] = useState(null);
   const [comparableError, setComparableError] = useState(null);
@@ -83,7 +86,7 @@ const FeasibilityIrrSection = () => {
       const updated = { ...prev };
       if (!updated[selectedScenario]) updated[selectedScenario] = {};
       Object.entries(yearlyPercentages).forEach(([key, years]) => {
-        updated[selectedScenario][key] = { ...updated[selectedScenario][key], ...years };
+        updated[selectedScenario][key] = { ...years };
       });
       
       setProjectDurations(prevDur => {
@@ -550,10 +553,11 @@ const FeasibilityIrrSection = () => {
     return sc;
   }, [cashInflowSimResult]);
 
-  const handleApplyInflowScenario = () => {
-    if (!parsedInflowResult?.[activeInflowScenario]?.length) return;
+  const handleApplyInflowScenario = (scenarioOverride) => {
+    const scenario = scenarioOverride || activeInflowScenario;
+    if (!parsedInflowResult?.[scenario]?.length) return;
     let maxY = 1; const cf = {};
-    parsedInflowResult[activeInflowScenario].forEach(row => {
+    parsedInflowResult[scenario].forEach(row => {
       const m = row.year.match(/\d+/); if (m) { const n = parseInt(m[0], 10); if (n > maxY) maxY = n; if (n > 0) cf[n] = parseFloat(row.percentage.replace("%", "").trim()) || 0; }
     });
     applyAutofill(cf, maxY); setIsComparableModalOpen(false);
@@ -661,48 +665,327 @@ const FeasibilityIrrSection = () => {
             })}
           </div>
           
-          <div className="d-flex justify-content-end gap-2 mt-3 mb-2">
-            <button 
-              type="button" 
-              className="btn d-inline-flex align-items-center gap-2 px-4 py-2" 
-              style={{
-                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '12px',
-                fontWeight: '600',
-                fontSize: '13px',
-                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.25)',
-                transition: 'all 0.2s ease'
+          {/* Predict Toggle + Simulate — centered */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginTop: '20px', marginBottom: '8px' }}>
+
+            {/* Toggle buttons — select mode */}
+            <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '14px', padding: '4px', gap: '4px' }}>
+              {[
+                { mode: 'inflow',  label: 'Predict Sales Cash Inflow',  icon: <FaSearch size={13} /> },
+                { mode: 'outflow', label: 'Predict Cost Cash Outflow', icon: <FaChartBar size={13} /> },
+              ].map(({ mode, label, icon }) => {
+                const active = selectedSimMode === mode;
+                const tealActive   = active && mode === 'inflow';
+                const purpleActive = active && mode === 'outflow';
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSelectedSimMode(mode)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '7px',
+                      padding: '8px 18px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      fontWeight: active ? 700 : 500,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      whiteSpace: 'nowrap',
+                      background: tealActive
+                        ? 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
+                        : purpleActive
+                          ? 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)'
+                          : 'transparent',
+                      color: active ? '#fff' : '#64748b',
+                      boxShadow: active ? '0 3px 10px rgba(0,0,0,0.18)' : 'none',
+                    }}
+                  >
+                    {icon} {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Simulate button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedSimMode === 'inflow') {
+                  setIsComparableModalOpen(true);
+                  setComparableResult(null);
+                  setComparableError(null);
+                } else {
+                  setIsCostOutflowModalOpen(true);
+                }
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(15, 23, 42, 0.35)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.25)'; }}
-              onClick={() => setIsCostOutflowModalOpen(true)}
-            >
-              <FaChartBar size={14} /> Predict Cost Cash Outflow
-            </button>
-            <button 
-              type="button" 
-              className="btn d-inline-flex align-items-center gap-2 px-4 py-2" 
               style={{
-                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-                color: '#fff',
-                border: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '9px 32px',
                 borderRadius: '12px',
-                fontWeight: '600',
-                fontSize: '13px',
-                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.25)',
-                transition: 'all 0.2s ease'
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '13.5px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                background: selectedSimMode === 'inflow'
+                  ? 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)'
+                  : 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+                color: '#fff',
+                boxShadow: selectedSimMode === 'inflow'
+                  ? '0 4px 14px rgba(13,148,136,0.35)'
+                  : '0 4px 14px rgba(124,58,237,0.35)',
+                letterSpacing: '0.02em',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(15, 23, 42, 0.35)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.25)'; }}
-              onClick={() => { setIsComparableModalOpen(true); setComparableResult(null); setComparableError(null); }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.opacity = '0.92'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.opacity = '1'; }}
             >
-              <FaSearch size={14} /> Predict Sales Cash Inflow
+              {selectedSimMode === 'inflow' ? <FaSearch size={14} /> : <FaChartBar size={14} />}
+              Simulate
             </button>
+
+            {/* Sub-scenario pills — clickable, mode-reactive */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {['Optimistic', 'Most Probable', 'Pessimistic', 'User Cashflow'].map(s => {
+                const isInflow = selectedSimMode === 'inflow';
+                const hasData = isInflow
+                  ? (s === 'User Cashflow' ? true : parsedInflowResult?.[s]?.length > 0)
+                  : false;
+                const isOpen = activeScenarioPill === s;
+
+                const accentColor  = isInflow ? '#0d9488' : '#7c3aed';
+                const accentBg     = isInflow ? 'rgba(13,148,136,0.10)' : 'rgba(124,58,237,0.10)';
+                const accentBorder = isInflow ? 'rgba(13,148,136,0.35)' : 'rgba(124,58,237,0.35)';
+
+                return (
+                  <span
+                    key={s}
+                    onClick={() => {
+                      if (!hasData && s !== 'User Cashflow') {
+                        setActiveScenarioPill(`__hint_${s}`);
+                        setTimeout(() => setActiveScenarioPill(prev => prev === `__hint_${s}` ? null : prev), 3000);
+                      } else {
+                        setActiveScenarioPill(isOpen ? null : s);
+                      }
+                    }}
+                    style={{
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      padding: '3px 12px',
+                      borderRadius: '999px',
+                      background: isOpen ? accentColor : hasData ? accentBg : '#f1f5f9',
+                      color: isOpen ? '#fff' : hasData ? accentColor : '#94a3b8',
+                      border: `1px solid ${isOpen ? accentColor : hasData ? accentBorder : '#e2e8f0'}`,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      transition: 'all 0.25s ease',
+                      boxShadow: isOpen ? `0 2px 8px ${accentBorder}` : 'none',
+                    }}
+                  >
+                    {s === 'User Cashflow' ? '✏️' : (hasData && !isOpen) ? '✓' : isOpen ? '▾' : '○'} {s}
+                  </span>
+                );
+              })}
+            </div>
+
           </div>
         </div>
       )}
+
+      {/* ── Hint toast — fixed bottom-center, auto-dismisses ── */}
+      {activeScenarioPill?.startsWith('__hint_') && (
+        <div style={{
+          position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9999,
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: '#1e293b', color: '#fef9c3',
+          borderRadius: '12px', padding: '12px 20px',
+          fontSize: '13px', fontWeight: 500,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
+          animation: 'fadeIn 0.2s ease',
+          whiteSpace: 'nowrap',
+        }}>
+          ⚠️ Run <strong style={{ color: '#fff' }}>Simulate</strong> first, then click this scenario.
+        </div>
+      )}
+
+      {/* ── Scenario result popup — fixed, viewport-centered ── */}
+      {activeScenarioPill && !activeScenarioPill.startsWith('__hint_') && (() => {
+        const isInflow    = selectedSimMode === 'inflow';
+        const accentColor  = isInflow ? '#0d9488' : '#7c3aed';
+        const accentLight  = isInflow ? 'rgba(13,148,136,0.08)' : 'rgba(124,58,237,0.08)';
+        const accentBorder = isInflow ? 'rgba(13,148,136,0.25)' : 'rgba(124,58,237,0.25)';
+        const inflowRows   = isInflow && activeScenarioPill !== 'User Cashflow'
+          ? (parsedInflowResult?.[activeScenarioPill] || [])
+          : [];
+
+        return typeof window !== 'undefined' ? createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={() => setActiveScenarioPill(null)}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9000,
+                background: 'rgba(15,23,42,0.45)',
+                backdropFilter: 'blur(3px)',
+                animation: 'fadeIn 0.15s ease',
+              }}
+            />
+
+            {/* Modal card */}
+            <div style={{
+              position: 'fixed',
+              top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 9001,
+              width: '90%', maxWidth: 480,
+              background: '#fff',
+              borderRadius: '20px',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.22)',
+              overflow: 'hidden',
+              animation: 'slideUp 0.22s ease',
+            }}>
+              {/* Coloured header bar */}
+              <div style={{
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${isInflow ? '#0f766e' : '#5b21b6'} 100%)`,
+                padding: '16px 20px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <span style={{ fontWeight: 700, fontSize: '14px', color: '#fff' }}>
+                  {isInflow ? '📈' : '📉'} {activeScenarioPill} Scenario
+                  <span style={{ marginLeft: 8, fontWeight: 400, fontSize: '11px', opacity: 0.8 }}>
+                    {isInflow ? 'Sales Cash Inflow' : 'Cost Cash Outflow'}
+                  </span>
+                </span>
+                <button
+                  onClick={() => setActiveScenarioPill(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px',
+                    color: '#fff', cursor: 'pointer', fontSize: '16px',
+                    width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1, fontWeight: 700,
+                  }}
+                >×</button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '20px', maxHeight: '60vh', overflowY: 'auto' }}>
+
+                {/* Inflow AI scenario table */}
+                {isInflow && activeScenarioPill !== 'User Cashflow' && (
+                  inflowRows.length > 0 ? (
+                    <>
+                      <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${accentBorder}`, marginBottom: 16 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ background: accentLight }}>
+                              <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: accentColor, borderBottom: `1px solid ${accentBorder}` }}>Year</th>
+                              <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: accentColor, borderBottom: `1px solid ${accentBorder}` }}>Sales %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inflowRows.map((row, i) => (
+                              <tr key={i} style={{ borderBottom: `1px solid ${accentBorder}`, background: i % 2 === 0 ? '#fff' : accentLight }}>
+                                <td style={{ padding: '7px 14px', fontWeight: 600, color: '#334155' }}>{row.year}</td>
+                                <td style={{ padding: '7px 14px', textAlign: 'right', color: accentColor, fontWeight: 700 }}>{row.percentage}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => { handleApplyInflowScenario(activeScenarioPill); setActiveScenarioPill(null); }}
+                          style={{
+                            background: `linear-gradient(135deg, ${accentColor} 0%, ${isInflow ? '#0f766e' : '#5b21b6'} 100%)`,
+                            color: '#fff', border: 'none', borderRadius: '10px',
+                            padding: '9px 24px', fontWeight: 700, fontSize: '13px',
+                            cursor: 'pointer', boxShadow: `0 4px 14px ${accentBorder}`,
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          ✓ Apply {activeScenarioPill}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>🔄</div>
+                      <p style={{ margin: 0, fontSize: '13px' }}>No data yet. Click <strong>Simulate</strong> to generate this scenario.</p>
+                    </div>
+                  )
+                )}
+
+                {/* User Cashflow manual entry */}
+                {activeScenarioPill === 'User Cashflow' && isInflow && (
+                  <div>
+                    <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${accentBorder}`, marginBottom: 16 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ background: accentLight }}>
+                            <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: accentColor, borderBottom: `1px solid ${accentBorder}` }}>Year</th>
+                            <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: accentColor, borderBottom: `1px solid ${accentBorder}` }}>Sales %</th>
+                            <th style={{ padding: '8px 8px', width: 36, borderBottom: `1px solid ${accentBorder}` }} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userCashflowRows.map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: `1px solid ${accentBorder}`, background: idx % 2 === 0 ? '#fff' : accentLight }}>
+                              <td style={{ padding: '6px 14px', fontWeight: 600, color: '#334155' }}>{row.year}</td>
+                              <td style={{ padding: '5px 14px', textAlign: 'right' }}>
+                                <input
+                                  type="number" min="0" max="100" step="0.01"
+                                  placeholder="e.g. 30"
+                                  value={row.percentage}
+                                  onChange={e => { const u = [...userCashflowRows]; u[idx] = { ...u[idx], percentage: e.target.value }; setUserCashflowRows(u); }}
+                                  style={{ width: 72, textAlign: 'right', border: `1.5px solid ${accentBorder}`, borderRadius: 7, padding: '4px 7px', fontSize: 12, outline: 'none', color: accentColor, fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                                {userCashflowRows.length > 2 && (
+                                  <button onClick={() => setUserCashflowRows(p => p.filter((_, i) => i !== idx))}
+                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>✕</button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <button
+                        onClick={() => setUserCashflowRows(p => {
+                          const lastMatch = p.length > 0 ? p[p.length - 1].year.match(/\d+/) : null;
+                          const nextNum = lastMatch ? parseInt(lastMatch[0], 10) + 1 : p.length;
+                          return [...p, { year: `Year ${nextNum}`, percentage: '' }];
+                        })}
+                        style={{ background: 'none', border: `1.5px solid ${accentBorder}`, borderRadius: 8, padding: '6px 14px', color: accentColor, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                      >+ Add Year</button>
+                      <button
+                        onClick={() => { handleApplyUserCashflow(); setActiveScenarioPill(null); }}
+                        style={{
+                          background: `linear-gradient(135deg, ${accentColor} 0%, ${isInflow ? '#0f766e' : '#5b21b6'} 100%)`,
+                          color: '#fff', border: 'none', borderRadius: 10,
+                          padding: '9px 24px', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                        }}
+                      >✓ Apply User Cashflow</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Outflow placeholder */}
+                {!isInflow && (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>🔧</div>
+                    <p style={{ margin: 0, fontSize: '13px' }}>Outflow sub-scenarios will be wired in the next phase.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>,
+          document.body
+        ) : null;
+      })()}
 
       {/* IRR Calculation Form */}
       <div>
@@ -792,27 +1075,35 @@ const FeasibilityIrrSection = () => {
       </div>
 
       {/* Find Comparable Projects Modal */}
-      {isComparableModalOpen && (
-        <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} tabIndex="-1" role="dialog" aria-modal="true">
-          <div className="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+      {isComparableModalOpen && typeof window !== 'undefined' && createPortal(
+        <div className="bootstrap-scope">
+          <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 2147483647 }} tabIndex="-1" role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
             <div className="modal-content border-0 shadow-lg rounded-4">
-              <div className="modal-header border-0 pb-0">
-                <h5 className="modal-title fw-bold text-dark">🔍 Project Analysis</h5>
-                <button type="button" className="btn-close" aria-label="Close" onClick={() => setIsComparableModalOpen(false)} disabled={comparableLoading} />
+              <div className="modal-header border-0 pb-0 pt-4 px-4">
+                <h5 className="modal-title fw-bold d-flex align-items-center gap-2" style={{ color: '#1e293b', fontSize: '1.4rem' }}><FaChartPie className="text-primary" /> Project Analysis</h5>
+                <button type="button" className="btn-close shadow-none" aria-label="Close" onClick={() => setIsComparableModalOpen(false)} disabled={comparableLoading} />
               </div>
-              <div className="modal-body pt-3 pb-4">
+              <div className="modal-body pt-3 pb-4 px-4">
                 <div className="row h-100">
                   {/* Sidebar */}
-                  <div className="col-md-3 border-end">
-                    <div className="nav flex-column nav-pills" role="tablist">
+                  <div className="col-md-3 border-end pe-4" style={{ borderColor: '#e2e8f0' }}>
+                    <div className="nav flex-column gap-2 mt-2" role="tablist">
                       {["Comparable projects", "Sales velocity", "Cash Inflow Simulation"].map(tab => {
                         const disabled = tab === "Cash Inflow Simulation" && !salesVelocityData;
                         const active = activeComparableTab === tab;
                         return (
-                          <button key={tab} type="button" className={`nav-link text-start fw-semibold mb-2 ${active ? "active" : ""}`}
+                          <button key={tab} type="button" className={`btn text-start fw-semibold py-3 px-4 rounded-4 shadow-sm border-0 d-flex justify-content-between align-items-center w-100`}
                             onClick={() => !disabled && setActiveComparableTab(tab)} disabled={disabled}
-                            style={{ ...(active ? { backgroundColor: "#198754", color: "white" } : { color: "#495057" }), ...(disabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}>
-                            {tab}{disabled && <i className="bi bi-lock-fill float-end text-muted mt-1"></i>}
+                            style={{ 
+                              background: active ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#f8fafc',
+                              color: active ? '#fff' : '#475569',
+                              transition: 'all 0.2s',
+                              opacity: disabled ? 0.6 : 1,
+                              cursor: disabled ? "not-allowed" : "pointer"
+                            }}>
+                            {tab}
+                            {disabled && <FaLock className="text-slate-400 opacity-50" />}
                           </button>
                         );
                       })}
@@ -825,52 +1116,86 @@ const FeasibilityIrrSection = () => {
                     {/* Tab 1: Comparable Projects */}
                     {activeComparableTab === "Comparable projects" && (
                       <div>
-                        <p className="text-dark mb-4">Searches for real estate projects near your coordinates within the specified radius.</p>
+                        <div className="mb-4 d-flex flex-column gap-2">
+                          <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>Searches for real estate projects near your coordinates within the specified radius.</p>
+                        </div>
                         {(() => {
                           const lf = JSON.parse(typeof window !== "undefined" ? localStorage.getItem("Land Identification") || "{}" : "{}");
                           const lat = parseFloat(lf.polygonCenterLat || lf.latitude);
                           const lng = parseFloat(lf.polygonCenterLng || lf.longitude);
                           return lat && lng && !isNaN(lat) && !isNaN(lng)
-                            ? (<div className="d-flex gap-3 mb-4">
-                                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">📍 Lat: <strong>{lat}</strong></span>
-                                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2 rounded-pill fs-6">📍 Lng: <strong>{lng}</strong></span>
+                            ? (<div className="d-flex align-items-center gap-3 mb-4 p-3 rounded-4 shadow-sm" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(248,250,252,0.9))', border: '1px solid rgba(226,232,240,0.8)', backdropFilter: 'blur(10px)' }}>
+                                <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill shadow-sm" style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0' }}>
+                                  <FaMapMarkerAlt className="text-primary" />
+                                  <span className="text-secondary small fw-medium">Lat:</span>
+                                  <strong className="text-dark">{lat}</strong>
+                                </div>
+                                <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill shadow-sm" style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0' }}>
+                                  <FaMapMarkerAlt className="text-primary" />
+                                  <span className="text-secondary small fw-medium">Lng:</span>
+                                  <strong className="text-dark">{lng}</strong>
+                                </div>
                               </div>)
-                            : <div className="alert alert-warning rounded-3 mb-4">⚠️ No coordinates found. Please save a polygon or enter coordinates in Land Identification first.</div>;
+                            : <div className="alert border-0 shadow-sm rounded-4 mb-4 d-flex align-items-center gap-3 px-4 py-3" style={{ background: 'linear-gradient(to right, #fffbeb, #fef3c7)', color: '#92400e' }}>
+                                <FaExclamationTriangle size={20} className="text-warning" />
+                                <span className="fw-medium">No coordinates found. Please save a polygon or enter coordinates in Land Identification first.</span>
+                              </div>;
                         })()}
 
-                        <div className="d-flex justify-content-end mb-4 align-items-center gap-2 flex-wrap">
+                        <div className="d-flex justify-content-end mb-4 align-items-center gap-3 flex-wrap p-3 rounded-4 shadow-sm" style={{ backgroundColor: 'rgba(248,250,252,0.6)', border: '1px solid #e2e8f0' }}>
                           {comparableProjects && comparableProjects.length === 0 && (
-                            <div className="text-danger fw-semibold small bg-danger bg-opacity-10 px-3 py-1 rounded-pill border border-danger border-opacity-25">⚠️ No projects found. Increase the area.</div>
+                            <div className="d-flex align-items-center gap-2 text-danger fw-semibold small bg-danger bg-opacity-10 px-3 py-2 rounded-pill border border-danger border-opacity-25 shadow-sm">
+                              <FaExclamationTriangle /> No projects found. Increase the area.
+                            </div>
                           )}
-                          <select className="form-select form-select-sm rounded-pill shadow-sm" style={{ width: "auto", minWidth: "80px" }} value={searchRadius} onChange={e => setSearchRadius(Number(e.target.value))} disabled={comparableLoading}>
-                            {[1,2,3,4,5].map(r => <option key={r} value={r}>{r}km</option>)}
-                          </select>
-                          <button type="button" className="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onClick={handleFindComparables} disabled={comparableLoading} style={{ minWidth: 155 }}>
-                            {comparableLoading ? <><span className="spinner-border spinner-border-sm me-2" />Searching…</> : "Find Comparables"}
+                          <div className="d-flex align-items-center gap-2">
+                            <label className="small text-muted fw-semibold mb-0">Radius:</label>
+                            <select className="form-select form-select-sm rounded-pill shadow-sm border-0 px-3" style={{ width: "90px", backgroundColor: '#fff', fontWeight: '600' }} value={searchRadius} onChange={e => setSearchRadius(Number(e.target.value))} disabled={comparableLoading}>
+                              {[1,2,3,4,5].map(r => <option key={r} value={r}>{r} km</option>)}
+                            </select>
+                          </div>
+                          
+                          <button type="button" className="btn rounded-pill px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2" 
+                            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)', color: '#fff', border: 'none', transition: 'all 0.2s', minWidth: 160 }} 
+                            onClick={handleFindComparables} disabled={comparableLoading}>
+                            {comparableLoading ? <><span className="spinner-border spinner-border-sm" /> Searching…</> : <><FaSearch /> Find Comparables</>}
                           </button>
-                          <button type="button" className="btn btn-outline-success btn-sm rounded-pill shadow-sm"
+                          
+                          <div className="vr d-none d-md-block mx-1" style={{ opacity: 0.15 }}></div>
+                          
+                          <button type="button" className="btn btn-light btn-sm rounded-pill shadow-sm d-inline-flex align-items-center gap-2 fw-semibold border px-3"
+                            style={{ color: '#059669', transition: 'all 0.2s' }}
                             onClick={() => { if (comparableProjects) localStorage.setItem("cache_comparableProjects", JSON.stringify(comparableProjects)); if (comparableProviderStats) localStorage.setItem("cache_comparableProviderStats", JSON.stringify(comparableProviderStats)); if (comparableResult) localStorage.setItem("cache_comparableResult", JSON.stringify(comparableResult)); alert("Saved to cache."); }}
-                            disabled={!comparableProjects}>💾 Save</button>
-                          <button type="button" className="btn btn-outline-danger btn-sm rounded-pill shadow-sm"
-                            onClick={() => { localStorage.removeItem("cache_comparableProjects"); localStorage.removeItem("cache_comparableProviderStats"); localStorage.removeItem("cache_comparableResult"); setComparableProjects(null); setComparableProviderStats(null); setComparableResult(null); }}>🗑️ Clear</button>
+                            disabled={!comparableProjects}>
+                            <FaSave /> Save
+                          </button>
+                          <button type="button" className="btn btn-light btn-sm rounded-pill shadow-sm d-inline-flex align-items-center gap-2 fw-semibold border px-3"
+                            style={{ color: '#dc2626', transition: 'all 0.2s' }}
+                            onClick={() => { localStorage.removeItem("cache_comparableProjects"); localStorage.removeItem("cache_comparableProviderStats"); localStorage.removeItem("cache_comparableResult"); setComparableProjects(null); setComparableProviderStats(null); setComparableResult(null); }}>
+                            <FaTrashAlt /> Clear
+                          </button>
                         </div>
 
-                        {comparableError && <div className="alert alert-danger rounded-3">❌ {comparableError}</div>}
+                        {comparableError && <div className="alert alert-danger rounded-4 shadow-sm border-0 d-flex align-items-center gap-2"><FaExclamationTriangle /> {comparableError}</div>}
 
                         {(comparableResult || comparableProjects) && (
                           <div>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
+                            <div className="d-flex align-items-center justify-content-between mb-3 px-1">
                               <div className="d-flex align-items-center gap-2">
-                                <h6 className="fw-bold text-dark mb-0">Comparable Projects</h6>
-                                <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill" style={{ fontSize: "0.75rem" }}>Web Search + Maps API</span>
+                                <h6 className="fw-bold text-slate-800 mb-0" style={{ fontSize: '1.1rem', color: '#1e293b' }}>Comparable Projects</h6>
+                                <span className="badge bg-indigo-50 text-indigo-700 px-2 py-1 rounded-pill fw-medium border" style={{ fontSize: "0.7rem", backgroundColor: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe' }}>Web Search + Maps API</span>
                               </div>
                               {comparableProjects?.length > 0 && (
-                                <div className="btn-group shadow-sm" role="group">
+                                <div className="d-flex p-1 rounded-pill bg-light border shadow-sm" style={{ gap: '4px' }}>
                                   {[["under_construction","Under Construction"],["other","Other Projects"]].map(([val,lbl]) => (
-                                    <React.Fragment key={val}>
-                                      <input type="radio" className="btn-check" name="pTabR" id={`pt-${val}`} autoComplete="off" checked={activeProjectTab === val} onChange={() => setActiveProjectTab(val)} />
-                                      <label className={`btn btn-sm ${activeProjectTab === val ? "btn-primary" : "btn-outline-primary"}`} htmlFor={`pt-${val}`}>{lbl}</label>
-                                    </React.Fragment>
+                                    <button 
+                                      key={val}
+                                      className={`btn btn-sm rounded-pill px-3 fw-semibold border-0 d-inline-flex align-items-center gap-2 ${activeProjectTab === val ? 'btn-primary shadow-sm' : 'btn-light text-muted'}`}
+                                      style={{ transition: 'all 0.2s' }}
+                                      onClick={() => setActiveProjectTab(val)}
+                                    >
+                                      <FaBuilding /> {lbl}
+                                    </button>
                                   ))}
                                 </div>
                               )}
@@ -879,44 +1204,69 @@ const FeasibilityIrrSection = () => {
                             {comparableProjects?.length > 0 ? (() => {
                               const filtered = comparableProjects.filter(p => activeProjectTab === "under_construction" ? p.status?.toLowerCase().includes("under construction") : !p.status?.toLowerCase().includes("under construction"));
                               return (
-                                <div className="table-responsive rounded-3 border shadow-sm" style={{ maxHeight: 380, overflowY: "auto" }}>
-                                  <table className="table table-hover table-striped align-middle mb-0" style={{ fontSize: "0.88rem" }}>
-                                    <thead style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "#e2e8f0", position: "sticky", top: 0 }}>
-                                      <tr>{["#","Project Name","Status","BHK","Location","Possession","Coordinates"].map(h => <th key={h} className="px-3 py-3" style={{ fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}</tr>
+                                <div className="table-responsive rounded-4 shadow-sm" style={{ maxHeight: 380, overflowY: "auto", border: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
+                                  <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
+                                    <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: 'rgba(248, 250, 252, 0.95)', backdropFilter: 'blur(8px)', borderBottom: '2px solid #e2e8f0' }}>
+                                      <tr>{["#","Project Name","Status","BHK","Location","Possession","Coordinates"].map(h => <th key={h} className="px-4 py-3 text-slate-600" style={{ fontWeight:700, whiteSpace:"nowrap", color: '#475569', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: '0.75rem' }}>{h}</th>)}</tr>
                                     </thead>
                                     <tbody>
                                       {filtered.length > 0 ? filtered.map((p, i) => (
-                                        <tr key={i}>
-                                          <td className="px-3 py-2 text-muted">{i+1}</td>
-                                          <td className="px-3 py-2 fw-semibold text-dark">{p.projectName||"—"}</td>
-                                          <td className="px-3 py-2"><span className={`badge ${p.status?.toLowerCase().includes("under construction")?"bg-info text-dark":"bg-secondary"} bg-opacity-10 border px-2 py-1 rounded-pill`}>{p.status||"Unknown"}</span></td>
-                                          <td className="px-3 py-2"><span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2">{p.bhkType||"—"}</span></td>
-                                          <td className="px-3 py-2 text-dark">{p.location||"—"}</td>
-                                          <td className="px-3 py-2"><span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill px-2">{p.expectedPossessionDate||"N/A"}</span></td>
-                                          <td className="px-3 py-2">{p.coordinates && !p.coordinates.includes("not configured") ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.coordinates)}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}><code style={{ fontSize:"0.75rem", background:"#f0f4ff", color:"#3730a3", padding:"2px 5px", borderRadius:4 }}>📍 {p.coordinates}</code></a> : <span className="text-muted">—</span>}</td>
+                                        <tr key={i} style={{ transition: 'background-color 0.2s' }}>
+                                          <td className="px-4 py-3 text-muted fw-medium">{i+1}</td>
+                                          <td className="px-4 py-3 fw-bold" style={{ color: '#1e293b' }}>{p.projectName||"—"}</td>
+                                          <td className="px-4 py-3">
+                                            <span className="badge rounded-pill fw-medium px-3 py-1" style={{ 
+                                              backgroundColor: p.status?.toLowerCase().includes("under construction") ? '#e0f2fe' : '#f1f5f9',
+                                              color: p.status?.toLowerCase().includes("under construction") ? '#0369a1' : '#475569',
+                                              border: `1px solid ${p.status?.toLowerCase().includes("under construction") ? '#bae6fd' : '#e2e8f0'}`
+                                            }}>{p.status||"Unknown"}</span>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            <span className="badge rounded-pill fw-semibold px-2 py-1" style={{ backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff' }}>{p.bhkType||"—"}</span>
+                                          </td>
+                                          <td className="px-4 py-3 text-slate-700 fw-medium" style={{ color: '#334155' }}>{p.location||"—"}</td>
+                                          <td className="px-4 py-3">
+                                            <span className="badge rounded-pill fw-medium px-3 py-1" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>{p.expectedPossessionDate||"N/A"}</span>
+                                          </td>
+                                          <td className="px-4 py-3">
+                                            {p.coordinates && !p.coordinates.includes("not configured") ? 
+                                              <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.coordinates)}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+                                                <div className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1" style={{ backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: '0.75rem', fontWeight: 600, transition: 'all 0.2s' }}>
+                                                  <FaMapMarkerAlt size={10} /> {p.coordinates}
+                                                </div>
+                                              </a> : 
+                                              <span className="text-muted">—</span>}
+                                          </td>
                                         </tr>
-                                      )) : <tr><td colSpan="7" className="text-center py-4 text-muted">No projects in this category.</td></tr>}
+                                      )) : <tr><td colSpan="7" className="text-center py-5 text-muted fw-medium">No projects in this category.</td></tr>}
                                     </tbody>
                                   </table>
                                 </div>
                               );
                             })() : comparableResult ? (
-                              <div className="p-4 rounded-3 border" style={{ background:"linear-gradient(135deg,#1a1a2e,#16213e)", color:"#e2e8f0", fontSize:"0.92rem", lineHeight:"1.75", maxHeight:380, overflowY:"auto" }}
-                                dangerouslySetInnerHTML={{ __html: comparableResult.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br/>") }} />
+                              <div className="p-4 rounded-4 shadow-sm" style={{ background:"linear-gradient(145deg, #1e293b, #0f172a)", color:"#f8fafc", fontSize:"0.95rem", lineHeight:"1.8", maxHeight:380, overflowY:"auto", border: '1px solid #334155' }}
+                                dangerouslySetInnerHTML={{ __html: comparableResult.replace(/\*\*(.+?)\*\*/g,"<strong style='color:#38bdf8'>$1</strong>").replace(/\n/g,"<br/>") }} />
                             ) : null}
 
                             {comparableTokenUsage && (
-                              <div className="mt-3">
-                                <button className="btn btn-sm btn-outline-secondary rounded-pill px-3 d-inline-flex align-items-center" onClick={() => setIsComparableLedgerOpen(!isComparableLedgerOpen)} style={{ fontSize:"0.8rem" }}>
-                                  Token Ledger <span style={{ marginLeft:6, transform: isComparableLedgerOpen?"rotate(180deg)":"none", transition:"transform 0.2s", display:"inline-block" }}>▼</span>
+                              <div className="mt-4">
+                                <button className="btn btn-sm rounded-pill px-4 py-2 d-inline-flex align-items-center fw-medium border-0 shadow-sm" 
+                                  onClick={() => setIsComparableLedgerOpen(!isComparableLedgerOpen)} 
+                                  style={{ fontSize:"0.85rem", backgroundColor: '#f8fafc', color: '#475569', transition: 'all 0.2s', border: '1px solid #e2e8f0' }}>
+                                  <FaCoins className="me-2 text-warning" /> Token Ledger 
+                                  <span className="ms-2" style={{ transform: isComparableLedgerOpen ? "rotate(180deg)" : "none", transition: "transform 0.3s ease", display: 'inline-flex' }}>
+                                    <FaChevronDown size={10} />
+                                  </span>
                                 </button>
-                                <div style={{ maxHeight: isComparableLedgerOpen?"180px":"0", overflow:"hidden", transition:"max-height 0.3s ease-in-out" }}>
-                                  <div className="card card-body bg-light border-0 shadow-sm rounded-4 mt-2 p-3">
-                                    <div className="d-flex gap-2">
-                                      {[["Prompt",comparableTokenUsage.input_tokens||0],["Completion",comparableTokenUsage.output_tokens||0],["Total",comparableTokenUsage.total_tokens||0]].map(([l,v])=>(
-                                        <div key={l} className="d-flex flex-column align-items-center bg-white rounded-3 p-2 shadow-sm flex-grow-1 border">
-                                          <span className="text-muted fw-semibold" style={{ fontSize:"0.7rem", textTransform:"uppercase" }}>{l}</span>
-                                          <span className="fw-bold text-dark fs-6">{v}</span>
+                                <div style={{ maxHeight: isComparableLedgerOpen ? "250px" : "0", overflow: "hidden", transition: "max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1)", opacity: isComparableLedgerOpen ? 1 : 0 }}>
+                                  <div className="card card-body border-0 shadow-sm rounded-4 mt-3 p-4" style={{ background: 'linear-gradient(to right bottom, rgba(255,255,255,0.9), rgba(248,250,252,0.9))', backdropFilter: 'blur(10px)', border: '1px solid rgba(226,232,240,0.8)' }}>
+                                    <div className="d-flex gap-3 flex-wrap">
+                                      {[["Prompt", comparableTokenUsage.input_tokens||0, '#3b82f6', '#eff6ff'], 
+                                        ["Completion", comparableTokenUsage.output_tokens||0, '#10b981', '#ecfdf5'], 
+                                        ["Total", comparableTokenUsage.total_tokens||0, '#6366f1', '#e0e7ff']].map(([l, v, c, bg])=>(
+                                        <div key={l} className="d-flex flex-column align-items-center justify-content-center rounded-4 p-3 shadow-sm flex-grow-1" style={{ backgroundColor: '#fff', border: `1px solid ${bg}` }}>
+                                          <span className="fw-bold mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: '0.5px', color: '#64748b' }}>{l}</span>
+                                          <span className="fw-bolder fs-4" style={{ color: c }}>{v.toLocaleString()}</span>
                                         </div>
                                       ))}
                                     </div>
@@ -933,24 +1283,37 @@ const FeasibilityIrrSection = () => {
                     {activeComparableTab === "Sales velocity" && (
                       <div>
                         {!comparableProjects?.length ? (
-                          <div className="d-flex flex-column align-items-center justify-content-center text-muted" style={{ minHeight:"300px" }}>
-                            <div className="fs-1 mb-3">📊</div>
-                            <h5 className="fw-bold text-secondary">Complete Comparable Search First</h5>
-                            <p className="text-center w-75">Run the Comparable Projects search to enable Sales Velocity analysis.</p>
+                          <div className="d-flex flex-column align-items-center justify-content-center text-muted bg-light rounded-4 border shadow-sm p-5" style={{ minHeight:"300px" }}>
+                            <FaChartBar className="text-secondary opacity-50 mb-3" size={48} />
+                            <h5 className="fw-bold text-slate-700">Complete Comparable Search First</h5>
+                            <p className="text-center w-75 mb-0">Run the Comparable Projects search to enable Sales Velocity analysis.</p>
                           </div>
                         ) : (
                           <>
-                            <div className="d-flex justify-content-between align-items-center mb-4">
-                              <h6 className="fw-bold text-dark m-0">Sales Velocity Analysis</h6>
-                              <div className="d-flex align-items-center gap-2">
-                                <button className="btn btn-primary btn-sm px-4 fw-bold shadow-sm" onClick={handleFetchSalesVelocity} disabled={salesVelocityLoading}>
-                                  {salesVelocityLoading ? <><span className="spinner-border spinner-border-sm me-2" />Fetching...</> : "Fetch Velocity"}
+                            <div className="d-flex justify-content-between align-items-center mb-4 px-1">
+                              <h6 className="fw-bold text-slate-800 m-0" style={{ fontSize: '1.1rem', color: '#1e293b' }}>Sales Velocity Analysis</h6>
+                              <div className="d-flex align-items-center gap-3">
+                                <button type="button" className="btn rounded-pill px-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2" 
+                                  style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)', color: '#fff', border: 'none', transition: 'all 0.2s', minWidth: 160 }} 
+                                  onClick={handleFetchSalesVelocity} disabled={salesVelocityLoading}>
+                                  {salesVelocityLoading ? <><span className="spinner-border spinner-border-sm" /> Fetching...</> : <><FaChartBar /> Fetch Velocity</>}
                                 </button>
-                                <button className="btn btn-outline-success btn-sm rounded-pill" onClick={() => { if (salesVelocityData) { localStorage.setItem("cache_salesVelocityData", JSON.stringify(salesVelocityData)); alert("Saved."); }}} disabled={!salesVelocityData}>💾 Save</button>
-                                <button className="btn btn-outline-danger btn-sm rounded-pill" onClick={() => { localStorage.removeItem("cache_salesVelocityData"); setSalesVelocityData(null); }}>🗑️ Clear</button>
+                                
+                                <div className="vr d-none d-md-block mx-1" style={{ opacity: 0.15 }}></div>
+
+                                <button className="btn btn-light btn-sm rounded-pill shadow-sm d-inline-flex align-items-center gap-2 fw-semibold border px-3" 
+                                  style={{ color: '#059669', transition: 'all 0.2s' }}
+                                  onClick={() => { if (salesVelocityData) { localStorage.setItem("cache_salesVelocityData", JSON.stringify(salesVelocityData)); alert("Saved."); }}} disabled={!salesVelocityData}>
+                                  <FaSave /> Save
+                                </button>
+                                <button className="btn btn-light btn-sm rounded-pill shadow-sm d-inline-flex align-items-center gap-2 fw-semibold border px-3" 
+                                  style={{ color: '#dc2626', transition: 'all 0.2s' }}
+                                  onClick={() => { localStorage.removeItem("cache_salesVelocityData"); setSalesVelocityData(null); }}>
+                                  <FaTrashAlt /> Clear
+                                </button>
                               </div>
                             </div>
-                            {salesVelocityError && <div className="alert alert-danger py-2 px-3 small">{salesVelocityError}</div>}
+                            {salesVelocityError && <div className="alert alert-danger rounded-4 shadow-sm border-0 d-flex align-items-center gap-2"><FaExclamationTriangle /> {salesVelocityError}</div>}
                             {salesVelocityData?.velocity_data && (() => {
                               const statusLookup = {};
                               if (comparableProjects) {
@@ -993,71 +1356,60 @@ const FeasibilityIrrSection = () => {
 
                               return (
                                 <div>
-                                  <div className="d-flex align-items-center justify-content-between mb-3">
-                                    <div className="d-flex flex-column">
-                                      <span className="text-muted" style={{ fontSize: "0.82rem" }}>
-                                        Showing {filteredRows.length} of {allRows.length} projects
+                                  <div className="d-flex align-items-center justify-content-between mb-4 px-1">
+                                    <div className="d-flex flex-column gap-2">
+                                      <span className="text-muted fw-semibold" style={{ fontSize: "0.85rem" }}>
+                                        Showing <strong className="text-dark">{filteredRows.length}</strong> of {allRows.length} projects
                                       </span>
-                                      <span className="badge mt-1 px-2 py-1" style={{ fontSize: "0.75rem", alignSelf: "flex-start", backgroundColor: "rgba(253, 126, 20, 0.1)", color: "#d9534f", border: "1px solid rgba(253, 126, 20, 0.5)" }}>
-                                        <i className="bi bi-info-circle me-1"></i>
-                                        Reminder: Please select/deselect the projects based on your requirement for future process.
-                                      </span>
+                                      <div className="d-inline-flex align-items-center gap-2 rounded-pill px-3 py-1" style={{ backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontSize: '0.75rem', fontWeight: 600 }}>
+                                        <FaInfoCircle /> Please select/deselect the projects based on your requirement for future process.
+                                      </div>
                                     </div>
-                                    <div className="btn-group shadow-sm" role="group" aria-label="Sales velocity filter">
-                                      <input
-                                        type="radio"
-                                        className="btn-check"
-                                        name="salesTabRadio"
-                                        id="salesTab1"
-                                        autoComplete="off"
-                                        checked={activeSalesTab === "upcoming"}
-                                        onChange={() => setActiveSalesTab("upcoming")}
-                                      />
-                                      <label className={`btn btn-sm ${activeSalesTab === "upcoming" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab1">
-                                        Upcoming Projects
-                                      </label>
-                                      <input
-                                        type="radio"
-                                        className="btn-check"
-                                        name="salesTabRadio"
-                                        id="salesTab2"
-                                        autoComplete="off"
-                                        checked={activeSalesTab === "other"}
-                                        onChange={() => setActiveSalesTab("other")}
-                                      />
-                                      <label className={`btn btn-sm ${activeSalesTab === "other" ? "btn-primary" : "btn-outline-primary"}`} htmlFor="salesTab2">
-                                        Other Projects
-                                      </label>
+                                    <div className="d-flex p-1 rounded-pill bg-light border shadow-sm" style={{ gap: '4px' }}>
+                                      <button
+                                        className={`btn btn-sm rounded-pill px-3 fw-semibold border-0 d-inline-flex align-items-center gap-2 ${activeSalesTab === "upcoming" ? 'btn-primary shadow-sm' : 'btn-light text-muted'}`}
+                                        style={{ transition: 'all 0.2s' }}
+                                        onClick={() => setActiveSalesTab("upcoming")}
+                                      >
+                                        <FaBuilding /> Upcoming Projects
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm rounded-pill px-3 fw-semibold border-0 d-inline-flex align-items-center gap-2 ${activeSalesTab === "other" ? 'btn-primary shadow-sm' : 'btn-light text-muted'}`}
+                                        style={{ transition: 'all 0.2s' }}
+                                        onClick={() => setActiveSalesTab("other")}
+                                      >
+                                        <FaBuilding /> Other Projects
+                                      </button>
                                     </div>
                                   </div>
-                                  <div className="table-responsive bg-white rounded-3 border border-secondary border-opacity-25 shadow-sm" style={{ maxHeight:340, overflowY:"auto" }}>
-                                    <table className="table table-hover table-bordered mb-0 align-middle text-center" style={{ fontSize: "0.85rem" }}>
-                                      <thead className="table-dark" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                                  <div className="table-responsive rounded-4 shadow-sm" style={{ maxHeight:380, overflowY:"auto", border: '1px solid #cbd5e1', backgroundColor: '#fff' }}>
+                                    <table className="table table-hover table-bordered align-middle mb-0 text-center" style={{ fontSize: "0.85rem", borderColor: '#e2e8f0' }}>
+                                      <thead style={{ position: "sticky", top: 0, zIndex: 2, backgroundColor: '#f8fafc', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                                         <tr>
-                                          <th rowSpan={2} className="py-3 px-2 align-middle text-center" style={{ width: "40px" }}>
-                                            <i className="bi bi-check2-square"></i>
+                                          <th rowSpan={2} className="py-3 px-2 align-middle text-center bg-white" style={{ width: "40px", borderBottom: '2px solid #cbd5e1' }}>
+                                            <FaCheckSquare className="text-slate-400" size={16} />
                                           </th>
-                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle">Project Name</th>
-                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle">DB Match</th>
-                                          <th rowSpan={2} className="py-3 px-2 align-middle">Score</th>
+                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle text-slate-600 bg-white" style={{ fontWeight:700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.3px', color: '#475569' }}>Project Name</th>
+                                          <th rowSpan={2} className="text-start py-3 px-3 align-middle text-slate-600 bg-white" style={{ fontWeight:700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.3px', color: '#475569' }}>DB Match</th>
+                                          <th rowSpan={2} className="py-3 px-2 align-middle text-slate-600 bg-white" style={{ fontWeight:700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.3px', color: '#475569', borderRight: '2px solid #cbd5e1' }}>Score</th>
                                           {activeYears.map(year => {
                                             const bhkTypes = activeBhkTypesPerYear[year] || [];
                                             return (
-                                              <th key={year} colSpan={1 + bhkTypes.length} className="py-2 px-2 border-bottom">
+                                              <th key={year} colSpan={1 + bhkTypes.length} className="py-2 px-2 text-slate-700" style={{ fontWeight:700, backgroundColor: '#f1f5f9', color: '#334155', borderBottom: '1px solid #e2e8f0', borderRight: '2px solid #cbd5e1' }}>
                                                 {year}
                                               </th>
                                             );
                                           })}
-                                          <th rowSpan={2} className="py-3 px-3 bg-secondary align-middle">Total</th>
+                                          <th rowSpan={2} className="py-3 px-3 align-middle text-slate-700" style={{ fontWeight:700, borderBottom: '2px solid #cbd5e1', backgroundColor: '#e2e8f0', color: '#334155', textTransform: 'uppercase', fontSize: '0.75rem' }}>Total</th>
                                         </tr>
                                         <tr>
                                           {activeYears.map(year => {
                                             const bhkTypes = activeBhkTypesPerYear[year] || [];
                                             return (
                                               <React.Fragment key={`sub-${year}`}>
-                                                <th className="py-2 px-2" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#e2e8f0" }}>Total</th>
-                                                {bhkTypes.map(bhk => (
-                                                  <th key={bhk} className="py-2 px-2 fw-normal" style={{ fontSize: "0.8rem", backgroundColor: "#2c3034", color: "#9ca3af" }}>
+                                                <th className="py-2 px-2" style={{ fontSize: "0.75rem", backgroundColor: "#f8fafc", color: "#475569", fontWeight: 700, borderBottom: '2px solid #cbd5e1' }}>Total</th>
+                                                {bhkTypes.map((bhk, index) => (
+                                                  <th key={bhk} className="py-2 px-2" style={{ fontSize: "0.75rem", backgroundColor: "#ffffff", color: "#64748b", fontWeight: 600, borderBottom: '2px solid #cbd5e1', borderRight: index === bhkTypes.length - 1 ? '2px solid #cbd5e1' : undefined }}>
                                                     {bhk}
                                                   </th>
                                                 ))}
@@ -1070,29 +1422,34 @@ const FeasibilityIrrSection = () => {
                                         {filteredRows.length > 0 ? filteredRows.map((row, idx) => {
                                           let rowTotal = 0;
                                           return (
-                                            <tr key={idx}>
-                                              <td className="text-center align-middle">
+                                            <tr key={idx} style={{ transition: 'background-color 0.2s', backgroundColor: selectedSalesVelocityProjects.has(row.llmName) ? '#f0fdf4' : 'transparent', cursor: 'pointer' }} onClick={() => {
+                                              setSelectedSalesVelocityProjects(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(row.llmName)) next.delete(row.llmName);
+                                                else next.add(row.llmName);
+                                                return next;
+                                              });
+                                            }}>
+                                              <td className="text-center align-middle bg-transparent">
                                                 <input
                                                   type="checkbox"
-                                                  className="form-check-input"
+                                                  className="form-check-input shadow-sm"
+                                                  style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
                                                   checked={selectedSalesVelocityProjects.has(row.llmName)}
-                                                  onChange={() => {
-                                                    setSelectedSalesVelocityProjects(prev => {
-                                                      const next = new Set(prev);
-                                                      if (next.has(row.llmName)) next.delete(row.llmName);
-                                                      else next.add(row.llmName);
-                                                      return next;
-                                                    });
-                                                  }}
+                                                  onChange={() => {}} // Handled by tr onClick
                                                 />
                                               </td>
-                                              <td className="text-start fw-bold text-dark px-3">{row.llmName}</td>
-                                              <td className="text-start px-3 text-muted">
-                                                {row.dbName ? row.dbName : <span className="fst-italic text-danger">No match</span>}
+                                              <td className="text-start fw-bold px-3 bg-transparent" style={{ color: '#1e293b' }}>{row.llmName}</td>
+                                              <td className="text-start px-3 text-muted fw-medium bg-transparent" style={{ fontSize: '0.8rem' }}>
+                                                {row.dbName ? row.dbName : <span className="d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1" style={{ backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>No match</span>}
                                               </td>
-                                              <td>
+                                              <td className="bg-transparent" style={{ borderRight: '2px solid #cbd5e1' }}>
                                                 {row.matchScore !== null ? (
-                                                  <span className={`badge ${row.matchScore >= 80 ? "bg-success" : row.matchScore >= 60 ? "bg-warning text-dark" : "bg-danger"}`}>
+                                                  <span className="badge rounded-pill fw-bold px-2 py-1" style={{ 
+                                                    backgroundColor: row.matchScore >= 80 ? '#dcfce7' : row.matchScore >= 60 ? '#fef3c7' : '#fee2e2',
+                                                    color: row.matchScore >= 80 ? '#166534' : row.matchScore >= 60 ? '#b45309' : '#991b1b',
+                                                    border: `1px solid ${row.matchScore >= 80 ? '#bbf7d0' : row.matchScore >= 60 ? '#fde68a' : '#fecaca'}`
+                                                  }}>
                                                     {row.matchScore}%
                                                   </span>
                                                 ) : "-"}
@@ -1106,11 +1463,11 @@ const FeasibilityIrrSection = () => {
 
                                                 return (
                                                   <React.Fragment key={year}>
-                                                    <td className="fw-semibold bg-light bg-opacity-10">{count !== null ? count : "-"}</td>
-                                                    {bhkTypes.map(bhk => {
+                                                    <td className="fw-bold" style={{ color: '#334155', backgroundColor: selectedSalesVelocityProjects.has(row.llmName) ? 'transparent' : 'rgba(241, 245, 249, 0.4)' }}>{count !== null ? count : "-"}</td>
+                                                    {bhkTypes.map((bhk, index) => {
                                                       const bhkCount = yearData?.breakdown?.[bhk];
                                                       return (
-                                                        <td key={bhk} className="text-muted" style={{ fontSize: "0.8rem" }}>
+                                                        <td key={bhk} className="fw-medium bg-transparent" style={{ fontSize: "0.8rem", color: '#64748b', borderRight: index === bhkTypes.length - 1 ? '2px solid #cbd5e1' : undefined }}>
                                                           {bhkCount ? bhkCount : "-"}
                                                         </td>
                                                       );
@@ -1118,7 +1475,7 @@ const FeasibilityIrrSection = () => {
                                                   </React.Fragment>
                                                 );
                                               })}
-                                              <td className="fw-bold text-primary bg-light">{rowTotal > 0 ? rowTotal : "-"}</td>
+                                              <td className="fw-bold" style={{ color: '#4338ca', backgroundColor: selectedSalesVelocityProjects.has(row.llmName) ? 'transparent' : '#e0e7ff', borderLeft: '1px solid #c7d2fe' }}>{rowTotal > 0 ? rowTotal : "-"}</td>
                                             </tr>
                                           );
                                         }) : (() => {
@@ -1150,104 +1507,110 @@ const FeasibilityIrrSection = () => {
                     {activeComparableTab === "Cash Inflow Simulation" && (
                       <div className="h-100 d-flex flex-column" style={{ minHeight:"400px" }}>
                         {!cashInflowSimResult ? (
-                          <div className="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-muted">
-                            <div className="fs-1 mb-3">💸</div>
-                            <h5 className="fw-bold text-secondary">Cash Inflow Simulation</h5>
-                            <p className="text-center w-75 mb-4">Predict cash inflow schedule using {selectedSalesVelocityProjects.size} selected comparable projects.</p>
-                            {cashInflowSimError && <div className="alert alert-danger w-75 mb-4">{cashInflowSimError}</div>}
-                            <button className="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold" onClick={handleRunCashInflowSimulation} disabled={cashInflowSimLoading || selectedSalesVelocityProjects.size === 0}>
-                              {cashInflowSimLoading ? <><span className="spinner-border spinner-border-sm me-2" />Simulating...</> : "Run Simulation"}
+                          <div className="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-muted bg-light rounded-4 border shadow-sm p-5">
+                            <FaMoneyBillWave className="text-success opacity-50 mb-3" size={48} />
+                            <h5 className="fw-bold text-slate-700">Cash Inflow Simulation</h5>
+                            <p className="text-center w-75 mb-4">Predict cash inflow schedule using <strong className="text-dark">{selectedSalesVelocityProjects.size}</strong> selected comparable projects.</p>
+                            {cashInflowSimError && <div className="alert alert-danger rounded-4 shadow-sm border-0 d-flex align-items-center gap-2 mb-4 w-75"><FaExclamationTriangle /> {cashInflowSimError}</div>}
+                            <button className="btn rounded-pill px-5 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2" 
+                              style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', transition: 'all 0.2s', fontSize: '1.05rem' }} 
+                              onClick={handleRunCashInflowSimulation} disabled={cashInflowSimLoading || selectedSalesVelocityProjects.size === 0}>
+                              {cashInflowSimLoading ? <><span className="spinner-border spinner-border-sm" /> Simulating...</> : <><FaMagic /> Run Simulation</>}
                             </button>
-                            {selectedSalesVelocityProjects.size === 0 && <small className="text-danger mt-2">Select at least one project in the Sales Velocity tab.</small>}
+                            {selectedSalesVelocityProjects.size === 0 && <small className="d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1 mt-3" style={{ backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', fontWeight: 600 }}><FaExclamationTriangle size={12} /> Select at least one project in the Sales Velocity tab.</small>}
                             
                             <div className="mt-5 w-100 px-4">
                               <button 
-                                className="btn btn-outline-secondary w-100 d-flex justify-content-between align-items-center fw-bold py-2 shadow-sm rounded-3"
+                                className="btn w-100 d-flex justify-content-between align-items-center fw-semibold py-3 shadow-sm rounded-4 border"
                                 onClick={() => setIsMetricListV2Open(!isMetricListV2Open)}
-                                style={{ background: isMetricListV2Open ? "#f8fafc" : "#fff" }}
+                                style={{ background: isMetricListV2Open ? "#f8fafc" : "#fff", color: '#334155', transition: 'all 0.2s' }}
                               >
-                                <span><i className="bi bi-list-check me-2 text-primary"></i> Metric List V2 (Verification)</span>
-                                <span>{isMetricListV2Open ? "▲" : "▼"}</span>
+                                <span className="d-flex align-items-center gap-2"><FaCheckSquare className="text-primary" /> Metric List V2 (Verification)</span>
+                                <span style={{ transform: isMetricListV2Open ? "rotate(180deg)" : "none", transition: "transform 0.3s ease", display: 'inline-flex' }}>
+                                  <FaChevronDown className="text-slate-400" />
+                                </span>
                               </button>
                               
                               {isMetricListV2Open && metricListV2 && (
-                                <div className="card card-body bg-light border-0 shadow-sm rounded-4 mt-3 p-4">
+                                <div className="card card-body border-0 shadow-sm rounded-4 mt-3 p-4" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                   <div className="row g-4">
                                     <div className="col-12">
-                                      <h6 className="fw-bold text-dark border-bottom pb-2 mb-3">Sales Info (Cash Inflow Payload)</h6>
-                                      <table className="table table-sm table-bordered bg-white text-center mb-0" style={{ fontSize: "0.85rem" }}>
-                                        <thead className="table-dark">
-                                          <tr>
-                                            <th>Asset Class</th>
-                                            <th>Property Type</th>
-                                            <th>Unit Mix</th>
-                                            <th>Total Units</th>
-                                            <th>Per Unit Cost</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {metricListV2.salesInfo.length > 0 ? metricListV2.salesInfo.map((row, idx) => (
-                                            <tr key={idx}>
-                                              <td className="text-muted">{row.assetClass}</td>
-                                              <td className="text-muted">{row.propertyType}</td>
-                                              <td className="fw-semibold text-primary">{row.unitMix}</td>
-                                              <td>{row.noOfUnits}</td>
-                                              <td>{Number(row.perUnitCost).toLocaleString()} {currency}</td>
+                                      <h6 className="fw-bold text-slate-700 border-bottom pb-2 mb-3" style={{ textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.5px' }}>Sales Info (Cash Inflow Payload)</h6>
+                                      <div className="table-responsive rounded-3 border shadow-sm">
+                                        <table className="table table-sm table-bordered bg-white text-center mb-0 align-middle" style={{ fontSize: "0.85rem", borderColor: '#e2e8f0' }}>
+                                          <thead style={{ backgroundColor: '#f1f5f9' }}>
+                                            <tr>
+                                              <th className="py-2 text-slate-600" style={{ fontWeight: 600 }}>Asset Class</th>
+                                              <th className="py-2 text-slate-600" style={{ fontWeight: 600 }}>Property Type</th>
+                                              <th className="py-2 text-slate-600" style={{ fontWeight: 600 }}>Unit Mix</th>
+                                              <th className="py-2 text-slate-600" style={{ fontWeight: 600 }}>Total Units</th>
+                                              <th className="py-2 text-slate-600" style={{ fontWeight: 600 }}>Per Unit Cost</th>
                                             </tr>
-                                          )) : <tr><td colSpan="5" className="text-muted">No sales info available.</td></tr>}
-                                        </tbody>
-                                      </table>
+                                          </thead>
+                                          <tbody>
+                                            {metricListV2.salesInfo.length > 0 ? metricListV2.salesInfo.map((row, idx) => (
+                                              <tr key={idx}>
+                                                <td className="text-muted fw-medium">{row.assetClass}</td>
+                                                <td className="text-muted fw-medium">{row.propertyType}</td>
+                                                <td className="fw-bold text-primary">{row.unitMix}</td>
+                                                <td className="fw-semibold text-dark">{row.noOfUnits}</td>
+                                                <td className="fw-semibold" style={{ color: '#059669' }}>{Number(row.perUnitCost).toLocaleString()} {currency}</td>
+                                              </tr>
+                                            )) : <tr><td colSpan="5" className="text-muted py-3">No sales info available.</td></tr>}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     </div>
 
                                     <div className="col-12">
-                                      <h6 className="fw-bold text-dark border-bottom pb-2 mb-3">Selected Sales Velocity Projects (Cash Inflow Payload)</h6>
+                                      <h6 className="fw-bold text-slate-700 border-bottom pb-2 mb-3" style={{ textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.5px' }}>Selected Sales Velocity Projects (Cash Inflow Payload)</h6>
                                       {selectedSalesVelocityProjects.size > 0 ? (
                                         <div className="d-flex flex-wrap gap-2">
                                           {Array.from(selectedSalesVelocityProjects).map(name => (
-                                            <span key={name} className="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2">
+                                            <span key={name} className="badge rounded-pill fw-semibold px-3 py-2 shadow-sm" style={{ backgroundColor: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
                                               {name}
                                             </span>
                                           ))}
                                         </div>
                                       ) : (
-                                        <div className="text-muted small">No projects selected. The simulation requires at least one project.</div>
+                                        <div className="text-muted small fw-medium">No projects selected. The simulation requires at least one project.</div>
                                       )}
                                     </div>
 
                                     <div className="col-md-6">
-                                      <h6 className="fw-bold text-dark border-bottom pb-2 mb-3">Cost Outflow</h6>
-                                      <div className="bg-white border rounded p-3 mb-2" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                                      <h6 className="fw-bold text-slate-700 border-bottom pb-2 mb-3" style={{ textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.5px' }}>Cost Outflow</h6>
+                                      <div className="bg-white border rounded-3 p-3 mb-2 shadow-sm" style={{ maxHeight: "200px", overflowY: "auto", borderColor: '#e2e8f0' }}>
                                         {metricListV2.cashOutflowRows.length > 0 ? metricListV2.cashOutflowRows.map((row, idx) => (
-                                          <div key={idx} className="d-flex justify-content-between small border-bottom py-1">
-                                            <span className="text-muted">{row.label}</span>
-                                            <span className="fw-semibold">{Number(row.value).toLocaleString()} {currency}</span>
+                                          <div key={idx} className="d-flex justify-content-between small border-bottom py-2">
+                                            <span className="text-slate-600 fw-medium">{row.label}</span>
+                                            <span className="fw-bold text-dark">{Number(row.value).toLocaleString()} {currency}</span>
                                           </div>
-                                        )) : <span className="small text-muted">No cost data.</span>}
+                                        )) : <span className="small text-muted fw-medium">No cost data.</span>}
                                       </div>
-                                      <div className="d-flex justify-content-between align-items-center bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 rounded">
-                                        <span className="fw-bold small">Total Cost:</span>
-                                        <span className="fw-bold">{Number(metricListV2.cashOutflowTotal).toLocaleString()} {currency}</span>
+                                      <div className="d-flex justify-content-between align-items-center px-3 py-3 rounded-3 shadow-sm" style={{ backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                                        <span className="fw-bold small text-uppercase" style={{ letterSpacing: '0.5px' }}>Total Cost:</span>
+                                        <span className="fw-bold fs-6">{Number(metricListV2.cashOutflowTotal).toLocaleString()} {currency}</span>
                                       </div>
                                       {metricListV2.constructionTimeline && (
-                                        <div className="mt-2 text-muted small">
-                                          <i className="bi bi-clock me-1"></i> Project Duration: <strong>{metricListV2.constructionTimeline}</strong>
+                                        <div className="mt-3 text-muted fw-semibold small d-flex align-items-center gap-1">
+                                          <FaCheckCircle className="text-success" /> Project Duration: <strong className="text-dark">{metricListV2.constructionTimeline}</strong>
                                         </div>
                                       )}
                                     </div>
 
                                     <div className="col-md-6">
-                                      <h6 className="fw-bold text-dark border-bottom pb-2 mb-3">Means of Finance</h6>
-                                      <div className="bg-white border rounded p-3 mb-2" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                                      <h6 className="fw-bold text-slate-700 border-bottom pb-2 mb-3" style={{ textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.5px' }}>Means of Finance</h6>
+                                      <div className="bg-white border rounded-3 p-3 mb-2 shadow-sm" style={{ maxHeight: "200px", overflowY: "auto", borderColor: '#e2e8f0' }}>
                                         {metricListV2.meansOfFinanceRows.length > 0 ? metricListV2.meansOfFinanceRows.map((row, idx) => (
-                                          <div key={idx} className="d-flex justify-content-between small border-bottom py-1">
-                                            <span className="text-muted">{row.label} ({row.percentage}%)</span>
-                                            <span className="fw-semibold">{Number(row.proposed).toLocaleString()} {currency}</span>
+                                          <div key={idx} className="d-flex justify-content-between small border-bottom py-2">
+                                            <span className="text-slate-600 fw-medium">{row.label} <span className="badge bg-light text-secondary ms-1">{row.percentage}%</span></span>
+                                            <span className="fw-bold text-dark">{Number(row.proposed).toLocaleString()} {currency}</span>
                                           </div>
-                                        )) : <span className="small text-muted">No finance data.</span>}
+                                        )) : <span className="small text-muted fw-medium">No finance data.</span>}
                                       </div>
-                                      <div className="d-flex justify-content-between align-items-center bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded">
-                                        <span className="fw-bold small">Total Finance ({metricListV2.meansOfFinanceTotalPercentage}%):</span>
-                                        <span className="fw-bold">{Number(metricListV2.meansOfFinanceTotals).toLocaleString()} {currency}</span>
+                                      <div className="d-flex justify-content-between align-items-center px-3 py-3 rounded-3 shadow-sm" style={{ backgroundColor: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>
+                                        <span className="fw-bold small text-uppercase" style={{ letterSpacing: '0.5px' }}>Total Finance ({metricListV2.meansOfFinanceTotalPercentage}%):</span>
+                                        <span className="fw-bold fs-6">{Number(metricListV2.meansOfFinanceTotals).toLocaleString()} {currency}</span>
                                       </div>
                                     </div>
                                   </div>
@@ -1257,13 +1620,18 @@ const FeasibilityIrrSection = () => {
                           </div>
                         ) : (
                           <div>
-                            <div className="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                              <h5 className="fw-bold text-dark m-0">Simulation Results</h5>
-                              <button className="btn btn-sm btn-outline-secondary rounded-pill" onClick={() => setCashInflowSimResult(null)}>↺ Reset</button>
+                            <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                              <h5 className="fw-bold text-slate-800 m-0 d-flex align-items-center gap-2"><FaChartBar className="text-primary" /> Simulation Results</h5>
+                              <button className="btn btn-sm btn-light border rounded-pill shadow-sm fw-semibold d-inline-flex align-items-center gap-1 px-3" style={{ color: '#475569', transition: 'all 0.2s' }} onClick={() => setCashInflowSimResult(null)}><FaTimes size={12} /> Reset</button>
                             </div>
-                            <div className="btn-group w-100 shadow-sm mb-4" role="group">
+                            <div className="d-flex flex-wrap p-1 rounded-pill bg-light border shadow-sm mb-4" style={{ gap: '4px', alignSelf: 'flex-start' }}>
                               {["Optimistic","Most Probable","Pessimistic","User Cashflow","Raw Output"].map(s => (
-                                <button key={s} type="button" className={`btn ${activeInflowScenario===s?"btn-primary fw-bold":"btn-outline-primary"}`} onClick={() => setActiveInflowScenario(s)}>{s}</button>
+                                <button key={s} type="button" 
+                                  className={`btn btn-sm rounded-pill px-4 fw-semibold border-0 d-inline-flex align-items-center justify-content-center ${activeInflowScenario===s ? "btn-primary shadow-sm" : "btn-light text-muted"}`} 
+                                  style={{ transition: 'all 0.2s', flex: '1 1 auto', minWidth: '100px' }}
+                                  onClick={() => setActiveInflowScenario(s)}>
+                                  {s}
+                                </button>
                               ))}
                             </div>
                             {activeInflowScenario === "Raw Output" && (
@@ -1273,39 +1641,68 @@ const FeasibilityIrrSection = () => {
                             )}
                             {activeInflowScenario === "User Cashflow" && (
                               <div>
-                                <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight:300, overflowY:"auto" }}>
-                                  <table className="table table-bordered mb-0 text-center align-middle">
-                                    <thead className="table-dark" style={{ position:"sticky", top:0 }}><tr><th>Year</th><th>Sales %</th><th style={{ width:60 }}></th></tr></thead>
+                                <div className="table-responsive bg-white rounded-4 border shadow-sm" style={{ maxHeight:300, overflowY:"auto", borderColor: '#e2e8f0' }}>
+                                  <table className="table table-hover table-bordered mb-0 text-center align-middle" style={{ fontSize: '0.9rem', borderColor: '#e2e8f0' }}>
+                                    <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: '#f8fafc', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                      <tr>
+                                        <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Year</th>
+                                        <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Sales %</th>
+                                        <th className="py-3 px-3 bg-white" style={{ width: 60, borderBottom: '2px solid #cbd5e1' }}></th>
+                                      </tr>
+                                    </thead>
                                     <tbody>
                                       {userCashflowRows.map((row, idx) => (
-                                        <tr key={idx}>
-                                          <td className="fw-semibold">{row.year}</td>
-                                          <td><input type="number" className="form-control form-control-sm mx-auto" style={{ width:100 }} placeholder="e.g. 30" min="0" max="100" step="0.01" value={row.percentage} onChange={e => { const u=[...userCashflowRows]; u[idx]={...u[idx],percentage:e.target.value}; setUserCashflowRows(u); }} /></td>
-                                          <td>{userCashflowRows.length > 2 && <button className="btn btn-sm btn-outline-danger rounded-pill" onClick={() => setUserCashflowRows(p=>p.filter((_,i)=>i!==idx))}>✕</button>}</td>
+                                        <tr key={idx} style={{ transition: 'background-color 0.2s' }}>
+                                          <td className="fw-bold text-slate-700 bg-transparent">{row.year}</td>
+                                          <td className="bg-transparent">
+                                            <input type="number" className="form-control form-control-sm mx-auto fw-bold text-primary shadow-sm" style={{ width:120, borderRadius: '8px', border: '1px solid #cbd5e1', textAlign: 'center' }} placeholder="e.g. 30" min="0" max="100" step="0.01" value={row.percentage} onChange={e => { const u=[...userCashflowRows]; u[idx]={...u[idx],percentage:e.target.value}; setUserCashflowRows(u); }} />
+                                          </td>
+                                          <td className="bg-transparent">
+                                            {userCashflowRows.length > 2 && <button className="btn btn-sm btn-outline-danger rounded-pill shadow-sm" onClick={() => setUserCashflowRows(p=>p.filter((_,i)=>i!==idx))}><FaTrashAlt size={12} /></button>}
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>
                                   </table>
                                 </div>
-                                <div className="d-flex justify-content-between mt-2">
-                                  <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => setUserCashflowRows(p=>[...p,{year:`Year ${p.length}`,percentage:""}])}>+ Add Year</button>
-                                  <button className="btn btn-success fw-bold px-4" onClick={handleApplyUserCashflow}>Apply User Cashflow</button>
+                                <div className="d-flex justify-content-between mt-3">
+                                  <button className="btn btn-sm rounded-pill px-4 fw-semibold shadow-sm d-inline-flex align-items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#3b82f6', border: '1px solid #bfdbfe', transition: 'all 0.2s' }} 
+                                    onClick={() => setUserCashflowRows(p => {
+                                      const lastMatch = p.length > 0 ? p[p.length - 1].year.match(/\d+/) : null;
+                                      const nextNum = lastMatch ? parseInt(lastMatch[0], 10) + 1 : p.length;
+                                      return [...p, { year: `Year ${nextNum}`, percentage: "" }];
+                                    })}>+ Add Year</button>
+                                  <button className="btn rounded-pill px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', transition: 'all 0.2s' }} onClick={handleApplyUserCashflow}><FaCheckCircle /> Apply User Cashflow</button>
                                 </div>
                               </div>
                             )}
                             {activeInflowScenario !== "Raw Output" && activeInflowScenario !== "User Cashflow" && (
                               <div>
                                 {parsedInflowResult?.[activeInflowScenario]?.length > 0 ? (
-                                  <div className="table-responsive bg-white rounded border shadow-sm" style={{ maxHeight:300, overflowY:"auto" }}>
-                                    <table className="table align-middle mb-0 text-center">
-                                      <thead className="table-dark" style={{ position:"sticky", top:0 }}><tr><th>Year</th><th>Sales %</th></tr></thead>
-                                      <tbody>{parsedInflowResult[activeInflowScenario].map((row,i)=><tr key={i}><td className="fw-bold">{row.year}</td><td className="text-primary fw-semibold">{row.percentage}</td></tr>)}</tbody>
+                                  <div className="table-responsive bg-white rounded-4 border shadow-sm" style={{ maxHeight:300, overflowY:"auto", borderColor: '#e2e8f0' }}>
+                                    <table className="table table-hover table-bordered align-middle mb-0 text-center" style={{ fontSize: '0.9rem', borderColor: '#e2e8f0' }}>
+                                      <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: '#f8fafc', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                        <tr>
+                                          <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Year</th>
+                                          <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Sales %</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {parsedInflowResult[activeInflowScenario].map((row,i)=>(
+                                          <tr key={i} style={{ transition: 'background-color 0.2s' }}>
+                                            <td className="fw-bold text-slate-700 bg-transparent">{row.year}</td>
+                                            <td className="fw-bold bg-transparent" style={{ color: '#4338ca' }}>{row.percentage}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
                                     </table>
                                   </div>
-                                ) : <p className="text-muted text-center py-4">No data parsed. Check Raw Output tab.</p>}
-                                <div className="mt-3 text-end">
-                                  <button className="btn btn-success fw-bold px-4" onClick={handleApplyInflowScenario} disabled={!parsedInflowResult?.[activeInflowScenario]?.length}>
-                                    <i className="bi bi-check2-circle me-2"></i>Apply {activeInflowScenario} Scenario
+                                ) : <div className="d-flex flex-column align-items-center justify-content-center py-5 bg-light rounded-4 border shadow-sm"><FaExclamationTriangle className="text-warning mb-2" size={32} /><span className="text-muted fw-semibold">No data parsed. Check Raw Output tab.</span></div>}
+                                <div className="mt-4 text-end">
+                                  <button className="btn rounded-pill px-5 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2" 
+                                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', transition: 'all 0.2s' }} 
+                                    onClick={handleApplyInflowScenario} disabled={!parsedInflowResult?.[activeInflowScenario]?.length}>
+                                    <FaCheckCircle /> Apply {activeInflowScenario} Scenario
                                   </button>
                                 </div>
                               </div>
@@ -1320,6 +1717,8 @@ const FeasibilityIrrSection = () => {
             </div>
           </div>
         </div>
+        </div>,
+        document.body
       )}
 
       {/* Predict Cost Cash Outflow Modal */}

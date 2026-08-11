@@ -2243,10 +2243,11 @@ const IRR = () => {
                                       <button
                                         type="button"
                                         className="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold"
-                                        onClick={() => {
-                                          const nextYear = userCashflowRows.length;
-                                          setUserCashflowRows([...userCashflowRows, { year: `Year ${nextYear}`, percentage: "" }]);
-                                        }}
+                                        onClick={() => setUserCashflowRows(p => {
+                                          const lastMatch = p.length > 0 ? p[p.length - 1].year.match(/\d+/) : null;
+                                          const nextNum = lastMatch ? parseInt(lastMatch[0], 10) + 1 : p.length;
+                                          return [...p, { year: `Year ${nextNum}`, percentage: "" }];
+                                        })}
                                       >
                                         + Add Year
                                       </button>

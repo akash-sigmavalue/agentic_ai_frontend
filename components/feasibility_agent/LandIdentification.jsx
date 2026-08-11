@@ -608,8 +608,14 @@ const LandIdentification = () => {
       netPlotAreaSqFt: dataToSave.netPlotAreaSqFt !== undefined ? dataToSave.netPlotAreaSqFt : prev.netPlotAreaSqFt,
       isNetPlotAreaAutoDerived: dataToSave.isNetPlotAreaAutoDerived !== undefined ? dataToSave.isNetPlotAreaAutoDerived : prev.isNetPlotAreaAutoDerived
     }));
-    localStorage.setItem('Land Identification', JSON.stringify(dataToSave));
-    window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: dataToSave }));
+
+    const payloadToSave = {
+      ...dataToSave,
+      netPlotAreaSqFt: dataToSave.netPlotAreaSqFt !== "" && dataToSave.netPlotAreaSqFt != null ? Number(dataToSave.netPlotAreaSqFt) : null
+    };
+
+    localStorage.setItem('Land Identification', JSON.stringify(payloadToSave));
+    window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: payloadToSave }));
   };
 
   const deletePolygon = () => {
@@ -671,7 +677,10 @@ const LandIdentification = () => {
 
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    if (name === 'netPlotAreaSqFt' && typeof value === 'string') {
+      value = value.replace(/,/g, "");
+    }
     setFormData(prev => {
       const updates = { [name]: value };
       if (name === 'netPlotAreaSqFt') {

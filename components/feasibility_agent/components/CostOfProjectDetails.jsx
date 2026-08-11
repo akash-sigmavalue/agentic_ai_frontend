@@ -941,7 +941,7 @@ const CostOfProjectDetails = () => {
 
             <div className="row g-3">
                 <div className="col-md-6">
-                    {renderInput("Land Acquisition", fixedInputs.landAcquisition, (v) => handleFixedInputChange('landAcquisition', v))}
+                    {renderInput(<span>Land Acquisition <span className="text-danger">*</span></span>, fixedInputs.landAcquisition, (v) => handleFixedInputChange('landAcquisition', v))}
                 </div>
                 <div className="col-md-6">
                     {renderInput(
@@ -976,7 +976,7 @@ const CostOfProjectDetails = () => {
                 <div className="col-md-6" style={{ position: 'relative' }}>
                     {renderInput(
                         <div className="d-flex align-items-center gap-2">
-                            <span>Construction Cost</span>
+                            <span>Construction Cost <span className="text-danger">*</span></span>
                             {constructionCostMinimized && constructionCostData && !constructionCostData.error && (
                                 <button
                                     className="btn btn-sm d-flex align-items-center gap-1"

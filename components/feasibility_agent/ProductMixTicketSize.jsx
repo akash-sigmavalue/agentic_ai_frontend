@@ -3108,7 +3108,7 @@ const ProductMixTicketSize = () => {
                                                 <td className={`text-center ${totalAllottedArea !== grossFloorArea && grossFloorArea > 0 ? 'text-danger fw-bold' : ''}`}>
                                                     {totalAllottedArea.toLocaleString()}
                                                     {totalAllottedArea !== grossFloorArea && grossFloorArea > 0 && (
-                                                        <div style={{ fontSize: '10px', marginTop: '2px' }}>(Target: {grossFloorArea.toLocaleString()})</div>
+                                                        <div style={{ fontSize: '10px', marginTop: '2px' }}>(Total Area: {grossFloorArea.toLocaleString()})</div>
                                                     )}
                                                 </td>
                                                 <td className={`text-center ${totalAllottedArea !== grossFloorArea && grossFloorArea > 0 ? 'text-danger fw-bold' : ''}`}>

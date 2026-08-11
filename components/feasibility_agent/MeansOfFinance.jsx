@@ -315,17 +315,26 @@ const MeansOfFinance = () => {
     }
   };
 
+  const focusedAmountFieldRef = React.useRef(null);
+
   // Sync Amount Data from Percentage & Active Total Project Cost
   useEffect(() => {
     if (activeTotalProjectCost > 0 && Object.keys(formData).length > 0) {
       const syncedAmounts = {};
       allRows.forEach((row) => {
-        const perc = parseFloat(formData[row.key]) || 0;
-        if (perc > 0) {
-          syncedAmounts[row.key] = formatNumber((perc / 100) * activeTotalProjectCost);
+        if (focusedAmountFieldRef.current === row.key) {
+          // Do not override what the user is currently typing
+          syncedAmounts[row.key] = amountData[row.key];
+        } else {
+          const perc = parseFloat(formData[row.key]) || 0;
+          if (perc > 0) {
+            syncedAmounts[row.key] = formatNumber((perc / 100) * activeTotalProjectCost);
+          } else {
+            syncedAmounts[row.key] = "";
+          }
         }
       });
-      setAmountData(syncedAmounts);
+      setAmountData(prev => ({ ...prev, ...syncedAmounts }));
     }
   }, [activeTotalProjectCost, formData]);
 
@@ -1213,7 +1222,11 @@ const MeansOfFinance = () => {
                         onChange={(event) =>
                           handleAmountChange(row.key, event.target.value)
                         }
-                        onBlur={() => handleAmountBlur(row.key)}
+                        onFocus={() => { focusedAmountFieldRef.current = row.key; }}
+                        onBlur={() => {
+                          focusedAmountFieldRef.current = null;
+                          handleAmountBlur(row.key);
+                        }}
                         placeholder="Enter amount"
                       />
                     </div>
