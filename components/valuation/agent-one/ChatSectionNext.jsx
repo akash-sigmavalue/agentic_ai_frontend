@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, Fragment, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { apiUrl } from "@/lib/api-client";
+import { useAuth } from "@/hooks/use-auth";
+import { useRouter } from "next/navigation";
 import {
   MessageSquareCode,
   Bot,
@@ -5938,11 +5940,27 @@ function StageDetailCard({ content, forceCollapsed = false }) {
 }
 
 export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMarkersUpdate, factorialData: externalFactorialData, onValuationResult, events, setEvents, isMaximized, onToggleMaximize }) {
+  const { user } = useAuth();
+  const router = useRouter();
   const [messages, setMessages] = useState([]);
   const [valuationResult, setValuationResult] = useState(null);
   const [input, setInput] = useState("");
   const [revertNotice, setRevertNotice] = useState("");
   const [backupValuationState, setBackupValuationState] = useState(null);
+
+  // Auto-restore and execute pending query after login redirect
+  useEffect(() => {
+    if (user) {
+      const pendingQuery = sessionStorage.getItem("sigmavalue_pending_query");
+      if (pendingQuery) {
+        sessionStorage.removeItem("sigmavalue_pending_query");
+        setInput(pendingQuery);
+        setTimeout(() => {
+          submitQuestion(pendingQuery);
+        }, 400);
+      }
+    }
+  }, [user]);
 
   // Clear revert notice after 3 seconds
   useEffect(() => {
@@ -6651,13 +6669,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   const submitQuickEstimate = async () => {
     if (isQuickEstimateStreaming) return;
 
-    setShowQuickEstimateModal(false);
-    abortRef.current?.abort?.();
-    abortRef.current = new AbortController();
     const payload = buildQuickEstimatePayload();
     const propertyLabel = String(payload.property_type || "property").replaceAll("_", " ");
     const locationLabel = payload.location_name || payload.city_name || "selected location";
     const summary = `Research quick estimate for ${propertyLabel} in ${locationLabel}`;
+
+    if (!user) {
+      sessionStorage.setItem("sigmavalue_pending_query", summary);
+      sessionStorage.setItem("sigmavalue_redirect", "/valuation");
+      router.push("/auth");
+      return;
+    }
     const includeCost = payload.recommended_approach === "cost"
       && ["villa", "building_land"].includes(String(payload.property_type || "").toLowerCase());
     const startedAt = Date.now();
@@ -6704,7 +6726,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`AI Quick Estimate request failed with status ${response.status}`);
+        if (response.status === 402) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("sigmavalue-tokens-exhausted"));
+          }
+          throw new Error("Your token balance has been exhausted. Please view pricing plans to purchase a token pack.");
+        }
+        throw new Error(`Quick Estimate request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -8701,6 +8729,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
     const trimmed = question.trim();
     if (!trimmed || isStreaming) return;
 
+    if (!user) {
+      sessionStorage.setItem("sigmavalue_pending_query", trimmed);
+      sessionStorage.setItem("sigmavalue_redirect", "/valuation");
+      router.push("/auth");
+      return;
+    }
+
     abortRef.current?.abort?.();
     abortRef.current = new AbortController();
     setCurrentQuestion(trimmed);
@@ -8733,6 +8768,12 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       });
 
       if (!response.ok || !response.body) {
+        if (response.status === 402) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("sigmavalue-tokens-exhausted"));
+          }
+          throw new Error("Your token balance has been exhausted. Please view pricing plans to purchase a token pack.");
+        }
         throw new Error(`Backend request failed with status ${response.status}`);
       }
 

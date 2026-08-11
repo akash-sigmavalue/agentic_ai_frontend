@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import type { LatLng, ElevationGridResponse } from "@/types/elevation.ts";
 
+import RoleGuard from "@/components/shared/RoleGuard";
+
 // Dynamic imports for heavy components (prevent SSR issues with Google Maps + Three.js)
 const Map2D = dynamic(() => import("@/components/elevation/Map2D"), { ssr: false });
 const Mesh3D = dynamic(() => import("@/components/elevation/Mesh3D"), { ssr: false });
@@ -35,7 +37,7 @@ const BACKEND_URL = (
   "http://localhost:8000"
 ).replace(/\/$/, "");
 
-export default function HomePage() {
+function ElevationPageContent() {
   // ── State ──────────────────────────────────────────────────────────────
   const [polygon, setPolygon] = useState<LatLng[] | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -1195,4 +1197,12 @@ function parseInlineCode(text: string): React.ReactNode {
     }
     return part;
   });
+}
+
+export default function ElevationPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN']} agentKey="elevation">
+      <ElevationPageContent />
+    </RoleGuard>
+  );
 }

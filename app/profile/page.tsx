@@ -1,443 +1,967 @@
 "use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  User as UserIcon, Mail, Shield, Coins, Clock, CheckCircle2,
-  XCircle, AlertCircle, Loader2, Edit3, Save, X, Trash2, LogOut,
-  RefreshCw, Zap, ChevronRight, BarChart3,
-} from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
-import { apiFetch, apiRequest, apiUrl, API_ROUTES } from '@/lib/api-client';
+  User as UserIcon, Mail, Shield, Coins, Building2, Zap, LogOut,
+  ArrowRight, Users, Send, Trash2, RefreshCw, Edit3, Check, X,
+  Clock, CheckCircle2, XCircle, Loader2, AlertTriangle, Crown, Receipt,
+  FileSpreadsheet, Upload, Download, PauseCircle, PlayCircle, Lock, Unlock,
+} from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
+import { apiFetch, apiRequest, API_ROUTES, API_BASE_URL } from "@/lib/api-client";
 
-// ── Token status helpers ───────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────────
+interface OrgMember {
+  user_id: number;
+  username: string;
+  email: string | null;
+  org_role: string;
+  status: string;
+  joined_at: string;
+}
 
-function TokenStatusBadge({ status }: { status: string }) {
-  const configs: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-    NOT_REQUESTED: { label: 'Not Requested', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: <Clock className="h-3 w-3" /> },
-    PENDING:       { label: 'Pending Approval', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: <AlertCircle className="h-3 w-3" /> },
-    APPROVED:      { label: 'Approved', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3 w-3" /> },
-    REJECTED:      { label: 'Rejected', color: 'bg-red-50 text-red-700 border-red-200', icon: <XCircle className="h-3 w-3" /> },
-  };
-  const cfg = configs[status] ?? configs['NOT_REQUESTED'];
+interface OrgInvite {
+  id: number;
+  invited_email: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
+interface OrgDetail {
+  id: number;
+  name: string;
+  owner_user_id: number;
+  org_token_balance: number;
+  status: string;
+  created_at: string;
+}
+
+// ─── Role Badge ─────────────────────────────────────────────────────────────────
+function RoleBadge({ role, accountType, orgRole, isDark }: { role: string; accountType?: string | null; orgRole?: string; isDark: boolean }) {
+  if (role === "ADMIN") return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-violet-500/10 text-violet-300 border-violet-500/30" : "bg-violet-50 text-violet-700 border-violet-200"
+      }`}>
+      <Shield className="h-3 w-3" /> ADMIN
+    </span>
+  );
+  if (orgRole === "OWNER") return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-amber-500/10 text-amber-300 border-amber-500/30" : "bg-amber-50 text-amber-700 border-amber-200"
+      }`}>
+      <Crown className="h-3 w-3" /> ORG OWNER
+    </span>
+  );
+  if (orgRole === "EMPLOYEE") return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+      }`}>
+      <Building2 className="h-3 w-3" /> EMPLOYEE
+    </span>
+  );
+  if (accountType === "ENTERPRISE") return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+      }`}>
+      <Building2 className="h-3 w-3" /> ENTERPRISE
+    </span>
+  );
+  if (role === "PAID" || accountType === "INDIVIDUAL") return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      }`}>
+      <Zap className="h-3 w-3" /> INDIVIDUAL PRO
+    </span>
+  );
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${cfg.color}`}>
-      {cfg.icon}
-      {cfg.label}
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"
+      }`}>
+      <Coins className="h-3 w-3" /> FREE TIER
     </span>
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
-  const cfg: Record<string, string> = {
-    ADMIN: 'bg-violet-50 text-violet-700 border-violet-200',
-    FREE:  'bg-blue-50 text-blue-700 border-blue-200',
-    PAID:  'bg-emerald-50 text-emerald-700 border-emerald-200',
+// ─── Invite Status Badge ────────────────────────────────────────────────────────
+function InviteStatusBadge({ status, isDark }: { status: string; isDark: boolean }) {
+  const map: Record<string, { color: string; icon: React.ReactNode }> = {
+    PENDING: { color: isDark ? "bg-amber-950/60 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200", icon: <Clock className="w-3 h-3" /> },
+    ACCEPTED: { color: isDark ? "bg-emerald-950/60 text-emerald-300 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <CheckCircle2 className="w-3 h-3" /> },
+    REVOKED: { color: isDark ? "bg-rose-950/60 text-rose-300 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200", icon: <XCircle className="w-3 h-3" /> },
+    EXPIRED: { color: isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-600 border-slate-300", icon: <AlertTriangle className="w-3 h-3" /> },
   };
+  const { color, icon } = map[status] || map.EXPIRED;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-black uppercase tracking-wider ${cfg[role] ?? cfg['FREE']}`}>
-      <Shield className="h-3 w-3" />
-      {role}
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${color}`}>
+      {icon} {status}
     </span>
   );
 }
 
-function formatTokens(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
+// ─── Section Card ───────────────────────────────────────────────────────────────
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const isDark = useTheme();
+  return (
+    <div className={`p-6 rounded-3xl border transition-colors ${isDark
+        ? "bg-slate-900/60 border-slate-800 text-slate-100"
+        : "bg-white border-slate-200 text-slate-900 shadow-sm"
+      } ${className}`}>
+      {children}
+    </div>
+  );
 }
 
-// ── Token status message ───────────────────────────────────────────────────────
-function TokenStatusMessage({ status }: { status: string }) {
-  if (status === 'NOT_REQUESTED') return (
-    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-      <p className="text-sm font-bold text-blue-700 mb-1">🎁 You have 1,000,000 free tokens waiting!</p>
-      <p className="text-xs text-blue-600 leading-relaxed">
-        Click <strong>"Request Token Access"</strong> below to activate your free token allowance for the Valuation Agent. An admin will review and approve your request.
-      </p>
+// ─── Owner Organization Management Section ──────────────────────────────────────
+function OrgManagementSection({ orgId, initialName, initialBalance, initialStatus, isDark }: {
+  orgId: number; initialName: string; initialBalance: number; initialStatus: string; isDark: boolean;
+}) {
+  const [orgName, setOrgName] = useState(initialName);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(initialName);
+  const [savingName, setSavingName] = useState(false);
+
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [invites, setInvites] = useState<OrgInvite[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [loadingInvites, setLoadingInvites] = useState(true);
+
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [removingUserId, setRemovingUserId] = useState<number | null>(null);
+  const [suspendingUserId, setSuspendingUserId] = useState<number | null>(null);
+
+  // Bulk Upload State
+  const [addMode, setAddMode] = useState<"single" | "bulk">("single");
+  const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [bulkUploadResult, setBulkUploadResult] = useState<{
+    added_count: number;
+    skipped_count: number;
+    message: string;
+    skipped_excel_base64?: string;
+    filename?: string;
+  } | null>(null);
+
+  const fetchMembers = async () => {
+    setLoadingMembers(true);
+    try { setMembers(await apiFetch<OrgMember[]>(API_ROUTES.enterpriseMyOrgMembers)); }
+    catch { /* ignore */ } finally { setLoadingMembers(false); }
+  };
+
+  const fetchInvites = async () => {
+    setLoadingInvites(true);
+    try { setInvites(await apiFetch<OrgInvite[]>(API_ROUTES.enterpriseMyOrgInvites)); }
+    catch { /* ignore */ } finally { setLoadingInvites(false); }
+  };
+
+  useEffect(() => {
+    fetchMembers();
+    fetchInvites();
+  }, []);
+
+  const handleRenameSave = async () => {
+    if (!nameInput.trim() || nameInput === orgName) { setEditingName(false); return; }
+    setSavingName(true);
+    try {
+      await apiRequest(API_ROUTES.enterpriseRenameOrg, {
+        method: "PATCH",
+        body: JSON.stringify({ name: nameInput.trim() }),
+      });
+      setOrgName(nameInput.trim());
+      setEditingName(false);
+    } catch (e: any) {
+      alert(e.message || "Failed to rename.");
+    } finally { setSavingName(false); }
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setSendingInvite(true);
+    setInviteMsg(null);
+    try {
+      const res = await apiRequest(API_ROUTES.enterpriseMyOrgMembers, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to add member");
+      setInviteMsg({
+        type: "success",
+        text: `✓ '${data.username}' (${inviteEmail.trim()}) has been added to your organization. They've been notified by email.`,
+      });
+      setInviteEmail("");
+      fetchMembers();
+    } catch (e: any) {
+      setInviteMsg({ type: "error", text: e.message });
+    } finally { setSendingInvite(false); }
+  };
+
+  const handleRemoveMember = async (userId: number, username: string) => {
+    if (!confirm(`Remove ${username} from the organization?`)) return;
+    setRemovingUserId(userId);
+    try {
+      const res = await apiRequest(API_ROUTES.enterpriseRemoveMember(userId), { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove member");
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message);
+    } finally { setRemovingUserId(null); }
+  };
+
+  const handleSuspendMember = async (userId: number, username: string) => {
+    if (!confirm(`Suspend ${username}'s account? They will no longer be able to use organization tokens.`)) return;
+    setSuspendingUserId(userId);
+    try {
+      const res = await apiRequest(API_ROUTES.enterpriseSuspendMember(userId), { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to suspend member");
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message);
+    } finally { setSuspendingUserId(null); }
+  };
+
+  const handleUnsuspendMember = async (userId: number, username: string) => {
+    if (!confirm(`Reactivate ${username}'s account?`)) return;
+    setSuspendingUserId(userId);
+    try {
+      const res = await apiRequest(API_ROUTES.enterpriseUnsuspendMember(userId), { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to reactivate member");
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message);
+    } finally { setSuspendingUserId(null); }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      const a = document.createElement('a');
+      a.href = '/employee_bulk_upload_template.xlsx';
+      a.download = 'employee_bulk_upload_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e: any) {
+      alert("Could not download template file");
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!excelFile) return;
+    setUploadingExcel(true);
+    setBulkUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", excelFile);
+
+      const res = await apiRequest(API_ROUTES.enterpriseBulkUploadMembers, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Bulk upload failed");
+      setBulkUploadResult(data);
+      setExcelFile(null);
+      fetchMembers();
+    } catch (e: any) {
+      alert(e.message || "Bulk upload failed");
+    } finally {
+      setUploadingExcel(false);
+    }
+  };
+
+  const handleDownloadSkippedExcel = () => {
+    if (!bulkUploadResult?.skipped_excel_base64) return;
+    const byteCharacters = atob(bulkUploadResult.skipped_excel_base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = bulkUploadResult.filename || "skipped_employees.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const activeMembers = members.filter(m => m.status === "ACTIVE");
+  const suspendedMembers = members.filter(m => m.status === "SUSPENDED");
+  const displayMembers = members.filter(m => m.status === "ACTIVE" || m.status === "SUSPENDED");
+  const pendingInvites = invites.filter(i => i.status === "PENDING");
+
+  return (
+    <div className="space-y-5">
+      {/* Org Header Card */}
+      <Card>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${isDark ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-600"
+              }`}>
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleRenameSave(); if (e.key === "Escape") setEditingName(false); }}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-bold focus:outline-none w-52 ${isDark ? "bg-slate-950 border-indigo-500 text-slate-100" : "bg-white border-indigo-500 text-slate-900"
+                      }`}
+                  />
+                  <button onClick={handleRenameSave} disabled={savingName}
+                    className="p-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-all">
+                    {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  <button onClick={() => setEditingName(false)}
+                    className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h2 className={`text-lg font-black truncate ${isDark ? "text-slate-100" : "text-slate-900"}`}>{orgName}</h2>
+                  <button onClick={() => { setNameInput(orgName); setEditingName(true); }}
+                    className={`p-1 rounded-md transition-all ${isDark ? "text-slate-500 hover:text-slate-300 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      }`}>
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Your enterprise organization</p>
+            </div>
+          </div>
+
+          {/* Org Stats */}
+          <div className="flex items-center gap-6 text-xs">
+            <div className="text-center">
+              <div className={`text-xl font-black ${isDark ? "text-amber-300" : "text-amber-600"}`}>{initialBalance.toLocaleString()}</div>
+              <div className={`text-[11px] uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-500"}`}>Shared Tokens</div>
+            </div>
+            <div className="text-center">
+              <div className={`text-xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{activeMembers.length}</div>
+              <div className={`text-[11px] uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-500"}`}>Active Members</div>
+            </div>
+            <div className="text-center">
+              <div className={`text-xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{pendingInvites.length}</div>
+              <div className={`text-[11px] uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-500"}`}>Pending Invites</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Status banner if suspended */}
+        {initialStatus === "SUSPENDED" && (
+          <div className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
+            }`}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            This organization is currently SUSPENDED. Contact support to reactivate.
+          </div>
+        )}
+      </Card>
+
+      {/* Add Employee (Single Email or Bulk Excel Upload) */}
+      <Card>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Add Employees</h3>
+          </div>
+          <div className={`p-1 rounded-xl border flex items-center gap-1 text-xs ${isDark ? "bg-slate-950 border-slate-800" : "bg-slate-100 border-slate-200"
+            }`}>
+            <button
+              onClick={() => { setAddMode("single"); setBulkUploadResult(null); }}
+              className={`px-3 py-1 rounded-lg font-bold transition-all ${addMode === "single"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              Single Email
+            </button>
+            <button
+              onClick={() => { setAddMode("bulk"); setInviteMsg(null); }}
+              className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all ${addMode === "bulk"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Bulk Excel Upload
+            </button>
+          </div>
+        </div>
+
+        {addMode === "single" ? (
+          <div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="employee@company.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
+                className={`flex-1 px-3 py-2.5 rounded-xl border text-sm font-medium focus:outline-none focus:border-indigo-500 ${isDark ? "bg-slate-950 border-slate-800 text-slate-200 placeholder-slate-500" : "bg-white border-slate-300 text-slate-900 placeholder-slate-400"
+                  }`}
+              />
+              <button
+                onClick={handleSendInvite}
+                disabled={sendingInvite || !inviteEmail.trim()}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+              >
+                {sendingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                Add Member
+              </button>
+            </div>
+
+            {inviteMsg && (
+              <div className={`mt-3 p-3 rounded-xl text-xs font-medium leading-relaxed ${inviteMsg.type === "success"
+                  ? isDark ? "bg-emerald-950/50 border border-emerald-800 text-emerald-300" : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                  : isDark ? "bg-rose-950/50 border border-rose-800 text-rose-300" : "bg-rose-50 border border-rose-200 text-rose-700"
+                }`}>
+                {inviteMsg.text}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+              <p className={isDark ? "text-slate-400" : "text-slate-600"}>
+                Upload an Excel file (.xlsx, .xls) containing employee emails in rows.
+              </p>
+              <button
+                onClick={handleDownloadTemplate}
+                className={`px-3 py-1.5 rounded-lg border font-bold flex items-center gap-1.5 transition-all text-xs ${isDark ? "bg-slate-900 border-slate-700 text-indigo-400 hover:bg-slate-800" : "bg-slate-50 border-slate-300 text-indigo-600 hover:bg-slate-100"
+                  }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Excel Template
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={e => setExcelFile(e.target.files?.[0] || null)}
+                className={`flex-1 px-3 py-2 rounded-xl border text-xs font-medium focus:outline-none ${isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-white border-slate-300 text-slate-700"
+                  }`}
+              />
+              <button
+                onClick={handleBulkUpload}
+                disabled={uploadingExcel || !excelFile}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+              >
+                {uploadingExcel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Upload & Process
+              </button>
+            </div>
+
+            {bulkUploadResult && (
+              <div className={`p-4 rounded-xl border space-y-3 ${isDark ? "bg-slate-950/70 border-slate-800" : "bg-slate-50 border-slate-200"
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                    Bulk Upload Completed
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    Total: {bulkUploadResult.total_processed}
+                  </span>
+                </div>
+                <div className="flex gap-4 text-xs font-bold">
+                  <div className={`px-3 py-1.5 rounded-lg border ${isDark ? "bg-emerald-950/50 border-emerald-800 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    }`}>
+                    ✓ Added: {bulkUploadResult.added_count}
+                  </div>
+                  <div className={`px-3 py-1.5 rounded-lg border ${bulkUploadResult.skipped_count > 0
+                      ? isDark ? "bg-amber-950/50 border-amber-800 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-700"
+                      : isDark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-600"
+                    }`}>
+                    ⚠ Skipped: {bulkUploadResult.skipped_count}
+                  </div>
+                </div>
+
+                {bulkUploadResult.skipped_count > 0 && bulkUploadResult.skipped_excel_base64 && (
+                  <div className="pt-2 border-t border-slate-800/40 flex items-center justify-between flex-wrap gap-2">
+                    <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      Emails not registered or unverified were safely skipped.
+                    </p>
+                    <button
+                      onClick={handleDownloadSkippedExcel}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Skipped Emails (.xlsx)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Organization Members */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Organization Members ({displayMembers.length})
+            </h3>
+          </div>
+          <button onClick={fetchMembers} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            }`}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingMembers ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+
+        {loadingMembers ? (
+          <div className="flex items-center justify-center py-6 text-slate-400 text-xs gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Loading members...
+          </div>
+        ) : displayMembers.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">No members yet. Add employees above.</p>
+        ) : (
+          <div className="space-y-2">
+            {displayMembers.map(m => (
+              <div key={m.user_id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+                }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${isDark ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-700"
+                    }`}>
+                    {m.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{m.username}</span>
+                      {m.status === "SUSPENDED" && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${isDark ? "bg-amber-950/80 text-amber-300 border-amber-800" : "bg-amber-100 text-amber-800 border-amber-300"
+                          }`}>
+                          SUSPENDED
+                        </span>
+                      )}
+                    </div>
+                    <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{m.email || "No email"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${m.org_role === "OWNER"
+                      ? isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
+                      : isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-slate-100 text-slate-700 border-slate-300"
+                    }`}>
+                    {m.org_role}
+                  </span>
+                  {m.org_role !== "OWNER" && (
+                    <div className="flex items-center gap-1">
+                      {m.status === "ACTIVE" ? (
+                        <button
+                          onClick={() => handleSuspendMember(m.user_id, m.username)}
+                          disabled={suspendingUserId === m.user_id}
+                          className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-amber-950/50 text-amber-400 hover:bg-amber-900/50 border-amber-800/60" : "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200"
+                            }`}
+                          title="Suspend member account"
+                        >
+                          {suspendingUserId === m.user_id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <PauseCircle className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUnsuspendMember(m.user_id, m.username)}
+                          disabled={suspendingUserId === m.user_id}
+                          className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-emerald-950/50 text-emerald-400 hover:bg-emerald-900/50 border-emerald-800/60" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200"
+                            }`}
+                          title="Reactivate member account"
+                        >
+                          {suspendingUserId === m.user_id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <PlayCircle className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRemoveMember(m.user_id, m.username)}
+                        disabled={removingUserId === m.user_id}
+                        className={`p-1.5 rounded-lg border transition-all disabled:opacity-50 ${isDark ? "bg-rose-950/50 text-rose-400 hover:bg-rose-900/50 border-rose-800/60" : "bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
+                          }`}
+                        title="Remove member"
+                      >
+                        {removingUserId === m.user_id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />
+                        }
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Invites List */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Invite History</h3>
+          </div>
+          <button onClick={fetchInvites} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            }`}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingInvites ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+
+        {loadingInvites ? (
+          <div className="flex items-center justify-center py-6 text-slate-400 text-xs gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Loading invites...
+          </div>
+        ) : invites.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">No invites sent yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {invites.map(inv => (
+              <div key={inv.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+                }`}>
+                <div>
+                  <div className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-900"}`}>{inv.invited_email}</div>
+                  <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Sent {new Date(inv.created_at).toLocaleDateString()} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <InviteStatusBadge status={inv.status} isDark={isDark} />
+                  {inv.status === "PENDING" && (
+                    <button
+                      onClick={() => handleRevokeInvite(inv.id)}
+                      className={`p-1.5 rounded-lg transition-all ${isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      title="Revoke invite"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
-  if (status === 'PENDING') return (
-    <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-      <p className="text-sm font-bold text-amber-700 mb-1">⏳ Your free token access is pending admin approval.</p>
-      <p className="text-xs text-amber-600 leading-relaxed">
-        Your request has been submitted. Please check back later — you will be able to use the Valuation Agent once an admin approves your request.
-      </p>
-    </div>
-  );
-  if (status === 'REJECTED') return (
-    <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
-      <p className="text-sm font-bold text-red-700 mb-1">❌ Your token request was rejected.</p>
-      <p className="text-xs text-red-600 leading-relaxed">
-        Please contact admin for more information, or submit a new request below.
-      </p>
-    </div>
-  );
-  if (status === 'APPROVED') return (
-    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-      <p className="text-sm font-bold text-emerald-700 mb-1">✅ Your token access is approved and active!</p>
-      <p className="text-xs text-emerald-600 leading-relaxed">
-        You can now use the Valuation Agent. Your token balance reduces with each request.
-      </p>
-    </div>
-  );
-  return null;
 }
 
-// ── Main Profile Page ──────────────────────────────────────────────────────────
+// ─── Employee Org Card ──────────────────────────────────────────────────────────
+function EmployeeOrgCard({ activeOrg, isDark }: { activeOrg: NonNullable<ReturnType<typeof useAuth>["user"]>["active_org"]; isDark: boolean }) {
+  if (!activeOrg) return null;
+  const isSuspended = activeOrg.org_status === "SUSPENDED";
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <Building2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+        <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Your Organization</h3>
+        <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-black uppercase border ${isSuspended
+            ? isDark ? "bg-rose-950 text-rose-400 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200"
+            : isDark ? "bg-emerald-950 text-emerald-400 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+          }`}>
+          {activeOrg.org_status}
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <div className={`text-xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{activeOrg.org_name}</div>
+          <div className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            You are an <strong className={isDark ? "text-indigo-300" : "text-indigo-600"}>Employee</strong> in this organization.
+          </div>
+        </div>
+
+        <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? "bg-slate-950/60 border-slate-800/80" : "bg-slate-50 border-slate-200"
+          }`}>
+          <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Shared Token Pool</span>
+          <span className={`text-sm font-black ${isDark ? "text-indigo-300" : "text-indigo-600"}`}>{activeOrg.org_token_balance.toLocaleString()} tokens</span>
+        </div>
+
+        {isSuspended && (
+          <div className={`p-3 rounded-xl border text-xs font-medium flex items-center gap-2 ${isDark ? "bg-rose-950/50 border-rose-800 text-rose-300" : "bg-rose-50 border-rose-200 text-rose-700"
+            }`}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Your organization is suspended. Contact your organization owner.
+          </div>
+        )}
+
+        <p className={`text-[11px] leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          All your agent usage inside the office workspace is billed against the organization's shared token pool.
+          Your personal {" "}
+          <strong className={isDark ? "text-slate-300" : "text-slate-700"}>10,000 free tokens</strong> remain untouched in your personal wallet.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+// ─── Payment History Card ────────────────────────────────────────────────────────
+function PaymentHistoryCard({ isDark }: { isDark: boolean }) {
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch<any[]>(API_ROUTES.paymentHistory);
+      setPayments(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+          <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Payment &amp; Billing History</h3>
+        </div>
+        <button onClick={fetchHistory} className={`p-1.5 rounded-lg transition-all ${isDark ? "text-slate-400 hover:text-slate-200 hover:bg-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+          }`}>
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-6 text-slate-400 text-xs gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Loading payment history...
+        </div>
+      ) : payments.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-6">No payments recorded yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {payments.map((p) => (
+            <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${isDark ? "bg-slate-950/50 border-slate-800/80" : "bg-slate-50 border-slate-200"
+              }`}>
+              <div className="space-y-0.5">
+                <div className={`font-bold flex items-center gap-2 ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+                  <span>₹{p.amount_inr?.toLocaleString()}</span>
+                  <span className={`font-mono text-[11px] ${isDark ? "text-indigo-400" : "text-indigo-600"}`}>(+{p.tokens_credited?.toLocaleString()} Tokens)</span>
+                </div>
+                <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {new Date(p.created_at).toLocaleString()} · Session: {p.stripe_session_id?.slice(-12) || p.id}
+                </div>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${p.status === "succeeded"
+                  ? isDark ? "bg-emerald-950 text-emerald-400 border-emerald-800" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : p.status === "pending"
+                    ? isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
+                    : isDark ? "bg-rose-950 text-rose-400 border-rose-800" : "bg-rose-50 text-rose-700 border-rose-200"
+                }`}>
+                {p.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Main Profile Page ──────────────────────────────────────────────────────────
 export default function ProfilePage() {
-  const { user, logout, refreshProfile } = useAuth();
+
+  const { user, logout, loading } = useAuth();
+  const isDark = useTheme();
   const router = useRouter();
 
-  const [editing, setEditing] = useState(false);
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [saveSuccess, setSaveSuccess] = useState('');
-
-  const [tokenLoading, setTokenLoading] = useState(false);
-  const [tokenError, setTokenError] = useState('');
-  const [tokenSuccess, setTokenSuccess] = useState('');
-
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  if (!user) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900"}`}>
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
   }
+  if (!user) return null;
 
-  const balance = user.token_balance;
-  const tokenStatus = balance?.status ?? 'NOT_REQUESTED';
-  const canRequestRedemption = tokenStatus === 'NOT_REQUESTED' || tokenStatus === 'REJECTED';
+  const isOwner = user.active_org?.org_role === "OWNER";
+  const isEmployee = user.active_org?.org_role === "EMPLOYEE";
 
-  const startEdit = () => {
-    setUsername(user.username);
-    setEmail(user.email ?? '');
-    setSaveError('');
-    setSaveSuccess('');
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setSaveError('');
-    setSaveSuccess('');
-  };
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaveLoading(true);
-    setSaveError('');
-    setSaveSuccess('');
-    try {
-      await apiFetch(API_ROUTES.profileUpdate, {
-        method: 'PATCH',
-        body: JSON.stringify({ username: username.trim() || undefined, email: email.trim() || undefined }),
-      });
-      setSaveSuccess('Profile updated successfully!');
-      setEditing(false);
-      await refreshProfile();
-    } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to update profile.');
-    } finally {
-      setSaveLoading(false);
-    }
-  };
-
-  const handleRequestRedemption = async () => {
-    setTokenLoading(true);
-    setTokenError('');
-    setTokenSuccess('');
-    try {
-      const res = await apiRequest(API_ROUTES.requestTokenRedemption, { method: 'POST' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || 'Request failed.');
-      }
-      setTokenSuccess('Token redemption request submitted! Admin will review soon.');
-      await refreshProfile();
-    } catch (err: unknown) {
-      setTokenError(err instanceof Error ? err.message : 'Failed to submit request.');
-    } finally {
-      setTokenLoading(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    setDeleteLoading(true);
-    try {
-      await apiRequest(API_ROUTES.profileDelete, { method: 'DELETE' });
-      await logout();
-    } catch {
-      setDeleteLoading(false);
-      setDeleteConfirm(false);
-    }
-  };
-
-  const usedPct = balance
-    ? Math.min(100, (balance.used_tokens / balance.total_allocated_tokens) * 100)
-    : 0;
+  const bgClass = isDark ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900";
+  const bannerClass = isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-slate-200 shadow-sm";
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-24 pb-12 px-4">
+    <div className={`min-h-screen pt-24 px-4 sm:px-6 pb-16 transition-colors ${bgClass}`}>
       <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Profile</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Manage your account and token access</p>
-          </div>
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 text-xs font-bold transition-all"
-          >
-            <ChevronRight className="h-3.5 w-3.5 rotate-180" /> Back
-          </button>
-        </div>
-
-        {saveSuccess && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium">
-            <CheckCircle2 className="h-4 w-4 shrink-0" /> {saveSuccess}
-          </div>
-        )}
-
-        {/* ── Account Card ── */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-8">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-2xl bg-white/20 flex items-center justify-center border border-white/30">
-                <UserIcon className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white">{user.username}</h2>
-                <p className="text-indigo-200 text-sm">{user.email}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <RoleBadge role={user.role} />
-                  {balance && <TokenStatusBadge status={tokenStatus} />}
-                </div>
-              </div>
+        {/* ─── Profile Banner ─────────────────────────────────────────────────── */}
+        <div className={`p-7 rounded-3xl border flex flex-col sm:flex-row items-center gap-6 justify-between transition-colors ${bannerClass}`}>
+          <div className="flex items-center gap-5">
+            <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center font-black text-2xl shrink-0 ${isDark ? "bg-indigo-600/20 border-indigo-500/30 text-indigo-400" : "bg-indigo-50 border-indigo-200 text-indigo-600"
+              }`}>
+              {user.username.charAt(0).toUpperCase()}
             </div>
-          </div>
-
-          {/* Profile Info */}
-          <div className="p-6">
-            {editing ? (
-              <form onSubmit={handleSaveProfile} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Username</label>
-                  <input
-                    value={username}
-                    onChange={e => setUsername(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
-                </div>
-                {saveError && (
-                  <p className="text-xs text-red-600 font-medium">{saveError}</p>
-                )}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={saveLoading}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-all disabled:opacity-60"
-                  >
-                    {saveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Save Changes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-bold transition-all"
-                  >
-                    <X className="h-4 w-4" /> Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Username</p>
-                      <p className="text-sm font-bold text-slate-900 mt-0.5">{user.username}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-                  <Mail className="h-4 w-4 text-slate-400" />
-                  <p className="text-sm text-slate-600">{user.email ?? 'No email set'}</p>
-                </div>
-                <button
-                  onClick={startEdit}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit Profile
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Token Balance Card (FREE users) ── */}
-        {user.role !== 'ADMIN' && (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
-                <Coins className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900">Token Balance</h3>
-                <p className="text-xs text-slate-400">Free token allowance for Valuation Agent</p>
-              </div>
-            </div>
-
-            <TokenStatusMessage status={tokenStatus} />
-
-            {/* Balance bar */}
-            {balance && tokenStatus === 'APPROVED' && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-500">Used</span>
-                  <span className="text-slate-900">
-                    {formatTokens(balance.used_tokens)} / {formatTokens(balance.total_allocated_tokens)}
-                  </span>
-                </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
-                    style={{ width: `${usedPct}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Allocated', value: formatTokens(balance.total_allocated_tokens), color: 'text-slate-700' },
-                    { label: 'Available', value: formatTokens(balance.available_tokens), color: 'text-emerald-600' },
-                    { label: 'Used', value: formatTokens(balance.used_tokens), color: 'text-indigo-600' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                      <p className={`text-lg font-black ${color}`}>{value}</p>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Request/Resubmit button */}
-            {canRequestRedemption && (
-              <div className="space-y-2">
-                {tokenError && (
-                  <p className="text-xs text-red-600 font-medium">{tokenError}</p>
-                )}
-                {tokenSuccess && (
-                  <p className="text-xs text-emerald-600 font-medium">{tokenSuccess}</p>
-                )}
-                <button
-                  onClick={handleRequestRedemption}
-                  disabled={tokenLoading}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-60"
-                >
-                  {tokenLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Zap className="h-4 w-4" />
-                  )}
-                  {tokenStatus === 'REJECTED' ? 'Re-submit Token Request' : 'Request Token Access'}
-                </button>
-              </div>
-            )}
-
-            {tokenStatus === 'PENDING' && (
-              <button
-                onClick={async () => { await refreshProfile(); }}
-                className="flex items-center gap-2 text-xs text-slate-400 hover:text-indigo-500 font-bold transition-colors"
-              >
-                <RefreshCw className="h-3.5 w-3.5" /> Refresh Status
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* ── Quick Links (for FREE users) ── */}
-        {user.role === 'FREE' && tokenStatus === 'APPROVED' && (
-          <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-3xl p-6 flex items-center justify-between">
             <div>
-              <p className="text-white font-black text-sm">Ready to valuate?</p>
-              <p className="text-indigo-200 text-xs mt-0.5">Use your tokens on the Valuation Agent</p>
-            </div>
-            <a
-              href="/valuation"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-indigo-700 text-sm font-black hover:bg-indigo-50 transition-all shadow-lg"
-            >
-              <BarChart3 className="h-4 w-4" /> Go to Valuation
-            </a>
-          </div>
-        )}
-
-        {/* ── Danger Zone ── */}
-        <div className="bg-white rounded-3xl border border-red-100 shadow-sm p-6">
-          <h3 className="text-sm font-black text-red-600 mb-1">Danger Zone</h3>
-          <p className="text-xs text-slate-400 mb-4">
-            Permanently delete your account. This action cannot be undone.
-          </p>
-
-          {!deleteConfirm ? (
-            <button
-              onClick={() => setDeleteConfirm(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-bold transition-all"
-            >
-              <Trash2 className="h-4 w-4" /> Delete Account
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                ⚠️ Are you absolutely sure? This will delete all your data, sessions, and token history.
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={deleteLoading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-all disabled:opacity-60"
-                >
-                  {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Yes, Delete
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(false)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-bold transition-all"
-                >
-                  Cancel
-                </button>
+              <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                <h1 className={`text-xl font-black ${isDark ? "text-slate-100" : "text-slate-900"}`}>{user.username}</h1>
+                <RoleBadge role={user.role} accountType={user.account_type} orgRole={user.active_org?.org_role} isDark={isDark} />
               </div>
+              <p className={`text-xs flex items-center gap-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <Mail className="h-3.5 w-3.5" />
+                {user.email || "No email attached"}
+              </p>
             </div>
-          )}
-        </div>
-
-        {/* ── Logout ── */}
-        <div className="flex justify-end">
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-sm font-bold transition-all"
-          >
+          </div>
+          <button onClick={logout}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold hover:bg-rose-500/20 transition-all shrink-0">
             <LogOut className="h-4 w-4" /> Sign Out
           </button>
         </div>
+
+        {/* ─── Wallets Row ─────────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* Personal Wallet */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <Coins className={`h-4 w-4 ${isDark ? "text-indigo-400" : "text-indigo-500"}`} /> Personal Wallet
+              </span>
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${isDark ? "bg-indigo-950 text-indigo-300 border-indigo-800" : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                }`}>
+                PERSONAL
+              </span>
+            </div>
+            <div className={`text-3xl font-black mb-1 ${isDark ? "text-indigo-300" : "text-indigo-600"}`}>
+              {(user.personal_token_balance || 0).toLocaleString()}
+            </div>
+            <p className={`text-xs mb-4 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Your personal token balance</p>
+            {!isEmployee && (
+              <button onClick={() => router.push("/pricing")}
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/30">
+                <Zap className="h-3.5 w-3.5" /> Get More Tokens (₹5,000 / 1M)
+              </button>
+            )}
+          </Card>
+
+          {/* Org Token Pool (if owner or employee) */}
+          {user.active_org ? (
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  <Building2 className={`h-4 w-4 ${isDark ? "text-amber-400" : "text-amber-500"}`} /> Organization Pool
+                </span>
+                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${isDark ? "bg-amber-950 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                  {user.active_org.org_role}
+                </span>
+              </div>
+              <div className={`text-3xl font-black mb-1 ${isDark ? "text-amber-300" : "text-amber-600"}`}>
+                {user.active_org.org_token_balance.toLocaleString()}
+              </div>
+              <p className={`text-xs mb-4 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                Shared pool — {isOwner ? "your employees draw from this." : "used for your office workspace."}
+              </p>
+              {isOwner && (
+                <button onClick={() => alert("Contact Sigma Value support to add more org tokens.")}
+                  className={`w-full py-2.5 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${isDark ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-600/30" : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                    }`}>
+                  <Coins className="h-3.5 w-3.5" /> Request More Org Tokens
+                </button>
+              )}
+            </Card>
+          ) : (
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                <Building2 className="h-4 w-4 text-slate-500" />
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Enterprise Org</span>
+              </div>
+              <p className={`text-xs leading-relaxed mb-4 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                Need a company account with shared tokens for your whole team?
+              </p>
+              <button onClick={() => router.push("/pricing#enterprise")}
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-200" : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+                  }`}>
+                Learn About Enterprise <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </Card>
+          )}
+        </div>
+
+        {/* ─── Owner: Full Organization Management ──────────────────────────── */}
+        {isOwner && user.active_org && (
+          <div>
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <div className="w-1 h-4 rounded-full bg-amber-400" />
+              <h2 className={`text-sm font-black uppercase tracking-wider ${isDark ? "text-slate-300" : "text-slate-700"}`}>Organization Management</h2>
+            </div>
+            <OrgManagementSection
+              orgId={user.active_org.org_id}
+              initialName={user.active_org.org_name}
+              initialBalance={user.active_org.org_token_balance}
+              initialStatus={user.active_org.org_status}
+              isDark={isDark}
+            />
+          </div>
+        )}
+
+        {/* ─── Employee: Read-only Org Card ──────────────────────────────────── */}
+        {isEmployee && (
+          <div>
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <div className="w-1 h-4 rounded-full bg-indigo-400" />
+              <h2 className={`text-sm font-black uppercase tracking-wider ${isDark ? "text-slate-300" : "text-slate-700"}`}>Your Organization</h2>
+            </div>
+            <EmployeeOrgCard activeOrg={user.active_org} isDark={isDark} />
+          </div>
+        )}
+
+        {/* ─── Payment & Billing History ─────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <div className="w-1 h-4 rounded-full bg-indigo-400" />
+            <h2 className={`text-sm font-black uppercase tracking-wider ${isDark ? "text-slate-300" : "text-slate-700"}`}>Billing History</h2>
+          </div>
+          <PaymentHistoryCard isDark={isDark} />
+        </div>
+
+        {/* ─── Pricing Reminder ────────────────────────────────────────────── */}
+        <Card>
+          <h3 className={`text-xs font-black uppercase tracking-wider mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>Current Plan Policy</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
+                ? "bg-slate-900/90 border-slate-800"
+                : "bg-emerald-50/50 border-emerald-200/60 shadow-sm"
+              }`}>
+              <span className={`font-bold ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>🎁 Free Signup Grant</span>
+              <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>10,000 tokens auto-credited on signup.</p>
+            </div>
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
+                ? "bg-slate-900/90 border-slate-800"
+                : "bg-indigo-50/50 border-indigo-200/60 shadow-sm"
+              }`}>
+              <span className={`font-bold ${isDark ? "text-indigo-400" : "text-indigo-700"}`}>⚡ Individual Pack</span>
+              <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>₹5,000 for 1,000,000 tokens.</p>
+            </div>
+            <div className={`p-3.5 rounded-xl border space-y-1 transition-colors ${isDark
+                ? "bg-slate-900/90 border-slate-800"
+                : "bg-amber-50/50 border-amber-200/60 shadow-sm"
+              }`}>
+              <span className={`font-bold ${isDark ? "text-amber-400" : "text-amber-700"}`}>🏢 Enterprise Org</span>
+              <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"}`}>Shared pool for multi-employee teams.</p>
+            </div>
+          </div>
+        </Card>
       </div>
-    </main>
+    </div>
   );
 }

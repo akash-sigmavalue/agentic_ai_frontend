@@ -6,7 +6,7 @@ import { Building2, Bot, Map, Workflow, Maximize2 } from "lucide-react";
 
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
-import TokenAccessGate from "@/components/shared/TokenAccessGate";
+import WalletGate from "@/components/shared/WalletGate";
 
 const MapSection = dynamic(() => import("@/components/valuation/shared/MapSection"), { ssr: false });
 
@@ -39,7 +39,7 @@ export default function HomePage() {
   // Maximize/Minimize state
   const [maximizedPanels, setMaximizedPanels] = useState([]);
   const toggleMaximize = useCallback((panelId) => {
-    setMaximizedPanels((prev) => 
+    setMaximizedPanels((prev) =>
       prev.includes(panelId) ? prev.filter((id) => id !== panelId) : [...prev, panelId]
     );
   }, []);
@@ -63,7 +63,7 @@ export default function HomePage() {
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaPercent = (deltaX / containerWidth) * 100;
-      
+
       if (dividerIndex === 0) {
         // Chat to Workflow divider
         const newLeft = Math.max(22, Math.min(45, startLeft + deltaPercent));
@@ -150,11 +150,10 @@ export default function HomePage() {
               type="button"
               onClick={() => setCompactPanel(panel)}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-center transition active:scale-[0.97] ${
-                isActive
-                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.25)]"
-                  : "text-text-dim hover:bg-bg-input hover:text-text-primary"
-              }`}
+              className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-center transition active:scale-[0.97] ${isActive
+                ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.25)]"
+                : "text-text-dim hover:bg-bg-input hover:text-text-primary"
+                }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="max-w-full truncate text-[8px] font-bold uppercase tracking-[0.08em]">{label}</span>
@@ -198,7 +197,7 @@ export default function HomePage() {
       `}</style>
 
       <div className="relative z-10 mt-20 flex h-[calc(100vh-5rem)] flex-col">
-       
+
 
         <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-6">
           <div className="mb-3 shrink-0 min-[1071px]:hidden">
@@ -206,7 +205,7 @@ export default function HomePage() {
           </div>
 
           <section ref={containerRef} className={`h-full min-h-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'grid grid-cols-1 min-[1071px]:grid-cols-3'}`}>
-            
+
             {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
             {maximizedPanels.length > 0 && (
               <div className="hidden shrink-0 gap-4 min-[1071px]:flex">
@@ -273,15 +272,24 @@ export default function HomePage() {
               </div>
 
               {/* Workflow Section */}
-              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 overflow-hidden flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("workflow") ? 'flex-1' : 'min-[1071px]:!hidden') : ''}`}>
+              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle w-full`}>
                 {renderCompactBrandHeader()}
                 <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
                 <div className="min-h-0 flex-1">
-                  <WorkflowSection 
-                    events={events} 
-                    isMaximized={maximizedPanels.includes("workflow")}
-                    onToggleMaximize={() => toggleMaximize("workflow")}
-                  />
+                  <WorkflowSection events={events} />
+                </div>
+              </div>
+
+              {/* Splitter 2 */}
+              <div
+                onMouseDown={handleMouseDown(1)}
+                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+              >
+                <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
                 </div>
               </div>
 

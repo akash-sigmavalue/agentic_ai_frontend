@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
 import Link from 'next/link';
 import { apiUrl } from '@/lib/api-client';
+import RoleGuard from '@/components/shared/RoleGuard';
 import "./web_search.css"
 
 type Message = {
@@ -58,7 +59,7 @@ const formatAgentError = (error: unknown) => {
   return message;
 };
 
-export default function Home() {
+function WebSearchComponent() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -400,5 +401,13 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function WebSearch() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN']} agentKey="web_search">
+      <WebSearchComponent />
+    </RoleGuard>
   );
 }

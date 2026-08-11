@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@variant dark (&:where(.dark-mode, .dark-mode *));
 
 @theme {
   --color-background: #f8fafc;
@@ -584,3 +585,45 @@
     display: none !important;
   }
 }
+
+/* Global Form Control Color Scheme & Webkit Autofill Overrides */
+input,
+textarea,
+select {
+  color-scheme: light;
+}
+
+html.dark-mode input,
+html.dark-mode textarea,
+html.dark-mode select {
+  color-scheme: dark;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
+  -webkit-text-fill-color: #0f172a !important;
+  -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+  background-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+html.dark-mode input:-webkit-autofill,
+html.dark-mode input:-webkit-autofill:hover, 
+html.dark-mode input:-webkit-autofill:focus,
+html.dark-mode input:-webkit-autofill:active,
+html.dark-mode textarea:-webkit-autofill,
+html.dark-mode textarea:-webkit-autofill:hover,
+html.dark-mode textarea:-webkit-autofill:focus,
+html.dark-mode textarea:-webkit-autofill:active {
+  -webkit-text-fill-color: #f8fafc !important;
+  -webkit-box-shadow: 0 0 0px 1000px #020617 inset !important;
+  background-color: #020617 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
