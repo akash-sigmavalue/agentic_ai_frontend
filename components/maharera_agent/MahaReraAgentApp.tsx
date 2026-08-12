@@ -824,12 +824,31 @@ function BrowserWindow({
 
         {viewMode === "stream" ? (
           screenshot ? (
-            <div className="relative w-full h-full flex items-center justify-center overflow-auto custom-scrollbar">
+            <div className="relative w-full h-full flex items-center justify-center overflow-auto custom-scrollbar group bg-slate-900/40 rounded-lg">
               <img
                 src={screenshot}
                 alt="Live agent browser activity frame"
-                className="max-h-full max-w-full rounded-lg border border-border/60 object-contain shadow-2xl transition-all duration-200"
+                className="max-h-full max-w-full rounded-lg border border-border/60 object-contain shadow-2xl transition-all duration-200 opacity-95"
               />
+              
+              {/* CRT Scanline effect */}
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.15)_50%),linear-gradient(90deg,rgba(255,0,0,0.04),rgba(0,255,0,0.01),rgba(0,0,255,0.04))] bg-[length:100%_4px,3px_100%] opacity-50 z-10 rounded-lg mix-blend-overlay"></div>
+              
+              {/* Vignette effect */}
+              <div className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_100px_rgba(0,0,0,0.8)] z-10"></div>
+              
+              {/* Live Overlay Badges */}
+              {busy && (
+                <div className="absolute top-4 right-4 flex items-center gap-2 pointer-events-none z-20">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-black/70 backdrop-blur-md rounded-md border border-red-500/30 text-red-400 font-bold text-[10px] tracking-widest font-mono shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                    <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                    REC
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/70 backdrop-blur-md rounded-md border border-cyan-500/30 text-cyan-300 font-bold text-[10px] tracking-widest font-mono shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                    LIVE
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center text-center p-6 max-w-sm">

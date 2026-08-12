@@ -442,14 +442,21 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
                         </p>
                       </div>
                       {href && (
-                        <button
-                          type="button"
-                          onClick={() => showDocument(text, href)}
-                          aria-label={`Open ${text}`}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-bg-deep transition hover:bg-accent-light"
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${text} in a new tab`}
+                          onClick={(event) => {
+                            if (event.altKey) {
+                              event.preventDefault();
+                              showDocument(text, href);
+                            }
+                          }}
+                          className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-accent px-3 text-[10px] font-black uppercase tracking-[0.1em] text-bg-deep transition hover:bg-accent-light"
                         >
-                          <ExternalLink className="h-4 w-4" />
-                        </button>
+                          <ExternalLink className="h-4 w-4" /> View
+                        </a>
                       )}
                     </div>
                   );
@@ -631,13 +638,21 @@ export default function ProjectDetailsModal({ isOpen, onClose, data }: ProjectDe
                   const label = String(linkedValue.text || col || "View document");
                   return (
                     <td key={col} className="px-4 py-3 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => showDocument(label, url)}
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open ${label} in a new tab`}
+                        onClick={(event) => {
+                          if (event.altKey) {
+                            event.preventDefault();
+                            showDocument(label, url);
+                          }
+                        }}
                         className="font-bold text-accent transition hover:text-accent-light hover:underline"
                       >
                         👁️ View Document
-                      </button>
+                      </a>
                     </td>
                   );
                 }
