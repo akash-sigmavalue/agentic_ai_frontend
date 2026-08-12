@@ -6,10 +6,9 @@ import "leaflet/dist/leaflet.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import "./data_retrieval/data_retieval.css";
-import "./valuation/valuation.css"
+import "./valuation/valuation.css";
 import Header from "@/components/shared/Header";
 import { AuthProvider } from "@/hooks/use-auth";
-
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,10 +19,19 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
- 
+
 export const metadata: Metadata = {
-  title: "Sigmavalue AI Pilot | Intelligent Workspace",
-  description: "Enterprise-grade AI control center for workflow visualization and geospatial analysis.",
+  title: "Sigmavalue OS | Intelligent Workspace",
+  description:
+    "Enterprise-grade AI control center for workflow visualization and geospatial analysis.",
+  icons: {
+    icon: [
+      { url: "/logo.png?v=2", type: "image/png" },
+      { url: "/favicon.ico?v=2" },
+    ],
+    shortcut: "/logo.png?v=2",
+    apple: "/logo.png?v=2",
+  },
 };
 
 export default function RootLayout({
@@ -38,6 +46,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="icon" href="/logo.png?v=2" type="image/png" />
+        <link rel="shortcut icon" href="/logo.png?v=2" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png?v=2" />
+        {/* Theme initializer must live in <head> when using beforeInteractive in App Router */}
         <Script
           id="theme-initializer"
           strategy="beforeInteractive"

@@ -1,6 +1,7 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import type { Metadata } from "next";
+import MahaReraClient from "./MahaReraClient";
 
 export const metadata: Metadata = {
   title: "MahaRERA Agent | Sigmavalue AI Pilot",
@@ -19,15 +20,5 @@ export default function MahaReraAgentPage() {
     .readFileSync(htmlPath, "utf8")
     .replace("__MAHARERA_API_BASE_URL__", apiBaseUrl);
 
-  return (
-    <main className="min-h-screen bg-[#f4f5f2] pt-20">
-      <iframe
-        title="MahaRERA Agent"
-        srcDoc={html}
-        className="block h-[calc(100vh-5rem)] w-full border-0"
-      />
-    </main>
-  );
+  return <MahaReraClient html={html} />;
 }
-
-
