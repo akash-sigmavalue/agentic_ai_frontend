@@ -204,7 +204,7 @@ export default function HomePage() {
             {renderCompactNavigation("assistant")}
           </div>
 
-          <section ref={containerRef} className={`h-full min-h-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'grid grid-cols-1 min-[1071px]:grid-cols-3'}`}>
+          <section ref={containerRef} className={`h-full min-h-0 flex-1 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'flex flex-col min-[1071px]:flex-row'} gap-4 min-[1071px]:gap-0`}>
 
             {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
             {maximizedPanels.length > 0 && (
@@ -248,8 +248,8 @@ export default function HomePage() {
             {/* Main Content Area */}
             <div className={`min-h-0 min-w-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col min-[1071px]:flex-row' : 'contents'}`}>
               {/* Chat section */}
-              <div className={`relative min-h-0 min-w-0 overflow-hidden h-full ${maximizedPanels.length > 0 ? (maximizedPanels.includes("assistant") ? 'flex-1' : 'hidden min-[1071px]:hidden') : ''}`}>
-                <TokenAccessGate featureName="Valuation Agent">
+              <div className={`resize-panel-left relative min-h-0 min-w-0 overflow-hidden h-full w-full min-[1071px]:h-full ${maximizedPanels.length > 0 ? (maximizedPanels.includes("assistant") ? 'flex-1' : 'hidden min-[1071px]:hidden') : ''}`}>
+                <WalletGate featureName="Valuation Agent">
                   <ChatSection
                     isMaximized={maximizedPanels.includes("assistant")}
                     onToggleMaximize={() => toggleMaximize("assistant")}
@@ -268,11 +268,24 @@ export default function HomePage() {
                     events={events}
                     setEvents={setEvents}
                   />
-                </TokenAccessGate>
+                </WalletGate>
+              </div>
+
+              {/* Splitter 1 */}
+              <div
+                onMouseDown={handleMouseDown(0)}
+                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+              >
+                <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                </div>
               </div>
 
               {/* Workflow Section */}
-              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle w-full`}>
+              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle`}>
                 {renderCompactBrandHeader()}
                 <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
                 <div className="min-h-0 flex-1">
