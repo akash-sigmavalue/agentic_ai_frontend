@@ -1,5 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
+  --bg-deep: #edf4fb;
+  --bg-dark: #f8fbff;
+  --bg-panel: rgba(255, 255, 255, 0.72);
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-input: rgba(15, 23, 42, 0.035);
+  --bg-header: rgba(255, 255, 255, 0.86);
+  --border-dim: rgba(15, 23, 42, 0.10);
+  --border-soft: rgba(15, 23, 42, 0.18);
+  --border-glow: rgba(8, 145, 178, 0.2);
+  --text-primary: #020617;
+  --text-secondary: #0f172a;
+  --text-muted: #334155;
+  --text-dim: #475569;
+  --accent: #0891b2;
+  --accent-light: #0ea5e9;
+  --accent-glow: rgba(8, 145, 178, 0.1);
+  --accent-purple: #7c3aed;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius-panel: 20px;
+}
+
+.dark-mode {
   --bg-deep: #02040a;
   --bg-dark: #0b0e14;
   --bg-panel: rgba(19, 23, 31, 0.66);
@@ -20,27 +45,6 @@
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --radius-panel: 20px;
-}
-
-.light {
-  --bg-deep: #edf4fb;
-  --bg-dark: #f8fbff;
-  --bg-panel: rgba(255, 255, 255, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.92);
-  --bg-input: rgba(15, 23, 42, 0.035);
-  --bg-header: rgba(255, 255, 255, 0.86);
-  --border-dim: rgba(15, 23, 42, 0.10);
-  --border-soft: rgba(15, 23, 42, 0.18);
-  --border-glow: rgba(8, 145, 178, 0.2);
-  --text-primary: #020617;
-  --text-secondary: #0f172a;
-  --text-muted: #334155;
-  --text-dim: #475569;
-  --accent: #0891b2;
-  --accent-light: #0ea5e9;
-  --accent-glow: rgba(8, 145, 178, 0.1);
-  --accent-purple: #7c3aed;
 }
 
 * {
@@ -168,18 +172,19 @@ textarea {
 
 .panel-kicker {
   margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 10px;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
 
 .panel-heading {
   margin: 4px 0 0;
-  font-family: var(--font-orbitron), sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-primary);
 }
@@ -200,10 +205,10 @@ textarea {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
   padding: 6px 10px;
-  font-family: var(--font-jetbrains), monospace;
+  font-family: 'Space Grotesk', monospace;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
 }
 
@@ -232,7 +237,7 @@ textarea {
   color: inherit !important;
 }
 
-@media (max-width: 1279px) {
+@media (max-width: 1070px) {
   .panel-shell {
     min-height: 420px;
   }

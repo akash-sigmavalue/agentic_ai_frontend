@@ -7,40 +7,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { API_BASE_URL, apiUrl } from "@/lib/api-client";
 import ValuationReport from "@/components/valuation/shared/ValuationReport";
-import {
-  Map as MapIcon,
-  Loader2,
-  ClipboardList,
-  Building2,
-  Building,
-  Milestone,
-  Star,
-  Sparkles,
-  HeartPulse,
-  Stethoscope,
-  GraduationCap,
-  School,
-  Bus,
-  Train,
-  Flower,
-  Trees,
-  ShoppingBag,
-  ShoppingCart,
-  Cpu,
-  Utensils,
-  Shield,
-  Flame,
-  Info,
-  Laptop,
-  Store,
-  Compass,
-  FileText,
-  Minimize2,
-  Maximize2,
-  RotateCw,
-  SlidersHorizontal,
-  Settings
-} from "lucide-react";
+import { Map as MapIcon, Loader2, ClipboardList, Building2, Building, Milestone, Star, Sparkles, HeartPulse, Stethoscope, GraduationCap, School, Bus, Train, Flower, Trees, ShoppingBag, ShoppingCart, Cpu, Utensils, Shield, Flame, Info, Laptop, Store, Compass, FileText, Minimize2, Maximize2, RotateCw, SlidersHorizontal, Settings } from "lucide-react";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -171,7 +138,10 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
   const map = useMap();
 
   useEffect(() => {
-    let timer;
+    let resizeTimer;
+    let frame;
+    let cancelled = false;
+
     if (markers.length > 0 && radius) {
       const validMarkers = markers.filter(m => m && m.lat != null && m.lng != null && !isNaN(Number(m.lat)) && !isNaN(Number(m.lng)));
       if (validMarkers.length > 0) {
@@ -192,30 +162,56 @@ function FitRadiusBounds({ markers, radius, mapMode }) {
 
         const paddedBounds = L.latLngBounds(newSW, newNE);
 
-        if (map && typeof map.fitBounds === 'function') {
-          map.fitBounds(paddedBounds, { padding: [40, 40], maxZoom: 16 });
-          timer = setTimeout(() => {
-            if (map && map._container && typeof map.invalidateSize === 'function') {
-              map.invalidateSize();
-            }
-          }, 200);
-        }
+        const fitMap = () => {
+          if (cancelled || !paddedBounds.isValid()) return;
+
+          const container = map.getContainer?.();
+          if (!container?.isConnected || !map.getPane?.("mapPane")) return;
+
+          try {
+            // Responsive layout and fullscreen changes can move/remount the map.
+            // Disable Leaflet's pan animation so it does not read a stale
+            // `_leaflet_pos` while that transition is taking place.
+            map.invalidateSize({ pan: false, animate: false });
+            map.fitBounds(paddedBounds, {
+              padding: [40, 40],
+              maxZoom: 16,
+              animate: false,
+            });
+
+            resizeTimer = window.setTimeout(() => {
+              if (!cancelled && map.getContainer?.()?.isConnected) {
+                map.invalidateSize({ pan: false, animate: false });
+              }
+            }, 200);
+          } catch {
+            // The map was detached between the lifecycle checks above.
+            // Its next mounted instance will run this effect again.
+          }
+        };
+
+        map.whenReady(() => {
+          if (!cancelled) frame = window.requestAnimationFrame(fitMap);
+        });
       }
     }
+
     return () => {
-      if (timer) clearTimeout(timer);
+      cancelled = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
     };
   }, [markers, radius, mapMode, map]);
 
   return null;
 }
 
-export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, valuationResult }) {
+export default function MapSection({ markers = [], factorialData, onDensityUpdate, onAmenityUpdate, onRoadUpdate, valuationResult, isMaximized, onToggleMaximize }) {
   const [activeTheme, setActiveTheme] = useState("dark");
   const [panelView, setPanelView] = useState("map"); // "map" | "report"
 
   useEffect(() => {
-    const getTheme = () => document.documentElement.classList.contains("light") ? "light" : "dark";
+    const getTheme = () => document.documentElement.classList.contains("dark-mode") ? "dark" : "light";
     setActiveTheme(getTheme());
 
     const observer = new MutationObserver(() => {
@@ -230,7 +226,6 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
     return () => observer.disconnect();
   }, []);
 
-  const [isMaximized, setIsMaximized] = useState(false);
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
@@ -603,11 +598,11 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   const mapContent = (
     <div className={`transition-all duration-300 flex flex-col ${isMaximized
-        ? "fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-[0_0_50px_rgba(0,0,0,0.6)]"
-        : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
+      ? "w-full h-full flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
+      : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       }`}>
       <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-input px-4 py-3 shrink-0">
-        <span className="font-display text-[11px] uppercase tracking-[0.14em] text-accent-light">
+        <span className="font-display text-[11px] uppercase tracking-[0.04em] text-accent-light">
           {isMaximized ? "Fullscreen Map View" : "Subject Property Location"}
         </span>
         <div className="flex items-center gap-4">
@@ -615,7 +610,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             {typeof primaryMarker?.lat === 'number' ? primaryMarker.lat.toFixed(5) : Number(primaryMarker?.lat || 0).toFixed(5)}, {typeof primaryMarker?.lng === 'number' ? primaryMarker.lng.toFixed(5) : Number(primaryMarker?.lng || 0).toFixed(5)}
           </span>
           <button
-            onClick={() => setIsMaximized(!isMaximized)}
+            onClick={onToggleMaximize}
             className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep cursor-pointer"
             title={isMaximized ? "Close Fullscreen" : "Maximize Map"}
           >
@@ -635,7 +630,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
       </div>
       <div className="w-full flex-1 relative z-0">
         <MapContainer
-          key={activeTheme}
+          key="leaflet-map-instance"
           center={center}
           zoom={15}
           style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
@@ -827,11 +822,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 rounded-2xl border border-white/[0.08] bg-bg-card/90 backdrop-blur-md p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300">
               <button
                 onClick={() => setMapMode("amenity")}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  mapMode === "amenity"
-                    ? "bg-cyan-500/20 text-[#22d3ee] border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.35)]"
-                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${mapMode === "amenity"
+                  ? "bg-cyan-500/20 text-[#22d3ee] border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.35)]"
+                  : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                  }`}
                 title="Amenities Layout"
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -840,11 +834,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
               <button
                 onClick={() => setMapMode("density")}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  mapMode === "density"
-                    ? "bg-amber-500/20 text-[#f59e0b] border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
-                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${mapMode === "density"
+                  ? "bg-amber-500/20 text-[#f59e0b] border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
+                  : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                  }`}
                 title="Built-Up Density & Congestion"
               >
                 <Building2 className="h-3.5 w-3.5" />
@@ -853,11 +846,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
               <button
                 onClick={() => setMapMode("roads")}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  mapMode === "roads"
-                    ? "bg-purple-500/20 text-[#a78bfa] border border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.35)]"
-                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${mapMode === "roads"
+                  ? "bg-purple-500/20 text-[#a78bfa] border border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.35)]"
+                  : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                  }`}
                 title="Road Infrastructure"
               >
                 <Milestone className="h-3.5 w-3.5" />
@@ -866,11 +858,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
               <button
                 onClick={() => setMapMode("cbd")}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  mapMode === "cbd"
-                    ? "bg-emerald-500/20 text-[#10b981] border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
-                    : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
-                }`}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${mapMode === "cbd"
+                  ? "bg-emerald-500/20 text-[#10b981] border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                  : "text-text-dim hover:text-text-primary hover:bg-white/5 border border-transparent"
+                  }`}
                 title="CBD Proximity"
               >
                 <Building className="h-3.5 w-3.5" />
@@ -891,7 +882,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
             <div className="absolute top-3 right-3 z-[1000] w-[340px] max-h-[85%] overflow-y-auto custom-scrollbar rounded-2xl border border-white/[0.08] bg-bg-card/95 backdrop-blur-xl p-5 shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col gap-4 text-xs text-left animate-in slide-in-from-top-3 duration-300">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
-                <span className="font-display text-[10px] font-black uppercase tracking-[0.2em] text-[#22d3ee] flex items-center gap-1.5">
+                <span className="font-display text-[10px] font-black uppercase tracking-[0.05em] text-[#22d3ee] flex items-center gap-1.5">
                   <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
                   Map Layer Settings
                 </span>
@@ -920,11 +911,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   <button
                     type="button"
                     onClick={() => setMapMode("amenity")}
-                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
-                      mapMode === "amenity"
-                        ? "border-cyan-500/40 bg-cyan-500/[0.08] shadow-[0_0_12px_rgba(6,182,212,0.15)]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
-                    }`}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${mapMode === "amenity"
+                      ? "border-cyan-500/40 bg-cyan-500/[0.08] shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+                      : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                      }`}
                   >
                     <div className="flex items-center gap-1.5">
                       <Sparkles className={`h-4 w-4 ${mapMode === "amenity" ? "text-cyan-400" : "text-text-dim group-hover:text-cyan-400 transition-colors"}`} />
@@ -937,11 +927,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   <button
                     type="button"
                     onClick={() => setMapMode("density")}
-                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
-                      mapMode === "density"
-                        ? "border-amber-500/40 bg-amber-500/[0.08] shadow-[0_0_12px_rgba(245,158,11,0.15)]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
-                    }`}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${mapMode === "density"
+                      ? "border-amber-500/40 bg-amber-500/[0.08] shadow-[0_0_12px_rgba(245,158,11,0.15)]"
+                      : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                      }`}
                   >
                     <div className="flex items-center gap-1.5">
                       <Building2 className={`h-4 w-4 ${mapMode === "density" ? "text-amber-400" : "text-text-dim group-hover:text-amber-400 transition-colors"}`} />
@@ -954,11 +943,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   <button
                     type="button"
                     onClick={() => setMapMode("roads")}
-                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
-                      mapMode === "roads"
-                        ? "border-purple-500/40 bg-purple-500/[0.08] shadow-[0_0_12px_rgba(168,85,247,0.15)]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
-                    }`}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${mapMode === "roads"
+                      ? "border-purple-500/40 bg-purple-500/[0.08] shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+                      : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                      }`}
                   >
                     <div className="flex items-center gap-1.5">
                       <Milestone className={`h-4 w-4 ${mapMode === "roads" ? "text-purple-400" : "text-text-dim group-hover:text-purple-400 transition-colors"}`} />
@@ -971,11 +959,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                   <button
                     type="button"
                     onClick={() => setMapMode("cbd")}
-                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${
-                      mapMode === "cbd"
-                        ? "border-emerald-500/40 bg-emerald-500/[0.08] shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
-                    }`}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-300 cursor-pointer relative overflow-hidden group ${mapMode === "cbd"
+                      ? "border-emerald-500/40 bg-emerald-500/[0.08] shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                      : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]"
+                      }`}
                   >
                     <div className="flex items-center gap-1.5">
                       <Building className={`h-4 w-4 ${mapMode === "cbd" ? "text-emerald-400" : "text-text-dim group-hover:text-emerald-400 transition-colors"}`} />
@@ -1005,11 +992,10 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
                               setSelectedCategories([...activeFilters, cat]);
                             }
                           }}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[9px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                            isChecked
-                              ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-400 font-extrabold shadow-sm"
-                              : "bg-white/[0.02] border-white/10 text-text-secondary hover:bg-white/[0.05] hover:text-white"
-                          }`}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[9px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${isChecked
+                            ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-400 font-extrabold shadow-sm"
+                            : "bg-white/[0.02] border-white/10 text-text-secondary hover:bg-white/[0.05] hover:text-white"
+                            }`}
                         >
                           <span className="shrink-0">{getCategoryIcon(cat, "h-3.5 w-3.5")}</span>
                           <span>{label}</span>
@@ -1094,35 +1080,40 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   );
 
   return (
-    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm">
-      <div className="panel-header-shell border-b border-border/60">
-        <div className="panel-title-shell">
+    <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm flex flex-col h-full">
+      <div className="panel-header-shell min-h-[68px] flex-nowrap border-b border-border/60">
+        <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <MapIcon className="h-5 w-5 text-accent" />
           </div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Visual Layer</h2>
         </div>
-        {/* Tab Switcher: Visual Layer | Report */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          <div className="flex items-center whitespace-nowrap rounded-xl border border-border/60 bg-bg-deep/60 p-0.5 gap-0.5">
             <button
               onClick={() => setPanelView("map")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${
-                panelView === "map"
-                  ? "bg-accent/20 text-accent shadow-[0_0_8px_rgba(34,211,238,0.15)] border border-accent/30"
-                  : "text-text-dim hover:text-text-secondary"
-              }`}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "map"
+                ? "bg-accent/20 text-accent shadow-[0_0_8px_rgba(34,211,238,0.15)] border border-accent/30"
+                : "text-text-dim hover:text-text-secondary"
+                }`}
             >
               <MapIcon className="h-3 w-3" />
               Visual Layer
             </button>
             <button
               onClick={() => setPanelView("report")}
-              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${
-                panelView === "report"
-                  ? "bg-accent-purple/20 text-accent-purple shadow-[0_0_8px_rgba(167,139,250,0.15)] border border-accent-purple/30"
-                  : "text-text-dim hover:text-text-secondary"
-              }`}
+              className={`relative flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${panelView === "report"
+                ? "bg-accent-purple/20 text-accent-purple shadow-[0_0_8px_rgba(167,139,250,0.15)] border border-accent-purple/30"
+                : "text-text-dim hover:text-text-secondary"
+                }`}
             >
               <FileText className="h-3 w-3" />
               Report
@@ -1133,137 +1124,128 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
               )}
             </button>
           </div>
-          <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${
-            panelView === "report" && valuationResult
-              ? "bg-green-500/10 border-green-500/30 text-green-400"
-              : markers.length > 0
-              ? "bg-accent/10 border-accent/20 text-accent"
-              : "bg-border/10 border-border/20 text-text-dim"
-          }`}>
-            {panelView === "report" ? (valuationResult ? "READY" : "PENDING") : (markers.length > 0 ? "LIVE MAP" : "WAITING")}
-          </div>
         </div>
       </div>
 
       {/* Report View */}
       {panelView === "report" ? (
-        <div className="flex-1 p-5 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 px-5 pb-5 pt-3 flex flex-col min-h-0 overflow-hidden">
           <ValuationReport valuationResult={valuationResult} />
         </div>
       ) : (
-        <div className="flex-1 p-5 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
-        {/* Inline controls panel relocated to floating settings overlay inside mapContent */}
+        <div className="flex-1 px-5 pb-5 pt-3 flex flex-col gap-5 overflow-y-auto custom-scrollbar relative z-0">
+          {/* Inline controls panel relocated to floating settings overlay inside mapContent */}
 
-        {markers.length > 0 ? (
-          <div className={isMaximized ? "hidden" : "relative w-full shrink-0"}>
-            {typeof window !== 'undefined' && isMaximized ? createPortal(mapContent, document.body) : mapContent}
-          </div>
-        ) : (
-          <div className="relative flex min-h-[400px] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-dashed border-border bg-bg-card shadow-inner">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.08),transparent_30%),radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.1),transparent_32%)]" />
-            <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:32px_32px]" />
-            <div className="relative z-10 max-w-sm px-8 py-10 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/25 text-accent-light shadow-md animate-pulse">
-                <Compass className="h-8 w-8 text-accent" />
-              </div>
-              <h3 className="font-display text-base font-bold uppercase tracking-[0.14em] text-text-primary">
-                Waiting For Coordinates
-              </h3>
-              <p className="mt-3.5 text-sm leading-6 text-text-secondary">
-                This panel follows the legacy frontend behavior. Once the backend sends coordinates or a map confirmation event, the location map will render here.
-              </p>
+          {markers.length > 0 ? (
+            <div className={`relative w-full flex flex-col ${isMaximized ? "flex-1 min-h-[500px]" : "shrink-0"}`}>
+              {mapContent}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="relative flex min-h-[400px] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-dashed border-border bg-bg-card shadow-inner">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.08),transparent_30%),radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.1),transparent_32%)]" />
+              <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:32px_32px]" />
+              <div className="relative z-10 max-w-sm px-8 py-10 text-center">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/25 text-accent-light shadow-md animate-pulse">
+                  <Compass className="h-8 w-8 text-accent" />
+                </div>
+                <h3 className="font-display text-base font-bold uppercase tracking-[0.04em] text-text-primary">
+                  Property Location Pending
+                </h3>
+                <p className="mt-3.5 text-sm leading-6 text-text-secondary">
+                  Waiting for the property coordinates to be confirmed.The map will load automatically once the location is available.
+                </p>
+              </div>
+            </div>
+          )}
 
-        {factorialData && (
-          isTableMaximized ? (
-            <>
-              <div className="rounded-2xl border border-border bg-bg-card p-4 shadow-panel shrink-0 opacity-40 flex items-center justify-between">
-                <span className="text-text-dim text-xs font-bold tracking-widest uppercase">Table is Fullscreen</span>
-                {mapMode === "amenity" && allAmenities.length > 0 && (
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
+          {factorialData && (
+            isTableMaximized ? (
+              <>
+                <div className="rounded-2xl border border-border bg-bg-card p-4 shadow-panel shrink-0 opacity-40 flex items-center justify-between">
+                  <span className="text-text-dim text-xs font-bold tracking-widest uppercase">Table is Fullscreen</span>
+                  {mapMode === "amenity" && allAmenities.length > 0 && (
+                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
                       ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
                       : "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/20"
-                    }`}>
-                    {allAmenities[0]?.source || "Local Database"}
-                  </span>
-                )}
-              </div>
-              {typeof window !== 'undefined' ? createPortal(
-                <div className="fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_0_100px_rgba(0,0,0,0.9)] flex flex-col">
-                  <div className="flex items-center justify-between border-b border-border bg-bg-input px-5 py-4 shrink-0">
-                    <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-accent-light">
-                      Fullscreen {mapMode === "amenity" ? "Amenities" : mapMode === "density" ? "Built-up Density" : mapMode === "cbd" ? "CBD Proximity" : "Road Infrastructure"} Table
-                    </span>
-                    <button
-                      onClick={() => setIsTableMaximized(false)}
-                      className="rounded-md bg-accent/10 px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
-                    >
-                      Close Fullscreen
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                    {mapMode === "amenity" ? (
-                      <AmenitiesTableContent allAmenities={allAmenities} radius={amenityRadius} markers={markers} />
-                    ) : mapMode === "density" ? (
-                      <DensityTableContent liveDensity={liveDensity} factorialData={factorialData} markers={markers} />
-                    ) : mapMode === "cbd" ? (
-                      <CbdTableContent cbdData={liveCbd} factorialData={factorialData} markers={markers} />
-                    ) : (
-                      <RoadsTableContent allRoads={liveRoads || []} radius={roadRadius} markers={markers} />
-                    )}
-                  </div>
-                </div>
-                , document.body) : null}
-            </>
-          ) : (
-            <div className="rounded-2xl border border-border bg-bg-card p-5 shadow-panel shrink-0 flex flex-col">
-              <div className="flex items-center justify-between mb-4 shrink-0 border-b border-border/40 pb-3">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-display text-sm font-bold uppercase tracking-[0.14em] text-text-primary flex items-center gap-2">
-                    <span className="text-accent shrink-0">
-                      {mapMode === "amenity" ? (
-                        <ClipboardList className="h-4.5 w-4.5" />
-                      ) : mapMode === "density" ? (
-                        <Building2 className="h-4.5 w-4.5" />
-                      ) : mapMode === "cbd" ? (
-                        <Building className="h-4.5 w-4.5" />
-                      ) : (
-                        <Milestone className="h-4.5 w-4.5" />
-                      )}
-                    </span>{" "}
-                    {mapMode === "amenity" ? `Amenities Found (${allAmenities.length})` : mapMode === "density" ? 'Built-Up Density & Congestion' : mapMode === "cbd" ? 'CBD Proximity' : 'Nearby Road Infrastructure'}
-                  </h3>
-                  {mapMode === "amenity" && allAmenities.length > 0 && (
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
-                        ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
-                        : "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/20"
                       }`}>
                       {allAmenities[0]?.source || "Local Database"}
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => setIsTableMaximized(true)}
-                  className="rounded-md bg-accent/10 px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
-                >
-                  Maximize
-                </button>
+                {typeof window !== 'undefined' ? createPortal(
+                  <div className="fixed inset-0 z-[9999] m-4 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_0_100px_rgba(0,0,0,0.9)] flex flex-col">
+                    <div className="flex items-center justify-between border-b border-border bg-bg-input px-5 py-4 shrink-0">
+                      <span className="font-display text-xs font-bold uppercase tracking-[0.04em] text-accent-light">
+                        Fullscreen {mapMode === "amenity" ? "Amenities" : mapMode === "density" ? "Built-up Density" : mapMode === "cbd" ? "CBD Proximity" : "Road Infrastructure"} Table
+                      </span>
+                      <button
+                        onClick={() => setIsTableMaximized(false)}
+                        className="rounded-md bg-accent/10 px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase text-accent hover:bg-accent hover:text-bg-deep transition cursor-pointer"
+                      >
+                        Close Fullscreen
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                      {mapMode === "amenity" ? (
+                        <AmenitiesTableContent allAmenities={allAmenities} radius={amenityRadius} markers={markers} />
+                      ) : mapMode === "density" ? (
+                        <DensityTableContent liveDensity={liveDensity} factorialData={factorialData} markers={markers} />
+                      ) : mapMode === "cbd" ? (
+                        <CbdTableContent cbdData={liveCbd} factorialData={factorialData} markers={markers} />
+                      ) : (
+                        <RoadsTableContent allRoads={liveRoads || []} radius={roadRadius} markers={markers} />
+                      )}
+                    </div>
+                  </div>
+                  , document.body) : null}
+              </>
+            ) : (
+              <div className="flex shrink-0 flex-col rounded-2xl border border-border bg-bg-card p-3 shadow-panel">
+                <div className="mb-3 flex shrink-0 flex-col gap-3 border-b border-border/40 pb-3">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <h3 className="font-display text-sm font-bold uppercase tracking-[0.04em] text-text-primary flex items-center gap-2">
+                      <span className="text-accent shrink-0">
+                        {mapMode === "amenity" ? (
+                          <ClipboardList className="h-4.5 w-4.5" />
+                        ) : mapMode === "density" ? (
+                          <Building2 className="h-4.5 w-4.5" />
+                        ) : mapMode === "cbd" ? (
+                          <Building className="h-4.5 w-4.5" />
+                        ) : (
+                          <Milestone className="h-4.5 w-4.5" />
+                        )}
+                      </span>{" "}
+                      {mapMode === "amenity" ? `Amenities Found (${allAmenities.length})` : mapMode === "density" ? 'Built-Up Density & Congestion' : mapMode === "cbd" ? 'CBD Proximity' : 'Nearby Road Infrastructure'}
+                    </h3>
+                    {mapMode === "amenity" && allAmenities.length > 0 && (
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${allAmenities[0]?.source === "Live OSM API"
+                        ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
+                        : "text-[#22d3ee] bg-[#22d3ee]/10 border-[#22d3ee]/20"
+                        }`}>
+                        {allAmenities[0]?.source || "Local Database"}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setIsTableMaximized(true)}
+                    className="inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-accent/10 px-3 text-[10px] font-bold uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep active:scale-[0.98] cursor-pointer"
+                  >
+                    Maximize Details
+                  </button>
+                </div>
+                <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                  {mapMode === "amenity" ? (
+                    <AmenitiesTableContent allAmenities={allAmenities} radius={amenityRadius} markers={markers} />
+                  ) : mapMode === "density" ? (
+                    <DensityTableContent sourceDensity={liveDensity} factorialData={factorialData} markers={markers} />
+                  ) : mapMode === "cbd" ? (
+                    <CbdTableContent cbdData={liveCbd} factorialData={factorialData} markers={markers} />
+                  ) : (
+                    <RoadsTableContent allRoads={liveRoads || []} radius={roadRadius} markers={markers} />
+                  )}
+                </div>
               </div>
-              <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2">
-                {mapMode === "amenity" ? (
-                  <AmenitiesTableContent allAmenities={allAmenities} radius={amenityRadius} markers={markers} />
-                ) : mapMode === "density" ? (
-                  <DensityTableContent sourceDensity={liveDensity} factorialData={factorialData} markers={markers} />
-                ) : mapMode === "cbd" ? (
-                  <CbdTableContent cbdData={liveCbd} factorialData={factorialData} markers={markers} />
-                ) : (
-                  <RoadsTableContent allRoads={liveRoads || []} radius={roadRadius} markers={markers} />
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       )}
     </section>
@@ -1384,7 +1366,7 @@ function CbdTableContent({ cbdData, factorialData, markers }) {
       {/* Combined summary table across all projects */}
       {allCbds.length > 0 && (
         <div className="flex flex-col gap-2 rounded-2xl border border-border/40 p-4 bg-bg-deep/30">
-          <h4 className="font-display text-[11px] uppercase tracking-[0.14em] text-text-dim border-b border-white/5 pb-2 mb-1 flex items-center gap-1.5">
+          <h4 className="font-display text-[11px] uppercase tracking-[0.04em] text-text-dim border-b border-white/5 pb-2 mb-1 flex items-center gap-1.5">
             <Building className="h-3.5 w-3.5 text-accent" /> All Identified CBDs — Summary
           </h4>
           <table className="w-full text-left text-[10px]">
@@ -1503,7 +1485,7 @@ function DensityTableContent({ liveDensity, factorialData, markers }) {
   );
 }
 
-function AmenitiesTableContent({ allAmenities, radius, markers }) {
+function AmenitiesTableContent({ allAmenities, radius, markers, showSource = false }) {
   if (allAmenities.length === 0) {
     return <p className="text-xs text-text-dim italic">No amenities found within {radius}m.</p>;
   }
@@ -1538,14 +1520,14 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
 
         return (
           <div key={project} className="flex flex-col gap-2 rounded-2xl border border-border bg-bg-deep/40 p-4">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-2">
-              <div className="flex items-center gap-2">
+            <div className="mb-2 flex flex-col gap-2 border-b border-white/5 pb-3">
+              <div className="flex min-w-0 items-center gap-2">
                 {isSubject ? <Star className="h-4.5 w-4.5 text-accent fill-accent" /> : <Building2 className="h-4.5 w-4.5 text-accent-purple" />}
-                <h4 className={`font-display text-sm uppercase tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
+                <h4 className={`min-w-0 break-words font-display text-xs uppercase leading-5 tracking-wider ${isSubject ? 'text-accent' : 'text-accent-purple'}`}>
                   {project} {isSubject && <span className="ml-2 rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">SUBJECT</span>}
                 </h4>
               </div>
-              <div className="flex flex-wrap items-center gap-2 max-w-[50%] justify-end">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {Object.entries(counts).map(([cat, count]) => (
                   <span key={cat} title={cat} className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold text-accent border border-accent/20">
                     {cat.charAt(0)}:{count}
@@ -1554,36 +1536,30 @@ function AmenitiesTableContent({ allAmenities, radius, markers }) {
               </div>
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-white/5 text-text-dim uppercase tracking-widest text-[9px]">
-                    <th className="pb-2 font-semibold">Name</th>
-                    <th className="pb-2 font-semibold">Category</th>
-                    <th className="pb-2 font-semibold text-center">Distance(m)</th>
-                    <th className="pb-2 text-right font-semibold">Source</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {amenities.map((a, i) => (
-                    <tr key={i} className="group hover:bg-white/[0.02] transition-colors">
-                      <td className="py-2.5 font-medium text-text-primary pr-4">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0">{getCategoryIcon(a.category, "h-3.5 w-3.5")}</span>
-                          <span>{a.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5">
-                        <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-text-secondary border border-white/5">
-                          {a.category.replace(/_/g, ' ')}
+            <div className="space-y-2">
+              {amenities.map((amenity, index) => (
+                <article key={`${amenity.name}-${index}`} className="rounded-xl border border-border/60 bg-bg-card p-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 shrink-0">{getCategoryIcon(amenity.category, "h-4 w-4")}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h5 className="min-w-0 break-words text-xs font-semibold leading-5 text-text-primary">
+                          {amenity.name || "Unnamed amenity"}
+                        </h5>
+                        <span className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 font-mono text-[9px] font-bold text-accent">
+                          {Math.round(amenity.distance_m)}m
                         </span>
-                      </td>
-                      <td className="py-2.5 text-center font-mono text-text-dim">{Math.round(a.distance_m)}m</td>
-                      <td className="py-2.5 text-right text-[10px] text-text-dim italic">{a.source || "N/A"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md border border-white/5 bg-white/5 px-2 py-0.5 text-[9px] capitalize text-text-secondary">
+                          {(amenity.mapped_type || amenity.category || "Other").replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[9px] italic text-text-dim">{amenity.source || "Unknown source"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         );

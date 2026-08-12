@@ -2,30 +2,30 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { buildWorkflowFromEvents } from "@/lib/valuation/workflow";
-import { 
-  Box, 
-  HelpCircle, 
-  GitBranch, 
-  MapPin, 
-  CheckCircle2, 
-  ClipboardList, 
-  Building2, 
-  Search, 
-  Database, 
-  Sparkles, 
-  Table, 
-  Brain, 
-  Flag, 
-  AlertTriangle, 
-  Bot, 
-  Zap, 
+import {
+  Box,
+  HelpCircle,
+  GitBranch,
+  MapPin,
+  CheckCircle2,
+  ClipboardList,
+  Building2,
+  Search,
+  Database,
+  Sparkles,
+  Table,
+  Brain,
+  Flag,
+  AlertTriangle,
+  Bot,
+  Zap,
   Hourglass,
   ShieldCheck,
   ChevronDown,
   SlidersHorizontal,
   FileText,
   FastForward
-} from "lucide-react";
+, Maximize2, Minimize2} from "lucide-react";
 
 // ── Stage metadata matching ACTUAL backend pipeline ───────────────────────────
 const STAGE_META = {
@@ -41,7 +41,7 @@ const STAGE_META = {
     icon: GitBranch,
     accent: "#fbbf24",
     accentGlow: "rgba(251,191,36,0.18)",
-    description: "Pipeline paused — villa detected, awaiting market vs cost approach decision",
+    description: "Valuation Pipeline paused — villa detected, awaiting market vs cost approach decision",
   },
   "Stage 2": {
     label: "Stage 2 — Workflow Planning",
@@ -51,14 +51,14 @@ const STAGE_META = {
     description: "Deterministic execution plan generated (market: 6 steps · cost: 8 steps)",
   },
   "Stage 3A": {
-    label: "Stage 3A — Comparable Identification",
+    label: "Stage 3A  — Comparable Discovery",
     icon: Search,
     accent: "#fb923c",
     accentGlow: "rgba(251,146,60,0.18)",
     description: "Agent web search × 2 passes → geocode → confidence scoring → 15km filter",
   },
   "Stage 3B": {
-    label: "Stage 3B — Listing & Transaction Fetch",
+    label: "Stage 3B— Market Data Collection",
     icon: Database,
     accent: "#f97316",
     accentGlow: "rgba(249,115,22,0.18)",
@@ -79,25 +79,25 @@ const STAGE_META = {
     description: "Compute avg rate per comparable project for Agent spatial adjustment",
   },
   "Stage 5": {
-    label: "Stage 5 — Agent Factoring & Final Valuation",
+    label: "Stage 5 — Valuation Synthesis",
     icon: Brain,
     accent: "#f472b6",
     accentGlow: "rgba(244,114,182,0.18)",
     description: "Agent spatial adjustments (amenity · road · density · CBD) → subject final rate",
   },
   "Complete": {
-    label: "Pipeline Complete",
+    label: "Valuation Pipeline Complete",
     icon: Flag,
     accent: "#34d399",
     accentGlow: "rgba(52,211,153,0.18)",
     description: "All stages finished — valuation output ready",
   },
   "Attention": {
-    label: "Pipeline Error",
+    label: "Valuation Pipeline Error",
     icon: AlertTriangle,
     accent: "#f87171",
     accentGlow: "rgba(248,113,113,0.18)",
-    description: "An error occurred in the pipeline",
+    description: "An error occurred in the Valuation Pipeline",
   },
 };
 
@@ -233,7 +233,7 @@ function SublocalityChipList({ items }) {
       {items.map((item) => (
         <span
           key={item}
-          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-info"
         >
           {item}
         </span>
@@ -249,22 +249,73 @@ function DetailRow({ label, value }) {
     ? toTitleCase(value)
     : value;
   return (
-    <div className="flex items-baseline gap-2 mt-1.5">
-      <span className="shrink-0 text-[9px] uppercase tracking-[0.14em] font-bold text-text-dim w-28">{label}</span>
-      <span className="text-[10px] leading-5 text-text-secondary break-words flex-1">{String(displayVal)}</span>
+    <div className="flex items-baseline gap-2 mt-1.5 min-w-0">
+      <span className="w-[38%] max-w-[112px] min-w-[80px] shrink-0 text-[9px] uppercase tracking-normal sm:tracking-[0.04em] font-bold text-text-dim sm:w-28 sm:shrink-0">{label}</span>
+      <span className="text-[10px] leading-5 text-text-secondary break-words flex-1 min-w-0">{String(displayVal)}</span>
     </div>
   );
 }
 
+function formatAmenitySummary(summary) {
+  if (!summary || summary === "—") return null;
+
+  let parsed = summary;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  let counts = parsed?.counts ?? parsed;
+  if (typeof counts === "string") {
+    try {
+      counts = JSON.parse(counts);
+    } catch {
+      counts = null;
+    }
+  }
+
+  if (!counts || typeof counts !== "object") return String(summary);
+
+  const entries = Object.entries(counts)
+    .map(([key, value]) => ({
+      label: String(key)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase()),
+      count: Number(value) || 0,
+    }))
+    .filter((item) => item.count > 0);
+
+  if (!entries.length) return null;
+
+  return entries.map((item) => `${item.label} - ${item.count}`).join("\n");
+}
+
 // ── Per-event structured detail panels ────────────────────────────────────────
+function countVisibleDroppedComparables(droppedComparables) {
+  if (!Array.isArray(droppedComparables) || droppedComparables.length === 0) return 0;
+  const seen = new Set();
+  let count = 0;
+  for (const d of droppedComparables) {
+    if (String(d?.drop_stage || "").toLowerCase().trim() === "dedup") continue;
+    const name = String(d?.project_name || "").toLowerCase().trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    count += 1;
+  }
+  return count;
+}
+
 function StepDetails({ step }) {
   const { data } = step;
   const type = data.eventType;
 
   let content = null;
-  try { content = JSON.parse(data.payload); } catch (_) {}
+  try { content = JSON.parse(data.payload); } catch (_) { }
 
-  const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5";
+  const boxClass = "mt-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2 sm:p-2.5";
 
   if (type === "entities" && content) {
     const sublocalityItems = getSublocalityItems(content);
@@ -362,13 +413,13 @@ function StepDetails({ step }) {
     // Map planned step_ids to their actual execution stage
     const STEP_STAGE_MAP = {
       comparable_identification: "→ Stage 3A",
-      rate_data_fetch:           "→ Stage 3B",
-      outlier_removal:           "→ Stage 3C",
-      Factorial_table:           "→ Stage 4",
-      factorial_table:           "→ Stage 4",
-      rate_derivation:           "→ Stage 5",
-      cost_inputs_collection:    "→ User Action",
-      cost_formula_calculation:  "→ Stage 5",
+      rate_data_fetch: "→ Stage 3B",
+      outlier_removal: "→ Stage 3C",
+      Factorial_table: "→ Stage 4",
+      factorial_table: "→ Stage 4",
+      rate_derivation: "→ Stage 5",
+      cost_inputs_collection: "→ User Action",
+      cost_formula_calculation: "→ Stage 5",
     };
     return (
       <div className={boxClass}>
@@ -400,14 +451,16 @@ function StepDetails({ step }) {
   if (type === "comparable_results" && content) {
     // Note: final_radius_km and iterations are always null in current backend
     // (s3_market_execution.py sets them to None). Only show total_found and source.
+    const shownCount = Array.isArray(content.comparables) ? content.comparables.length : (content.total_found || 0);
     const sourceLabel = {
       web: "Agent Web Search (gpt-4o-mini + web_search_preview × 2 passes)",
       db: "Internal Database",
-      both: "Agent Web Search + Internal Database",
+      both: "Agent Web Search + Transaction Database",
     }[content.comparable_source] || content.comparable_source || "Agent Web Search";
     return (
       <div className={`${boxClass} space-y-0.5`}>
-        <DetailRow label="Total Found" value={content.total_found} />
+        <DetailRow label="Total Found" value={shownCount} />
+        <DetailRow label="Dropped" value={countVisibleDroppedComparables(content.dropped_comparables)} />
         <DetailRow label="Source" value={sourceLabel} />
         <DetailRow label="Ranking" value="Confidence score (location 50% + category 30% + amenities 20%; plot searches also use fetched sub-localities)" />
       </div>
@@ -439,7 +492,7 @@ function StepDetails({ step }) {
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Project Name" value={content.project_name} />
         <DetailRow label="Total Transactions" value={content.total} />
-        <DetailRow label="Data Source" value="Internal DB (Government Registered)" />
+        <DetailRow label="Data Source" value="Transaction DB (Government Registered)" />
         <DetailRow label="Remarks" value="Official transaction values registered under government authorities. Represents actual closed agreement values." />
       </div>
     );
@@ -481,7 +534,7 @@ function StepDetails({ step }) {
 
   if (type === "factorial_results" && content) {
     const subjectProj = content.table?.find(p => p.is_subject);
-    
+
     let cbdText = null;
     if (subjectProj?.cbd_data && subjectProj.cbd_data.length > 0) {
       const nearest = subjectProj.cbd_data[0];
@@ -510,9 +563,11 @@ function StepDetails({ step }) {
       const counts = subjectProj.amenity_summary.counts || {};
       const parts = Object.entries(counts)
         .filter(([_, cnt]) => cnt > 0)
-        .map(([cat, cnt]) => `${cat}: ${cnt}`);
+        .map(([cat, cnt]) => `${String(cat)
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (match) => match.toUpperCase())} - ${cnt}`);
       if (parts.length > 0) {
-        amenityText = parts.join(", ");
+        amenityText = parts.join("\n");
       }
     }
 
@@ -523,10 +578,10 @@ function StepDetails({ step }) {
         <DetailRow label="Currency" value={content.currency} />
         <DetailRow label="Area Unit" value={content.area_unit} />
         <DetailRow label="Rate Basis" value={formatRateBasis(content.rate_basis)} />
-        
+
         {subjectProj && (roadText || cbdText || densityText || amenityText) && (
           <>
-            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.14em] font-bold text-cyan-400">
+            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.04em] font-bold text-cyan-400">
               Subject Geospatial Baseline
             </div>
             <DetailRow label="Road Type" value={roadText} />
@@ -539,7 +594,7 @@ function StepDetails({ step }) {
     );
   }
 
-  if (type === "factorial_analysis_result" && content) {
+  if ((type === "factorial_analysis_result" || type === "valuation_synthesis_result") && content) {
     const isPlotLand = content.rate_basis === "plot_land";
     const finalRate = isPlotLand
       ? (content.subject_final_plot_rate || content.subject_final_rate)
@@ -548,28 +603,28 @@ function StepDetails({ step }) {
     const rateRange = content.subject_rate_range;
     const valueRange = content.subject_value_range;
     const subjectRow = content.comparable_factoring_table?.find(r => r.role === "SUBJECT");
-    
+
     return (
       <div className={`${boxClass} space-y-0.5`}>
         <DetailRow label="Final Rate" value={finalRate ? `₹${Number(finalRate).toLocaleString()}/sqft` : null} />
         <DetailRow label="Adjusted Rate" value={content.subject_adjusted_rate ? `₹${Number(content.subject_adjusted_rate).toLocaleString()}/sqft` : null} />
-        <DetailRow label="Market Value" value={mktValue ? `₹${Number(mktValue).toLocaleString()}` : null} />
+        <DetailRow label="Property Value" value={mktValue ? `₹${Number(mktValue).toLocaleString()}` : null} />
         <DetailRow label="Methodology" value={content.methodology} />
         <DetailRow label="Rate Basis" value={formatRateBasis(content.rate_basis)} />
         <DetailRow label="Confidence" value={content.confidence} />
         {content.valuation_details?.total_net_adjustment != null && (
           <DetailRow label="Net Adjustment" value={`${content.valuation_details.total_net_adjustment > 0 ? "+" : ""}${content.valuation_details.total_net_adjustment}/sqft`} />
         )}
-        
+
         {subjectRow && (
           <>
-            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.14em] font-bold text-[#fb923c]">
+            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.04em] font-bold text-[#fb923c]">
               Subject Geospatial Baseline
             </div>
             <DetailRow label="Road Type" value={subjectRow.road_type} />
             <DetailRow label="Nearest CBD" value={subjectRow.cbd_name ? `${subjectRow.cbd_name} (${subjectRow.cbd_nearest_km} km)` : (subjectRow.cbd_nearest_km ? `${subjectRow.cbd_nearest_km} km` : null)} />
             <DetailRow label="Built Density" value={subjectRow.builtup_density_score != null ? `Score: ${subjectRow.builtup_density_score}/10` : null} />
-            <DetailRow label="Amenities" value={subjectRow.amenity_summary} />
+            <DetailRow label="Amenities" value={formatAmenitySummary(subjectRow.amenity_summary)} />
           </>
         )}
       </div>
@@ -603,7 +658,7 @@ function StepDetails({ step }) {
         <DetailRow label="Changed Fields" value={fields.join(", ") || "—"} />
         <DetailRow label="Approach" value={approach} />
         {newVal != null && <DetailRow label={`New ${sym} Value`} value={`₹${Number(newVal).toLocaleString()}`} />}
-        <DetailRow label="Pipeline Re-Run" value="Skipped — instant client-side update" />
+        <DetailRow label="Valuation Pipeline Re-Run" value="Skipped — instant client-side update" />
       </div>
     );
   }
@@ -627,24 +682,25 @@ function StepDetails({ step }) {
 // ── Icon Helper Mapper ────────────────────────────────────────────────────────
 function getStepIcon(type) {
   const map = {
-    entities:                 Box,
-    clarification_needed:     HelpCircle,
-    approach_choice_needed:   GitBranch,
-    map_confirmation:         MapPin,
-    extraction_verification:  CheckCircle2,
-    area_age_recalc:          Zap,
-    workflow:                 ClipboardList,
-    comparable_results:       Building2,
-    listing_results:          Search,
-    transaction_results:      Database,
-    incremental_listing:      FastForward,
-    cleaning_results:         Sparkles,
-    recalculate_results:      SlidersHorizontal,
-    factorial_results:        Table,
-    factorial_analysis_result:Brain,
-    cost_calculation_result:  ShieldCheck,
-    done:                     Flag,
-    error:                    AlertTriangle,
+    entities: Box,
+    clarification_needed: HelpCircle,
+    approach_choice_needed: GitBranch,
+    map_confirmation: MapPin,
+    extraction_verification: CheckCircle2,
+    area_age_recalc: Zap,
+    workflow: ClipboardList,
+    comparable_results: Building2,
+    listing_results: Search,
+    transaction_results: Database,
+    incremental_listing: FastForward,
+    cleaning_results: Sparkles,
+    recalculate_results: SlidersHorizontal,
+    factorial_results: Table,
+    factorial_analysis_result: Brain,
+    valuation_synthesis_result: Brain,
+    cost_calculation_result: ShieldCheck,
+    done: Flag,
+    error: AlertTriangle,
   };
   return map[type] || HelpCircle;
 }
@@ -673,8 +729,8 @@ function StepCard({ step, accent, index }) {
       <div className="flex flex-col items-center">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-[0_0_15px_rgba(255,255,255,0.02)] transition-all duration-300 relative group-hover:scale-105"
-          style={{ 
-            background: `linear-gradient(135deg, ${accent}18 0%, ${accent}05 100%)`, 
+          style={{
+            background: `linear-gradient(135deg, ${accent}18 0%, ${accent}05 100%)`,
             border: `1.5px solid ${accent}35`,
             boxShadow: `0 0 10px ${accent}12`,
             color: accent
@@ -687,9 +743,9 @@ function StepCard({ step, accent, index }) {
       </div>
 
       <div
-        className="mb-4 flex-1 rounded-2xl border p-4 futuristic-card relative overflow-hidden"
-        style={{ 
-          background: `linear-gradient(145deg, ${accent}09 0%, rgba(255,255,255,0.01) 100%)`, 
+        className="mb-4 flex-1 rounded-2xl border p-3 sm:p-4 futuristic-card relative overflow-hidden"
+        style={{
+          background: `linear-gradient(145deg, ${accent}09 0%, rgba(255,255,255,0.01) 100%)`,
           borderColor: `${accent}25`,
           "--stage-color": accent,
           "--stage-glow": `${accent}12`
@@ -697,20 +753,20 @@ function StepCard({ step, accent, index }) {
       >
         {/* Futuristic tech corner accent */}
         <div className="absolute top-0 right-0 h-8 w-8 pointer-events-none opacity-20"
-             style={{
-               background: `radial-gradient(circle at top right, ${accent}40 0%, transparent 70%)`
-             }} 
+          style={{
+            background: `radial-gradient(circle at top right, ${accent}40 0%, transparent 70%)`
+          }}
         />
-        
+
         <div className="flex items-start justify-between gap-3 relative z-10">
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-text-primary leading-tight flex-1 min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.04em] text-text-primary leading-tight flex-1 min-w-0">
             {step.data.title}
           </p>
           <span
-            className="shrink-0 rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.18em]"
-            style={{ 
-              background: `linear-gradient(90deg, ${accent}25, ${accent}10)`, 
-              color: accent, 
+            className="shrink-0 rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.05em]"
+            style={{
+              background: `linear-gradient(90deg, ${accent}25, ${accent}10)`,
+              color: accent,
               border: `1px solid ${accent}40`,
               boxShadow: `0 0 8px ${accent}20`
             }}
@@ -735,12 +791,12 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
   const { accent, accentGlow, label, icon: IconComponent, description } = meta;
 
   return (
-    <div 
-      className="rounded-2xl border overflow-hidden transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-md relative z-10" 
-      style={{ 
-        borderColor: `${accent}25`, 
-        background: open 
-          ? `linear-gradient(180deg, ${accent}06 0%, rgba(255,255,255,0.01) 100%)` 
+    <div
+      className="rounded-2xl border overflow-hidden transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-md relative z-10"
+      style={{
+        borderColor: `${accent}25`,
+        background: open
+          ? `linear-gradient(180deg, ${accent}06 0%, rgba(255,255,255,0.01) 100%)`
           : `${accent}03`
       }}
     >
@@ -751,8 +807,8 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
       >
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg relative transition-transform duration-300 active:scale-95 ${isActive ? 'animate-[pulse_1.5s_infinite]' : 'animate-[pulse_3s_infinite]'}`}
-          style={{ 
-            background: `linear-gradient(135deg, ${accent}25 0%, ${accent}08 100%)`, 
+          style={{
+            background: `linear-gradient(135deg, ${accent}25 0%, ${accent}08 100%)`,
             border: `1px solid ${accent}45`,
             boxShadow: open ? `0 0 15px ${accent}30` : 'none',
             color: accent
@@ -766,23 +822,23 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
             <span className="absolute -inset-[6px] rounded-2xl border border-accent/20 animate-ping opacity-45 pointer-events-none" style={{ borderColor: accent }} />
           )}
         </span>
-        
+
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: accent }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.05em]" style={{ color: accent }}>
             {label}
           </p>
           {description && (
             <p className="mt-1 text-[10px] leading-4 text-text-dim truncate font-medium">{description}</p>
           )}
         </div>
-        
+
         <div className="flex items-center gap-3.5 shrink-0">
           <span
             className="rounded-full px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest"
-            style={{ 
-              background: `linear-gradient(90deg, ${accent}22, ${accent}09)`, 
-              color: accent, 
-              border: `1px solid ${accent}35` 
+            style={{
+              background: `linear-gradient(90deg, ${accent}22, ${accent}09)`,
+              color: accent,
+              border: `1px solid ${accent}35`
             }}
           >
             {steps.length} STEP{steps.length !== 1 ? "S" : ""}
@@ -794,13 +850,13 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
         </div>
       </button>
 
-      <div 
+      <div
         className={`transition-all duration-300 ease-in-out overflow-hidden ${open ? 'max-h-[1500px] border-t border-white/[0.03] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}
       >
         <div className="px-4.5 pt-4 pb-2">
           <div className="mb-3 flex items-center gap-2">
             <div className="ml-4 h-px w-3" style={{ background: `${accent}40` }} />
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em]" style={{ color: accent }}>EXECUTION STEPS</span>
+            <span className="text-[8px] font-bold uppercase tracking-[0.05em]" style={{ color: accent }}>EXECUTION STEPS</span>
             <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${accent}20, transparent)` }} />
           </div>
           <div className="space-y-1">
@@ -819,11 +875,11 @@ function EmptyState() {
   const previewStages = [
     { label: "Stage 1 — Property Profiling", icon: Box, color: "#22d3ee" },
     { label: "Stage 2 — Workflow Planning", icon: ClipboardList, color: "#a78bfa" },
-    { label: "Stage 3A — Comparable Identification", icon: Search, color: "#fb923c" },
-    { label: "Stage 3B — Listing Fetch", icon: Database, color: "#f97316" },
+    { label: "Stage 3A  — Comparable Discovery", icon: Search, color: "#fb923c" },
+    { label: "Stage 3B— Market Data Collection", icon: Database, color: "#f97316" },
     { label: "Stage 3C — Data Cleaning", icon: Sparkles, color: "#60a5fa" },
     { label: "Stage 4 — Factorial Table", icon: Table, color: "#34d399" },
-    { label: "Stage 5 — Agent Factoring & Value", icon: Brain, color: "#f472b6" },
+    { label: "Stage 5 — Valuation Synthesis", icon: Brain, color: "#f472b6" },
   ];
 
   return (
@@ -840,7 +896,7 @@ function EmptyState() {
           <div className="absolute inset-0 rounded-full border border-dashed border-cyan-500/10 animate-spin" style={{ animationDuration: '8s' }} />
           <div className="absolute inset-2.5 rounded-full border border-cyan-500/15" />
           <div className="absolute inset-5 rounded-full border border-dashed border-cyan-500/5 animate-spin" style={{ animationDuration: '15s', animationDirection: 'reverse' }} />
-          <div 
+          <div
             className="absolute top-0 bottom-0 left-1/2 right-0 bg-gradient-to-r from-cyan-400/20 to-transparent origin-left pointer-events-none"
             style={{
               animation: 'radarRotation 4s linear infinite',
@@ -853,22 +909,22 @@ function EmptyState() {
           <Hourglass className="h-3.5 w-3.5 animate-pulse" />
         </span>
       </div>
-      <h3 className="font-display text-xs uppercase tracking-[0.18em] text-text-primary font-black">
+      <h3 className="font-display text-xs uppercase tracking-[0.05em] text-text-primary font-black">
         Valuation Pipeline Inactive
       </h3>
       <p className="mt-2 max-w-xs text-[10px] leading-5 text-text-dim font-medium">
         Enter a property valuation query to initialize the agentic orchestration.
       </p>
-      
+
       <div className="mt-8 w-full max-w-[320px] rounded-2xl border border-white/[0.04] bg-white/[0.01] p-4 backdrop-blur-md text-left">
-        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-text-dim mb-3">Orchestration Blueprint</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.05em] text-text-dim mb-3">Orchestration Blueprint</p>
         <div className="flex flex-col gap-2">
           {previewStages.map((s, i) => {
             const PreviewIcon = s.icon;
             return (
               <div key={i} className="flex items-center gap-2.5 rounded-xl border border-white/[0.05] bg-white/[0.01] px-3 py-2 transition hover:bg-white/[0.03]">
                 <PreviewIcon className="h-4 w-4 shrink-0" style={{ color: s.color }} />
-                <span className="text-[9px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
+                <span className="text-[9px] uppercase tracking-[0.04em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
               </div>
             );
           })}
@@ -879,7 +935,7 @@ function EmptyState() {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function WorkflowSectionNext({ events = [] }) {
+export default function WorkflowSectionNext({ events = [], isMaximized, onToggleMaximize }) {
   const workflow = useMemo(() => buildWorkflowFromEvents(events), [events]);
   const stages = useMemo(() => groupByStage(workflow.nodes), [workflow.nodes]);
   const isEmpty = stages.length === 0;
@@ -891,7 +947,7 @@ export default function WorkflowSectionNext({ events = [] }) {
     <section className="panel-shell border border-border/80 shadow-lg bg-bg-card/50 backdrop-blur-sm relative overflow-hidden flex flex-col h-full">
       {/* Background grid overlay */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.12),rgba(255,255,255,0))] pointer-events-none z-0" />
-      
+
       <style>{`
         .futuristic-card {
           backdrop-filter: blur(12px);
@@ -905,8 +961,8 @@ export default function WorkflowSectionNext({ events = [] }) {
       `}</style>
 
       {/* Header */}
-      <div className="panel-header-shell border-b border-border/60 shrink-0 relative z-10">
-        <div className="panel-title-shell">
+      <div className="panel-header-shell relative z-10 min-h-[68px] shrink-0 flex-wrap border-b border-border/60">
+        <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <Bot className="h-5 w-5 text-accent" />
           </div>
@@ -918,15 +974,20 @@ export default function WorkflowSectionNext({ events = [] }) {
             <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Agentic Execution Flow</h2>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
           {!isEmpty && (
-            <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
-              {stages.length} / 7 STAGES
+            <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-text-secondary">
+              5 MAIN STAGES
             </span>
           )}
-          <div className={`panel-pill text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>
-            {isEmpty ? "STANDBY" : "ACTIVE"}
-          </div>
         </div>
       </div>
 
@@ -935,7 +996,7 @@ export default function WorkflowSectionNext({ events = [] }) {
         {isEmpty ? (
           <EmptyState />
         ) : (
-          <div className="flex flex-col gap-4.5 p-4.5">
+          <div className="flex flex-col gap-4.5 px-4.5 pb-4.5 pt-0">
             {/* Progress Nodes - Aerospace / Telemetry Control Panel */}
             <div className="flex items-center justify-between gap-1 mb-2 bg-bg-deep/45 rounded-2xl border border-white/[0.04] p-4 backdrop-blur-md relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-pink-500/5 pointer-events-none" />
@@ -949,8 +1010,8 @@ export default function WorkflowSectionNext({ events = [] }) {
                         <div
                           className="h-[2px] flex-1 transition-all duration-700"
                           style={{
-                            background: active 
-                              ? `linear-gradient(90deg, ${STAGE_META[PROGRESS_STAGES[idx - 1].key]?.accent || "#ffffff"}, ${meta.accent})` 
+                            background: active
+                              ? `linear-gradient(90deg, ${STAGE_META[PROGRESS_STAGES[idx - 1].key]?.accent || "#ffffff"}, ${meta.accent})`
                               : "rgba(255,255,255,0.05)"
                           }}
                         />
@@ -991,8 +1052,8 @@ export default function WorkflowSectionNext({ events = [] }) {
             {/* Stage Accordions Container */}
             <div className="space-y-3.5 relative">
               {/* Vertical connector pipeline wire running behind accordion icons */}
-              <div 
-                className="absolute left-[38px] top-6 bottom-6 w-[2px] pointer-events-none z-0 hidden sm:block" 
+              <div
+                className="absolute left-[38px] top-6 bottom-6 w-[2px] pointer-events-none z-0 hidden sm:block"
                 style={{
                   background: `linear-gradient(180deg, rgba(34,211,238,0.15) 0%, rgba(167,139,250,0.15) 50%, rgba(244,114,182,0.15) 100%)`
                 }}

@@ -1263,19 +1263,25 @@ function getInteractiveRows(
   module2Output: Module2Output | null,
   retrievalOutput: VisualizationRetrievalState | null,
 ): Record<string, unknown>[] {
+  // Module 2 output takes highest priority — already fully processed
   const visualizationRows = module2Output?.visualization_ready_output?.records;
-  if (Array.isArray(visualizationRows)) {
+  if (Array.isArray(visualizationRows) && visualizationRows.length > 0) {
     return visualizationRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
   }
-  if (Array.isArray(module2Output?.analysis_ready_dataset)) {
+  if (Array.isArray(module2Output?.analysis_ready_dataset) && module2Output.analysis_ready_dataset.length > 0) {
     return module2Output.analysis_ready_dataset.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
   }
-  const retrievalRows = retrievalOutput?.resultSet?.rows;
-  if (Array.isArray(retrievalRows)) {
-    return retrievalRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
-  }
-  return [];
+
+  // Fallback: collect rows from ALL result sets returned by the retrieval agent
+  const allSets = retrievalOutput?.resultSets ?? (retrievalOutput?.resultSet ? [retrievalOutput.resultSet] : []);
+  if (allSets.length === 0) return [];
+
+  // Prefer the "combined" table produced by the backend (unified schema, all metrics)
+  const combined = allSets.find((rs) => rs.domain?.includes('combined'));
+  const source = combined?.rows?.length ? combined.rows : allSets.flatMap((rs) => rs.rows ?? []);
+  return source.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
 }
+
 
 function extractIntentLocations(moduleOutput: Module1IntentOutput | null) {
   const found: string[] = [];
