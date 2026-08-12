@@ -6722,7 +6722,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: abortRef.current.signal,
+        signal: abortRef?.current?.signal,
       });
 
       if (!response.ok || !response.body) {
