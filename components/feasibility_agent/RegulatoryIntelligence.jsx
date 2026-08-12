@@ -19,6 +19,9 @@ import {
   FaRoad,
   FaTableCells,
   FaArrowUpRightFromSquare,
+  FaRulerCombined,
+  FaSquareParking,
+  FaPercent,
 } from "react-icons/fa6";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -100,6 +103,33 @@ const REGULATORY_SECTIONS = [
     icon: FaTableCells,
     color: "#37474f",
     gradient: "linear-gradient(135deg, #37474f 0%, #263238 100%)",
+  },
+  {
+    id: "setbacks-margins",
+    title: "Setbacks and Margins",
+    question:
+      "What are the mandatory setback requirements (front, rear, and side margins) for the proposed development in Baner, Pune as per UDCPR/DCR?",
+    icon: FaRulerCombined,
+    color: "#5c6bc0",
+    gradient: "linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%)",
+  },
+  {
+    id: "parking-access",
+    title: "Parking and Access Requirements",
+    question:
+      "What are the parking requirements (number of spaces, dimensions, layout) and access/driveway regulations applicable to the proposed development in Baner, Pune?",
+    icon: FaSquareParking,
+    color: "#00796b",
+    gradient: "linear-gradient(135deg, #00796b 0%, #004d40 100%)",
+  },
+  {
+    id: "ground-coverage",
+    title: "Ground Coverage Percentage",
+    question:
+      "What is the maximum permissible ground coverage percentage (site coverage) for the proposed development in Baner, Pune as per local planning regulations?",
+    icon: FaPercent,
+    color: "#f57c00",
+    gradient: "linear-gradient(135deg, #f57c00 0%, #e65100 100%)",
   },
 ];
 
@@ -322,7 +352,10 @@ const RegulatoryIntelligence = () => {
         "airport-clearances": `Does the proposed development in ${village}, ${location}, ${country} require Airport Authority (AAI) or aviation clearance?`,
         "development-regulations": `Which Development Control Regulations (DCR/UDCPR/Local Planning Regulations) govern the proposed development in ${village}, ${location}, ${country}?`,
         "buffer-distance": `What is the minimum required buffer distance or setback from the abutting road in ${village}, ${location}, ${country}?`,
-        "fsi-sanctioned-details": `For given land parcel coordinates ${lat}, ${lng}, development category is ${formattedDevCat || 'Residential'}, Road Width is ${formattedRoadWidening || '9-12'}, planning authority is ${planningAuthority} in ${location}, ${country}, Provide the maximum permissible FSI also provide table for it?`
+        "fsi-sanctioned-details": `For given land parcel coordinates ${lat}, ${lng}, development category is ${formattedDevCat || 'Residential'}, Road Width is ${formattedRoadWidening || '9-12'}, planning authority is ${planningAuthority} in ${location}, ${country}, Provide the maximum permissible FSI also provide table for it?`,
+        "setbacks-margins": `What are the mandatory setback requirements (front, rear, and side margins) for the proposed development in ${village ? village + ', ' : ''}${location}, ${country} as per local planning authority is ${planningAuthority} ?`,
+        "parking-access": `What are the parking requirements (number of spaces, dimensions, layout) and access/driveway regulations applicable to the proposed development in ${village ? village + ', ' : ''}${location}, ${country}?`,
+        "ground-coverage": `What is the maximum permissible ground coverage percentage (site coverage) for the proposed development in ${village ? village + ', ' : ''}${location}, ${country} as per local planning authority is ${planningAuthority} ?`,
       };
 
       setEditableQuestions((prev) => {
