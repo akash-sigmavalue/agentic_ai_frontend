@@ -48,6 +48,7 @@ const LandIdentification = () => {
   const [currentArea, setCurrentArea] = useState(null);
 
   // Dynamic fetch states
+  const [planningAuthSource, setPlanningAuthSource] = useState("");
   const [villages, setVillages] = useState([]);
   const [villagesLoading, setVillagesLoading] = useState(false);
   const [villagesError, setVillagesError] = useState("");
@@ -166,6 +167,7 @@ const LandIdentification = () => {
     }
 
     setPlanningAdvisoryLoading(true);
+    setPlanningAuthSource("");
     setFormData(prev => ({ ...prev, planningAuthority: "" }));
 
     try {
@@ -187,6 +189,7 @@ const LandIdentification = () => {
           ...prev,
           planningAuthority: data.planningAdvisory,
         }));
+        setPlanningAuthSource(data.source || "openai");
       } else {
         alert("Could not fetch planning authority. Please try again.");
       }
@@ -1082,14 +1085,16 @@ const LandIdentification = () => {
                   Planning Authority 
                   {planningAdvisoryLoading && <span className="spinner-border spinner-border-sm text-primary ms-2" role="status"></span>}
                 </span>
-                <button 
-                  className="btn btn-sm btn-outline-primary py-0 px-2" 
-                  style={{ fontSize: '11px', borderRadius: '12px' }}
-                  onClick={fetchPlanningAuthority}
-                  disabled={planningAdvisoryLoading}
-                >
-                  Fetch
-                </button>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <button 
+                    className="btn btn-sm btn-outline-primary py-0 px-2" 
+                    style={{ fontSize: '11px', borderRadius: '12px' }}
+                    onClick={fetchPlanningAuthority}
+                    disabled={planningAdvisoryLoading}
+                  >
+                    Fetch
+                  </button>
+                </div>
               </div>
               <input 
                 type="text" 

@@ -726,7 +726,7 @@ const RegulatoryIntelligence = () => {
           style={{ fontWeight: 700 }}
         >
           <FaCircleInfo className="me-2" style={{ color: "#448C74" }} />
-          Regulatory Intelligence (Document Agent)
+          Regulatory & Document Intelligence
           <span
             className="ms-2"
             style={{

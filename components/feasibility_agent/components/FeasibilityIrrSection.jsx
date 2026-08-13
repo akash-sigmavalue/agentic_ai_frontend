@@ -63,7 +63,7 @@ const FeasibilityIrrSection = () => {
   const [cashInflowSimError, setCashInflowSimError] = useState(null);
   const [activeInflowScenario, setActiveInflowScenario] = useState("Most Probable");
   const [userCashflowRows, setUserCashflowRows] = useState([
-    { year: "Year 0", percentage: "" },
+    { year: "Year 0", percentage: "0" },
     { year: "Year 1", percentage: "" },
   ]);
 
@@ -554,7 +554,7 @@ const FeasibilityIrrSection = () => {
   }, [cashInflowSimResult]);
 
   const handleApplyInflowScenario = (scenarioOverride) => {
-    const scenario = scenarioOverride || activeInflowScenario;
+    const scenario = typeof scenarioOverride === "string" ? scenarioOverride : activeInflowScenario;
     if (!parsedInflowResult?.[scenario]?.length) return;
     let maxY = 1; const cf = {};
     parsedInflowResult[scenario].forEach(row => {
@@ -746,7 +746,7 @@ const FeasibilityIrrSection = () => {
 
             {/* Sub-scenario pills — clickable, mode-reactive */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {['Optimistic', 'Most Probable', 'Pessimistic', 'User Cashflow'].map(s => {
+              {(selectedSimMode === 'inflow' ? ['Optimistic', 'Most Probable', 'Pessimistic', 'User Cashflow'] : []).map(s => {
                 const isInflow = selectedSimMode === 'inflow';
                 const hasData = isInflow
                   ? (s === 'User Cashflow' ? true : parsedInflowResult?.[s]?.length > 0)
@@ -1024,22 +1024,28 @@ const FeasibilityIrrSection = () => {
                 return (
                   <tr key={row.key} className={hasError || isOver ? "irr-err-row" : ""}>
                     <td className="cl">
-                      <div className="fw-bold">{row.label}</div>
+                      <div className="fw-bold">
+                        {row.label}
+                        {row.key === "sales_cash_inflow" && (
+                          <FaInfoCircle title="Year 0 usually does not have any sales" className="ms-1 text-muted" size={12} />
+                        )}
+                      </div>
                       <div className="text-muted" style={{fontSize:"10px"}}>{currency} {formatCurrency(row.totalAmount)}</div>
                     </td>
                     {years.map(y => {
                       const pct = rowData[y] || 0;
                       const val = (pct / 100) * row.totalAmount;
+                      const isSalesInflowYear0 = row.key === "sales_cash_inflow" && y === 0;
                       return (
                         <td key={y} className="text-center p-2">
                           <div className="d-flex flex-column align-items-center gap-1">
                             <div className="input-group input-group-sm" style={{ width: "85px" }}>
-                              <input type="number" className="form-control" style={{fontSize:"10px", padding:"2px 4px", textAlign:"right"}} value={pct ? Math.round(pct * 100) / 100 : ""} onChange={e => handleDataEntry(row.key, y, "percent", e.target.value)} placeholder="0" min="0" max="100" step="0.01" disabled={row.totalAmount === 0} />
+                              <input type="number" className="form-control" style={{fontSize:"10px", padding:"2px 4px", textAlign:"right"}} value={pct ? Math.round(pct * 100) / 100 : ""} onChange={e => handleDataEntry(row.key, y, "percent", e.target.value)} placeholder="0" min="0" max="100" step="0.01" disabled={row.totalAmount === 0 || isSalesInflowYear0} />
                               <span className="input-group-text" style={{fontSize:"9px", padding:"2px 4px"}}>%</span>
                             </div>
                             <div className="input-group input-group-sm" style={{ width: "85px" }}>
                               <span className="input-group-text" style={{fontSize:"9px", padding:"2px 4px"}}>{currency}</span>
-                              <input type="number" className="form-control" style={{fontSize:"10px", padding:"2px 4px", textAlign:"right"}} value={val ? Math.round(val * 100) / 100 : ""} onChange={e => handleDataEntry(row.key, y, "value", e.target.value)} placeholder="0" step="0.01" disabled={row.totalAmount === 0} />
+                              <input type="number" className="form-control" style={{fontSize:"10px", padding:"2px 4px", textAlign:"right"}} value={val ? Math.round(val * 100) / 100 : ""} onChange={e => handleDataEntry(row.key, y, "value", e.target.value)} placeholder="0" step="0.01" disabled={row.totalAmount === 0 || isSalesInflowYear0} />
                             </div>
                           </div>
                         </td>
@@ -1646,7 +1652,10 @@ const FeasibilityIrrSection = () => {
                                     <thead style={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: '#f8fafc', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                                       <tr>
                                         <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Year</th>
-                                        <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>Sales %</th>
+                                        <th className="py-3 px-3 bg-white text-slate-600" style={{ fontWeight: 700, borderBottom: '2px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.5px' }}>
+                                          Sales %
+                                          <FaInfoCircle title="Year 0 usually does not have any sales" className="ms-1 text-muted" size={14} />
+                                        </th>
                                         <th className="py-3 px-3 bg-white" style={{ width: 60, borderBottom: '2px solid #cbd5e1' }}></th>
                                       </tr>
                                     </thead>
@@ -1655,7 +1664,7 @@ const FeasibilityIrrSection = () => {
                                         <tr key={idx} style={{ transition: 'background-color 0.2s' }}>
                                           <td className="fw-bold text-slate-700 bg-transparent">{row.year}</td>
                                           <td className="bg-transparent">
-                                            <input type="number" className="form-control form-control-sm mx-auto fw-bold text-primary shadow-sm" style={{ width:120, borderRadius: '8px', border: '1px solid #cbd5e1', textAlign: 'center' }} placeholder="e.g. 30" min="0" max="100" step="0.01" value={row.percentage} onChange={e => { const u=[...userCashflowRows]; u[idx]={...u[idx],percentage:e.target.value}; setUserCashflowRows(u); }} />
+                                            <input type="number" disabled={row.year === "Year 0" || row.year === "0"} className="form-control form-control-sm mx-auto fw-bold text-primary shadow-sm" style={{ width:120, borderRadius: '8px', border: '1px solid #cbd5e1', textAlign: 'center' }} placeholder="e.g. 30" min="0" max="100" step="0.01" value={row.percentage} onChange={e => { const u=[...userCashflowRows]; u[idx]={...u[idx],percentage:e.target.value}; setUserCashflowRows(u); }} />
                                           </td>
                                           <td className="bg-transparent">
                                             {userCashflowRows.length > 2 && <button className="btn btn-sm btn-outline-danger rounded-pill shadow-sm" onClick={() => setUserCashflowRows(p=>p.filter((_,i)=>i!==idx))}><FaTrashAlt size={12} /></button>}

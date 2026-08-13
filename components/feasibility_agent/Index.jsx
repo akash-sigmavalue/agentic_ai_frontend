@@ -693,7 +693,7 @@ import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
   { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
-  { id: "regulatory-intelligence", label: "Regulatory Intelligence", subtitle: "Zoning & rules", icon: FaCircleInfo },
+  { id: "regulatory-intelligence", label: "Regulatory & Document Intelligence", subtitle: "Zoning & rules", icon: FaCircleInfo },
   { id: "land-fsi", label: "Land And FSI Details", subtitle: "Web + document assisted", icon: FaMountainCity },
   { id: "market-analysis", label: "Market Research", subtitle: "Market trends", icon: FaChartLine },
   { id: "predictive-rate-sim", label: "Predictive Rate Simulator", subtitle: "Rate simulation", icon: FaChartBar },
@@ -977,10 +977,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="sidebar-openai-pill mb-4">
-            <span className="fw-bold text-dark" style={{fontSize: "14px"}}>OpenAI API</span>
-            <span className="badge rounded-pill config-badge">Configured</span>
-          </div>
+
 
           <ul className="sidebar-nav">
             {sidebarButtons.map((btn, index) => {
@@ -1141,7 +1138,7 @@ const Index = () => {
                 className="me-3"
                 style={{ color: "#448C74" }}
               />
-              Regulatory Intelligence
+              Regulatory & Document Intelligence
             </h1>
           </div>
 

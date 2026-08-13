@@ -1130,7 +1130,25 @@ const ProductMixTicketSize = () => {
     };
 
     const addProductMixRow = () => {
-        setProductMixRows(prev => [...prev, { id: Date.now(), assetClass: 'Residential', propertyType: 'Flat', unitMix: 'Studio', mode: 'Point', minArea: '', maxArea: '', pointArea: '', rate: '', allottedArea: '', totalInventory: null }]);
+        setProductMixRows(prev => {
+            const propType = 'Flat';
+            const list = getUnitTypesForProperty(propType, dbPropertyUnitMap, dbUnitTypes);
+            const defaultUnit = list.length > 1 ? list[1] : 'Studio';
+            
+            return [...prev, { 
+                id: Date.now(), 
+                assetClass: 'Residential', 
+                propertyType: propType, 
+                unitMix: defaultUnit, 
+                mode: 'Point', 
+                minArea: '', 
+                maxArea: '', 
+                pointArea: '', 
+                rate: '', 
+                allottedArea: '', 
+                totalInventory: null 
+            }];
+        });
     };
 
     const removeProductMixRow = (id) => {
