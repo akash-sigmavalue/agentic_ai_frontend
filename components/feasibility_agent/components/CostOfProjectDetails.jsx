@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt, FaFileUpload, FaTimes, FaChevronDown, FaChevronUp, FaRobot, FaCheckCircle } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaInfoCircle, FaSyncAlt, FaExternalLinkAlt, FaFileUpload, FaTimes, FaChevronDown, FaChevronUp, FaRobot, FaCheckCircle, FaCalculator } from 'react-icons/fa';
 import { apiUrl } from "@/lib/api-client";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import FinanceCostCalculatorModal from './FinanceCostCalculatorModal';
 
 const CostOfProjectDetails = () => {
     const [currency, setCurrency] = useState("INR");
@@ -16,6 +17,9 @@ const CostOfProjectDetails = () => {
     const [newFieldName, setNewFieldName] = useState("");
     const [newFieldDesc, setNewFieldDesc] = useState("");
     const [isFetchingConstruction, setIsFetchingConstruction] = useState(false);
+
+    // Finance Cost Calculator modal
+    const [isFinanceCostModalOpen, setIsFinanceCostModalOpen] = useState(false);
 
     // Document Agent - Approval Cost
     const [approvalDocModal, setApprovalDocModal] = useState(false);
@@ -1143,7 +1147,16 @@ const CostOfProjectDetails = () => {
                     ))}
                 </div>
                 <div className="col-md-6">
-                    {renderInput("Finance Cost", fixedInputs.financeCost, (v) => handleFixedInputChange('financeCost', v))}
+                    {renderInput("Finance Cost", fixedInputs.financeCost, (v) => handleFixedInputChange('financeCost', v), "0", (
+                        <button
+                            className="btn-fetch-pill"
+                            onClick={() => setIsFinanceCostModalOpen(true)}
+                            disabled={!activeScenarioId}
+                            title="Open Finance Cost Calculator"
+                        >
+                            <FaCalculator size={10} /> Calculate
+                        </button>
+                    ))}
                 </div>
                 <div className="col-md-6">
                     {renderInput("Miscellaneous Cost", fixedInputs.miscellaneousCost, (v) => handleFixedInputChange('miscellaneousCost', v))}
@@ -1503,6 +1516,16 @@ const CostOfProjectDetails = () => {
                     </div>
                 )
             )}
+
+            {/* Finance Cost Calculator Modal */}
+            <FinanceCostCalculatorModal
+                isOpen={isFinanceCostModalOpen}
+                onClose={() => setIsFinanceCostModalOpen(false)}
+                defaultCurrency={currency}
+                onApply={(totalInterest) => {
+                    handleFixedInputChange('financeCost', String(Math.round(totalInterest * 100) / 100));
+                }}
+            />
         </div>
     );
 };
