@@ -688,6 +688,7 @@ import LandIdentification from "./LandIdentification";
 import RegulatoryIntelligence from "./RegulatoryIntelligence";
 import ScenarioRevenueDashboard from "./components/ScenarioRevenueDashboard";
 import FeasibilityIrrSection from "./components/FeasibilityIrrSection";
+import { downloadFeasibilityPDF, checkFeasibilityCompleteness } from "./FeasibilityReport";
 import { apiUrl } from "@/lib/api-client";
 
 const sidebarButtons = [
@@ -807,7 +808,29 @@ const Index = () => {
     useState(true);
   const [showToolsDropdown, setShowToolsDropdown] = useState(false);
   const [isLandV2Active, setIsLandV2Active] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const routerLocation = useLocation();
+
+  const handleDownloadReport = async () => {
+    setReportError("");
+    const { complete, missing } = checkFeasibilityCompleteness();
+    if (!complete) {
+      setReportError(`Complete all sections before downloading the report. Missing: ${missing.join(", ")}`);
+      setTimeout(() => setReportError(""), 8000);
+      return;
+    }
+    setReportDownloading(true);
+    try {
+      await downloadFeasibilityPDF();
+    } catch (err) {
+      console.error("Report download error:", err);
+      setReportError("Failed to generate report. Please try again.");
+      setTimeout(() => setReportError(""), 5000);
+    } finally {
+      setReportDownloading(false);
+    }
+  };
 
   // Load saved data from localStorage on mount
   useEffect(() => {
@@ -1012,7 +1035,27 @@ const Index = () => {
 
         {/* Main Content Component */}
         <main className="content-area">
-          <div className="d-flex justify-content-end mb-4">
+          <div className="d-flex justify-content-end mb-4 gap-2 align-items-start">
+            {reportError && (
+              <div className="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2" style={{ fontSize: "13px", borderRadius: "10px", maxWidth: "500px" }}>
+                <FaCircleInfo />
+                <span>{reportError}</span>
+              </div>
+            )}
+            <button
+              className="btn btn-outline-success rounded-pill px-4 py-2 fw-semibold shadow-sm d-flex align-items-center gap-2"
+              onClick={handleDownloadReport}
+              disabled={reportDownloading}
+              title="Download Feasibility Report as PDF"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              {reportDownloading ? (
+                <span className="spinner-border spinner-border-sm" role="status" />
+              ) : (
+                <FaChartLine />
+              )}
+              {reportDownloading ? "Generating..." : "Download Report"}
+            </button>
             <div className="position-relative">
               <button
                 className="btn btn-outline-primary dropdown-toggle"
@@ -1983,7 +2026,7 @@ const Index = () => {
               className="col-12 text-center pt-4 fade-in-up"
               style={{ animationDelay: "0.9s" }}
             >
-              <div className="d-flex justify-content-center align-items-center gap-4">
+              <div className="d-flex justify-content-center align-items-center gap-4 flex-wrap">
                 <button
                   className="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-semibold shadow-sm card-hover-lift"
                   onClick={() => setShowDashboard(true)}
@@ -1997,6 +2040,19 @@ const Index = () => {
                 >
                   <FaUsers className="me-2" />
                   Developer Share
+                </button>
+                <button
+                  className="btn btn-lg rounded-pill px-5 py-3 fw-semibold shadow-sm card-hover-lift"
+                  style={{ background: "linear-gradient(135deg, #448C74, #2d6b55)", color: "#fff", border: "none" }}
+                  onClick={handleDownloadReport}
+                  disabled={reportDownloading}
+                >
+                  {reportDownloading ? (
+                    <span className="spinner-border spinner-border-sm me-2" role="status" />
+                  ) : (
+                    <FaDatabase className="me-2" />
+                  )}
+                  {reportDownloading ? "Generating Report..." : "Download Report"}
                 </button>
               </div>
             </div>
