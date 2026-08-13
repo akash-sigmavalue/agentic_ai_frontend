@@ -299,9 +299,6 @@ const WorkflowSectionDashboard: React.FC<WorkflowSectionProps> = ({
               <Maximize2 className="h-4 w-4" />
             </button>
           )}
-          <div className="bg-slate-200 px-3 py-1 rounded-lg border border-slate-300">
-             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">STANDBY</span>
-          </div>
         </div>
       </div>
 

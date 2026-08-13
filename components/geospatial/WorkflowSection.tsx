@@ -31,6 +31,9 @@ import {
   FolderKanban,
   Globe2,
   Handshake,
+  Home,
+  LayoutDashboard,
+  Lightbulb,
   LineChart,
   MapPinned,
   Maximize2,
@@ -91,7 +94,7 @@ interface AgentLayer {
   }[];
 }
 
-const agentLayers: AgentLayer[] = [
+const AGENT_LAYERS: AgentLayer[] = [
   {
     id: 'specialized',
     layer: 'Layer 1',
@@ -107,6 +110,7 @@ const agentLayers: AgentLayer[] = [
       { name: 'Market Research', icon: Search },
       { name: 'Physical AI', icon: Bot },
       { name: 'Feasibility', icon: ClipboardCheck, href: '/feasibility' },
+      { name: 'Value Creation Agent', icon: Lightbulb },
     ],
   },
   {
@@ -118,9 +122,9 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-indigo-600 border-indigo-100 bg-indigo-50',
     soft: 'from-indigo-500/10 to-sky-500/10',
     agents: [
-      { name: 'User Input (Docs/Images)', icon: FileText, href: '/user_input' },
-      { name: 'Web Data', icon: Globe2, href: '/web_search' },
-      { name: 'Data Retriever Agent', icon: Server, href: '/data_retrieval' },
+      { name: 'Document Intelligence Agent', icon: FileText, href: '/user_input' },
+      { name: 'Live Data Intelligence Agent', icon: Globe2, href: '/web_search' },
+      { name: 'Transaction Intelligence Agent', icon: Server, href: '/data_retrieval' },
       { name: 'Analytics', icon: LineChart },
       { name: 'Legal', icon: Scale },
     ],
@@ -134,10 +138,12 @@ const agentLayers: AgentLayer[] = [
     accent: 'text-violet-600 border-violet-100 bg-violet-50',
     soft: 'from-violet-500/10 to-fuchsia-500/10',
     agents: [
-      { name: 'UI Creation', icon: MonitorCog, href: '/ui_creation' },
+      { name: 'Portfolio Management Agent', icon: LayoutDashboard, href: '/portfolio-management' },
+      { name: 'Generative Interface', icon: MonitorCog, href: '/ui_creation' },
+      { name: 'Autonomous Relationship Agent', icon: Handshake },
+      { name: 'Autonomous Real Estate ERP Agent', icon: Building2 },
+      { name: 'Property Management Agent', icon: Home },
       { name: 'Solution Engine', icon: Settings },
-      { name: 'CRM', icon: Handshake },
-      { name: 'ERP', icon: Building2 },
       { name: 'Project Management', icon: FolderKanban },
     ],
   },

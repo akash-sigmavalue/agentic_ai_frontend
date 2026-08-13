@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useRef, useCallback } from "react";
-import { Building2, Bot, Map, Workflow } from "lucide-react";
+import { Building2, Bot, Map, Workflow, Maximize2 } from "lucide-react";
 
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
@@ -35,6 +35,14 @@ export default function HomePage() {
   const [leftWidth, setLeftWidth] = useState(33); // 33%
   const [middleWidth, setMiddleWidth] = useState(34); // 34%
   const containerRef = useRef(null);
+
+  // Maximize/Minimize state
+  const [maximizedPanels, setMaximizedPanels] = useState([]);
+  const toggleMaximize = useCallback((panelId) => {
+    setMaximizedPanels((prev) =>
+      prev.includes(panelId) ? prev.filter((id) => id !== panelId) : [...prev, panelId]
+    );
+  }, []);
 
   const handleEventsReset = useCallback((keepUpToEventType) => {
     setEvents((prev) => {
@@ -143,8 +151,8 @@ export default function HomePage() {
               onClick={() => setCompactPanel(panel)}
               aria-current={isActive ? "page" : undefined}
               className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-center transition active:scale-[0.97] ${isActive
-                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.25)]"
-                  : "text-text-dim hover:bg-bg-input hover:text-text-primary"
+                ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.25)]"
+                : "text-text-dim hover:bg-bg-input hover:text-text-primary"
                 }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -196,77 +204,124 @@ export default function HomePage() {
             {renderCompactNavigation("assistant")}
           </div>
 
-          <section ref={containerRef} className="flex flex-col min-[1071px]:flex-row h-full min-h-0 flex-1 gap-4 min-[1071px]:gap-0">
-            {/* Chat section */}
-            <div className="resize-panel-left w-full xl:h-full min-h-0 relative">
-              <WalletGate featureName="Valuation Agent">
-                <ChatSection
-                  onClear={() => {
-                    setEvents([]);
-                    setMarkers([]);
-                    setValuationResult(null);
-                  }}
-                  onEvent={(event) => setEvents((prev) => [...prev, event])}
-                  onEventsReset={handleEventsReset}
-                  onMarkersUpdate={(m) => {
-                    setMarkers(m);
-                  }}
-                  factorialData={factorialData}
-                  onValuationResult={setValuationResult}
-                  events={events}
-                  setEvents={setEvents}
-                />
-              </WalletGate>
-            </div>
+          <section ref={containerRef} className={`h-full min-h-0 flex-1 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'flex flex-col min-[1071px]:flex-row'} gap-4 min-[1071px]:gap-0`}>
 
-            {/* Splitter 1 */}
-            <div
-              onMouseDown={handleMouseDown(0)}
-              className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-            >
-              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+            {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
+            {maximizedPanels.length > 0 && (
+              <div className="hidden shrink-0 gap-4 min-[1071px]:flex">
+                {!maximizedPanels.includes("assistant") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Bot className="h-5 w-5 text-accent" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">AI Assistant</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("assistant")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+                {!maximizedPanels.includes("workflow") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Workflow className="h-5 w-5 text-success" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Agentic Execution Flow</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("workflow")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+                {!maximizedPanels.includes("visual") && (
+                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <Map className="h-5 w-5 text-accent-purple" />
+                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Visual Layer</span>
+                    </div>
+                    <button onClick={() => toggleMaximize("visual")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                      <Maximize2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Workflow Section */}
-            <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle w-full`}>
-              {renderCompactBrandHeader()}
-              <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
-              <div className="min-h-0 flex-1">
-                <WorkflowSection events={events} />
+            {/* Main Content Area */}
+            <div className={`min-h-0 min-w-0 flex-1 gap-4 ${maximizedPanels.length > 0 ? 'flex flex-col min-[1071px]:flex-row' : 'contents'}`}>
+              {/* Chat section */}
+              <div className={`resize-panel-left relative min-h-0 min-w-0 overflow-hidden h-full w-full min-[1071px]:h-full ${maximizedPanels.length > 0 ? (maximizedPanels.includes("assistant") ? 'flex-1' : 'hidden min-[1071px]:hidden') : ''}`}>
+                <WalletGate featureName="Valuation Agent">
+                  <ChatSection
+                    isMaximized={maximizedPanels.includes("assistant")}
+                    onToggleMaximize={() => toggleMaximize("assistant")}
+                    onClear={() => {
+                      setEvents([]);
+                      setMarkers([]);
+                      setValuationResult(null);
+                    }}
+                    onEvent={(event) => setEvents((prev) => [...prev, event])}
+                    onEventsReset={handleEventsReset}
+                    onMarkersUpdate={(m) => {
+                      setMarkers(m);
+                    }}
+                    factorialData={factorialData}
+                    onValuationResult={setValuationResult}
+                    events={events}
+                    setEvents={setEvents}
+                  />
+                </WalletGate>
               </div>
-            </div>
 
-            {/* Splitter 2 */}
-            <div
-              onMouseDown={handleMouseDown(1)}
-              className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-            >
-              <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              {/* Splitter 1 */}
+              <div
+                onMouseDown={handleMouseDown(0)}
+                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+              >
+                <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                </div>
               </div>
-            </div>
 
-            {/* Map Section */}
-            <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-right w-full`}>
-              {renderCompactBrandHeader()}
-              <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
-              <div className="min-h-0 flex-1">
-                <MapSection
-                  markers={markers}
-                  factorialData={factorialData}
-                  onDensityUpdate={setDensityUpdates}
-                  onAmenityUpdate={setAmenityUpdates}
-                  onRoadUpdate={setRoadUpdates}
-                  valuationResult={valuationResult}
-                />
+              {/* Workflow Section */}
+              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle`}>
+                {renderCompactBrandHeader()}
+                <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
+                <div className="min-h-0 flex-1">
+                  <WorkflowSection events={events} />
+                </div>
+              </div>
+
+              {/* Splitter 2 */}
+              <div
+                onMouseDown={handleMouseDown(1)}
+                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
+              >
+                <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                </div>
+              </div>
+
+              {/* Map Section */}
+              <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("visual") ? 'flex-1' : 'min-[1071px]:!hidden') : ''}`}>
+                {renderCompactBrandHeader()}
+                <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
+                <div className="min-h-0 flex-1">
+                  <MapSection
+                    markers={markers}
+                    factorialData={factorialData}
+                    onDensityUpdate={setDensityUpdates}
+                    onAmenityUpdate={setAmenityUpdates}
+                    onRoadUpdate={setRoadUpdates}
+                    valuationResult={valuationResult}
+                    isMaximized={maximizedPanels.includes("visual")}
+                    onToggleMaximize={() => toggleMaximize("visual")}
+                  />
+                </div>
               </div>
             </div>
           </section>
