@@ -2,7 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
+<<<<<<< HEAD
 import { Cpu, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon, Shield, Lock } from 'lucide-react';
+=======
+import { Cpu, Home, LayoutDashboard, Sun, Moon, LogOut, User as UserIcon, Shield, Lock, Zap, Menu, X } from 'lucide-react';
+>>>>>>> 5f226a56fbdc643ec47058b4357b0b9e18a5af0a
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import AgentListDropdown from './AgentListDropdown';
@@ -31,6 +35,7 @@ function getServerThemeSnapshot() {
   return false;
 }
 
+<<<<<<< HEAD
 const Header = () => {
   const isDark = React.useSyncExternalStore(
     subscribeToThemeChanges,
@@ -51,11 +56,23 @@ const Header = () => {
   React.useEffect(() => {
     const theme = localStorage.getItem('sigmavalue_theme') === 'dark';
   }, []);
+=======
+const THEME_STORAGE_KEY = 'sigmavalue_theme';
+const THEME_CHANGE_EVENT = 'sigmavalue-theme-change';
+
+const getThemeSnapshot = () => localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+const getServerThemeSnapshot = () => false;
+>>>>>>> 5f226a56fbdc643ec47058b4357b0b9e18a5af0a
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark-mode', isDark);
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+<<<<<<< HEAD
   }, [isDark]);
+=======
+    onStoreChange();
+  };
+>>>>>>> 5f226a56fbdc643ec47058b4357b0b9e18a5af0a
 
   React.useEffect(() => {
     let cancelled = false;

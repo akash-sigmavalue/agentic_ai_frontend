@@ -86,6 +86,7 @@ const agentLayers: AgentLayer[] = [
     accent: "text-indigo-600 border-indigo-100 bg-indigo-50",
     soft: "from-indigo-500/10 to-sky-500/10",
     agents: [
+<<<<<<< HEAD
       { name: "User Input (Docs/Images)", icon: FileText, href: "/user_input", key: 'user_input' },
       { name: "Web Data", icon: Globe2, href: "/web_search", key: 'web_search' },
       { name: "RERA Automation", icon: Building2, href: "/maharera_agent", key: 'rera_automation' },
@@ -93,6 +94,13 @@ const agentLayers: AgentLayer[] = [
       { name: "Data Retriever Agent", icon: Server, href: "/data_retrieval", key: 'data_retrieval' },
       { name: "Analytics", icon: LineChart, key: 'analytics' },
       { name: "Legal", icon: Scale, key: 'legal' },
+=======
+      { name: "Document Intelligence Agent", icon: FileText, href: "/user_input", key: "user_input" },
+      { name: "Live Data Intelligence Agent", icon: Globe2, href: "/web_search", key: "web_search" },
+      { name: "Transaction Intelligence Agent", icon: Server, href: "/data_retrieval", key: "data_retrieval" },
+      { name: "Analytics", icon: LineChart, key: "analytics" },
+      { name: "Legal", icon: Scale, key: "legal" },
+>>>>>>> 5f226a56fbdc643ec47058b4357b0b9e18a5af0a
     ],
   },
   {
