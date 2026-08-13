@@ -1302,8 +1302,8 @@ export default function DocumentReader() {
                 </button>
 
                 <div className="flex items-center gap-2">
-                  {/* Button 1: Process VLM (Hidden/Commented Out) */}
-                  {/* <div className="relative group">
+                  {/* Button 1: Process VLM */}
+                  <div className="relative group">
                     <button
                       type="button"
                       onClick={() => handleProcessWithMode("vlm")}
@@ -1318,11 +1318,12 @@ export default function DocumentReader() {
                       )}
                       {busy === "upload" && busyMode === "vlm" ? "Processing VLM..." : "Process VLM"}
                     </button>
+                    {/* Tooltip */}
                     <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col w-56 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl z-50 pointer-events-none">
                       <span className="font-bold text-purple-300">✨ Process VLM Mode</span>
                       <span className="text-slate-300">Specially designed for VLM (Visual Language Models). Processes visual documents such as images, floor plans, graphs, charts, and diagrams.</span>
                     </div>
-                  </div> */}
+                  </div>
 
                   {/* Button 2: Process Documents */}
                   <div className="relative group">
@@ -1659,8 +1660,8 @@ export default function DocumentReader() {
         </div>
       </div>
 
-      {/* VLM Verification & Guardrail Modal (Hidden/Commented Out) */}
-      {/* {vlmModal.isOpen && (
+      {/* VLM Verification & Guardrail Modal */}
+      {vlmModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 mb-3">
@@ -1731,7 +1732,7 @@ export default function DocumentReader() {
             </div>
           </div>
         </div>
-      )} */}
+      )}
     </main>
   );
 }
