@@ -216,7 +216,15 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
   };
 
   const handleApply = () => {
-    if (totals && onApply) onApply(totals.interest);
+    if (totals && onApply) {
+      onApply(totals.interest, {
+        loanAmount: parseFloat(loanAmountDisplay || "0") * (UNIT_MULTIPLIERS[loanAmountUnit] || 1),
+        annualInterest: parseFloat(annualInterest || "0"),
+        tenureMonths: parseInt(tenureMonths || "0"),
+        totalInterest: totals.interest,
+        currency
+      });
+    }
     onClose();
   };
 
