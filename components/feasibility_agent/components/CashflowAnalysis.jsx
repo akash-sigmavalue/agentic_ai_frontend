@@ -15,6 +15,20 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
   });
   const [irrLoading, setIrrLoading] = React.useState(false);
   const [irrError, setIrrError] = React.useState("");
+  
+  const [currency, setCurrency] = React.useState("₹");
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("Land Identification");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.currency) {
+          setCurrency(parsed.currency);
+        }
+      }
+    } catch {}
+  }, []);
 
   React.useEffect(() => {
     try {
@@ -208,13 +222,13 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
             <tbody>
               <tr>
                 <td>Cashflow</td>
-                {revenueData.yearly.map((val, i) => <td key={i}>₹{formatCurrency(val)}</td>)}
-                <td className="cf-text-green fw-bold">₹{formatCurrency(revenueData.total)}</td>
+                {revenueData.yearly.map((val, i) => <td key={i}>{currency}{formatCurrency(val)}</td>)}
+                <td className="cf-text-green fw-bold">{currency}{formatCurrency(revenueData.total)}</td>
               </tr>
               <tr>
                 <td>Total sales in flow</td>
-                {revenueData.yearly.map((val, i) => <td key={i}>₹{formatCurrency(val)}</td>)}
-                <td className="cf-text-green fw-bold">₹{formatCurrency(revenueData.total)}</td>
+                {revenueData.yearly.map((val, i) => <td key={i}>{currency}{formatCurrency(val)}</td>)}
+                <td className="cf-text-green fw-bold">{currency}{formatCurrency(revenueData.total)}</td>
               </tr>
             </tbody>
           </table>
@@ -236,14 +250,14 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
               {costData.rows.map((row, idx) => (
                 <tr key={idx}>
                   <td>{row.label}</td>
-                  {row.yearly.map((val, i) => <td key={i}>₹{formatCurrency(val)}</td>)}
-                  <td className="fw-bold" style={{ color: '#0f172a' }}>₹{formatCurrency(row.total)}</td>
+                  {row.yearly.map((val, i) => <td key={i}>{currency}{formatCurrency(val)}</td>)}
+                  <td className="fw-bold" style={{ color: '#0f172a' }}>{currency}{formatCurrency(row.total)}</td>
                 </tr>
               ))}
               <tr className="cf-total-row">
                 <td className="cf-text-dark-green">Cost of project</td>
-                {costData.yearlyTotals.map((val, i) => <td key={i} className="cf-text-dark-green">₹{formatCurrency(val)}</td>)}
-                <td className="cf-text-dark-green">₹{formatCurrency(costData.grandTotal)}</td>
+                {costData.yearlyTotals.map((val, i) => <td key={i} className="cf-text-dark-green">{currency}{formatCurrency(val)}</td>)}
+                <td className="cf-text-dark-green">{currency}{formatCurrency(costData.grandTotal)}</td>
               </tr>
             </tbody>
           </table>
@@ -264,8 +278,8 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
             <tbody>
               <tr className="cf-total-row">
                 <td>Net Cash Generation</td>
-                {netCashData.yearly.map((val, i) => <td key={i}>₹{formatCurrency(val)}</td>)}
-                <td>₹{formatCurrency(netCashData.total)}</td>
+                {netCashData.yearly.map((val, i) => <td key={i}>{currency}{formatCurrency(val)}</td>)}
+                <td>{currency}{formatCurrency(netCashData.total)}</td>
               </tr>
             </tbody>
           </table>

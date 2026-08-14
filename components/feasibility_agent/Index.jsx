@@ -956,7 +956,6 @@ const Index = () => {
         backgroundColor: theme === "dark" ? "#1e1e2f" : "#f3f5f9",
       }}
     >
-      <Header />
 
       <div className="dashboard-container">
         {/* Sidebar Nav Component */}
@@ -1239,9 +1238,10 @@ const Index = () => {
           /* Global Dashboard Container */
           .dashboard-container {
             display: flex;
-            height: calc(100vh - 72px); /* Adjust based on header height */
+            height: calc(100vh - 80px); /* Adjust based on global header height */
             width: 100%;
             overflow: hidden;
+            margin-top: 80px; /* Push down below the global fixed header */
           }
 
           /* Sidebar Styling */
