@@ -690,6 +690,7 @@ import ScenarioRevenueDashboard from "./components/ScenarioRevenueDashboard";
 import FeasibilityIrrSection from "./components/FeasibilityIrrSection";
 import { downloadFeasibilityPDF, checkFeasibilityCompleteness } from "./FeasibilityReport";
 import { apiUrl } from "@/lib/api-client";
+import SectionHero from "./components/SectionHero";
 
 const sidebarButtons = [
   { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
@@ -702,8 +703,8 @@ const sidebarButtons = [
   { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
   { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
   { id: "irr-calculator", label: "IRR Calculator", subtitle: "Cash inflow & IRR", icon: FaCalculator },
-  { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
-  { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
+  // { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
+  // { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
 ];
 
 const Index = () => {
@@ -1032,7 +1033,7 @@ const Index = () => {
 
         {/* Main Content Component */}
         <main className="content-area">
-          <div className="d-flex justify-content-end mb-4 gap-2 align-items-start">
+          <div className="d-none justify-content-end mb-4 gap-2 align-items-start">
             {reportError && (
               <div className="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2" style={{ fontSize: "13px", borderRadius: "10px", maxWidth: "500px" }}>
                 <FaCircleInfo />
@@ -1107,19 +1108,13 @@ const Index = () => {
           </div>
 
           {/* Section 0.1: Land Identification */}
-          <div
+          <SectionHero
             id="section-land-identification"
-            className="text-center mb-5 fade-in-up"
-            style={{ scrollMarginTop: "120px" }}
-          >
-            <h1 className="display-5 fw-bold text-dark mb-2">
-              <FaMountainCity
-                className="me-3"
-                style={{ color: "#448C74" }}
-              />
-              Land Identification
-            </h1>
-          </div>
+            title="Land Identification"
+            description="Identify and locate potential land parcels using advanced mapping and spatial intelligence."
+            icon={FaMountainCity}
+            illustration="/assets/illustrations/land-identification.jpg"
+          />
 
           <div className="row g-4 mb-5">
             <div className="col-12 fade-in-up stagger-1">
@@ -1128,19 +1123,13 @@ const Index = () => {
           </div>
 
           {/* Section 0.2: Regulatory Intelligence */}
-          <div
+          <SectionHero
             id="section-regulatory-intelligence"
-            className="text-center mb-5 fade-in-up"
-            style={{ scrollMarginTop: "120px" }}
-          >
-            <h1 className="display-5 fw-bold text-dark mb-2">
-              <FaCircleInfo
-                className="me-3"
-                style={{ color: "#448C74" }}
-              />
-              Regulatory & Document Intelligence
-            </h1>
-          </div>
+            title="Regulatory & Document Intelligence"
+            description="Leverage AI to automatically analyze, summarize, and extract insights from zoning, compliance, and regulatory documents."
+            icon={FaCircleInfo}
+            illustration="/assets/illustrations/regulatory-intelligence.jpg"
+          />
 
           <div className="row g-4 mb-5">
             <div className="col-12 fade-in-up stagger-1">
@@ -1149,19 +1138,13 @@ const Index = () => {
           </div>
 
           {/* Section 1: Land Details */}
-          <div
+          <SectionHero
             id="section-land-fsi"
-            className="text-center mb-5 fade-in-up"
-            style={{ scrollMarginTop: "120px" }}
-          >
-            <h1 className="display-5 fw-bold text-dark mb-2">
-              <FaMountainCity
-                className="me-3"
-                style={{ color: "#448C74" }}
-              />
-              Land And FSI Details
-            </h1>
-          </div>
+            title="Land And FSI Details"
+            description="View extracted details about plot boundary, land area, and building footprint for accurate floor space index projections."
+            icon={FaMountainCity}
+            illustration="/assets/illustrations/land-fsi.jpg"
+          />
 
           <style>{`
           /* Custom Select Scrollbar */
@@ -1394,7 +1377,7 @@ const Index = () => {
             flex: 1;
             overflow-y: auto;
             background-color: #f3f5f9;
-            padding: 40px;
+            padding: 20px 40px;
             scrollbar-width: thin;
             scrollbar-color: #cbd5e0 #edf2f7;
           }
@@ -1521,16 +1504,17 @@ const Index = () => {
 
             {/* Market Analysis Charts Section */}
             <div
-              id="section-market-analysis"
+              id="section-market-analysis-wrapper"
               className="col-12 fade-in-up stagger-4 mt-5"
               style={{ scrollMarginTop: "120px" }}
             >
-              <div className="text-center mb-4">
-                <h3 className="fw-bold text-dark mb-1">
-                  <FaChartLine className="me-3" style={{ color: "#448C74" }} />
-                  Market Research
-                </h3>
-              </div>
+              <SectionHero
+                id="section-market-analysis"
+                title="Market Research"
+                description="Analyze market trends, benchmark performance, and discover segmented growth opportunities across regions."
+                icon={FaChartLine}
+                illustration="/assets/illustrations/market-research.jpg"
+              />
               <div className="row g-3 mb-4">
                 <div className="col-md-4">
                   <a
@@ -1882,13 +1866,15 @@ const Index = () => {
                     className="col-12 fade-in-up stagger-5"
                     style={{ scrollMarginTop: "120px" }}
                   >
-                    <div className="text-center mb-4">
-                      <h1 className="display-5 fw-bold text-dark mb-1">
-                        <FaChartBar className="me-3" style={{ color: "#448C74" }} />
-                        Predictive Rate Simulator
-                      </h1>
-                    </div>
-                    <div className="row g-4 align-items-stretch mt-2">
+                    <SectionHero
+                      id="predictive-rate-sim-hero"
+                      title="Predictive Rate Simulator"
+                      description="Simulate current trends and model predictive market rates using historical indicators and risk factors."
+                      icon={FaChartBar}
+                      illustration="/assets/illustrations/predictive-rate.jpg"
+                      comingSoon={true}
+                    />
+                    <div className="row g-4 align-items-stretch mt-2 d-none">
                       <div className="col-12 d-flex">
                         <RateSim />
                       </div>
@@ -1896,16 +1882,13 @@ const Index = () => {
                   </div>
 
                   {/* Section 3: Building Design Header */}
-                  <div
+                  <SectionHero
                     id="section-building"
-                    className="text-center mb-4 mt-5 fade-in-up"
-                    style={{ scrollMarginTop: "120px" }}
-                  >
-                    <h1 className="display-5 fw-bold text-dark mb-1">
-                      <FaCompassDrafting className="me-3" style={{ color: "#448C74" }} />
-                      Product Mix Design
-                    </h1>
-                  </div>
+                    title="Product Mix Design"
+                    description="Strategically design your product mix architecture to maximize ecosystem value and drive sustainable growth."
+                    icon={FaCompassDrafting}
+                    illustration="/assets/illustrations/product-mix.jpg"
+                  />
 
 
 
@@ -1951,16 +1934,13 @@ const Index = () => {
   </div>
 </div> */}
 
-            <div
+            <SectionHero
               id="section-revenue-heading"
-              className="text-center mb-4 mt-5 fade-in-up"
-              style={{ scrollMarginTop: "120px" }}
-            >
-              <h1 className="display-5 fw-bold text-dark mb-1">
-                <FaHandHoldingDollar className="me-3" style={{ color: "#448C74" }} />
-                Revenue
-              </h1>
-            </div>
+              title="Revenue"
+              description="Forecast potential revenue and map exponential growth trajectories based on dynamic pricing models."
+              icon={FaHandHoldingDollar}
+              illustration="/assets/illustrations/revenue.jpg"
+            />
 
             {/* Scenario Revenue Dashboard */}
             <div className="col-12 fade-in-up stagger-7">
@@ -1968,16 +1948,13 @@ const Index = () => {
             </div>
 
 
-            <div
+            <SectionHero
               id="section-cost-heading"
-              className="text-center mb-4 mt-5 fade-in-up"
-              style={{ scrollMarginTop: "120px" }}
-            >
-              <h1 className="display-5 fw-bold text-dark mb-1">
-                <FaCalculator className="me-3" style={{ color: "#448C74" }} />
-                Cost Details
-              </h1>
-            </div>
+              title="Cost Details"
+              description="Analyze project budgets, manage ledger expenses, and track financial allocations comprehensively."
+              icon={FaCalculator}
+              illustration="/assets/illustrations/cost-details.jpg"
+            />
 
             {/* Cost Of Project Details (New Section) */}
             <div className="col-12 fade-in-up stagger-7 mb-4">
@@ -1986,32 +1963,26 @@ const Index = () => {
 
             {/* Old Cost Details sections removed */}
 
-            <div
+            <SectionHero
               id="section-means-finance-heading"
-              className="text-center mb-4 mt-5 fade-in-up"
-              style={{ scrollMarginTop: "120px" }}
-            >
-              <h1 className="display-5 fw-bold text-dark mb-1">
-                <FaHandHoldingDollar className="me-3" style={{ color: "#448C74" }} />
-                Means Of Finance
-              </h1>
-            </div>
+              title="Means Of Finance"
+              description="Explore funding sources, investment nodes, and smart financing options to secure capital."
+              icon={FaHandHoldingDollar}
+              illustration="/assets/illustrations/means-finance.jpg"
+            />
 
             <div className="col-12 fade-in-up stagger-7">
               <MeansOfFinance />
             </div>
 
             {/* IRR Calculator Section */}
-            <div
+            <SectionHero
               id="section-irr-calculator-heading"
-              className="text-center mb-4 mt-5 fade-in-up"
-              style={{ scrollMarginTop: "120px" }}
-            >
-              <h1 className="display-5 fw-bold text-dark mb-1">
-                <FaCalculator className="me-3" style={{ color: "#448C74" }} />
-                IRR Calculator
-              </h1>
-            </div>
+              title="IRR Calculator"
+              description="Calculate the Internal Rate of Return (IRR) to measure profitability and benchmark investment performance."
+              icon={FaCalculator}
+              illustration="/assets/illustrations/irr-calculator.jpg"
+            />
 
             <div id="section-irr-calculator" className="col-12 fade-in-up stagger-7 mb-4">
               <FeasibilityIrrSection />
@@ -2023,33 +1994,92 @@ const Index = () => {
               className="col-12 text-center pt-4 fade-in-up"
               style={{ animationDelay: "0.9s" }}
             >
-              <div className="d-flex justify-content-center align-items-center gap-4 flex-wrap">
+              <style>{`
+                .action-btn-blue {
+                  background: linear-gradient(135deg, #4d9cff 0%, #1e6bf2 100%);
+                  box-shadow: 0 10px 25px rgba(30, 107, 242, 0.4);
+                }
+                .action-btn-blue:hover {
+                  box-shadow: 0 15px 30px rgba(30, 107, 242, 0.5);
+                  transform: translateY(-3px);
+                }
+                .action-btn-blue .icon-circle { color: #1e6bf2; }
+
+                .action-btn-green {
+                  background: linear-gradient(135deg, #2ae095 0%, #0ebb7a 100%);
+                  box-shadow: 0 10px 25px rgba(14, 187, 122, 0.4);
+                }
+                .action-btn-green:hover {
+                  box-shadow: 0 15px 30px rgba(14, 187, 122, 0.5);
+                  transform: translateY(-3px);
+                }
+                .action-btn-green .icon-circle { color: #0ebb7a; }
+
+                .action-btn-teal {
+                  background: linear-gradient(135deg, #378b94 0%, #176067 100%);
+                  box-shadow: 0 10px 25px rgba(23, 96, 103, 0.4);
+                }
+                .action-btn-teal:hover {
+                  box-shadow: 0 15px 30px rgba(23, 96, 103, 0.5);
+                  transform: translateY(-3px);
+                }
+                .action-btn-teal .icon-circle { color: #176067; }
+
+                .action-btn-base {
+                  border: none;
+                  color: white;
+                  padding: 8px 32px 8px 8px;
+                  border-radius: 50px !important;
+                  font-weight: 600;
+                  font-size: 15px;
+                  display: flex;
+                  align-items: center;
+                  gap: 16px;
+                  transition: all 0.3s ease;
+                }
+                .action-btn-base .icon-circle {
+                  background: white;
+                  width: 44px;
+                  height: 44px;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 18px;
+                }
+              `}</style>
+              <div className="d-flex justify-content-center align-items-center gap-4 flex-wrap pb-5">
                 <button
-                  className="btn btn-primary btn-lg rounded-pill px-5 py-3 fw-semibold shadow-sm card-hover-lift"
+                  className="action-btn-base action-btn-blue d-none"
                   onClick={() => setShowDashboard(true)}
                 >
-                  <FaChartLine className="me-2" />
+                  <div className="icon-circle">
+                    <FaChartLine />
+                  </div>
                   View Dashboard
                 </button>
                 <button
-                  className="btn btn-success btn-lg rounded-pill px-5 py-3 fw-semibold shadow-sm card-hover-lift"
+                  className="action-btn-base action-btn-green d-none"
                   onClick={() => navigate("/ownership-check")}
                 >
-                  <FaUsers className="me-2" />
+                  <div className="icon-circle">
+                    <FaUsers />
+                  </div>
                   Developer Share
                 </button>
                 <button
-                  className="btn btn-lg rounded-pill px-5 py-3 fw-semibold shadow-sm card-hover-lift"
-                  style={{ background: "linear-gradient(135deg, #448C74, #2d6b55)", color: "#fff", border: "none" }}
+                  className="action-btn-base action-btn-teal"
                   onClick={handleDownloadReport}
                   disabled={reportDownloading}
                 >
-                  {reportDownloading ? (
-                    <span className="spinner-border spinner-border-sm me-2" role="status" />
-                  ) : (
-                    <FaDatabase className="me-2" />
-                  )}
-                  {reportDownloading ? "Generating Report..." : "Download Report"}
+                  <div className="icon-circle">
+                    {reportDownloading ? (
+                      <span className="spinner-border spinner-border-sm" role="status" />
+                    ) : (
+                      <FaDatabase />
+                    )}
+                  </div>
+                  {reportDownloading ? "Generating..." : "Download Report"}
                 </button>
               </div>
             </div>

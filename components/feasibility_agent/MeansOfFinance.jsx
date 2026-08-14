@@ -1089,7 +1089,7 @@ const MeansOfFinance = () => {
 
       {/* Main Means of Finance Panel */}
       <div className="mean-finance-panel">
-        <div className="mean-finance-panel-header">
+        <div className="mean-finance-panel-header d-none">
           <div>
             <div className="mean-finance-panel-eyebrow">Selected Section</div>
             <h1 className="mean-finance-panel-title">Means Of Finance</h1>

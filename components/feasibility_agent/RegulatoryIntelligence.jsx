@@ -716,7 +716,7 @@ const RegulatoryIntelligence = () => {
     <div className="card shadow-sm border-0 rounded-3 mb-4">
       {/* Header */}
       <div
-        className="card-header border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+        className="card-header border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2 d-none"
         style={{
           background: "linear-gradient(135deg, #f8faf9 0%, #edf5f1 100%)",
         }}

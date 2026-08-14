@@ -385,8 +385,8 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                         <th>Month No.</th>
                         <th>Disbursement{unitSuffix}</th>
                         <th>Repayment{unitSuffix}</th>
-                        <th>Interest % (Ann. ROI)</th>
                         <th>Outstanding Loan{unitSuffix}</th>
+                        <th>Interest % (Ann. ROI)</th>
                         <th>Total Interest{unitSuffix}</th>
                       </tr>
                     </thead>
@@ -396,9 +396,9 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                           <td style={{fontWeight:700,color:"#475569",textAlign:"center"}}>{row.period}</td>
                           <td><input className="fcc-table-input" type="number" min={0} step={0.1} value={row.disbursement_amount} onChange={e=>handleCellChange(idx,"disbursement_amount",e.target.value)}/></td>
                           <td><input className="fcc-table-input" type="number" min={0} step={0.1} value={row.repayment_amount} onChange={e=>handleCellChange(idx,"repayment_amount",e.target.value)}/></td>
+                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.outstanding_loan)}</td>
                           <td><input className="fcc-table-input" type="number" min={0} max={100} step={0.01} value={row.interest_percent} onChange={e=>handleCellChange(idx,"interest_percent",e.target.value)}/></td>
-                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.outstanding_loan, 4)}</td>
-                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.total_interest, 4)}</td>
+                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.total_interest)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -409,9 +409,9 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
               {totals && (
                 <div style={{display:"flex",gap:16,flexWrap:"wrap",marginTop:10,padding:"10px 16px",background:"#1e293b",borderRadius:10,color:"#fff",fontSize:12,fontWeight:600}}>
                   <span style={{fontWeight:800}}>TABLE TOTAL</span>
-                  <span style={{marginLeft:"auto"}}>Disbursement: {currency} {fmt(totals.disbursement,4)}</span>
-                  <span>Repayment: {currency} {fmt(totals.entered_repayment,4)}</span>
-                  <span style={{color:"#fbbf24"}}>Total Interest: {currency} {fmt(totals.interest,4)}</span>
+                  <span style={{marginLeft:"auto"}}>Disbursement: {currency} {fmt(totals.disbursement)}</span>
+                  <span>Repayment: {currency} {fmt(totals.entered_repayment)}</span>
+                  <span style={{color:"#fbbf24"}}>Total Interest: {currency} {fmt(totals.interest)}</span>
                 </div>
               )}
             </div>
@@ -470,7 +470,7 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                             <th>{detailView==="Monthly"?"Month":detailView==="Quarterly"?"Quarter":"Year"}</th>
                             <th>Opening Principal Balance</th>
                             <th>Disbursement Amount</th>
-                            <th>Principal Before Repayment</th>
+                            <th>Outstanding Loan{unitSuffix}</th>
                             <th>Scheduled Principal Repayment</th>
                             <th>Annual Interest Rate (%)</th>
                             <th>Total Interest</th>
@@ -481,13 +481,13 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                           {displayedDetail.map((row,i)=>(
                             <tr key={i}>
                               <td style={{fontWeight:700,color:"#475569",textAlign:"center"}}>{row[periodKey]??row.period}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.opening_balance,4)}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.disbursement_amount,4)}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.debt_before_repayment,4)}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.entered_repayment,4)}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.interest_pct_annual_roi,4)}%</td>
-                              <td style={{textAlign:"right",fontWeight:700,color:"#f59e0b"}}>{fmt(row.total_interest,4)}</td>
-                              <td style={{textAlign:"right"}}>{fmt(row.closing_balance,4)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.opening_balance)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.disbursement_amount)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.debt_before_repayment)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.entered_repayment)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.interest_pct_annual_roi)}%</td>
+                              <td style={{textAlign:"right",fontWeight:700,color:"#f59e0b"}}>{fmt(row.total_interest)}</td>
+                              <td style={{textAlign:"right"}}>{fmt(row.closing_balance)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -506,11 +506,6 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
               {loadingXls?<span className="fcc-spinner" style={{borderTopColor:"#495057",borderColor:"rgba(73,80,87,.2)"}}/>:<FaDownload size={12}/>} Download Excel
             </button>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              {totals && (
-                <div style={{fontSize:13,color:"#64748b"}}>
-                  Total Interest: <strong style={{color:"#1e293b",fontSize:15}}>{currency} {fmt(totals.interest)}</strong>
-                </div>
-              )}
               <button className="fcc-btn-secondary" onClick={onClose}>Cancel</button>
               <button className="fcc-btn-primary" onClick={handleApply} disabled={!totals}>
                 <FaCheckCircle size={13}/> Apply Finance Cost

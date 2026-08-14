@@ -1889,7 +1889,7 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
         }
       `}</style>
 
-      <div className="land-details-header">
+      <div className="land-details-header d-none">
         <div>
           <div className="land-details-eyebrow">Selected Section</div>
           <h1 className="land-details-title">Land and FSI Details</h1>

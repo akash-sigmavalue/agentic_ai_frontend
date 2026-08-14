@@ -800,7 +800,7 @@ const UnitDesignStructure = ({ onSave, calculationMode, setCalculationMode }) =>
                     }
                 }
             `}</style>
-            <div className="unit-design-header">
+            <div className="unit-design-header d-none">
                 <div className="unit-design-eyebrow">Selected Section</div>
                 <h2 className="unit-design-title">Unit Design Structure</h2>
             </div>

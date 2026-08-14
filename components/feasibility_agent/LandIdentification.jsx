@@ -827,7 +827,7 @@ const LandIdentification = () => {
       `}</style>
       <div className="land-section-card">
         {/* Header Section */}
-        <div className="d-flex justify-content-between align-items-center mb-4 pb-2">
+        <div className="d-flex justify-content-between align-items-center mb-4 pb-2 d-none">
           <div>
             <div className="land-header-subtitle">Selected Section</div>
             <h2 className="land-header-title">Land Identification</h2>

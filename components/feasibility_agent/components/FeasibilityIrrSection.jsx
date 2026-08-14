@@ -626,7 +626,7 @@ const FeasibilityIrrSection = () => {
       `}</style>
 
       {/* Section Header */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 pb-3 border-bottom">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 pb-3 border-bottom d-none">
         <div>
           <div className="fw-bold text-uppercase mb-1" style={{ fontSize: "11px", letterSpacing: "1px", color: "#94a3b8" }}>Cashflow Analysis</div>
           <h4 className="fw-bold mb-1" style={{ color: "#0f172a", margin: 0 }}>IRR Calculator</h4>
