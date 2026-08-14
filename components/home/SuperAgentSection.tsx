@@ -59,6 +59,17 @@ const AGENTS: Agent[] = [
   { name: 'Value Creation Agent', description: 'Continuously identifies actions that can increase the value, income and commercial potential of any land, property, project or portfolio.', capabilities: ['Highest-and-best-use discovery', 'Redevelopment potential', 'Rental enhancement', 'Space-use optimisation', 'Approval and FSI opportunities', 'Renovation recommendations', 'Pricing improvement', 'Refinancing and exit strategies'], cta: 'Discover Your Property’s Untapped Value →', icon: Lightbulb, iconClass: 'bg-amber-600/15 text-amber-500', position: '' },
 ];
 
+const ACTIVE_AGENT_NAMES = new Set([
+  'Valuation Agent',
+  'Land & GIS Agent',
+  'Market Research Agent',
+  'Feasibility Agent',
+  'Document Intelligence Agent',
+  'Transaction Intelligence Agent',
+  'Portfolio Management agent',
+  'Connector Agent',
+]);
+
 type SuperAgentSectionProps = {
   isDark?: boolean;
 };
@@ -144,6 +155,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
   };
 
   const activeAgent = AGENTS[activeIndex];
+  const isActiveAgentAvailable = ACTIVE_AGENT_NAMES.has(activeAgent.name);
   const ActiveIcon = activeAgent.icon;
 
   return (
@@ -338,7 +350,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                   key={`mini-${idx}`}
                   type="button"
                   aria-label={`Show ${agent.name}`}
-                  className={`max-md:hidden absolute flex min-h-[62px] w-[148px] max-lg:w-[132px] cursor-pointer items-start gap-[9px] rounded-[12px] p-[10px_11px] backdrop-blur-[14px] origin-center will-change-transform transition-all duration-300 ${
+                  className={`max-md:hidden absolute flex min-h-[66px] w-[164px] max-lg:w-[154px] cursor-pointer items-start gap-[9px] rounded-[12px] p-[10px_11px] backdrop-blur-[14px] origin-center will-change-transform transition-all duration-300 ${
                     isDark
                       ? 'border border-[rgba(126,110,255,0.32)] bg-[linear-gradient(145deg,rgba(14,23,61,0.95),rgba(7,13,40,0.82))] text-[#f7f8ff] shadow-[0_14px_38px_rgba(0,0,0,0.35)] hover:border-[rgba(160,140,255,0.85)] hover:shadow-[0_18px_48px_rgba(0,0,0,0.45),0_0_26px_rgba(100,75,255,0.35)]'
                       : 'border border-[#c7d2fe] bg-white/90 text-slate-800 shadow-[0_10px_30px_rgba(79,70,229,0.10)] hover:border-indigo-400 hover:bg-white hover:shadow-[0_16px_40px_rgba(79,70,229,0.18)]'
@@ -366,12 +378,16 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                   >
                     <AgentIcon className="h-[14px] w-[14px]" />
                   </div>
-                  <div className="min-w-0 pt-[1px]">
+                  <div className="min-w-0 flex-1 pt-[1px]">
                     <div className={`line-clamp-2 text-[10.5px] font-[800] leading-[1.18] ${isDark ? 'text-[#f4f5ff]' : 'text-slate-800'}`}>
                       {agent.name}
                     </div>
-                    <div className={`mt-[5px] inline-flex text-[8px] font-[850] tracking-[0.09em] ${isDark ? 'text-[#00ddb8]' : 'text-emerald-600'}`}>
-                      ● ACTIVE
+                    <div className={`mt-[5px] inline-flex whitespace-nowrap text-[8px] font-[850] tracking-[0.04em] ${
+                      ACTIVE_AGENT_NAMES.has(agent.name)
+                        ? isDark ? 'text-[#00ddb8]' : 'text-emerald-600'
+                        : isDark ? 'text-amber-300' : 'text-amber-600'
+                    }`}>
+                      {ACTIVE_AGENT_NAMES.has(agent.name) ? '● ACTIVE' : '● IN DEVELOPMENT'}
                     </div>
                   </div>
                 </button>
@@ -405,6 +421,13 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                 >
                   <PillIcon className="h-3.5 w-3.5" />
                   <span className="whitespace-nowrap">{agent.name}</span>
+                  <span className={`whitespace-nowrap text-[8px] font-black tracking-[0.08em] ${
+                    ACTIVE_AGENT_NAMES.has(agent.name)
+                      ? isDark ? 'text-emerald-300' : 'text-emerald-600'
+                      : isDark ? 'text-amber-300' : 'text-amber-600'
+                  }`}>
+                    {ACTIVE_AGENT_NAMES.has(agent.name) ? 'ACTIVE' : 'IN DEVELOPMENT'}
+                  </span>
                 </button>
               );
             })}
@@ -539,18 +562,30 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
 
             {/* Footer */}
             <div className={`flex items-center justify-between gap-[10px] border-t px-[20px] py-[12px] ${isDark ? 'border-[rgba(129,115,202,0.14)]' : 'border-slate-100'}`}>
-              <div className={`inline-flex items-center gap-[6px] text-[9px] font-[900] tracking-[0.1em] ${isDark ? 'text-[#08e0bc]' : 'text-emerald-600'}`}>
-                <span className={`h-[6px] w-[6px] rounded-full ${isDark ? 'bg-[#05deb9] shadow-[0_0_10px_rgba(5,222,185,0.90)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]'}`} />
-                ACTIVE
+              <div className={`inline-flex items-center gap-[6px] text-[9px] font-[900] tracking-[0.1em] ${
+                isActiveAgentAvailable
+                  ? isDark ? 'text-[#08e0bc]' : 'text-emerald-600'
+                  : isDark ? 'text-amber-300' : 'text-amber-600'
+              }`}>
+                <span className={`h-[6px] w-[6px] rounded-full ${
+                  isActiveAgentAvailable
+                    ? isDark ? 'bg-[#05deb9] shadow-[0_0_10px_rgba(5,222,185,0.90)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]'
+                    : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]'
+                }`} />
+                {isActiveAgentAvailable ? 'ACTIVE' : 'IN DEVELOPMENT'}
               </div>
               <button
-                className={`inline-flex items-center gap-[6px] rounded-[10px] px-[16px] py-[9px] text-[12px] font-bold text-white shadow-md transition-all hover:-translate-y-[2px] ${
-                  isDark
+                type="button"
+                disabled={!isActiveAgentAvailable}
+                className={`inline-flex items-center gap-[6px] rounded-[10px] px-[16px] py-[9px] text-[12px] font-bold text-white shadow-md transition-all ${
+                  !isActiveAgentAvailable
+                    ? 'cursor-not-allowed bg-slate-500/70 opacity-70'
+                    : isDark
                     ? 'bg-gradient-to-br from-[#7660ff] to-[#9278ff] shadow-[0_6px_20px_rgba(104,82,255,0.38)] hover:shadow-[0_12px_28px_rgba(104,82,255,0.52)]'
                     : 'bg-gradient-to-br from-[#4f46e5] to-[#6366f1] shadow-[0_6px_20px_rgba(79,70,229,0.30)] hover:shadow-[0_12px_28px_rgba(79,70,229,0.45)]'
                 }`}
               >
-                Open agent →
+                {isActiveAgentAvailable ? 'Open agent →' : 'In development'}
               </button>
             </div>
           </div>
