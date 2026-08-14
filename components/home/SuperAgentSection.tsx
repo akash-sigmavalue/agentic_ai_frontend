@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AppWindow,
@@ -69,6 +70,17 @@ const ACTIVE_AGENT_NAMES = new Set([
   'Portfolio Management agent',
   'Connector Agent',
 ]);
+
+const ACTIVE_AGENT_ROUTES: Record<string, string> = {
+  'Valuation Agent': '/valuation',
+  'Land & GIS Agent': '/visualization_agent',
+  'Market Research Agent': '/market_research',
+  'Feasibility Agent': '/feasibility',
+  'Document Intelligence Agent': '/user_input',
+  'Transaction Intelligence Agent': '/data_retrieval',
+  'Portfolio Management agent': '/portfolio-management',
+  'Connector Agent': '/connector',
+};
 
 type SuperAgentSectionProps = {
   isDark?: boolean;
@@ -156,6 +168,7 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
 
   const activeAgent = AGENTS[activeIndex];
   const isActiveAgentAvailable = ACTIVE_AGENT_NAMES.has(activeAgent.name);
+  const activeAgentRoute = ACTIVE_AGENT_ROUTES[activeAgent.name];
   const ActiveIcon = activeAgent.icon;
 
   return (
@@ -574,19 +587,26 @@ export default function SuperAgentSection({ isDark: propIsDark }: SuperAgentSect
                 }`} />
                 {isActiveAgentAvailable ? 'ACTIVE' : 'IN DEVELOPMENT'}
               </div>
-              <button
-                type="button"
-                disabled={!isActiveAgentAvailable}
-                className={`inline-flex items-center gap-[6px] rounded-[10px] px-[16px] py-[9px] text-[12px] font-bold text-white shadow-md transition-all ${
-                  !isActiveAgentAvailable
-                    ? 'cursor-not-allowed bg-slate-500/70 opacity-70'
-                    : isDark
-                    ? 'bg-gradient-to-br from-[#7660ff] to-[#9278ff] shadow-[0_6px_20px_rgba(104,82,255,0.38)] hover:shadow-[0_12px_28px_rgba(104,82,255,0.52)]'
-                    : 'bg-gradient-to-br from-[#4f46e5] to-[#6366f1] shadow-[0_6px_20px_rgba(79,70,229,0.30)] hover:shadow-[0_12px_28px_rgba(79,70,229,0.45)]'
-                }`}
-              >
-                {isActiveAgentAvailable ? 'Open agent →' : 'In development'}
-              </button>
+              {isActiveAgentAvailable && activeAgentRoute ? (
+                <Link
+                  href={activeAgentRoute}
+                  className={`inline-flex items-center gap-[6px] rounded-[10px] px-[16px] py-[9px] text-[12px] font-bold text-white shadow-md transition-all hover:-translate-y-[2px] ${
+                    isDark
+                      ? 'bg-gradient-to-br from-[#7660ff] to-[#9278ff] shadow-[0_6px_20px_rgba(104,82,255,0.38)] hover:shadow-[0_12px_28px_rgba(104,82,255,0.52)]'
+                      : 'bg-gradient-to-br from-[#4f46e5] to-[#6366f1] shadow-[0_6px_20px_rgba(79,70,229,0.30)] hover:shadow-[0_12px_28px_rgba(79,70,229,0.45)]'
+                  }`}
+                >
+                  Open agent →
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex cursor-not-allowed items-center gap-[6px] rounded-[10px] bg-slate-500/70 px-[16px] py-[9px] text-[12px] font-bold text-white opacity-70 shadow-md"
+                >
+                  In development
+                </button>
+              )}
             </div>
           </div>
           {/* ── End active agent card ── */}
