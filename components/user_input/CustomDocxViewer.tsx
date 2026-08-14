@@ -52,10 +52,11 @@ export default function CustomDocxViewer({ url, searchText }: CustomDocxViewerPr
 
     const walker = document.createTreeWalker(containerRef.current, NodeFilter.SHOW_TEXT, null);
     const nodesToReplace: { node: Node; parent: Node }[] = [];
-    let node;
+    let node: Node | null = null;
     while ((node = walker.nextNode())) {
-      if (node.nodeValue && searchWords.some(w => node.nodeValue!.toLowerCase().includes(w))) {
-        nodesToReplace.push({ node, parent: node.parentNode! });
+      const curr = node;
+      if (curr && curr.nodeValue && searchWords.some(w => curr.nodeValue!.toLowerCase().includes(w))) {
+        nodesToReplace.push({ node: curr, parent: curr.parentNode! });
       }
     }
 
@@ -69,7 +70,7 @@ export default function CustomDocxViewer({ url, searchText }: CustomDocxViewerPr
     });
 
     if (firstHighlight) {
-      firstHighlight.scrollIntoView({ behavior: "smooth", block: "center" });
+      (firstHighlight as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [searchText, htmlContent]);
 

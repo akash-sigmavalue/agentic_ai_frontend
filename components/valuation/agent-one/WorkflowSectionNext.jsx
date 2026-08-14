@@ -25,7 +25,7 @@ import {
   SlidersHorizontal,
   FileText,
   FastForward
-} from "lucide-react";
+, Maximize2, Minimize2} from "lucide-react";
 
 // ── Stage metadata matching ACTUAL backend pipeline ───────────────────────────
 const STAGE_META = {
@@ -233,7 +233,7 @@ function SublocalityChipList({ items }) {
       {items.map((item) => (
         <span
           key={item}
-          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-info"
+          className="inline-flex items-center rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-info"
         >
           {item}
         </span>
@@ -250,10 +250,47 @@ function DetailRow({ label, value }) {
     : value;
   return (
     <div className="flex items-baseline gap-2 mt-1.5 min-w-0">
-      <span className="w-[38%] max-w-[112px] min-w-[80px] shrink-0 text-[9px] uppercase tracking-normal sm:tracking-[0.14em] font-bold text-text-dim sm:w-28 sm:shrink-0">{label}</span>
+      <span className="w-[38%] max-w-[112px] min-w-[80px] shrink-0 text-[9px] uppercase tracking-normal sm:tracking-[0.04em] font-bold text-text-dim sm:w-28 sm:shrink-0">{label}</span>
       <span className="text-[10px] leading-5 text-text-secondary break-words flex-1 min-w-0">{String(displayVal)}</span>
     </div>
   );
+}
+
+function formatAmenitySummary(summary) {
+  if (!summary || summary === "—") return null;
+
+  let parsed = summary;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  let counts = parsed?.counts ?? parsed;
+  if (typeof counts === "string") {
+    try {
+      counts = JSON.parse(counts);
+    } catch {
+      counts = null;
+    }
+  }
+
+  if (!counts || typeof counts !== "object") return String(summary);
+
+  const entries = Object.entries(counts)
+    .map(([key, value]) => ({
+      label: String(key)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (match) => match.toUpperCase()),
+      count: Number(value) || 0,
+    }))
+    .filter((item) => item.count > 0);
+
+  if (!entries.length) return null;
+
+  return entries.map((item) => `${item.label} - ${item.count}`).join("\n");
 }
 
 // ── Per-event structured detail panels ────────────────────────────────────────
@@ -526,9 +563,11 @@ function StepDetails({ step }) {
       const counts = subjectProj.amenity_summary.counts || {};
       const parts = Object.entries(counts)
         .filter(([_, cnt]) => cnt > 0)
-        .map(([cat, cnt]) => `${cat}: ${cnt}`);
+        .map(([cat, cnt]) => `${String(cat)
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (match) => match.toUpperCase())} - ${cnt}`);
       if (parts.length > 0) {
-        amenityText = parts.join(", ");
+        amenityText = parts.join("\n");
       }
     }
 
@@ -542,7 +581,7 @@ function StepDetails({ step }) {
 
         {subjectProj && (roadText || cbdText || densityText || amenityText) && (
           <>
-            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.14em] font-bold text-cyan-400">
+            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.04em] font-bold text-cyan-400">
               Subject Geospatial Baseline
             </div>
             <DetailRow label="Road Type" value={roadText} />
@@ -579,13 +618,13 @@ function StepDetails({ step }) {
 
         {subjectRow && (
           <>
-            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.14em] font-bold text-[#fb923c]">
+            <div className="mt-3 border-t border-border/40 pt-2 text-[9px] uppercase tracking-[0.04em] font-bold text-[#fb923c]">
               Subject Geospatial Baseline
             </div>
             <DetailRow label="Road Type" value={subjectRow.road_type} />
             <DetailRow label="Nearest CBD" value={subjectRow.cbd_name ? `${subjectRow.cbd_name} (${subjectRow.cbd_nearest_km} km)` : (subjectRow.cbd_nearest_km ? `${subjectRow.cbd_nearest_km} km` : null)} />
             <DetailRow label="Built Density" value={subjectRow.builtup_density_score != null ? `Score: ${subjectRow.builtup_density_score}/10` : null} />
-            <DetailRow label="Amenities" value={subjectRow.amenity_summary} />
+            <DetailRow label="Amenities" value={formatAmenitySummary(subjectRow.amenity_summary)} />
           </>
         )}
       </div>
@@ -720,11 +759,11 @@ function StepCard({ step, accent, index }) {
         />
 
         <div className="flex items-start justify-between gap-3 relative z-10">
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-text-primary leading-tight flex-1 min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.04em] text-text-primary leading-tight flex-1 min-w-0">
             {step.data.title}
           </p>
           <span
-            className="shrink-0 rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.18em]"
+            className="shrink-0 rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.05em]"
             style={{
               background: `linear-gradient(90deg, ${accent}25, ${accent}10)`,
               color: accent,
@@ -785,7 +824,7 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
         </span>
 
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: accent }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.05em]" style={{ color: accent }}>
             {label}
           </p>
           {description && (
@@ -817,7 +856,7 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
         <div className="px-4.5 pt-4 pb-2">
           <div className="mb-3 flex items-center gap-2">
             <div className="ml-4 h-px w-3" style={{ background: `${accent}40` }} />
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em]" style={{ color: accent }}>EXECUTION STEPS</span>
+            <span className="text-[8px] font-bold uppercase tracking-[0.05em]" style={{ color: accent }}>EXECUTION STEPS</span>
             <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${accent}20, transparent)` }} />
           </div>
           <div className="space-y-1">
@@ -870,7 +909,7 @@ function EmptyState() {
           <Hourglass className="h-3.5 w-3.5 animate-pulse" />
         </span>
       </div>
-      <h3 className="font-display text-xs uppercase tracking-[0.18em] text-text-primary font-black">
+      <h3 className="font-display text-xs uppercase tracking-[0.05em] text-text-primary font-black">
         Valuation Pipeline Inactive
       </h3>
       <p className="mt-2 max-w-xs text-[10px] leading-5 text-text-dim font-medium">
@@ -878,14 +917,14 @@ function EmptyState() {
       </p>
 
       <div className="mt-8 w-full max-w-[320px] rounded-2xl border border-white/[0.04] bg-white/[0.01] p-4 backdrop-blur-md text-left">
-        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-text-dim mb-3">Orchestration Blueprint</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.05em] text-text-dim mb-3">Orchestration Blueprint</p>
         <div className="flex flex-col gap-2">
           {previewStages.map((s, i) => {
             const PreviewIcon = s.icon;
             return (
               <div key={i} className="flex items-center gap-2.5 rounded-xl border border-white/[0.05] bg-white/[0.01] px-3 py-2 transition hover:bg-white/[0.03]">
                 <PreviewIcon className="h-4 w-4 shrink-0" style={{ color: s.color }} />
-                <span className="text-[9px] uppercase tracking-[0.12em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
+                <span className="text-[9px] uppercase tracking-[0.04em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
               </div>
             );
           })}
@@ -896,7 +935,7 @@ function EmptyState() {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function WorkflowSectionNext({ events = [] }) {
+export default function WorkflowSectionNext({ events = [], isMaximized, onToggleMaximize }) {
   const workflow = useMemo(() => buildWorkflowFromEvents(events), [events]);
   const stages = useMemo(() => groupByStage(workflow.nodes), [workflow.nodes]);
   const isEmpty = stages.length === 0;
@@ -922,7 +961,7 @@ export default function WorkflowSectionNext({ events = [] }) {
       `}</style>
 
       {/* Header */}
-      <div className="panel-header-shell relative z-10 shrink-0 flex-wrap border-b border-border/60">
+      <div className="panel-header-shell relative z-10 min-h-[68px] shrink-0 flex-wrap border-b border-border/60">
         <div className="panel-title-shell min-w-0 flex-1">
           <div className="icon-chip bg-accent/10 border border-accent/20 p-2 rounded-xl">
             <Bot className="h-5 w-5 text-accent" />
@@ -935,15 +974,20 @@ export default function WorkflowSectionNext({ events = [] }) {
             <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary m-0">Agentic Execution Flow</h2>
           </div>
         </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onToggleMaximize}
+            className="flex items-center justify-center rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
           {!isEmpty && (
-            <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
+            <span className="rounded-full border border-border/40 bg-white/[0.02] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-text-secondary">
               5 MAIN STAGES
             </span>
           )}
-          <div className={`panel-pill shrink-0 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${isEmpty ? "bg-warning/10 border border-warning/20 text-warning" : "bg-accent/10 border border-accent/20 text-accent"}`}>
-            {isEmpty ? "STANDBY" : "ACTIVE"}
-          </div>
         </div>
       </div>
 
@@ -952,7 +996,7 @@ export default function WorkflowSectionNext({ events = [] }) {
         {isEmpty ? (
           <EmptyState />
         ) : (
-          <div className="flex flex-col gap-4.5 p-4.5">
+          <div className="flex flex-col gap-4.5 px-4.5 pb-4.5 pt-0">
             {/* Progress Nodes - Aerospace / Telemetry Control Panel */}
             <div className="flex items-center justify-between gap-1 mb-2 bg-bg-deep/45 rounded-2xl border border-white/[0.04] p-4 backdrop-blur-md relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-pink-500/5 pointer-events-none" />

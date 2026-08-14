@@ -290,6 +290,9 @@ export type UploadResult = {
   chunk_count: number;
   message: string;
   token_usage: TokenUsage;
+  processing_mode?: "standard" | "vlm";
+  vlm_cost_usd?: number;
+  vlm_tokens?: number;
 };
 
 export type Chunk = {
