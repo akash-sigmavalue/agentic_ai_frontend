@@ -1517,13 +1517,34 @@ const CostOfProjectDetails = () => {
                 )
             )}
 
-            {/* Finance Cost Calculator Modal */}
             <FinanceCostCalculatorModal
                 isOpen={isFinanceCostModalOpen}
                 onClose={() => setIsFinanceCostModalOpen(false)}
                 defaultCurrency={currency}
-                onApply={(totalInterest) => {
+                activeScenarioId={activeScenarioId}
+                onApply={(totalInterest, params) => {
                     handleFixedInputChange('financeCost', String(Math.round(totalInterest * 100) / 100));
+                    if (params) {
+                        updateActiveData({
+                            fixedInputs: {
+                                ...fixedInputs,
+                                financeCost: String(Math.round(totalInterest * 100) / 100)
+                            },
+                            financeCostParams: params
+                        });
+
+                        try {
+                            const key = "FinanceCostCalculatorData";
+                            const existing = JSON.parse(localStorage.getItem(key) || "{}");
+                            if (activeScenarioId) {
+                                existing[activeScenarioId] = params;
+                                localStorage.setItem(key, JSON.stringify(existing));
+                                window.dispatchEvent(new Event("financeCostDataUpdated"));
+                            }
+                        } catch(e) {
+                            console.error("Error saving FinanceCostCalculatorData:", e);
+                        }
+                    }
                 }}
             />
         </div>

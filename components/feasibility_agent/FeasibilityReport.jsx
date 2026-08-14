@@ -96,184 +96,7 @@ function stripMarkdown(md) {
     .replace(/-{3,}/g, "");
 }
 
-/**
- * Generate Cost vs Revenue comparison bar chart as an inline SVG
- */
-function generateCostRevenueChart(scenarioKPIs, sym) {
-  if (!scenarioKPIs || scenarioKPIs.length === 0) return "";
-  
-  const width = 600;
-  const height = 220;
-  const paddingLeft = 80;
-  const paddingRight = 30;
-  const paddingTop = 20;
-  const paddingBottom = 40;
-  
-  let maxVal = 0;
-  scenarioKPIs.forEach(k => {
-    if (k.totalRevenue > maxVal) maxVal = k.totalRevenue;
-    if (k.totalCost > maxVal) maxVal = k.totalCost;
-  });
-  if (maxVal === 0) maxVal = 1;
-  
-  const yTicks = 4;
-  let yAxisGrid = "";
-  for (let i = 0; i <= yTicks; i++) {
-    const ratio = i / yTicks;
-    const y = paddingTop + (height - paddingTop - paddingBottom) * (1 - ratio);
-    const val = maxVal * ratio;
-    
-    yAxisGrid += `<line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3" />`;
-    
-    let formattedVal = "";
-    if (val >= 10000000) formattedVal = (val / 10000000).toFixed(1) + " Cr";
-    else if (val >= 100000) formattedVal = (val / 100000).toFixed(1) + " L";
-    else formattedVal = Math.round(val).toLocaleString();
-    
-    yAxisGrid += `<text x="${paddingLeft - 10}" y="${y + 4}" fill="#64748b" font-size="8" text-anchor="end" font-weight="600">${sym}${formattedVal}</text>`;
-  }
-
-  const xAxisY = height - paddingBottom;
-  const axisLines = `<line x1="${paddingLeft}" y1="${xAxisY}" x2="${width - paddingRight}" y2="${xAxisY}" stroke="#cbd5e1" stroke-width="1.5" />`;
-
-  const chartWidth = width - paddingLeft - paddingRight;
-  const numScenarios = scenarioKPIs.length;
-  const groupWidth = chartWidth / numScenarios;
-  const barWidth = Math.min(22, groupWidth * 0.3);
-  const gap = groupWidth * 0.1;
-  
-  let barsHtml = "";
-  let xLabelsHtml = "";
-  
-  scenarioKPIs.forEach((k, idx) => {
-    const groupCenterX = paddingLeft + (idx * groupWidth) + (groupWidth / 2);
-    
-    const revHeight = (k.totalRevenue / maxVal) * (height - paddingTop - paddingBottom);
-    const revX = groupCenterX - barWidth - (gap / 2);
-    const revY = xAxisY - revHeight;
-    barsHtml += `<rect x="${revX}" y="${revY}" width="${barWidth}" height="${revHeight}" fill="#10b981" rx="2" />`;
-    
-    const costHeight = (k.totalCost / maxVal) * (height - paddingTop - paddingBottom);
-    const costX = groupCenterX + (gap / 2);
-    const costY = xAxisY - costHeight;
-    barsHtml += `<rect x="${costX}" y="${costY}" width="${barWidth}" height="${costHeight}" fill="#f43f5e" rx="2" />`;
-    
-    xLabelsHtml += `<text x="${groupCenterX}" y="${xAxisY + 16}" fill="#1e293b" font-size="9" font-weight="700" text-anchor="middle">${escHtml(k.name)}</text>`;
-  });
-
-  return `
-  <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
-    <div style="font-size: 9px; font-weight: 800; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Financial Feasibility Comparison</div>
-    <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: ${width}px; background:#fafbfc; border:1px solid #e2e8f0; border-radius:8px; padding: 10px;">
-      ${yAxisGrid}
-      ${barsHtml}
-      ${axisLines}
-      ${xLabelsHtml}
-      <g transform="translate(${width / 2 - 100}, ${height - 12})">
-        <rect x="0" y="0" width="8" height="8" fill="#10b981" rx="1" />
-        <text x="12" y="7.5" fill="#475569" font-size="8" font-weight="600">Expected Revenue</text>
-        <rect x="110" y="0" width="8" height="8" fill="#f43f5e" rx="1" />
-        <text x="122" y="7.5" fill="#475569" font-size="8" font-weight="600">Project Cost</text>
-      </g>
-    </svg>
-  </div>`;
-}
-
-/**
- * Generate Cumulative Cashflow J-Curve chart as an inline SVG
- */
-function generateJCurveChart(netCashYearly, sym) {
-  if (!netCashYearly || netCashYearly.length === 0) return "";
-  
-  const width = 600;
-  const height = 180;
-  const paddingLeft = 80;
-  const paddingRight = 30;
-  const paddingTop = 20;
-  const paddingBottom = 35;
-  
-  let cumulative = 0;
-  const cumulativeVals = netCashYearly.map(v => {
-    cumulative += v;
-    return cumulative;
-  });
-  
-  let maxVal = Math.max(...cumulativeVals, 0);
-  let minVal = Math.min(...cumulativeVals, 0);
-  if (maxVal === 0 && minVal === 0) { maxVal = 1; minVal = -1; }
-  const range = maxVal - minVal;
-  
-  const getY = (val) => {
-    const ratio = (val - minVal) / range;
-    return paddingTop + (height - paddingTop - paddingBottom) * (1 - ratio);
-  };
-  
-  const yTicks = 4;
-  let yAxisGrid = "";
-  for (let i = 0; i <= yTicks; i++) {
-    const ratio = i / yTicks;
-    const val = minVal + range * ratio;
-    const y = getY(val);
-    
-    yAxisGrid += `<line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3" />`;
-    
-    let formattedVal = "";
-    const absVal = Math.abs(val);
-    if (absVal >= 10000000) formattedVal = (absVal / 10000000).toFixed(1) + " Cr";
-    else if (absVal >= 100000) formattedVal = (absVal / 100000).toFixed(1) + " L";
-    else formattedVal = Math.round(absVal).toLocaleString();
-    if (val < 0) formattedVal = "-" + formattedVal;
-    
-    yAxisGrid += `<text x="${paddingLeft - 10}" y="${y + 3}" fill="#64748b" font-size="8" text-anchor="end" font-weight="600">${sym}${formattedVal}</text>`;
-  }
-
-  const zeroY = getY(0);
-  const zeroLine = `<line x1="${paddingLeft}" y1="${zeroY}" x2="${width - paddingRight}" y2="${zeroY}" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="2,2" />`;
-
-  const numPoints = cumulativeVals.length;
-  const chartWidth = width - paddingLeft - paddingRight;
-  const xStep = chartWidth / (numPoints - 1 || 1);
-  
-  let pointsStr = "";
-  let areaPointsStr = `${paddingLeft},${zeroY} `;
-  let pointsHtml = "";
-  let xLabelsHtml = "";
-  
-  cumulativeVals.forEach((val, idx) => {
-    const x = paddingLeft + (idx * xStep);
-    const y = getY(val);
-    
-    pointsStr += `${x},${y} `;
-    areaPointsStr += `${x},${y} `;
-    
-    pointsHtml += `<circle cx="${x}" cy="${y}" r="4" fill="#448C74" stroke="#ffffff" stroke-width="1.5" />`;
-    
-    let nodeVal = "";
-    const absVal = Math.abs(val);
-    if (absVal >= 10000000) nodeVal = (absVal / 10000000).toFixed(1) + " Cr";
-    else if (absVal >= 100000) nodeVal = (absVal / 100000).toFixed(1) + " L";
-    else nodeVal = Math.round(absVal).toLocaleString();
-    if (val < 0) nodeVal = "-" + nodeVal;
-    
-    pointsHtml += `<text x="${x}" y="${y - 8}" fill="#2d6b55" font-size="7" font-weight="800" text-anchor="middle">${sym}${nodeVal}</text>`;
-    xLabelsHtml += `<text x="${x}" y="${height - paddingBottom + 14}" fill="#1e293b" font-size="8" font-weight="700" text-anchor="middle">Year ${idx}</text>`;
-  });
-  
-  areaPointsStr += `${paddingLeft + (numPoints - 1) * xStep},${zeroY}`;
-  const linePath = `<polygon points="${areaPointsStr}" fill="#448C74" fill-opacity="0.08" /><polyline points="${pointsStr}" fill="none" stroke="#448C74" stroke-width="2.5" />`;
-
-  return `
-  <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
-    <div style="font-size: 9px; font-weight: 800; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Cumulative Project Cash Flow (J-Curve)</div>
-    <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: ${width}px; background:#fafbfc; border:1px solid #e2e8f0; border-radius:8px; padding: 10px;">
-      ${yAxisGrid}
-      ${zeroLine}
-      ${linePath}
-      ${pointsHtml}
-      ${xLabelsHtml}
-    </svg>
-  </div>`;
-}
+/* Legacy SVG Chart Generator functions removed – now rendering premium interactive Chart.js graphs */
 
 function generateGanttChart(rows) {
   if (!rows || rows.length === 0) {
@@ -472,6 +295,54 @@ function buildReportHTML(data, logoBase64) {
     return { id: sc.id, name: sc.name, totalRevenue, totalCost, netProfit };
   });
 
+  const jCurveData = scenarios.map((sc) => {
+    let totalRev = 0;
+    if (revenueV2.scenarios) {
+      const sr = revenueV2.scenarios.find((s) => s.scenarioId === sc.id);
+      if (sr) totalRev = sr.totalRevenue || 0;
+    }
+
+    const scenarioCostData = costDetails[sc.id] || {};
+    const fixedInputs = scenarioCostData.fixedInputs || {};
+    const customFields = scenarioCostData.customFields || [];
+    const dynamicRows = [{ key: "sales_cash_inflow", label: "Sales Cash Inflow", totalAmount: totalRev }];
+    Object.keys(FIXED_COST_LABELS).forEach((key) => {
+      dynamicRows.push({ key, label: FIXED_COST_LABELS[key], totalAmount: Number(fixedInputs[key]) || 0 });
+    });
+    customFields.forEach((f) => {
+      dynamicRows.push({ key: `custom_${f.id}`, label: f.name || "Custom", totalAmount: Number(f.value) || 0 });
+    });
+
+    const scenarioFormData = (irrForm.formData || {})[sc.id] || {};
+    const projectDuration = (irrForm.projectDurations || {})[sc.id] || 1;
+    const yearsArray = Array.from({ length: projectDuration + 1 }, (_, i) => i);
+
+    const getYearVal = (rowKey, year, total) => {
+      const pct = scenarioFormData[rowKey]?.[year] || 0;
+      return (parseFloat(pct) / 100) * (total || 0);
+    };
+
+    const revenueYearly = yearsArray.map((y) => getYearVal("sales_cash_inflow", y, totalRev));
+    const costRowsData = dynamicRows.filter((r) => r.key !== "sales_cash_inflow");
+    const costYearlyTotals = yearsArray.map((y) =>
+      costRowsData.reduce((sum, r) => sum + getYearVal(r.key, y, r.totalAmount), 0)
+    );
+    const netCashYearly = yearsArray.map((y) => revenueYearly[y] - costYearlyTotals[y]);
+
+    let cumulative = 0;
+    const cumulativeCashFlows = netCashYearly.map((val) => {
+      cumulative += val;
+      return Math.round(cumulative * 100) / 100;
+    });
+
+    return {
+      id: sc.id,
+      name: sc.name,
+      years: yearsArray.map((y) => `Yr ${y}`),
+      cumulativeCashFlows,
+    };
+  });
+
   const primaryKPI = scenarioKPIs[0] || { totalRevenue: 0, totalCost: 0, netProfit: 0 };
   const logoImg = logoBase64
     ? `<img src="data:image/png;base64,${logoBase64}" style="height:42px;object-fit:contain;" alt="Logo" />`
@@ -487,6 +358,7 @@ function buildReportHTML(data, logoBase64) {
 <title>Feasibility Report - ${escHtml(projectTitle)}</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
   
@@ -832,7 +704,12 @@ function buildReportHTML(data, logoBase64) {
         return `
         <div class="reg-card">
           <div class="reg-card-title">
-            <span class="reg-badge ${isCompleted ? "completed" : "pending"}">${isCompleted ? "✓ Done" : "Pending"}</span>
+            <span class="reg-badge ${isCompleted ? "completed" : "pending"}">
+              ${isCompleted 
+                ? `<svg style="width:8px; height:8px; stroke:currentColor; stroke-width:3.5; fill:none; margin-right:2px; vertical-align:middle;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg> Done` 
+                : `<svg style="width:8px; height:8px; stroke:currentColor; stroke-width:3.5; fill:none; margin-right:2px; vertical-align:middle;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg> Pending`
+              }
+            </span>
             ${escHtml(title)}
           </div>
           <div class="reg-body">${escHtml(answer)}</div>
@@ -919,8 +796,13 @@ function buildReportHTML(data, logoBase64) {
       </table>`;
     }).join("")}
 
-    <!-- SVG Scenario comparison -->
-    ${generateCostRevenueChart(scenarioKPIs, sym)}
+    <!-- Beautiful Interactive Chart.js Scenario comparison -->
+    <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
+      <div style="font-size: 9px; font-weight: 800; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Financial Feasibility Comparison</div>
+      <div style="width: 100%; height: 260px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-sizing: border-box; position: relative;">
+        <canvas id="cost-revenue-canvas"></canvas>
+      </div>
+    </div>
   </div>
 
   <div class="page-footer">
@@ -1043,6 +925,42 @@ function buildReportHTML(data, logoBase64) {
         ${allMofRows.map((r, i) => `<span><span class="mof-legend-dot" style="background:${colors[i % colors.length]};"></span>${escHtml(r.label)}: ${r.pct.toFixed(1)}% (${fmtCurrencyCompact((r.pct / 100) * totalCost, sym)})</span>`).join("")}
       </div>`;
     }).join("")}
+
+    <!-- Scenario-wise Debt Summary Grid -->
+    <div style="margin-top: 24px;">
+      <div style="font-size: 9px; font-weight: 800; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Debt Financing & Loan Parameters Summary</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Loan Principal</th>
+            <th>Annual ROI</th>
+            <th>Tenure</th>
+            <th class="text-right">Total Interest Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scenarios.map((sc) => {
+            const costData = costDetails[sc.id] || {};
+            const params = costData.financeCostParams;
+            if (!params) {
+              return `<tr>
+                <td style="font-weight:700;">${escHtml(sc.name)}</td>
+                <td colspan="4" style="color:#94a3b8;font-style:italic;">No calculated loan parameters saved (manually entered or not configured).</td>
+              </tr>`;
+            }
+            const pSym = getCurrencySymbol(params.currency || currencyCode);
+            return `<tr>
+              <td style="font-weight:700;">${escHtml(sc.name)}</td>
+              <td class="mono">${fmtCurrencyCompact(params.loanAmount, pSym)}</td>
+              <td class="mono">${params.annualInterest}%</td>
+              <td class="mono">${params.tenureMonths} months</td>
+              <td class="text-right mono font-black" style="color:#f59e0b;">${fmtCurrencyCompact(params.totalInterest, pSym)}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="page-footer">
@@ -1110,8 +1028,13 @@ function buildReportHTML(data, logoBase64) {
       <div class="scenario-header" ${sIdx > 0 ? 'style="margin-top:24px;"' : ""}>
         <h4>Scenario ${sIdx + 1}: ${escHtml(sc.name || `Scenario ${sIdx + 1}`)}</h4>
       </div>
-      <!-- SVG J-Curve Cumulative Chart -->
-      ${generateJCurveChart(netCashYearly, sym)}
+      <!-- Beautiful Interactive Chart.js J-Curve Cumulative Chart -->
+      <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
+        <div style="font-size: 9px; font-weight: 800; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Cumulative Project Cash Flow (J-Curve)</div>
+        <div style="width: 100%; height: 230px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; box-sizing: border-box; position: relative;">
+          <canvas id="j-curve-canvas-${sc.id}"></canvas>
+        </div>
+      </div>
       `;
     }).join("")}
   </div>
@@ -1142,23 +1065,56 @@ function buildReportHTML(data, logoBase64) {
   <div class="section" style="margin-top:20px; page-break-inside: avoid;">
     <div class="section-title">Financial Viability Assessment</div>
     <table>
-      <thead><tr><th>Scenario</th><th class="text-right">Revenue</th><th class="text-right">Cost</th><th class="text-right">Net Surplus</th><th class="text-center">Verdict</th></tr></thead>
+      <thead><tr><th>Scenario</th><th class="text-right">Revenue</th><th class="text-right">Cost</th><th class="text-right">Net Surplus</th><th class="text-center">IRR (%)</th><th class="text-center">Verdict</th></tr></thead>
       <tbody>
-        ${scenarioKPIs.map((k) => {
-          const margin = k.totalRevenue > 0 ? (k.netProfit / k.totalRevenue) * 100 : 0;
-          let verdict = "❌ Not Viable";
-          let verdictColor = "#dc2626";
-          if (margin >= 20) { verdict = "✅ Highly Viable"; verdictColor = "#059669"; }
-          else if (margin >= 10) { verdict = "⚠️ Moderately Viable"; verdictColor = "#d97706"; }
-          else if (margin >= 0) { verdict = "⚠️ Marginally Viable"; verdictColor = "#d97706"; }
-          return `<tr>
-            <td style="font-weight:700;">${escHtml(k.name)}</td>
-            <td class="text-right mono" style="color:#059669;font-weight:700;">${fmtCurrencyCompact(k.totalRevenue, sym)}</td>
-            <td class="text-right mono">${fmtCurrencyCompact(k.totalCost, sym)}</td>
-            <td class="text-right mono font-black" style="color:${k.netProfit >= 0 ? "#059669" : "#dc2626"};">${fmtCurrencyCompact(k.netProfit, sym)}</td>
-            <td class="text-center" style="font-weight:800;color:${verdictColor};font-size:9px;">${verdict}<br><span style="font-size:7px;color:#64748b;">Margin: ${margin.toFixed(1)}%</span></td>
-          </tr>`;
-        }).join("")}
+        ${(() => {
+          const calculatedIrrMap = irrForm.calculatedIrr || {};
+          return scenarioKPIs.map((k) => {
+            const margin = k.totalRevenue > 0 ? (k.netProfit / k.totalRevenue) * 100 : 0;
+            let verdictColor = "#dc2626";
+            let verdictBg = "#fef2f2";
+            let verdictBorder = "#fca5a5";
+            let verdictText = "Not Viable";
+            let verdictIcon = `<svg style="width:10px; height:10px; stroke:currentColor; stroke-width:3; fill:none; margin-right:3px; vertical-align:middle;" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+            if (margin >= 20) {
+              verdictColor = "#059669";
+              verdictBg = "#ecfdf5";
+              verdictBorder = "#a7f3d0";
+              verdictText = "Highly Viable";
+              verdictIcon = `<svg style="width:10px; height:10px; stroke:currentColor; stroke-width:3; fill:none; margin-right:3px; vertical-align:middle;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            } else if (margin >= 10) {
+              verdictColor = "#d97706";
+              verdictBg = "#fffbeb";
+              verdictBorder = "#fde68a";
+              verdictText = "Moderately Viable";
+              verdictIcon = `<svg style="width:10px; height:10px; stroke:currentColor; stroke-width:2.5; fill:none; margin-right:3px; vertical-align:middle;" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+            } else if (margin >= 0) {
+              verdictColor = "#d97706";
+              verdictBg = "#fffbeb";
+              verdictBorder = "#fde68a";
+              verdictText = "Marginally Viable";
+              verdictIcon = `<svg style="width:10px; height:10px; stroke:currentColor; stroke-width:2.5; fill:none; margin-right:3px; vertical-align:middle;" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+            }
+
+            const scIrr = calculatedIrrMap[k.id];
+            const scIrrText = scIrr != null && !isNaN(Number(scIrr)) ? Number(scIrr).toFixed(2) + "%" : "—";
+
+            return `<tr>
+              <td style="font-weight:700;">${escHtml(k.name)}</td>
+              <td class="text-right mono" style="color:#059669;font-weight:700;">${fmtCurrencyCompact(k.totalRevenue, sym)}</td>
+              <td class="text-right mono">${fmtCurrencyCompact(k.totalCost, sym)}</td>
+              <td class="text-right mono font-black" style="color:${k.netProfit >= 0 ? "#059669" : "#dc2626"};">${fmtCurrencyCompact(k.netProfit, sym)}</td>
+              <td class="text-center mono font-black" style="color:#0f766e;font-size:10px;">${scIrrText}</td>
+              <td class="text-center" style="padding: 8px 10px;">
+                <span style="display:inline-flex; align-items:center; padding:2.5px 8px; border-radius:12px; font-size:8px; font-weight:800; text-transform:uppercase; color:${verdictColor}; background:${verdictBg}; border:1px solid ${verdictBorder};">
+                  ${verdictIcon} ${verdictText}
+                </span>
+                <br><span style="font-size:7px;color:#64748b;margin-top:2px;display:inline-block;">Margin: ${margin.toFixed(1)}%</span>
+              </td>
+            </tr>`;
+          }).join("");
+        })()}
       </tbody>
     </table>
   </div>
@@ -1177,8 +1133,12 @@ function buildReportHTML(data, logoBase64) {
   </div>
 </div>
 
-<!-- Leaflet initialization script for plot boundaries & pins -->
+<!-- Leaflet & Chart.js initialization script -->
 <script>
+  const scenarioKPIs = ${JSON.stringify(scenarioKPIs)};
+  const jCurveData = ${JSON.stringify(jCurveData)};
+  const currencySymbol = "${sym}";
+
   function initMap() {
     const lat = ${subjectLat};
     const lng = ${subjectLng};
@@ -1239,18 +1199,227 @@ function buildReportHTML(data, logoBase64) {
     });
   }
 
+  const datalabelsPlugin = {
+    id: 'datalabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea: { top } } = chart;
+      ctx.save();
+      ctx.font = 'bold 8px Inter';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const meta = chart.getDatasetMeta(datasetIndex);
+        meta.data.forEach((element, index) => {
+          const value = dataset.data[index];
+          if (value == null) return;
+
+          let label = "";
+          const absVal = Math.abs(value);
+          if (absVal >= 10000000) label = currencySymbol + (value / 10000000).toFixed(2) + ' Cr';
+          else if (absVal >= 100000) label = currencySymbol + (value / 100000).toFixed(2) + ' L';
+          else label = currencySymbol + Math.round(value).toLocaleString('en-IN');
+
+          const x = element.x;
+          let y = element.y - 6;
+          if (chart.config.type === 'line') {
+            y = element.y - 8;
+          }
+          const drawY = Math.max(y, top + 10);
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.strokeText(label, x, drawY);
+
+          ctx.fillStyle = chart.config.type === 'bar'
+            ? (dataset.label === 'Expected Revenue' ? '#065f46' : '#1d4ed8')
+            : '#047857';
+
+          ctx.fillText(label, x, drawY);
+        });
+      });
+      ctx.restore();
+    }
+  };
+
+  function initCharts() {
+    // 1. Cost vs Revenue Bar Chart
+    const ctxBar = document.getElementById('cost-revenue-canvas');
+    if (ctxBar) {
+      new Chart(ctxBar, {
+        type: 'bar',
+        plugins: [datalabelsPlugin],
+        data: {
+          labels: scenarioKPIs.map(k => k.name),
+          datasets: [
+            {
+              label: 'Expected Revenue',
+              data: scenarioKPIs.map(k => k.totalRevenue),
+              backgroundColor: '#10b981',
+              borderRadius: 6,
+              borderWidth: 0,
+              barPercentage: 0.6,
+              categoryPercentage: 0.5
+            },
+            {
+              label: 'Project Cost',
+              data: scenarioKPIs.map(k => k.totalCost),
+              backgroundColor: '#3b82f6',
+              borderRadius: 6,
+              borderWidth: 0,
+              barPercentage: 0.6,
+              categoryPercentage: 0.5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                font: { size: 9, weight: 'bold', family: 'Inter' },
+                color: '#475569'
+              }
+            },
+            tooltip: {
+              titleFont: { size: 10, family: 'Inter' },
+              bodyFont: { size: 10, family: 'Inter' },
+              callbacks: {
+                label: function(context) {
+                  let value = context.raw;
+                  if (value >= 10000000) return context.dataset.label + ': ' + currencySymbol + (value / 10000000).toFixed(2) + ' Cr';
+                  if (value >= 100000) return context.dataset.label + ': ' + currencySymbol + (value / 100000).toFixed(2) + ' L';
+                  return context.dataset.label + ': ' + currencySymbol + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 8, weight: '700', family: 'Inter' }, color: '#1e293b' }
+            },
+            y: {
+              grid: { color: '#f1f5f9' },
+              ticks: {
+                font: { size: 8, family: 'Inter' },
+                color: '#64748b',
+                callback: function(value) {
+                  if (value >= 10000000) return currencySymbol + (value / 10000000).toFixed(1) + ' Cr';
+                  if (value >= 100000) return currencySymbol + (value / 100000).toFixed(1) + ' L';
+                  return currencySymbol + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Scenario J-Curve Chart
+    jCurveData.forEach(scData => {
+      const ctxLine = document.getElementById('j-curve-canvas-' + scData.id);
+      if (ctxLine) {
+        const chartCtx = ctxLine.getContext('2d');
+        const gradient = chartCtx.createLinearGradient(0, 0, 0, 160);
+        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.22)');
+        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
+
+        new Chart(ctxLine, {
+          type: 'line',
+          plugins: [datalabelsPlugin],
+          data: {
+            labels: scData.years,
+            datasets: [
+              {
+                label: 'Cumulative Net Cash Flow',
+                data: scData.cumulativeCashFlows,
+                borderColor: '#10b981',
+                borderWidth: 2.5,
+                tension: 0.35,
+                fill: true,
+                backgroundColor: gradient,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                titleFont: { size: 10, family: 'Inter' },
+                bodyFont: { size: 10, family: 'Inter' },
+                callbacks: {
+                  label: function(context) {
+                    let value = context.raw;
+                    if (value >= 10000000) return 'Cumulative: ' + currencySymbol + (value / 10000000).toFixed(2) + ' Cr';
+                    if (value >= 100000) return 'Cumulative: ' + currencySymbol + (value / 100000).toFixed(2) + ' L';
+                    return 'Cumulative: ' + currencySymbol + value.toLocaleString('en-IN');
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 8, weight: '700', family: 'Inter' }, color: '#1e293b' }
+              },
+              y: {
+                grid: { color: '#f1f5f9' },
+                ticks: {
+                  font: { size: 8, family: 'Inter' },
+                  color: '#64748b',
+                  callback: function(value) {
+                    const absVal = Math.abs(value);
+                    let prefix = value < 0 ? '-' : '';
+                    if (absVal >= 10000000) return prefix + currencySymbol + (absVal / 10000000).toFixed(1) + ' Cr';
+                    if (absVal >= 100000) return prefix + currencySymbol + (absVal / 100000).toFixed(1) + ' L';
+                    return prefix + currencySymbol + absVal.toLocaleString('en-IN');
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    });
+  }
+
   function triggerPrint() {
     setTimeout(() => { window.print(); }, 2000);
   }
 
-  if (document.readyState === 'complete') {
-    initMap();
-    triggerPrint();
-  } else {
-    window.addEventListener('load', () => {
+  function initAll() {
+    if (typeof L === 'undefined' || typeof Chart === 'undefined') {
+      setTimeout(initAll, 50);
+      return;
+    }
+    try {
       initMap();
-      triggerPrint();
-    });
+    } catch (e) {
+      console.error("Leaflet map initialization failed:", e);
+    }
+    try {
+      initCharts();
+    } catch (e) {
+      console.error("Chart.js initialization failed:", e);
+    }
+    triggerPrint();
+  }
+
+  if (document.readyState === 'complete') {
+    initAll();
+  } else {
+    window.addEventListener('load', initAll);
   }
 </script>
 </body>

@@ -226,6 +226,28 @@ const MeansOfFinance = () => {
 
   const activeTotalProjectCost = getScenarioTotalProjectCost(activeScenarioId);
 
+  useEffect(() => {
+    const handleFinanceUpdate = () => {
+      if (!activeScenarioId || !activeTotalProjectCost) return;
+      try {
+        const fccData = JSON.parse(localStorage.getItem("FinanceCostCalculatorData") || "{}");
+        const scenarioData = fccData[activeScenarioId];
+        if (scenarioData && scenarioData.loanAmount) {
+          const num = parseFloat(scenarioData.loanAmount) || 0;
+          if (num > 0) {
+            const calculatedPerc = (num / activeTotalProjectCost) * 100;
+            const formattedPerc = String(calculatedPerc);
+            setFormData(prev => ({ ...prev, bankFinance: formattedPerc }));
+          }
+        }
+      } catch (e) {}
+    };
+    
+    handleFinanceUpdate();
+    window.addEventListener("financeCostDataUpdated", handleFinanceUpdate);
+    return () => window.removeEventListener("financeCostDataUpdated", handleFinanceUpdate);
+  }, [activeScenarioId, activeTotalProjectCost]);
+
   const handleScenarioSelect = (id) => {
     setActiveScenarioId(id);
     try {
@@ -296,9 +318,7 @@ const MeansOfFinance = () => {
     const numAmt = parseFloat(cleanVal);
     if (!isNaN(numAmt) && activeTotalProjectCost > 0) {
       const calculatedPerc = (numAmt / activeTotalProjectCost) * 100;
-      const formattedPerc = Number.isInteger(calculatedPerc)
-        ? String(calculatedPerc)
-        : calculatedPerc.toFixed(2);
+      const formattedPerc = String(calculatedPerc);
       setFormData((prev) => ({ ...prev, [key]: formattedPerc }));
     } else if (rawValue === "") {
       setFormData((prev) => ({ ...prev, [key]: "" }));

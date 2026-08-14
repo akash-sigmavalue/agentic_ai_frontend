@@ -104,7 +104,7 @@ function groupDetail(rows, freq) {
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, defaultCurrency = "INR" }) {
+export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, defaultCurrency = "INR", activeScenarioId }) {
   const [loanAmountDisplay, setLoanAmountDisplay] = useState("100");
   const [loanAmountUnit,    setLoanAmountUnit]    = useState("Actual amount");
   const [currency,          setCurrency]          = useState(defaultCurrency || "INR");
@@ -120,6 +120,7 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
   const [detailOpen,   setDetailOpen]   = useState(false);
   const [detailView,   setDetailView]   = useState("Monthly");
   const [isDirty,      setIsDirty]      = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const prevSig = useRef(null);
   const loanAmount = parseFloat(loanAmountDisplay || "0") * (UNIT_MULTIPLIERS[loanAmountUnit] || 1);
@@ -156,20 +157,71 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
   }, [loanAmountDisplay, loanAmountUnit, tenureMonths, annualInterest, repayStartMonth, currency]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !initialLoadDone) return;
     const sig = `${loanAmountDisplay}-${loanAmountUnit}-${tenureMonths}-${annualInterest}-${repayStartMonth}-${currency}`;
     if (sig !== prevSig.current) {
       prevSig.current = sig;
       setIsDirty(false);
       fetchSchedule(null);
     }
-  }, [isOpen, loanAmountDisplay, loanAmountUnit, tenureMonths, annualInterest, repayStartMonth, currency, fetchSchedule]);
+  }, [isOpen, initialLoadDone, loanAmountDisplay, loanAmountUnit, tenureMonths, annualInterest, repayStartMonth, currency, fetchSchedule]);
 
   useEffect(() => {
     if (isOpen) {
       setCurrency(defaultCurrency || "INR");
     }
   }, [isOpen, defaultCurrency]);
+
+  useEffect(() => {
+    if (isOpen && activeScenarioId) {
+      try {
+        const existing = JSON.parse(localStorage.getItem("FinanceCostCalculatorData") || "{}");
+        const saved = existing[activeScenarioId];
+        if (saved) {
+          if (saved.loanAmountDisplay) setLoanAmountDisplay(saved.loanAmountDisplay);
+          if (saved.loanAmountUnit) setLoanAmountUnit(saved.loanAmountUnit);
+          if (saved.tenureMonths) setTenureMonths(saved.tenureMonths.toString());
+          if (saved.annualInterest) setAnnualInterest(saved.annualInterest.toString());
+          if (saved.repayStartMonth) setRepayStartMonth(saved.repayStartMonth.toString());
+          
+          if (saved.scheduleRows) setScheduleRows(saved.scheduleRows);
+          if (saved.detailRows) setDetailRows(saved.detailRows);
+          if (saved.totals) setTotals(saved.totals);
+          if (saved.isDirty) setIsDirty(saved.isDirty);
+          
+          prevSig.current = `${saved.loanAmountDisplay || "100"}-${saved.loanAmountUnit || "Actual amount"}-${saved.tenureMonths || "60"}-${saved.annualInterest || "12.50"}-${saved.repayStartMonth || "11"}-${saved.currency || "INR"}`;
+        }
+      } catch (e) {}
+      setInitialLoadDone(true);
+    } else if (!isOpen) {
+      setInitialLoadDone(false);
+    }
+  }, [isOpen, activeScenarioId]);
+
+  useEffect(() => {
+    if (totals && activeScenarioId && initialLoadDone) {
+      try {
+        const key = "FinanceCostCalculatorData";
+        const existing = JSON.parse(localStorage.getItem(key) || "{}");
+        existing[activeScenarioId] = {
+          loanAmount: parseFloat(loanAmountDisplay || "0") * (UNIT_MULTIPLIERS[loanAmountUnit] || 1),
+          annualInterest: parseFloat(annualInterest || "0"),
+          tenureMonths: parseInt(tenureMonths || "0"),
+          totalInterest: totals.interest,
+          currency,
+          loanAmountDisplay,
+          loanAmountUnit,
+          repayStartMonth,
+          scheduleRows,
+          detailRows,
+          totals,
+          isDirty
+        };
+        localStorage.setItem(key, JSON.stringify(existing));
+        window.dispatchEvent(new Event("financeCostDataUpdated"));
+      } catch (e) {}
+    }
+  }, [totals, scheduleRows, detailRows, isDirty, activeScenarioId, loanAmountDisplay, loanAmountUnit, annualInterest, tenureMonths, currency, repayStartMonth, initialLoadDone]);
 
   const handleReset = () => { setIsDirty(false); fetchSchedule(null); };
 
@@ -216,7 +268,15 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
   };
 
   const handleApply = () => {
-    if (totals && onApply) onApply(totals.interest);
+    if (totals && onApply) {
+      onApply(totals.interest, {
+        loanAmount: parseFloat(loanAmountDisplay || "0") * (UNIT_MULTIPLIERS[loanAmountUnit] || 1),
+        annualInterest: parseFloat(annualInterest || "0"),
+        tenureMonths: parseInt(tenureMonths || "0"),
+        totalInterest: totals.interest,
+        currency
+      });
+    }
     onClose();
   };
 

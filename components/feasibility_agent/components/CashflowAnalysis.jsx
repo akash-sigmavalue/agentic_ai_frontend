@@ -3,9 +3,32 @@ import { apiUrl } from "@/lib/api-client";
 import { FaChartLine, FaSpinner } from 'react-icons/fa';
 
 const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamicRows }) => {
-  const [irrValue, setIrrValue] = useState(null);
-  const [irrLoading, setIrrLoading] = useState(false);
-  const [irrError, setIrrError] = useState("");
+  const [irrValue, setIrrValue] = React.useState(() => {
+    try {
+      const raw = localStorage.getItem("irrFormV2");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed?.calculatedIrr?.[selectedScenario] ?? null;
+      }
+    } catch {}
+    return null;
+  });
+  const [irrLoading, setIrrLoading] = React.useState(false);
+  const [irrError, setIrrError] = React.useState("");
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("irrFormV2");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setIrrValue(parsed?.calculatedIrr?.[selectedScenario] ?? null);
+      } else {
+        setIrrValue(null);
+      }
+    } catch {
+      setIrrValue(null);
+    }
+  }, [selectedScenario]);
 
   const scenarioData = formData[selectedScenario] || {};
 
@@ -52,6 +75,7 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
     if (netCashData.yearly.length === 0) return;
     setIrrLoading(true);
     setIrrError("");
+    setIrrValue(null);
 
     try {
       const res = await fetch(apiUrl('/new_rate_simulator/simulator/calculate-irr'), {
@@ -65,7 +89,19 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
 
       const data = await res.json();
       if (Array.isArray(data) && data.length === 3 && typeof data[0] === 'number' && !isNaN(data[0])) {
-        setIrrValue(data[0]); // percentage
+        const val = data[0];
+        setIrrValue(val);
+        
+        try {
+          const raw = localStorage.getItem("irrFormV2");
+          const parsed = raw ? JSON.parse(raw) : { projectDurations: {}, formData: {} };
+          if (!parsed.calculatedIrr) parsed.calculatedIrr = {};
+          parsed.calculatedIrr[selectedScenario] = val;
+          localStorage.setItem("irrFormV2", JSON.stringify(parsed));
+          window.dispatchEvent(new Event('irrFormV2Updated'));
+        } catch (e) {
+          console.error("Failed to save IRR value to localStorage", e);
+        }
       } else {
         setIrrError("Failed to calculate IRR from API response.");
       }
