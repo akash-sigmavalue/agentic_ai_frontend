@@ -1978,7 +1978,7 @@ const Index = () => {
             {/* IRR Calculator Section */}
             <SectionHero
               id="section-irr-calculator-heading"
-              title="IRR Calculator"
+              title="Project IRR"
               description="Calculate the Internal Rate of Return (IRR) to measure profitability and benchmark investment performance."
               icon={FaCalculator}
               illustration="/assets/illustrations/irr-calculator.jpg"
@@ -2048,6 +2048,13 @@ const Index = () => {
                   font-size: 18px;
                 }
               `}</style>
+              {reportError && (
+                <div className="d-flex justify-content-center mb-3">
+                  <div className="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 text-danger shadow-sm" style={{ fontSize: "14px", borderRadius: "10px", maxWidth: "600px" }}>
+                    <span style={{ fontWeight: 600 }}>⚠️ Error:</span> {reportError}
+                  </div>
+                </div>
+              )}
               <div className="d-flex justify-content-center align-items-center gap-4 flex-wrap pb-5">
                 <button
                   className="action-btn-base action-btn-blue d-none"

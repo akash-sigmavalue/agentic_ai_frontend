@@ -198,7 +198,7 @@ export function buildCostOutflowPayload(selectedScenarioId = null) {
   const payload = {
     location,
     timeline: {
-      duration_years: durationYears || 1,
+      duration_years: (durationYears || 1) + 1,
     },
     product_mix_rows: productMixRows.map((r) => ({
       unitMix:        r.unitMix || r.bhkType || r.unitType || r.bhk || "",

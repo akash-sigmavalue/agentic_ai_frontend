@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { apiUrl } from "@/lib/api-client";
-import { FaChartLine, FaSpinner } from 'react-icons/fa';
+import { FaChartLine, FaSpinner, FaFileExcel } from 'react-icons/fa';
+import * as XLSX from 'xlsx';
 
 const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamicRows }) => {
   const [irrValue, setIrrValue] = React.useState(() => {
@@ -131,6 +132,40 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
     return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
 
+  const handleDownloadExcel = () => {
+    const wsData = [];
+    
+    // Header
+    wsData.push(["Cashflow Analysis & IRR"]);
+    wsData.push([]);
+    
+    const yearHeaders = yearsArray.map(y => `Year ${y}`);
+    
+    // Revenue Data
+    wsData.push(["REVENUE TYPE", ...yearHeaders, "TOTAL"]);
+    wsData.push(["Cashflow", ...revenueData.yearly, revenueData.total]);
+    wsData.push(["Total sales in flow", ...revenueData.yearly, revenueData.total]);
+    wsData.push([]);
+    
+    // Cost Data
+    wsData.push(["COST TYPE", ...yearHeaders, "TOTAL"]);
+    costData.rows.forEach(row => {
+      wsData.push([row.label, ...row.yearly, row.total]);
+    });
+    wsData.push(["Cost of project", ...costData.yearlyTotals, costData.grandTotal]);
+    wsData.push([]);
+    
+    // IRR Data
+    wsData.push(["IRR CALCULATION", ...yearHeaders, "TOTAL"]);
+    wsData.push(["Net Cash Generation", ...netCashData.yearly, netCashData.total]);
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cashflow & IRR");
+    
+    XLSX.writeFile(wb, `Cashflow_Analysis_${selectedScenario || 'scenario'}.xlsx`);
+  };
+
   if (!selectedScenario) return null;
 
   return (
@@ -147,6 +182,7 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
           width: 100%;
           border-collapse: collapse;
           font-size: 13px;
+          table-layout: fixed;
         }
         .cf-table th {
           background: #fff;
@@ -160,6 +196,7 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
         }
         .cf-table th:first-child {
           text-align: left;
+          width: 220px;
         }
         .cf-table td {
           padding: 12px 16px;
@@ -171,6 +208,7 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
           text-align: left;
           font-weight: 600;
           color: #334155;
+          width: 220px;
         }
         .cf-table tr:last-child td {
           border-bottom: none;
@@ -191,10 +229,14 @@ const CashflowAnalysis = ({ formData, projectDuration, selectedScenario, dynamic
            </h5>
            <p className="text-muted small mb-0 mt-1">Yearly projection based on the active scenario's breakdown.</p>
         </div>
-        <div>
-           <button onClick={calculateIRR} disabled={irrLoading} className="btn btn-success rounded-pill fw-bold px-4 shadow-sm" style={{ transition: "all 0.2s" }}>
-             {irrLoading ? <FaSpinner className="fa-spin me-2" /> : <FaChartLine className="me-2" />}
+        <div className="d-flex gap-2">
+           <button onClick={calculateIRR} disabled={irrLoading} className="btn rounded-pill px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', transition: 'all 0.2s' }}>
+             {irrLoading ? <FaSpinner className="fa-spin" /> : <FaChartLine />}
              {irrLoading ? "Calculating..." : "Calculate IRR"}
+           </button>
+           <button onClick={handleDownloadExcel} className="btn rounded-pill px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2" style={{ backgroundColor: '#fff', color: '#10b981', border: '2px solid #10b981', transition: 'all 0.2s' }} title="Download as Excel">
+             <FaFileExcel />
+             Download Excel
            </button>
         </div>
       </div>

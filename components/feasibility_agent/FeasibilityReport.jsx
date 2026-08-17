@@ -468,8 +468,8 @@ function buildReportHTML(data, logoBase64) {
                 ["Zoning", land.zoning],
                 ["Development Category", land.developmentCategory],
                 ["Road Category", land.roadCategory],
-                ["Road Widening", land.roadWidening],
-                ["Built-up Density", land.builtupDensity],
+                ["Road Width", land.roadWidening ? (String(land.roadWidening).includes('-') ? String(land.roadWidening).split('-').map(s => `${s.trim()}m`).join(' to ') : `${land.roadWidening} m`) : ""],
+                ["Built-up Density", land.builtupDensity ? `${land.builtupDensity}%` : ""],
                 ["Boundary Verification", land.boundaryVerification],
                 ["Ownership Summary", land.ownershipSummary],
               ].filter(([, v]) => v).map(([label, val]) =>
@@ -674,7 +674,7 @@ function buildReportHTML(data, logoBase64) {
             <thead><tr>
               <th>Asset Class</th><th>Type</th><th>Unit Mix</th>
               <th class="tr">Area (sqft)</th><th class="tr">Rate</th><th class="tr">Ticket Size</th>
-              <th class="tc">Inv.</th><th class="tr">Allotted</th><th class="tr">Revenue</th>
+              <th class="tc">Inventory</th><th class="tr">Allotted</th><th class="tr">Revenue</th>
             </tr></thead>
             <tbody>
               ${rowsHTML}
