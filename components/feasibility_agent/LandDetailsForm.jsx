@@ -787,6 +787,7 @@ import remarkGfm from "remark-gfm";
 import { apiUrl } from "@/lib/api-client";
 import Select from "react-select"
 import OsmInline from "./OsmInline";
+import { useLedger } from "./hooks/useLedger";
 
 const ALLOWED_CITIES = [
   "Pune", "Thane", "Abu Dhabi", "Dubai",
@@ -795,6 +796,7 @@ const ALLOWED_CITIES = [
 ];
 
 const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }) => {
+  const { recordLlmCall } = useLedger();
   const [formData, setFormData] = useState({
     clientName: "",
     phoneNumber: "",
@@ -1082,6 +1084,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
             source.close();
             setWebAgentStatus("completed");
             saveV3Payload(undefined, queryToSend, "completed", accumulatedResponse);
+            recordLlmCall(
+              "deepseek.v3.2",
+              "Regulatory Intelligence",
+              { apiCalls: 1 }
+            );
           }
         } catch (e) {
           console.error("Error parsing chat_stream event data:", e);
@@ -1178,6 +1185,11 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
           ...prev,
           planningAdvisory: data.planningAdvisory,
         }));
+        recordLlmCall(
+          "mistral.mistral-large-3-675b-instruct",
+          "Land & FSI Details",
+          { apiCalls: 1 }
+        );
       } else if (data?.error) {
         console.warn("Planning authority lookup skipped:", data.error);
       }

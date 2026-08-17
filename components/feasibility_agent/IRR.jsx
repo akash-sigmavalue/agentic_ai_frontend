@@ -14,6 +14,7 @@ import { formatMetricNumber } from "./utils/irrMetricUtils";
 import { runIrrCashflowSimulation, runSalesInflowSimulation } from "./services/irrSimulationService";
 import { FaArrowLeft, FaCalculator, FaChartBar, FaChevronDown, FaChevronUp, FaCopy, FaInfoCircle } from 'react-icons/fa';
 import { apiUrl } from "@/lib/api-client";
+import { useLedger } from "./hooks/useLedger";
 
 const IRR_SCENARIOS = ["Optimistic", "Most Probable", "Pessimistic"];
 
@@ -29,6 +30,7 @@ const applyMetricListData = (metricData, setters) => {
 };
 
 const IRR = () => {
+  const { recordLlmCall } = useLedger();
   const navigate = useNavigate();
   const [irrResult, setIrrResult] = useState(null);
   const [isMetricListOpen, setIsMetricListOpen] = useState(false);
@@ -250,6 +252,18 @@ const IRR = () => {
       const { data, tokenLedger } = await runIrrCashflowSimulation(payload);
       setSimulationResult(data);
       setSimulationTokenLedger(tokenLedger);
+      if (tokenLedger) {
+        recordLlmCall(
+          tokenLedger.model || "moonshotai.kimi-k2-thinking",
+          "IRR Simulation",
+          {
+            inputTokens:  tokenLedger.promptTokens ?? 0,
+            outputTokens: tokenLedger.completionTokens ?? 0,
+            totalTokens:  tokenLedger.totalTokens ?? 0,
+            apiCalls:     1,
+          }
+        );
+      }
 
       const irrFormFill = mapSimulationToIrrForm(data);
 

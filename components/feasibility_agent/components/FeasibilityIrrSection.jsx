@@ -4,6 +4,7 @@ import { FaSearch, FaSave, FaChartBar, FaMapMarkerAlt, FaTrashAlt, FaExclamation
 import { apiUrl } from "@/lib/api-client";
 import CashflowAnalysis from "./CashflowAnalysis";
 import CostOutflowSimulationModal from "./CostOutflowSimulationModal";
+import { useLedger } from "../hooks/useLedger";
 
 // ─── Constants ───────────────────────────────────────────────────────────
 const FIXED_COST_LABELS = {
@@ -20,6 +21,7 @@ const FIXED_COST_LABELS = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const FeasibilityIrrSection = () => {
+  const { recordLlmCall, recordDbCall } = useLedger();
   // IRR Form State
   const [projectDurations, setProjectDurations] = useState({});
   const [formData, setFormData] = useState({}); // nested by scenarioId
@@ -492,7 +494,19 @@ const FeasibilityIrrSection = () => {
       if (!res.ok || body?.success === false) setComparableError(body?.error || "Search failed.");
       else {
         setComparableResult(body.result);
-        if (body.tokenUsage) setComparableTokenUsage(body.tokenUsage);
+        if (body.tokenUsage) {
+          setComparableTokenUsage(body.tokenUsage);
+          recordLlmCall(
+            "moonshotai.kimi-k2-thinking",
+            "Comparable Projects",
+            {
+              inputTokens:  body.tokenUsage.input_tokens  ?? 0,
+              outputTokens: body.tokenUsage.output_tokens ?? 0,
+              totalTokens:  body.tokenUsage.total_tokens  ?? 0,
+              apiCalls:     (body.projects?.length ?? 0) || 1,
+            }
+          );
+        }
         if (body.projects) setComparableProjects(body.projects);
         if (body.providerStats) setComparableProviderStats(body.providerStats);
       }
@@ -513,7 +527,10 @@ const FeasibilityIrrSection = () => {
       });
       const body = await res.json();
       if (!res.ok || body?.success === false) setSalesVelocityError(body?.error || "Failed.");
-      else setSalesVelocityData(body);
+      else {
+        setSalesVelocityData(body);
+        recordDbCall("Sales Velocity DB", "Comparable Projects", 1);
+      }
     } catch (err) { setSalesVelocityError(err.message); }
     finally { setSalesVelocityLoading(false); }
   };
@@ -530,7 +547,11 @@ const FeasibilityIrrSection = () => {
       });
       const body = await res.json();
       if (!res.ok || body?.success === false) setCashInflowSimError(body?.error || "Failed.");
-      else setCashInflowSimResult(body.data);
+      else {
+        setCashInflowSimResult(body.data);
+        // predict-cash-inflow uses Bedrock Mistral Large (no token usage returned by endpoint)
+        recordLlmCall("mistral.mistral-large-3-675b-instruct", "Cash Inflow Simulation", { apiCalls: 1 });
+      }
     } catch (err) { setCashInflowSimError(err.message); }
     finally { setCashInflowSimLoading(false); }
   };

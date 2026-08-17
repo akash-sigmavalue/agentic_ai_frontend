@@ -3,6 +3,7 @@ import { FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaMapMarkerAlt, FaCrosshai
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
 import TransactionDrilldownModal from './TransactionDrilldownModal';
+import { useLedger } from './hooks/useLedger';
 
 const formatProjectOption = ({ project, index }, { context }) => {
     if (context === "value") {
@@ -346,6 +347,7 @@ const EditableDropdown = ({ options, value, onChange, placeholder, style }) => {
 };
 
 const ProductMixTicketSize = () => {
+    const { recordDbCall } = useLedger();
     const theme = "light";
     const [isAnalysisModeOpen, setIsAnalysisModeOpen] = useState(true);
     const [isAppliedProductMixOpen, setIsAppliedProductMixOpen] = useState(false);
@@ -925,6 +927,7 @@ const ProductMixTicketSize = () => {
             });
             if (res.ok) {
                 const json = await res.json();
+                recordDbCall("Transaction DB", "Product Mix", 1);
                 if (json.success && json.data) {
                     if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {
@@ -994,6 +997,7 @@ const ProductMixTicketSize = () => {
             });
             if (res.ok) {
                 const json = await res.json();
+                recordDbCall("Transaction DB", "Product Mix", 1);
                 if (json.success && json.data) {
                     if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {
@@ -1057,6 +1061,7 @@ const ProductMixTicketSize = () => {
             });
             if (res.ok) {
                 const json = await res.json();
+                recordDbCall("Transaction DB", "Product Mix", 1);
                 if (json.success && json.data) {
                     if (Array.isArray(json.years) && json.years.length > 0) setAvailableYears(json.years);
                     json.data.forEach(apiData => {

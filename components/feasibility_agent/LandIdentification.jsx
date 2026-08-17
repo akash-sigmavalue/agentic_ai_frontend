@@ -5,12 +5,14 @@ import { useJsApiLoader, Autocomplete, GoogleMap, DrawingManagerF, PolygonF, Mar
 import Select from "react-select";
 import { apiUrl } from "@/lib/api-client";
 import * as turf from '@turf/turf';
+import { useLedger } from "./hooks/useLedger";
 
 const libraries = ['places', 'drawing', 'geometry'];
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 18.52461645, lng: 73.7805654 }; // Pune
 
 const LandIdentification = () => {
+  const { recordLlmCall } = useLedger();
   const [formData, setFormData] = useState({
     country: '',
     currency: '',
@@ -190,6 +192,11 @@ const LandIdentification = () => {
           planningAuthority: data.planningAdvisory,
         }));
         setPlanningAuthSource(data.source || "openai");
+        recordLlmCall(
+          "mistral.mistral-large-3-675b-instruct",
+          "Land Identification",
+          { apiCalls: 1 }
+        );
       } else {
         alert("Could not fetch planning authority. Please try again.");
       }
