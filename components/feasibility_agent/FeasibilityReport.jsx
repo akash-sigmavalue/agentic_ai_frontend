@@ -16,7 +16,6 @@ const REGULATORY_SECTION_TITLES = {
   "height-restrictions": "Height Restrictions",
   "heritage-restrictions": "Heritage Restrictions",
   "airport-clearances": "Airport Clearances",
-  "development-regulations": "Development Regulations",
   "buffer-distance": "Buffer Distance from Roads",
   "fsi-sanctioned-details": "FSI Sanctioned Details",
   "setbacks-margins": "Setbacks and Margins",
@@ -222,6 +221,7 @@ function collectReportData() {
   const zoningType = get("zoningType") || "";
   const landDetailsForm = get("landDetailsForm") || {};
   const landAndFsiDetails = get("Land_and_fsi_details") || {};
+  const transactionsData = get("ticketSizeSimulationTransactions") || {};
 
   return {
     land,
@@ -238,7 +238,8 @@ function collectReportData() {
     landDetailsResults,
     zoningType,
     landDetailsForm,
-    landAndFsiDetails
+    landAndFsiDetails,
+    transactionsData
   };
 }
 
@@ -256,12 +257,16 @@ export function checkFeasibilityCompleteness() {
   if (!land || !land.location) missing.push("Land Identification");
 
   const reg = get("Regulatory Intelligence");
-  if (!reg || !reg.sectionResults) {
+  if (!reg || (!reg.sectionResults && !reg.regWebAgentStatus)) {
     missing.push("Regulatory Intelligence");
   } else {
-    const answeredCount = Object.values(reg.sectionResults).filter(
-      (r) => r.status === "completed"
-    ).length;
+    let answeredCount = 0;
+    if (reg.sectionResults) {
+      answeredCount += Object.values(reg.sectionResults).filter((r) => r.status === "completed").length;
+    }
+    if (reg.regWebAgentStatus === "completed") {
+      answeredCount++;
+    }
     if (answeredCount === 0) missing.push("Regulatory Intelligence (no sections analyzed)");
   }
 
@@ -496,9 +501,28 @@ function buildReportHTML(data, logoBase64) {
   </div>`);
 
   // ─── PAGE 3+: REGULATORY COMPLIANCE ─────────────────────────────
-  const regSectionsList = Object.entries(REGULATORY_SECTION_TITLES).map(([id, title]) => {
+  const regSectionsList = [];
+
+  if (regulatory.regWebAgentStatus === "completed" && regulatory.regWebAgentResponse) {
+    regSectionsList.push({
+      id: "web-data-agent",
+      title: "01 Web Data Agent (Building Regulations & Rules)",
+      status: "completed",
+      answer: regulatory.regWebAgentResponse,
+      query: regulatory.regWebAgentQuery
+    });
+  } else if (regulatory.regWebAgentStatus) {
+    regSectionsList.push({
+      id: "web-data-agent",
+      title: "01 Web Data Agent (Building Regulations & Rules)",
+      status: regulatory.regWebAgentStatus,
+      answer: ""
+    });
+  }
+
+  Object.entries(REGULATORY_SECTION_TITLES).forEach(([id, title]) => {
     const result = regulatory.sectionResults?.[id] || {};
-    return { id, title, ...result };
+    regSectionsList.push({ id, title, ...result });
   });
   const completedRegs = regSectionsList.filter(r => r.status === "completed" && r.answer);
   const pendingRegs   = regSectionsList.filter(r => r.status !== "completed" || !r.answer);
@@ -519,7 +543,7 @@ function buildReportHTML(data, logoBase64) {
         <div class="rp-body">
           <div class="section-title">Regulatory Compliance Details</div>
           ${chunk.map(r => {
-            const qText = regulatory.editableQuestions?.[r.id] || "";
+            const qText = r.query || regulatory.editableQuestions?.[r.id] || "";
             return `
             <div class="reg-block">
               <div class="reg-block-header">
@@ -615,16 +639,7 @@ function buildReportHTML(data, logoBase64) {
             <div class="fk-value">${landAndFsiDetails.grossFloorArea ? fmtNum(landAndFsiDetails.grossFloorArea) + " sq.ft" : "—"}</div>
           </div>
         </div>
-        ${landAndFsiDetails.webAgentResponse ? `
-          <div class="reg-block" style="margin-top:14px;">
-            <div class="reg-block-header">
-              <span class="badge-done">&#10003; Verified</span>
-              <strong>Web &amp; Document Intelligence – Building Regulations</strong>
-            </div>
-            ${landAndFsiDetails.webAgentQuery ? `<div class="query-box"><strong>Query:</strong> ${escHtml(landAndFsiDetails.webAgentQuery)}</div>` : ""}
-            <div class="reg-body reg-markdown-content" data-raw="${escHtml(landAndFsiDetails.webAgentResponse)}"></div>
-          </div>
-        ` : `<div class="empty-state" style="margin-top:14px;">No Web Agent analysis run for building codes/regulations.</div>`}
+
       `}
     </div>
     <div class="rp-footer">
@@ -693,6 +708,86 @@ function buildReportHTML(data, logoBase64) {
         <div class="chart-label">Financial Feasibility Comparison</div>
         <div class="chart-box"><canvas id="cost-revenue-canvas"></canvas></div>
       </div>
+
+      ${(() => {
+        const activeScenarioId = productMix.activeScenarioId;
+        const activeScenario = (productMix.scenarios || []).find(s => s.id === activeScenarioId) || (productMix.scenarios || [])[0] || {};
+        const areaResults = activeScenario.areaAnalysisResults || [];
+        const rateResults = activeScenario.rateAnalysisResults || [];
+        
+        if (areaResults.length === 0 && rateResults.length === 0) return "";
+        
+        let html = '<div class="section-title" style="margin-top:32px;">Transaction Analysis Results</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">';
+        
+        if (areaResults.length > 0) {
+           areaResults.forEach(r => {
+             const rowsHtml = (r.rows || []).map(row => `<tr>
+                <td class="tc">${escHtml(r.propertyType)}</td>
+                <td class="tc">${escHtml(r.unitType)}</td>
+                <td class="tc">${fmtNum(row.rangeMin)} - ${fmtNum(row.rangeMax)}</td>
+                <td class="tc bold" style="color:#2563eb;">${fmtNum(row.count || 0)}</td>
+             </tr>`).join("");
+             
+             const totalCount = (r.rows || []).reduce((a, x) => a + (Number(x.count) || 0), 0);
+             
+             html += `
+             <div>
+               <div class="sub-label">Area Range Results (${escHtml(r.propertyType)} - ${escHtml(r.unitType)})</div>
+               <table class="data-table compact-table">
+                 <thead><tr>
+                    <th class="tc">Property Type</th>
+                    <th class="tc">Unit Type</th>
+                    <th class="tc">Area Range<br/><span style="font-size:8px;font-weight:normal;">(Min - Max)</span></th>
+                    <th class="tc">Transaction Count</th>
+                 </tr></thead>
+                 <tbody>
+                    ${rowsHtml}
+                    <tr class="total-row">
+                      <td colspan="3" class="tc bold">Total Transactions</td>
+                      <td class="tc bold" style="color:#2563eb;">${fmtNum(totalCount)}</td>
+                    </tr>
+                 </tbody>
+               </table>
+             </div>`;
+           });
+        }
+        
+        if (rateResults.length > 0) {
+           rateResults.forEach(r => {
+             const rowsHtml = (r.rows || []).map(row => `<tr>
+                <td class="tc">${escHtml(r.propertyType)}</td>
+                <td class="tc">${escHtml(r.unitType)}</td>
+                <td class="tc">${fmtNum(row.rangeMin)} - ${fmtNum(row.rangeMax)}</td>
+                <td class="tc bold" style="color:#2563eb;">${fmtNum(row.count || 0)}</td>
+             </tr>`).join("");
+             
+             const totalCount = (r.rows || []).reduce((a, x) => a + (Number(x.count) || 0), 0);
+             
+             html += `
+             <div>
+               <div class="sub-label">Rate Range Results (${escHtml(r.propertyType)} - ${escHtml(r.unitType)})</div>
+               <table class="data-table compact-table">
+                 <thead><tr>
+                    <th class="tc">Property Type</th>
+                    <th class="tc">Unit Type</th>
+                    <th class="tc">Rate Range<br/><span style="font-size:8px;font-weight:normal;">(Min - Max)</span></th>
+                    <th class="tc">Transaction Count</th>
+                 </tr></thead>
+                 <tbody>
+                    ${rowsHtml}
+                    <tr class="total-row">
+                      <td colspan="3" class="tc bold">Total Transactions</td>
+                      <td class="tc bold" style="color:#2563eb;">${fmtNum(totalCount)}</td>
+                    </tr>
+                 </tbody>
+               </table>
+             </div>`;
+           });
+        }
+        
+        html += '</div>';
+        return html;
+      })()}
     </div>
     <div class="rp-footer">
       <span>Confidential – SigmaValue AI Feasibility Agent</span>
