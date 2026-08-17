@@ -22,7 +22,10 @@ import {
   FaRulerCombined,
   FaSquareParking,
   FaPercent,
+  FaEarthAmericas,
+  FaWandSparkles,
 } from "react-icons/fa6";
+import { FaExternalLinkAlt, FaExpandAlt, FaCompress } from "react-icons/fa";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiUrl } from "@/lib/api-client";
@@ -78,15 +81,7 @@ const REGULATORY_SECTIONS = [
     color: "#e65100",
     gradient: "linear-gradient(135deg, #e65100 0%, #bf360c 100%)",
   },
-  {
-    id: "development-regulations",
-    title: "Development Regulations",
-    question:
-      "Which Development Control Regulations (DCR/UDCPR/Local Planning Regulations) govern the proposed development?",
-    icon: FaScaleBalanced,
-    color: "#ad1457",
-    gradient: "linear-gradient(135deg, #ad1457 0%, #880e4f 100%)",
-  },
+
   {
     id: "buffer-distance",
     title: "Buffer Distance from Roads",
@@ -272,14 +267,29 @@ const StatusIcon = ({ status }) => {
 
 /* ─────────────────────── main component ─────────────────────── */
 
+
 const RegulatoryIntelligence = () => {
   const { recordLlmCall } = useLedger();
+
+  /* ── Web Data Agent state (Building Regulations & Rules) ── */
+  const [regWebAgentStatus, setRegWebAgentStatus]               = useState("idle");
+  const [regWebAgentResponse, setRegWebAgentResponse]           = useState("");
+  const [regWebAgentError, setRegWebAgentError]                 = useState("");
+  const [regWebAgentQuery, setRegWebAgentQuery]                 = useState("");
+  const [regWebAgentCurrentStatus, setRegWebAgentCurrentStatus] = useState("");
+  const [regWebAgentStatusLog, setRegWebAgentStatusLog]         = useState([]);
+  const [isRegWebAgentExpanded, setIsRegWebAgentExpanded]       = useState(false);
+  const [isRegWebAgentMaximized, setIsRegWebAgentMaximized]     = useState(false);
+  const regWebEventSourceRef = useRef(null);
+  const regUserEditedQueryRef = useRef(false);
+
   /* ── upload state ── */
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | indexed | error
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef(null);
+
 
   /* ── editable questions state ── */
   const [editableQuestions, setEditableQuestions] = useState(
@@ -352,7 +362,7 @@ const RegulatoryIntelligence = () => {
         "height-restrictions": `Are there any height restrictions applicable to the proposed development in ${village}, ${location}, ${country}? If yes, what is the maximum permissible height?`,
         "heritage-restrictions": `Is the property located within a heritage zone or subject to any heritage restrictions in ${village}, ${location}, ${country}?`,
         "airport-clearances": `Does the proposed development in ${village}, ${location}, ${country} require Airport Authority (AAI) or aviation clearance?`,
-        "development-regulations": `Which Development Control Regulations (DCR/UDCPR/Local Planning Regulations) govern the proposed development in ${village}, ${location}, ${country}?`,
+
         "buffer-distance": `What is the minimum required buffer distance or setback from the abutting road in ${village}, ${location}, ${country}?`,
         "fsi-sanctioned-details": `For given land parcel coordinates ${lat}, ${lng}, development category is ${formattedDevCat || 'Residential'}, Road Width is ${formattedRoadWidening || '9-12'}, planning authority is ${planningAuthority} in ${location}, ${country}, Provide the maximum permissible FSI also provide table for it?`,
         "setbacks-margins": `What are the mandatory setback requirements (front, rear, and side margins) for the proposed development in ${village ? village + ', ' : ''}${location}, ${country} as per local planning authority is ${planningAuthority} ?`,
@@ -400,6 +410,11 @@ const RegulatoryIntelligence = () => {
         if (parsed.sectionResults) {
           setSectionResults((prev) => ({ ...prev, ...parsed.sectionResults }));
         }
+        // Restore Web Agent state
+        if (parsed.regWebAgentQuery)    setRegWebAgentQuery(parsed.regWebAgentQuery);
+        if (parsed.regWebAgentStatus)   setRegWebAgentStatus(parsed.regWebAgentStatus);
+        if (parsed.regWebAgentResponse) setRegWebAgentResponse(parsed.regWebAgentResponse);
+        if (parsed.regWebAgentQuery)    regUserEditedQueryRef.current = true;
       } catch (e) {
         console.error("Error parsing Regulatory Intelligence payload:", e);
       }
@@ -407,18 +422,135 @@ const RegulatoryIntelligence = () => {
   }, []);
 
   // Persist Regulatory Intelligence payload to localStorage
-  const saveRegulatoryPayload = (newResults, newQuestions) => {
+  const saveRegulatoryPayload = (newResults, newQuestions, webAgentOverrides = {}) => {
     const currentResults = newResults || sectionResults;
     const currentQuestions = newQuestions || editableQuestions;
     const payload = {
       uploadedFiles: pdfFiles.map((f) => ({ name: f.name, size: f.size })),
       editableQuestions: currentQuestions,
       sectionResults: currentResults,
+      regWebAgentQuery:    webAgentOverrides.query    ?? regWebAgentQuery,
+      regWebAgentStatus:   webAgentOverrides.status   ?? regWebAgentStatus,
+      regWebAgentResponse: webAgentOverrides.response ?? regWebAgentResponse,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem("Regulatory Intelligence", JSON.stringify(payload));
     window.dispatchEvent(new CustomEvent("regulatoryIntelligenceSaved", { detail: payload }));
     return payload;
+  };
+
+  /* ── Web Data Agent: query construction from land data ── */
+  const constructRegWebQuery = (landData) => {
+    let location = "pune";
+    let lat = "18.6448506424618";
+    let lng = "73.7781109002116";
+    let planningAuthority = "Pune Metropolitan Region Development Authority";
+
+    const savedData = landData || localStorage.getItem("Land Identification") || localStorage.getItem("landDetailsForm");
+    if (savedData) {
+      try {
+        const parsed = typeof savedData === "string" ? JSON.parse(savedData) : savedData;
+        location = (parsed.location === "Other Location" && parsed.otherLocationName)
+          ? parsed.otherLocationName
+          : parsed.location || parsed.city || location;
+        lat = parsed.polygonCenterLat || parsed.latitude || lat;
+        lng = parsed.polygonCenterLng || parsed.longitude || lng;
+        planningAuthority = parsed.planningAuthority || parsed.planning_authority || parsed.planningAdvisory || planningAuthority;
+      } catch (err) {
+        console.error("Error parsing Land Identification data for Reg Web Agent:", err);
+      }
+    }
+    return `give me building code/building regulation rules & relevant document in ${location}, for ${lat}, ${lng}, under ${planningAuthority}`;
+  };
+
+  /* ── Web Data Agent: sync query from Land Identification events ── */
+  useEffect(() => {
+    const updateQueryFromEvent = (e) => {
+      const newQuery = constructRegWebQuery(e?.detail);
+      if (!regUserEditedQueryRef.current) {
+        setRegWebAgentQuery(newQuery);
+      }
+    };
+
+    // Initial sync on mount if query not already restored from localStorage
+    if (!regUserEditedQueryRef.current) {
+      setRegWebAgentQuery(constructRegWebQuery());
+    }
+
+    window.addEventListener("landIdentificationSaved", updateQueryFromEvent);
+    window.addEventListener("landDetailsUpdated",      updateQueryFromEvent);
+    window.addEventListener("landDetailsFormSaved",    updateQueryFromEvent);
+    return () => {
+      window.removeEventListener("landIdentificationSaved", updateQueryFromEvent);
+      window.removeEventListener("landDetailsUpdated",      updateQueryFromEvent);
+      window.removeEventListener("landDetailsFormSaved",    updateQueryFromEvent);
+    };
+  }, []);
+
+  /* ── Web Data Agent: streaming function ── */
+  const runRegWebDataAgent = () => {
+    setRegWebAgentStatus("loading");
+    setRegWebAgentError("");
+    setRegWebAgentResponse("");
+    setRegWebAgentCurrentStatus("Initializing web search...");
+    setRegWebAgentStatusLog(["Initializing web search connection..."]);
+    setIsRegWebAgentExpanded(true);
+
+    const queryToSend = regWebAgentQuery ||
+      `give me building code/building regulation rules & relevant document in pune, for 18.6448506424618, 73.7781109002116, under Pune Metropolitan Region Development Authority`;
+    const encodedQuery = encodeURIComponent(queryToSend);
+
+    if (regWebEventSourceRef.current) {
+      regWebEventSourceRef.current.close();
+    }
+
+    let accumulatedResponse = "";
+
+    try {
+      const streamUrl = apiUrl(`/api/web_search_v2/chat_stream?query=${encodedQuery}&no_cache=true`);
+      const source = new EventSource(streamUrl);
+      regWebEventSourceRef.current = source;
+
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "status") {
+            const statusMsg = data.content || "Processing...";
+            setRegWebAgentCurrentStatus(statusMsg);
+            setRegWebAgentStatusLog((prev) => [...prev, statusMsg]);
+          } else if (data.type === "chunk") {
+            accumulatedResponse += data.content || "";
+            setRegWebAgentResponse((prev) => prev + data.content);
+          } else if (data.type === "done") {
+            source.close();
+            setRegWebAgentStatus("completed");
+            saveRegulatoryPayload(undefined, undefined, {
+              query:    queryToSend,
+              status:   "completed",
+              response: accumulatedResponse,
+            });
+            recordLlmCall(
+              "deepseek.v3.2",
+              "Regulatory Intelligence",
+              { apiCalls: 1 }
+            );
+          }
+        } catch (e) {
+          console.error("Error parsing reg web chat_stream event data:", e);
+        }
+      };
+
+      source.onerror = (err) => {
+        console.error("reg web chat_stream EventSource error:", err);
+        source.close();
+        setRegWebAgentStatus("error");
+        setRegWebAgentError("Connection to Web Search Agent stream failed. Please try again.");
+      };
+    } catch (err) {
+      console.error("Error establishing reg web EventSource:", err);
+      setRegWebAgentStatus("error");
+      setRegWebAgentError(err.message || "Failed to establish stream connection.");
+    }
   };
 
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(-1);
@@ -552,6 +684,9 @@ const RegulatoryIntelligence = () => {
     abortRef.current = false;
     setIsRunning(true);
     setUploadError("");
+
+    // Also trigger Web Data Agent alongside document analysis
+    runRegWebDataAgent();
 
     // Reset all sections
     setSectionResults(
@@ -776,6 +911,7 @@ const RegulatoryIntelligence = () => {
       </div>
 
       <div className="card-body" style={{ padding: "24px" }}>
+
         {/* ── Upload Zone ── */}
         <div style={{ marginBottom: "24px" }}>
           <label
@@ -997,6 +1133,192 @@ const RegulatoryIntelligence = () => {
 
         {/* ── Section Cards ── */}
         <div>
+          {/* Web Data Agent Card — numbered 01 */}
+          <div style={styles.sectionCard("#448C74", isRegWebAgentExpanded)}>
+            <div
+              role="button"
+              tabIndex={0}
+              style={{ ...styles.sectionHeader, cursor: "pointer" }}
+              onClick={() => setIsRegWebAgentExpanded(!isRegWebAgentExpanded)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setIsRegWebAgentExpanded(!isRegWebAgentExpanded)}
+              aria-expanded={isRegWebAgentExpanded}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+                <div style={styles.sectionIconBadge("linear-gradient(135deg, #448C74, #2d6b55)")}>
+                  <FaEarthAmericas />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "14px", color: "#222" }}>
+                    <span style={{ color: "#448C74", fontWeight: 700, marginRight: "6px", fontSize: "12px" }}>01</span>
+                    Web Data Agent (Building Regulations &amp; Rules)
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline-success btn-sm rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm"
+                  style={{ fontSize: "11px", borderColor: "#448C74", color: "#2d6b55", backgroundColor: "#ffffff" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(`${window.location.origin}/web_search`, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Open Web Search Agent <FaExternalLinkAlt size={10} />
+                </button>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "3px 10px",
+                    borderRadius: "12px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    background: regWebAgentStatus === "completed" ? "#e8f5e9" : regWebAgentStatus === "loading" ? "#fff3e0" : regWebAgentStatus === "error" ? "#fce4ec" : "#f5f5f5",
+                    color: regWebAgentStatus === "completed" ? "#2e7d32" : regWebAgentStatus === "loading" ? "#e65100" : regWebAgentStatus === "error" ? "#c62828" : "#888",
+                  }}
+                >
+                  {regWebAgentStatus === "completed" ? "Completed" : regWebAgentStatus === "loading" ? "Processing..." : regWebAgentStatus === "error" ? "Error" : "Pending"}
+                </span>
+                {isRegWebAgentExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+              </div>
+            </div>
+
+            {/* Expanded Body */}
+            {isRegWebAgentExpanded && (
+              <div style={styles.answerBox}>
+                {/* Editable Query */}
+                <div className="mb-3">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <strong style={{ color: "#448C74", fontSize: "13px" }}>Q:</strong>
+                    <span style={{ fontSize: "12px", fontStyle: "italic", color: "#666" }}>Edit the query below before running</span>
+                  </div>
+                  <textarea
+                    className="form-control"
+                    value={regWebAgentQuery}
+                    onChange={(e) => {
+                      setRegWebAgentQuery(e.target.value);
+                      regUserEditedQueryRef.current = true;
+                    }}
+                    disabled={regWebAgentStatus === "loading"}
+                    rows={3}
+                    style={{
+                      fontSize: "13px",
+                      borderRadius: "8px",
+                      borderColor: "#cbd5e1",
+                      borderLeft: "4px solid #448C74",
+                      background: regWebAgentStatus === "loading" ? "#f8fafc" : "#ffffff",
+                      lineHeight: "1.6",
+                      fontFamily: "inherit"
+                    }}
+                    placeholder="Enter query for Web data agent..."
+                  />
+                  <div className="d-flex justify-content-end mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm text-white rounded-pill px-4 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                      onClick={runRegWebDataAgent}
+                      disabled={regWebAgentStatus === "loading"}
+                      style={{
+                        background: regWebAgentStatus === "loading" ? "#ccc" : "linear-gradient(135deg, #448C74, #55d19d)",
+                        border: "none"
+                      }}
+                    >
+                      {regWebAgentStatus === "loading" ? (
+                        <><FaSpinner style={{ animation: "spin 1s linear infinite" }} /> Processing...</>
+                      ) : (
+                        <><FaWandSparkles size={12} /> Run Web Agent</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading */}
+                {regWebAgentStatus === "loading" && (
+                  <div className="mt-3 p-3 rounded-3 bg-white border shadow-sm">
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <div className="d-flex align-items-center gap-2" style={{ fontSize: "13px", fontWeight: 600, color: "#2d6b55" }}>
+                        <FaSpinner style={{ animation: "spin 1s linear infinite", width: "0.9rem", height: "0.9rem" }} />
+                        <span>{regWebAgentCurrentStatus || "Querying building regulation rules & authority documents..."}</span>
+                      </div>
+                      <span className="badge bg-success bg-opacity-10 text-success" style={{ fontSize: "10px", fontWeight: 600 }}>Live Web Search Stream</span>
+                    </div>
+                    <div className="progress mb-2" style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e9ecef" }}>
+                      <div
+                        className="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                        role="progressbar"
+                        style={{ width: regWebAgentResponse ? "90%" : regWebAgentStatusLog.length > 2 ? "65%" : "35%", transition: "width 0.4s ease" }}
+                      />
+                    </div>
+                    {regWebAgentStatusLog.length > 0 && (
+                      <div className="pt-2 mt-2 border-top" style={{ fontSize: "11px", color: "#666", maxHeight: "90px", overflowY: "auto" }}>
+                        {regWebAgentStatusLog.map((logMsg, i) => (
+                          <div key={i} className="d-flex align-items-center gap-2 mb-1">
+                            <span className="text-success fw-bold" style={{ fontSize: "10px" }}>✓</span>
+                            <span>{logMsg}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Result */}
+                {regWebAgentStatus === "completed" && regWebAgentResponse && (
+                  <div className="mt-3 rounded-3 border bg-white shadow-sm overflow-hidden">
+                    <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
+                      <div className="d-flex align-items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#2d6b55" }}>
+                        <span>Analysis Result</span>
+                        <span className="badge bg-success bg-opacity-10 text-success fw-normal" style={{ fontSize: "10px" }}>Web Agent</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
+                        style={{ fontSize: "11px", fontWeight: 600 }}
+                        onClick={() => setIsRegWebAgentMaximized(!isRegWebAgentMaximized)}
+                      >
+                        {isRegWebAgentMaximized ? <><FaCompress size={11} /> Minimize View</> : <><FaExpandAlt size={11} /> Maximize View</>}
+                      </button>
+                    </div>
+                    <div
+                      className="p-3 regulatory-answer-md custom-scrollbar"
+                      style={{ maxHeight: isRegWebAgentMaximized ? "750px" : "350px", overflowY: "scroll", fontSize: "13px", background: "#ffffff" }}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ node, ...props }) => <h4 className="web-response-h1" {...props} />,
+                          h2: ({ node, ...props }) => <h5 className="web-response-h2" {...props} />,
+                          h3: ({ node, ...props }) => <h6 className="web-response-h3" {...props} />,
+                          a: ({ node, href, children, ...props }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="web-response-link" {...props}>
+                              {children} <FaExternalLinkAlt size={9} className="ms-1 inline-icon" />
+                            </a>
+                          ),
+                          blockquote: ({ node, ...props }) => <blockquote className="web-response-blockquote" {...props} />,
+                          table: ({ node, ...props }) => (
+                            <div className="table-responsive my-3">
+                              <table className="table table-sm table-hover table-bordered border-light-subtle web-response-table" {...props} />
+                            </div>
+                          )
+                        }}
+                      >
+                        {regWebAgentResponse}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error */}
+                {regWebAgentStatus === "error" && (
+                  <div className="mt-3 p-3 rounded-3 bg-danger bg-opacity-10 border border-danger text-danger small">{regWebAgentError}</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Existing AI Document Analysis sections — numbered 02 onwards */}
           {REGULATORY_SECTIONS.map((section, idx) => {
             const result = sectionResults[section.id];
             const isExpanded = expandedSections.has(section.id);
@@ -1040,7 +1362,7 @@ const RegulatoryIntelligence = () => {
                             fontSize: "12px",
                           }}
                         >
-                          {String(idx + 1).padStart(2, "0")}
+                          {String(idx + 2).padStart(2, "0")}
                         </span>
                         {section.title}
                       </div>
