@@ -2266,6 +2266,7 @@ function DroppedComparableTable({ droppedComparables, onRestore, selectable, onU
 
 // ── Listing Table ────────────────────────────────────────────────
 function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCollapsed }) {
+  const { user } = useAuth();
   const [isMaximized, setIsMaximized] = useState(false);
   const [sortConfig, setSortConfig] = useState({ column: null, direction: null });
   const [filterConfig, setFilterConfig] = useState({});
@@ -2364,7 +2365,13 @@ function ListingTable({ listings, dbTransactions, collapsed = false, onToggleCol
             {lst._is_db ? (
               <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
             ) : lst.source_url ? (
-              <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400">web</span>
+              user?.role === "ADMIN" ? (
+                <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300 font-medium">
+                  {lst.source_url}
+                </a>
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400">web</span>
+              )
             ) : "—"}
           </td>
         </tr>
@@ -6722,7 +6729,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: abortRef.current.signal,
+        signal: abortRef?.current?.signal,
       });
 
       if (!response.ok || !response.body) {

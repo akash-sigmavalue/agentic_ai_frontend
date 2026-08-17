@@ -228,6 +228,7 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
 
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [isTableMaximized, setIsTableMaximized] = useState(false);
+  const [isMapMaximized, setIsMapMaximized] = useState(false);
   const [mapMode, setMapMode] = useState("amenity");
   const [amenityRadius, setAmenityRadius] = useState(1000);
   const [densityRadius, setDensityRadius] = useState(500);
@@ -597,24 +598,24 @@ export default function MapSection({ markers = [], factorialData, onDensityUpdat
   const center = primaryMarker ? [primaryMarker.lat, primaryMarker.lng] : [20.5937, 78.9629];
 
   const mapContent = (
-    <div className={`transition-all duration-300 flex flex-col ${isMaximized
-      ? "w-full h-full flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
+    <div className={`transition-all duration-300 flex flex-col ${isMapMaximized
+      ? "w-full h-full flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative z-[50]"
       : "w-full h-[450px] overflow-hidden rounded-2xl border border-white/[0.08] bg-bg-card shadow-panel relative"
       }`}>
       <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-input px-4 py-3 shrink-0">
         <span className="font-display text-[11px] uppercase tracking-[0.04em] text-accent-light">
-          {isMaximized ? "Fullscreen Map View" : "Subject Property Location"}
+          {isMapMaximized ? "Fullscreen Map View" : "Subject Property Location"}
         </span>
         <div className="flex items-center gap-4">
           <span className="font-mono text-[11px] text-text-dim">
             {typeof primaryMarker?.lat === 'number' ? primaryMarker.lat.toFixed(5) : Number(primaryMarker?.lat || 0).toFixed(5)}, {typeof primaryMarker?.lng === 'number' ? primaryMarker.lng.toFixed(5) : Number(primaryMarker?.lng || 0).toFixed(5)}
           </span>
           <button
-            onClick={onToggleMaximize}
+            onClick={() => setIsMapMaximized(!isMapMaximized)}
             className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-accent transition hover:bg-accent hover:text-bg-deep cursor-pointer"
-            title={isMaximized ? "Close Fullscreen" : "Maximize Map"}
+            title={isMapMaximized ? "Close Fullscreen" : "Maximize Map"}
           >
-            {isMaximized ? (
+            {isMapMaximized ? (
               <>
                 <Minimize2 className="h-3 w-3" />
                 Close Fullscreen
