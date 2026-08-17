@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { apiUrl } from '@/lib/api-client';
+import { useLedger } from './hooks/useLedger';
 import {
     FaSearch,
     FaTable,
@@ -103,6 +104,7 @@ const TransactionDrilldownModal = ({
     conversionFactor = 1.0,
     onClose,
 }) => {
+    const { recordDbCall } = useLedger();
     /* ── states ──────────────────────────────────────────────────────────── */
     const [step, setStep] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');                        // 1=col select, 2=results
@@ -187,6 +189,7 @@ const TransactionDrilldownModal = ({
                 setTotalPages(json.total_pages || 1);
                 setPage(json.page || 1);
                 setStep(2);
+                recordDbCall("Transaction DB", "Market Research", 1);
             } else {
                 setError(json.error || 'Failed to fetch transactions');
             }
@@ -250,6 +253,7 @@ const TransactionDrilldownModal = ({
                 body: JSON.stringify(payload),
             });
             const json = await res.json();
+            recordDbCall("Transaction DB", "Market Research", 1);
             const exportData = (json && json.success && json.data) ? json.data : transactions;
 
             const headers = selectedColumns.map(label);

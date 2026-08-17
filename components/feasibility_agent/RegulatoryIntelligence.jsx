@@ -26,6 +26,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiUrl } from "@/lib/api-client";
+import { useLedger } from "./hooks/useLedger";
 
 /* ─────────────────────── constants ─────────────────────── */
 
@@ -272,6 +273,7 @@ const StatusIcon = ({ status }) => {
 /* ─────────────────────── main component ─────────────────────── */
 
 const RegulatoryIntelligence = () => {
+  const { recordLlmCall } = useLedger();
   /* ── upload state ── */
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -617,6 +619,17 @@ const RegulatoryIntelligence = () => {
         }
 
         const result = await askResp.json();
+        const tokenUsage = result.token_usage || {};
+        recordLlmCall(
+          "moonshotai.kimi-k2.5",
+          "Regulatory Intelligence",
+          {
+            inputTokens:  tokenUsage.input ?? tokenUsage.input_tokens ?? 0,
+            outputTokens: tokenUsage.output ?? tokenUsage.output_tokens ?? 0,
+            totalTokens:  (tokenUsage.input ?? tokenUsage.input_tokens ?? 0) + (tokenUsage.output ?? tokenUsage.output_tokens ?? 0),
+            apiCalls:     1,
+          }
+        );
         const answer =
           result.answer ||
           result.response ||
@@ -677,6 +690,17 @@ const RegulatoryIntelligence = () => {
       }
 
       const result = await askResp.json();
+      const tokenUsage = result.token_usage || {};
+      recordLlmCall(
+        "moonshotai.kimi-k2.5",
+        "Regulatory Intelligence",
+        {
+          inputTokens:  tokenUsage.input ?? tokenUsage.input_tokens ?? 0,
+          outputTokens: tokenUsage.output ?? tokenUsage.output_tokens ?? 0,
+          totalTokens:  (tokenUsage.input ?? tokenUsage.input_tokens ?? 0) + (tokenUsage.output ?? tokenUsage.output_tokens ?? 0),
+          apiCalls:     1,
+        }
+      );
       const answer =
         result.answer ||
         result.response ||

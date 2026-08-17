@@ -19,6 +19,7 @@ import {
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
 import { apiUrl } from "@/lib/api-client";
+import { useLedger } from "./hooks/useLedger";
 import {
   FaArrowLeft,
   FaBolt,
@@ -86,6 +87,7 @@ const SCENARIO_COLORS = {
 };
 
 const SalesVelocity = () => {
+  const { recordDbCall } = useLedger();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(TAB_KEYS.MAP);
   const [formState, setFormState] = useState(DEFAULT_FORM_STATE);
@@ -328,6 +330,7 @@ const SalesVelocity = () => {
         setFilterResult(null);
       } else {
         setFilterResult(data);
+        recordDbCall("Sales Velocity DB", "Sales Velocity", 1);
       }
     } catch (error) {
       console.error("SalesVelocity filter error", error);
@@ -374,6 +377,7 @@ const SalesVelocity = () => {
         setComparisonResult(null);
       } else {
         setComparisonResult(data);
+        recordDbCall("Sales Velocity DB", "Sales Velocity", 1);
       }
     } catch (error) {
       console.error("SalesVelocity comparison error", error);
@@ -419,6 +423,7 @@ const SalesVelocity = () => {
         setProjectionResult(null);
       } else {
         setProjectionResult(data);
+        recordDbCall("Sales Velocity DB", "Sales Velocity", 1);
       }
     } catch (error) {
       console.error("SalesVelocity projection error", error);

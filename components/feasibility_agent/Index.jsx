@@ -578,7 +578,7 @@ import {
   FaDatabase,
   FaMapLocationDot,
 } from "react-icons/fa6";
-import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding } from "react-icons/fa";
+import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding, FaFilePdf, FaDownload } from "react-icons/fa";
 import Select from "react-select";
 import { useState, useEffect } from "react";
 import Header from "./Header";
@@ -691,6 +691,8 @@ import FeasibilityIrrSection from "./components/FeasibilityIrrSection";
 import { downloadFeasibilityPDF, checkFeasibilityCompleteness } from "./FeasibilityReport";
 import { apiUrl } from "@/lib/api-client";
 import SectionHero from "./components/SectionHero";
+import { TokenLedgerProvider } from "./contexts/TokenLedgerContext";
+import UsageCostTab from "./components/UsageCostTab";
 
 const sidebarButtons = [
   { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
@@ -703,6 +705,7 @@ const sidebarButtons = [
   { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
   { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
   { id: "irr-calculator", label: "IRR Calculator", subtitle: "Cash inflow & IRR", icon: FaCalculator },
+  { id: "generate-report", label: "Generate Report", subtitle: "Export PDF report", icon: FaFilePdf },
   // { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
   // { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
 ];
@@ -885,6 +888,7 @@ const Index = () => {
         { id: "cost-details", elementId: "section-cost-heading" },
         { id: "means-finance", elementId: "section-means-finance-heading" },
         { id: "irr-calculator", elementId: "section-irr-calculator-heading" },
+        { id: "generate-report", elementId: "section-generate-report" },
         { id: "cashflows", elementId: "section-cashflows" },
       ];
 
@@ -950,6 +954,7 @@ const Index = () => {
   const handleUnitDesignSave = () => { };
 
   return (
+    <TokenLedgerProvider>
     <div
       className={`min-vh-100 theme-${theme}`}
       style={{
@@ -1002,6 +1007,11 @@ const Index = () => {
                       } else if (btn.id === "irr-calculator") {
                         setActiveSection(btn.id);
                         document.getElementById("section-irr-calculator-heading")?.scrollIntoView({ behavior: "smooth" });
+                      } else if (btn.id === "generate-report") {
+                        setActiveSection(btn.id);
+                        document.getElementById("section-generate-report")?.scrollIntoView({ behavior: "smooth" });
+                      } else if (btn.id === "usage-cost") {
+                        setActiveSection(btn.id);
                       } else if (btn.id === "cashflows") {
                         navigate("/irr");
                       } else if (btn.id === "predictive-rate-sim") {
@@ -1028,6 +1038,43 @@ const Index = () => {
               );
             })}
           </ul>
+
+          {/* Separated Monitoring / Token Counter Section */}
+          <div className="mt-auto pt-3 border-top border-light-subtle">
+            <button
+              className={`nav-btn-modern w-100 ${activeSection === "usage-cost" ? "active" : ""}`}
+              style={{
+                borderRadius: "12px",
+                border: activeSection === "usage-cost" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
+                backgroundColor: activeSection === "usage-cost" ? "#eef2ff" : "#f8fafc",
+                transition: "all 0.2s ease",
+              }}
+              onClick={() => setActiveSection("usage-cost")}
+            >
+              <div className="nav-btn-modern-left">
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-circle"
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    backgroundColor: activeSection === "usage-cost" ? "#4f46e5" : "#6366f115",
+                    color: activeSection === "usage-cost" ? "#ffffff" : "#4f46e5",
+                  }}
+                >
+                  <FaDatabase size={14} />
+                </div>
+                <div className="nav-btn-modern-text text-start">
+                  <div className="nav-btn-modern-title" style={{ color: "#1e293b", fontWeight: 700, fontSize: "13px" }}>
+                    Usage &amp; Cost
+                  </div>
+                  <div className="nav-btn-modern-subtitle" style={{ color: "#64748b", fontSize: "11px" }}>
+                    Token &amp; API Counter
+                  </div>
+                </div>
+              </div>
+              <FaChevronRight className="nav-btn-modern-chevron" style={{ color: "#94a3b8" }} />
+            </button>
+          </div>
         </aside>
 
         {/* Main Content Component */}
@@ -1988,104 +2035,98 @@ const Index = () => {
               <FeasibilityIrrSection />
             </div>
 
-            {/* Dashboard Buttons */}
-            <div
-              id="section-cashflows"
-              className="col-12 text-center pt-4 fade-in-up"
-              style={{ animationDelay: "0.9s" }}
-            >
-              <style>{`
-                .action-btn-blue {
-                  background: linear-gradient(135deg, #4d9cff 0%, #1e6bf2 100%);
-                  box-shadow: 0 10px 25px rgba(30, 107, 242, 0.4);
-                }
-                .action-btn-blue:hover {
-                  box-shadow: 0 15px 30px rgba(30, 107, 242, 0.5);
-                  transform: translateY(-3px);
-                }
-                .action-btn-blue .icon-circle { color: #1e6bf2; }
+            {/* Section 11: Generate Feasibility Report */}
+            <SectionHero
+              id="section-generate-report"
+              title="Generate Feasibility Report"
+              description="Compile all land parameters, zoning intelligence, product mix, revenue projections, cost outflow, and IRR calculations into a comprehensive PDF report."
+              icon={FaFilePdf}
+            />
 
-                .action-btn-green {
-                  background: linear-gradient(135deg, #2ae095 0%, #0ebb7a 100%);
-                  box-shadow: 0 10px 25px rgba(14, 187, 122, 0.4);
-                }
-                .action-btn-green:hover {
-                  box-shadow: 0 15px 30px rgba(14, 187, 122, 0.5);
-                  transform: translateY(-3px);
-                }
-                .action-btn-green .icon-circle { color: #0ebb7a; }
+            <div className="col-12 fade-in-up stagger-7 mb-5">
+              <div className="card shadow-sm border-0 rounded-4 overflow-hidden" style={{ background: "#ffffff" }}>
+                <div className="card-body p-4 p-lg-5 text-center">
+                  <div
+                    className="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle"
+                    style={{ width: "64px", height: "64px", background: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)", color: "#0284c7" }}
+                  >
+                    <FaFilePdf size={28} />
+                  </div>
+                  <h4 className="fw-bold text-dark mb-2">Project Feasibility Report</h4>
+                  <p className="text-muted mx-auto mb-4" style={{ maxWidth: "560px", fontSize: "14px" }}>
+                    Export a comprehensive, executive-ready feasibility study covering zoning compliance, market research, revenue projections, cost distributions, and multi-scenario investment metrics.
+                  </p>
 
-                .action-btn-teal {
-                  background: linear-gradient(135deg, #378b94 0%, #176067 100%);
-                  box-shadow: 0 10px 25px rgba(23, 96, 103, 0.4);
-                }
-                .action-btn-teal:hover {
-                  box-shadow: 0 15px 30px rgba(23, 96, 103, 0.5);
-                  transform: translateY(-3px);
-                }
-                .action-btn-teal .icon-circle { color: #176067; }
+                  {reportError && (
+                    <div className="alert alert-warning py-2 px-3 mx-auto mb-4 d-flex align-items-center justify-content-center gap-2" style={{ fontSize: "13px", borderRadius: "10px", maxWidth: "500px" }}>
+                      <FaCircleInfo />
+                      <span>{reportError}</span>
+                    </div>
+                  )}
 
-                .action-btn-base {
-                  border: none;
-                  color: white;
-                  padding: 8px 32px 8px 8px;
-                  border-radius: 50px !important;
-                  font-weight: 600;
-                  font-size: 15px;
-                  display: flex;
-                  align-items: center;
-                  gap: 16px;
-                  transition: all 0.3s ease;
-                }
-                .action-btn-base .icon-circle {
-                  background: white;
-                  width: 44px;
-                  height: 44px;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-size: 18px;
-                }
-              `}</style>
-              <div className="d-flex justify-content-center align-items-center gap-4 flex-wrap pb-5">
-                <button
-                  className="action-btn-base action-btn-blue d-none"
-                  onClick={() => setShowDashboard(true)}
-                >
-                  <div className="icon-circle">
-                    <FaChartLine />
+                  <div className="d-flex justify-content-center">
+                    <button
+                      className="btn btn-lg rounded-pill px-5 py-3 fw-bold text-white shadow d-flex align-items-center gap-3"
+                      style={{
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        border: "none",
+                        fontSize: "16px",
+                        transition: "all 0.3s ease",
+                      }}
+                      onClick={handleDownloadReport}
+                      disabled={reportDownloading}
+                    >
+                      {reportDownloading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm" role="status" />
+                          <span>Generating Feasibility Report...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaDownload size={18} />
+                          <span>Download Feasibility Report (PDF)</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                  View Dashboard
-                </button>
-                <button
-                  className="action-btn-base action-btn-green d-none"
-                  onClick={() => navigate("/ownership-check")}
-                >
-                  <div className="icon-circle">
-                    <FaUsers />
-                  </div>
-                  Developer Share
-                </button>
-                <button
-                  className="action-btn-base action-btn-teal"
-                  onClick={handleDownloadReport}
-                  disabled={reportDownloading}
-                >
-                  <div className="icon-circle">
-                    {reportDownloading ? (
-                      <span className="spinner-border spinner-border-sm" role="status" />
-                    ) : (
-                      <FaDatabase />
-                    )}
-                  </div>
-                  {reportDownloading ? "Generating..." : "Download Report"}
-                </button>
+                </div>
               </div>
             </div>
           </div>
         </main>
       </div>
+
+      {/* Usage & Cost Panel — rendered outside main scroll area */}
+      {activeSection === "usage-cost" && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1200,
+          background: "rgba(15,23,42,0.45)", backdropFilter: "blur(2px)",
+          display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+        }} onClick={(e) => { if (e.target === e.currentTarget) setActiveSection("land-identification"); }}>
+          <div style={{
+            width: "min(900px, 95vw)", height: "100vh", overflowY: "auto",
+            background: "#f8fafc", boxShadow: "-8px 0 32px rgba(0,0,0,0.12)",
+            display: "flex", flexDirection: "column",
+          }}>
+            <div style={{
+              padding: "16px 20px", background: "#fff",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              position: "sticky", top: 0, zIndex: 1,
+            }}>
+              <span style={{ fontWeight: 700, fontSize: "15px", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                <FaDatabase size={14} color="#4f46e5" /> Usage &amp; Cost
+              </span>
+              <button
+                onClick={() => setActiveSection("land-identification")}
+                style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: "20px", color: "#64748b", lineHeight: 1 }}
+                title="Close"
+              >✕</button>
+            </div>
+            <UsageCostTab />
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Modal */}
       <Dashboard
@@ -2093,6 +2134,7 @@ const Index = () => {
         onClose={() => setShowDashboard(false)}
       />
     </div>
+    </TokenLedgerProvider>
   );
 };
 

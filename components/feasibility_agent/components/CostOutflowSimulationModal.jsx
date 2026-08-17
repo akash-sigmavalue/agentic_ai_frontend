@@ -14,6 +14,7 @@ import { FaChartBar, FaTimes, FaCheckCircle, FaExclamationTriangle, FaTimesCircl
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiUrl } from "@/lib/api-client";
 import { buildCostOutflowPayload, convertResultToIrrFormData } from "../utils/buildCostOutflowPayload";
+import { useLedger } from "../hooks/useLedger";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STEPS = ["View Data", "Validate", "Simulate", "Review & Apply"];
@@ -53,6 +54,7 @@ const pct = (v) => `${Number(v).toFixed(1)}%`;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario }) => {
+  const { recordLlmCall } = useLedger();
   const [step, setStep] = useState(1);
   const [payload, setPayload] = useState(null);
   const [buildErrors, setBuildErrors] = useState([]);
@@ -107,6 +109,11 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
       const data = await res.json();
       if (data.success) {
         setSimResult(data);
+        recordLlmCall(
+          "mistral.mistral-large-3-675b-instruct",
+          "Cost Outflow Simulation",
+          { apiCalls: 1 }
+        );
         setStep(4);
         // Initialise editable percentages from result
         const init = {};

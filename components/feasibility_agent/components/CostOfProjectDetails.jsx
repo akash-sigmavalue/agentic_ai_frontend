@@ -4,8 +4,10 @@ import { apiUrl } from "@/lib/api-client";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import FinanceCostCalculatorModal from './FinanceCostCalculatorModal';
+import { useLedger } from '../hooks/useLedger';
 
 const CostOfProjectDetails = () => {
+    const { recordLlmCall } = useLedger();
     const [currency, setCurrency] = useState("INR");
     const [scenarios, setScenarios] = useState([]);
     const [activeScenarioId, setActiveScenarioId] = useState(null);
@@ -292,6 +294,17 @@ const CostOfProjectDetails = () => {
             }
             
             const data = await askRes.json();
+            const tokenUsage = data.token_usage || {};
+            recordLlmCall(
+                "moonshotai.kimi-k2.5",
+                "Cost Details",
+                {
+                    inputTokens:  tokenUsage.input ?? tokenUsage.input_tokens ?? 0,
+                    outputTokens: tokenUsage.output ?? tokenUsage.output_tokens ?? 0,
+                    totalTokens:  (tokenUsage.input ?? tokenUsage.input_tokens ?? 0) + (tokenUsage.output ?? tokenUsage.output_tokens ?? 0),
+                    apiCalls:     1,
+                }
+            );
             const answerText = data.answer || data.response || data.output || data.content || (typeof data === 'string' ? data : JSON.stringify(data));
             
             // Try to extract [COST: 12345]

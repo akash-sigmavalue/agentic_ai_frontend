@@ -397,8 +397,8 @@
 
 import { apiUrl } from "@/lib/api-client";
 import { useState, useEffect, useRef } from "react";
-
 import { FaGlobe, FaFilePdf, FaMinus, FaExpandAlt, FaCompressAlt, FaTimes } from "react-icons/fa";
+import { useLedger } from "./hooks/useLedger";
 
 // Helper: read areaType from landDetailsForm in localStorage
 const getAreaType = () => {
@@ -433,6 +433,7 @@ const getLandDetailsField = (fieldName) => {
 };
 
 const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
+  const { recordLlmCall } = useLedger();
   const [formData, setFormData] = useState({
     Proposed_Basic_FSI: "",
     Proposed_Premium_FSI: "",
@@ -570,6 +571,17 @@ const FSIProposalForm = ({ landResults, zoningType, location, onSave }) => {
       }
 
       const result = await askResponse.json();
+      const tokenUsage = result.token_usage || {};
+      recordLlmCall(
+        "moonshotai.kimi-k2.5",
+        "Land & FSI Details",
+        {
+          inputTokens:  tokenUsage.input ?? tokenUsage.input_tokens ?? 0,
+          outputTokens: tokenUsage.output ?? tokenUsage.output_tokens ?? 0,
+          totalTokens:  (tokenUsage.input ?? tokenUsage.input_tokens ?? 0) + (tokenUsage.output ?? tokenUsage.output_tokens ?? 0),
+          apiCalls:     1,
+        }
+      );
 
       setDocLoading(false);
       setDocStatus("Completed successfully.");
