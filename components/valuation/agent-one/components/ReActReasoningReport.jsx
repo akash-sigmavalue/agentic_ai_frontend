@@ -64,7 +64,7 @@ export default function ReActReasoningReport({ report }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-panel p-6">
-      <div className="max-h-[720px] overflow-y-auto custom-scrollbar space-y-3.5 font-mono text-[11px] leading-relaxed pr-2">
+      <div className="max-h-[720px] overflow-y-auto custom-scrollbar space-y-3.5 font-mono text-xs sm:text-[13px] leading-relaxed pr-2">
         {renderedLines.map((line, idx) => {
           switch (line.type) {
             case 'empty':
@@ -73,7 +73,7 @@ export default function ReActReasoningReport({ report }) {
             case 'stage-header':
               return (
                 <div key={idx} className="border-b border-border/60 pb-2 pt-4 first:pt-0">
-                  <h4 className="text-accent text-[12px] font-black tracking-wider uppercase">
+                  <h4 className="text-accent text-xs sm:text-[14px] font-black tracking-wider uppercase">
                     {line.content}
                   </h4>
                 </div>
@@ -82,7 +82,7 @@ export default function ReActReasoningReport({ report }) {
             case 'step-header':
               return (
                 <div key={idx} className="pt-2">
-                  <h5 className="text-text-primary text-[11px] font-bold tracking-wide uppercase">
+                  <h5 className="text-text-primary text-xs sm:text-[13px] font-bold tracking-wide uppercase">
                     {line.content}
                   </h5>
                 </div>

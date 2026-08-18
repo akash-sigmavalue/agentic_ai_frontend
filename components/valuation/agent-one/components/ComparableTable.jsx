@@ -313,7 +313,7 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
   const renderTable = (maxHeightClass = "") => (
     <div className="relative">
       <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-        <table className="w-full min-w-max text-left text-xs">
+        <table className="w-full min-w-max text-left text-xs sm:text-sm">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
             <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
               {selectable && (
@@ -873,7 +873,7 @@ export default function ComparableTable({
       </div>
 
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-        <table className="w-full min-w-max text-left text-xs">
+        <table className="w-full min-w-max text-left text-xs sm:text-sm">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
             <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim bg-[#161922]">
               {selectable && (

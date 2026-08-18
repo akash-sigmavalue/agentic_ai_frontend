@@ -96,21 +96,21 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
               </span>
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.05em] text-accent">
                 AI Quick Estimate Running
               </p>
-              <p className="mt-1 text-xs text-text-secondary">
+              <p className="mt-1 text-xs sm:text-sm text-text-secondary">
                 {propertyLabel} · {locationLabel}
               </p>
             </div>
           </div>
-          <div className="rounded-full border border-accent/20 bg-bg-input/80 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-accent">
+          <div className="rounded-full border border-accent/20 bg-bg-input/80 px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-accent">
             {elapsed}
           </div>
         </div>
 
         <div className="mt-4">
-          <div className="mb-1.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-text-dim">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] sm:text-xs font-bold uppercase tracking-wider text-text-dim">
             <span>Valuation Pipeline progress</span>
             <span className="text-accent">{progressPct}%</span>
           </div>
@@ -159,18 +159,18 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
-                      <p className={`text-[11px] font-bold uppercase tracking-[0.04em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
+                      <p className={`text-[11px] sm:text-xs font-bold uppercase tracking-[0.04em] ${isActive ? "text-accent" : isComplete ? "text-success" : "text-text-dim"
                         }`}>
                         {stage.label}
                       </p>
                       {isActive && (
-                        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent animate-pulse">
+                        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent animate-pulse">
                           Live
                         </span>
                       )}
                     </div>
                   </div>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">
+                  <p className="mt-0.5 text-[11px] sm:text-xs leading-relaxed text-text-secondary">
                     {isActive && progress.message ? progress.message : stage.desc}
                   </p>
                 </div>
@@ -183,11 +183,11 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
         {selectedComparables.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-accent/20 bg-bg-input/40 animate-in fade-in slide-in-from-bottom-2 duration-400">
             <div className="flex items-center gap-2 border-b border-accent/15 bg-accent/5 px-3.5 py-2">
-              <span className="text-accent text-[10px]">◈</span>
-              <p className="text-[9px] font-black uppercase tracking-[0.05em] text-accent">
+              <span className="text-accent text-xs">◈</span>
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-accent">
                 Selected Comparables
               </p>
-              <span className="ml-auto rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[8px] font-bold text-accent">
+              <span className="ml-auto rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[9px] font-bold text-accent">
                 {selectedComparables.length} found
               </span>
             </div>
@@ -210,15 +210,15 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
                     className="flex flex-col gap-1.5 px-3.5 py-2.5 hover:bg-accent/[0.03] transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="flex-1 truncate text-[11px] font-semibold text-text-primary leading-tight">
+                      <span className="flex-1 truncate text-[11px] sm:text-xs font-semibold text-text-primary leading-tight">
                         {comp.project_name || "—"}
                       </span>
-                      <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${sourceBadgeClass}`}>
+                      <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${sourceBadgeClass}`}>
                         {sourceIcon} {sourceLabel}
                       </span>
                     </div>
                     {reason && (
-                      <p className="text-[10px] leading-relaxed text-text-dim line-clamp-2">
+                      <p className="text-[10px] sm:text-[11px] leading-relaxed text-text-dim line-clamp-2">
                         {reason}
                       </p>
                     )}
@@ -232,14 +232,14 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
         {(progress.message || detailChips.length > 0) && (
           <div className="rounded-xl border border-border/50 bg-bg-input/60 px-3.5 py-3">
             {progress.message && (
-              <p className="text-xs leading-relaxed text-text-primary">{progress.message}</p>
+              <p className="text-xs sm:text-sm leading-relaxed text-text-primary">{progress.message}</p>
             )}
             {detailChips.length > 0 && (
               <div className={`flex flex-wrap gap-2 ${progress.message ? "mt-2.5" : ""}`}>
                 {detailChips.map((chip) => (
                   <span
                     key={chip}
-                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent"
+                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold text-accent"
                   >
                     {chip}
                   </span>
@@ -249,7 +249,7 @@ export function QuickEstimateProgressPanel({ progress, includeCost, propertyLabe
           </div>
         )}
 
-        <p className="text-[10px] leading-relaxed text-text-dim">
+        <p className="text-[10px] sm:text-[11px] leading-relaxed text-text-dim">
           This usually takes 1–3 minutes depending on listing availability and comparable coverage.
         </p>
       </div>
@@ -284,14 +284,14 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
 
     return (
       <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">
+        <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">
           {config.label}{isRequired ? " *" : ""}
         </span>
         {config.type === "select" ? (
           <select
             value={values[field] ?? ""}
             onChange={(event) => updateField(field, event.target.value)}
-            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
           >
             {(config.options || []).map((option) => (
               <option key={option} value={option} style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>
@@ -305,7 +305,7 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
             value={values[field] ?? ""}
             onChange={(event) => updateField(field, event.target.value)}
             placeholder={config.placeholder}
-            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
           />
         )}
       </label>
@@ -321,13 +321,13 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
               <Zap className="h-5 w-5 text-accent" />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">AI Quick Estimate</p>
-              <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.05em] text-accent">AI Quick Estimate</p>
+              <p className="mt-1 text-xs sm:text-sm leading-relaxed text-text-secondary">
                 Enter the subject details once and get a direct valuation result.
               </p>
             </div>
           </div>
-          <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+          <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-accent">
             Research Mode
           </div>
         </div>
@@ -337,10 +337,10 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
         <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Property Information</p>
-              <p className="mt-1 text-[11px] text-text-dim">Start with the identity fields, then add the remaining details.</p>
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-accent">Property Information</p>
+              <p className="mt-1 text-[11px] sm:text-xs text-text-dim">Start with the identity fields, then add the remaining details.</p>
             </div>
-            <div className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+            <div className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-accent">
               Step 1 First
             </div>
           </div>
@@ -351,11 +351,11 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
-            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Property Type</span>
+            <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Property Type</span>
             <select
               value={propertyType}
               onChange={(event) => updateField("property_type", event.target.value)}
-              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
             >
               <option value="apartment" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Apartment</option>
               <option value="villa" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Villa</option>
@@ -366,12 +366,12 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
             </select>
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach</span>
+            <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach</span>
             <select
               value={values.recommended_approach}
               onChange={(event) => updateField("recommended_approach", event.target.value)}
               disabled={!isCostCapable && values.recommended_approach === "market"}
-              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
+              className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
             >
               <option value="market" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Market Approach</option>
               {isCostCapable && <option value="cost" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-primary)" }}>Cost Approach</option>}
@@ -384,14 +384,14 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-3">
-          <p className="text-[10px] leading-relaxed text-text-dim">
+          <p className="text-[10px] sm:text-[11px] leading-relaxed text-text-dim">
             Uses comparables, listings, transactions, cleaning, and factoring.
           </p>
           <button
             type="button"
             onClick={onSubmit}
             disabled={disabled || missingRequired.length > 0}
-            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Zap className="h-4 w-4" />
             Get Valuation

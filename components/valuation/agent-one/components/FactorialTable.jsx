@@ -181,7 +181,7 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
       </div>
 
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-        <table className="w-full min-w-max text-left text-xs">
+        <table className="w-full min-w-max text-left text-xs sm:text-sm">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
             <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
               <th className="px-4 py-3 font-semibold w-10">

@@ -4364,7 +4364,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     key={prompt}
                     type="button"
                     onClick={() => submitQuestion(prompt)}
-                    className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-xs text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
+                    className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-sm text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
                   >
                     {prompt}
                   </button>
@@ -4374,7 +4374,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <button
                   type="button"
                   onClick={() => setShowUserFormModal(true)}
-                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-wider transition ${inputMode === "user_form"
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-black uppercase tracking-wider transition ${inputMode === "user_form"
                     ? "border-accent/40 bg-accent/15 text-accent shadow-[0_0_14px_rgba(34,211,238,0.12)]"
                     : "border-border bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
                     }`}
@@ -4384,7 +4384,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <button
                   type="button"
                   onClick={() => setInputMode("describe_ai")}
-                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-wider transition ${inputMode === "describe_ai"
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-black uppercase tracking-wider transition ${inputMode === "describe_ai"
                     ? "border-warning/40 bg-warning/15 text-warning shadow-[0_0_14px_rgba(251,146,60,0.12)]"
                     : "border-border bg-bg-card text-text-secondary hover:border-warning/30 hover:text-text-primary"
                     }`}

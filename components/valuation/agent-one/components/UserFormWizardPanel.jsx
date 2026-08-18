@@ -142,12 +142,12 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
     if (field === "recommended_approach") {
       return (
         <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-          <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach *</span>
+          <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Approach *</span>
           <select
             value={values.recommended_approach}
             onChange={(event) => updateField("recommended_approach", event.target.value)}
             disabled={!isCostCapable && values.recommended_approach === "market"}
-            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition focus:border-accent focus:bg-accent/5 disabled:opacity-70"
           >
             <option value="market">Market Approach</option>
             {isCostCapable && <option value="cost">Cost Approach</option>}
@@ -158,14 +158,14 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
 
     return (
       <label key={field} className="flex min-w-[145px] flex-1 flex-col gap-1.5">
-        <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">
+        <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">
           {config.label}{isRequired ? " *" : ""}
         </span>
         {config.type === "select" ? (
           <select
             value={values[field] ?? ""}
             onChange={(event) => updateField(field, event.target.value)}
-            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition focus:border-accent focus:bg-accent/5"
           >
             <option value="" disabled>Select...</option>
             {(config.options || []).map((option) => (
@@ -180,7 +180,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
             value={values[field] ?? ""}
             onChange={(event) => updateField(field, event.target.value)}
             placeholder={config.placeholder}
-            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
+            className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-accent focus:bg-accent/5"
           />
         )}
       </label>
@@ -201,7 +201,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
   return (
     <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-2xl border border-accent/25 bg-bg-card/95 text-left shadow-panel md:max-h-[calc(100dvh-4rem)]">
       <div className="w-[240px] shrink-0 border-r border-border/70 bg-bg-deep/40 p-4">
-        <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Sections</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.05em] text-accent">Sections</p>
         <div className="mt-4 space-y-2">
           {sections.map((section, index) => {
             const locked = !canOpenSection(index);
@@ -223,8 +223,8 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                     : "border-border/60 bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
                   }`}
               >
-                <span className="mt-0.5 text-[10px] font-black">{prefix}</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.04em] leading-relaxed">
+                <span className="mt-0.5 text-[10px] sm:text-[11px] font-black">{prefix}</span>
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.04em] leading-relaxed">
                   {section.title.replace(/^Section \d+ • /, "")}
                 </span>
               </button>
@@ -237,12 +237,12 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
         <div className="shrink-0 border-b border-accent/15 bg-accent/5 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-accent">{sections[activeSection].title}</p>
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.05em] text-accent">{sections[activeSection].title}</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">
                 Step-by-step wizard for structured property input.
               </p>
             </div>
-            <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-accent">
+            <div className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-accent">
               {activeSection + 1} / {sections.length}
             </div>
           </div>
@@ -253,8 +253,8 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
             <div className="space-y-3">
               <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5">
                 <div className="mb-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Property Type</p>
-                  <p className="mt-1 text-[11px] text-text-dim">Choose the property category first to unlock relevant fields.</p>
+                  <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-accent">Property Type</p>
+                  <p className="mt-1 text-[11px] sm:text-xs text-text-dim">Choose the property category first to unlock relevant fields.</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {renderField("property_type")}
@@ -271,8 +271,8 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
               <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent">Auto-detected Coordinates</p>
-                    <p className="mt-1 text-[11px] text-text-dim leading-relaxed">
+                    <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-accent">Auto-detected Coordinates</p>
+                    <p className="mt-1 text-[11px] sm:text-xs text-text-dim leading-relaxed">
                       Coordinates are auto-fetched from the location you entered. You can edit them manually or refresh.
                     </p>
                   </div>
@@ -280,7 +280,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                     type="button"
                     onClick={fetchCoordinates}
                     disabled={isGeocoding}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-warning transition hover:bg-warning/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-warning transition hover:bg-warning/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isGeocoding ? (
                       <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -302,43 +302,43 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
-                    <p className="text-[10px] text-accent font-semibold">Fetching coordinates from location…</p>
+                    <p className="text-xs text-accent font-semibold">Fetching coordinates from location…</p>
                   </div>
                 )}
 
                 {geocodeError && (
                   <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2.5">
-                    <p className="text-[10px] font-bold text-red-400 leading-relaxed">⚠️ {geocodeError}</p>
-                    <p className="mt-1 text-[9px] text-text-dim">You can enter coordinates manually below.</p>
+                    <p className="text-xs font-bold text-red-400 leading-relaxed">⚠️ {geocodeError}</p>
+                    <p className="mt-1 text-[10px] text-text-dim">You can enter coordinates manually below.</p>
                   </div>
                 )}
 
                 {values.lat && values.lng && !isGeocoding && !geocodeError && (
                   <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-3 py-2">
-                    <span className="text-green-400 text-xs">✓</span>
-                    <p className="text-[10px] font-semibold text-green-400">Coordinates found: {values.lat}, {values.lng}</p>
+                    <span className="text-green-400 text-sm">✓</span>
+                    <p className="text-xs font-semibold text-green-400">Coordinates found: {values.lat}, {values.lng}</p>
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Latitude</span>
+                    <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Latitude</span>
                     <input
                       type="text"
                       value={values.lat ?? ""}
                       onChange={(e) => onChange({ ...values, lat: e.target.value, coordinates: e.target.value && values.lng ? `${e.target.value}, ${values.lng}` : values.coordinates })}
                       placeholder="e.g. 19.0760"
-                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className="pl-1 text-[9px] font-bold uppercase tracking-[0.05em] text-text-dim">Longitude</span>
+                    <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Longitude</span>
                     <input
                       type="text"
                       value={values.lng ?? ""}
                       onChange={(e) => onChange({ ...values, lng: e.target.value, coordinates: values.lat && e.target.value ? `${values.lat}, ${e.target.value}` : values.coordinates })}
                       placeholder="e.g. 72.8777"
-                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+                      className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
                     />
                   </label>
                 </div>
@@ -362,7 +362,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
             <div className="space-y-2 rounded-2xl border border-border/70 bg-bg-deep/30 p-4">
               {reviewSummary.map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-3 border-b border-border/40 py-2 last:border-0">
-                  <span className="text-[10px] font-black uppercase tracking-[0.05em] text-text-dim">{label}</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-text-dim">{label}</span>
                   <span className="text-sm font-semibold text-text-primary text-right">{value || "—"}</span>
                 </div>
               ))}
@@ -371,7 +371,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
 
           {activeSection === 5 && (
             <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-4">
-              <p className="text-[11px] text-text-secondary leading-relaxed">
+              <p className="text-[11px] sm:text-xs text-text-secondary leading-relaxed">
                 Review is complete. Click the button below to generate the valuation.
               </p>
             </div>
@@ -390,7 +390,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                   setGeocodeError("");
                   setGeocodeFetched(false);
                 }}
-                className="rounded-xl border border-border/40 bg-bg-input/20 px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-dim transition hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10"
+                className="rounded-xl border border-border/40 bg-bg-input/20 px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-text-dim transition hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10"
               >
                 Reset
               </button>
@@ -398,7 +398,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                 type="button"
                 onClick={() => setActiveSection((prev) => Math.max(0, prev - 1))}
                 disabled={activeSection === 0}
-                className="rounded-xl border border-border bg-bg-input px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary transition hover:border-accent/30 hover:text-text-primary disabled:opacity-40"
+                className="rounded-xl border border-border bg-bg-input px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-text-secondary transition hover:border-accent/30 hover:text-text-primary disabled:opacity-40"
               >
                 Previous
               </button>
@@ -407,7 +407,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
               <button
                 type="button"
                 disabled={!isSectionComplete(activeSection)}
-                className="rounded-xl bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                className="rounded-xl bg-accent px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
                 onClick={() => {
                   if (isSectionComplete(activeSection)) {
                     const next = Math.min(5, activeSection + 1);
@@ -423,7 +423,7 @@ export default function UserFormWizardPanel({ values, onChange, onSubmit, disabl
                 type="button"
                 onClick={onSubmit}
                 disabled={disabled}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-bg-deep transition hover:scale-[1.02] hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Zap className="h-4 w-4" />
                 Get Valuation
