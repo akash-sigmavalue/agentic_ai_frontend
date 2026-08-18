@@ -10,7 +10,7 @@ import BadgeList from "./BadgeList";
 import WorkflowPanel, { type WorkflowStepStatus } from "./WorkflowPanel";
 import QueryPanel from "./QueryPanel";
 import ResultsTable from "./ResultsTable";
-import type { AgentEvent, BackendConfig, Badge, DataRow, LogEntry, PlanResponse, StatusKind } from "./types";
+import type { AgentEvent, BackendConfig, Badge, DataRow, LogEntry, PlanResponse, QueryClarification, StatusKind } from "./types";
 
 type MahaReraAgentAppProps = {
   initialApiBaseUrl: string;
@@ -33,6 +33,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   const [busy, setBusy] = useState(false);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [clarification, setClarification] = useState<QueryClarification | null>(null);
   const [plan, setPlan] = useState<unknown[] | null>(null);
   const [workflowStatuses, setWorkflowStatuses] = useState<Record<string, WorkflowStepStatus>>({});
   const [results, setResults] = useState<DataRow[]>([]);
@@ -93,6 +94,7 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
   const clearOutput = useCallback(() => {
     closeStream();
     setLogEntries([]);
+    setClarification(null);
     setBadges([]);
     setPlan(null);
     setWorkflowStatuses({});
@@ -161,6 +163,15 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
           case "location_resolved":
             addBadge("Location", `${message.state || "-"}${message.district ? ` / ${message.district}` : ""}`);
             addBadge("Confidence", message.confidence || "unknown");
+            break;
+          case "input_required":
+            setClarification({
+              message: message.message || "Please provide a project name and location name.",
+              suggestedQuery: message.suggested_query,
+            });
+            setStatus("Query needs clarification", "err");
+            setBusy(false);
+            closeStream();
             break;
           case "portal_resolved":
             addBadge("Portal", message.state || "-");
@@ -572,7 +583,11 @@ export default function MahaReraAgentApp({ initialApiBaseUrl }: MahaReraAgentApp
               statusKind={statusKind}
               busy={busy}
               backendConfig={backendConfig}
-              onQueryChange={setQuery}
+              clarification={clarification}
+              onQueryChange={(value) => {
+                setQuery(value);
+                setClarification(null);
+              }}
               onUrlOverrideChange={setUrlOverride}
               onDistrictHintChange={setDistrictHint}
               onApiBaseUrlChange={setApiBaseUrl}

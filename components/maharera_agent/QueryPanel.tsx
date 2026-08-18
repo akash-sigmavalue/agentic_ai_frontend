@@ -1,8 +1,8 @@
-import { Bot, FlaskConical, ListChecks, Play, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, Bot, FlaskConical, ListChecks, Play, SlidersHorizontal } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import AgentCard from "./AgentCard";
 import StatusChip from "./StatusChip";
-import type { BackendConfig, StatusKind } from "./types";
+import type { BackendConfig, QueryClarification, StatusKind } from "./types";
 
 type QueryPanelProps = {
   query: string;
@@ -13,6 +13,7 @@ type QueryPanelProps = {
   statusKind: StatusKind;
   busy: boolean;
   backendConfig: BackendConfig;
+  clarification: QueryClarification | null;
   onQueryChange: (value: string) => void;
   onUrlOverrideChange: (value: string) => void;
   onDistrictHintChange: (value: string) => void;
@@ -32,6 +33,7 @@ export default function QueryPanel({
   statusKind,
   busy,
   backendConfig,
+  clarification,
   onQueryChange,
   onUrlOverrideChange,
   onDistrictHintChange,
@@ -60,6 +62,25 @@ export default function QueryPanel({
           <p className="mt-2 text-[11px] leading-5 text-text-dim">
             Write naturally and include the city, district, state, project type, promoter, or status where useful. The agent extracts the location, picks the matching state RERA portal, and builds the search plan.
           </p>
+          {clarification ? (
+            <div
+              role="alert"
+              className="mt-3 rounded-2xl border border-amber-400/60 bg-amber-400/10 p-3 shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+            >
+              <div className="flex gap-2.5">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Query needs clarification</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-text-primary">{clarification.message}</p>
+                  {clarification.suggestedQuery ? (
+                    <p className="mt-2 rounded-lg border border-amber-300/20 bg-bg-deep/45 px-2.5 py-2 font-mono text-[11px] text-amber-100">
+                      Example: {clarification.suggestedQuery}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <details className="group rounded-2xl border border-border bg-bg-card/60">

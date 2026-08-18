@@ -23,6 +23,11 @@ export type BackendConfig = {
   browserTestPath: string;
 };
 
+export type QueryClarification = {
+  message: string;
+  suggestedQuery?: string;
+};
+
 export type AgentEvent = {
   type?: string;
   message?: string;
@@ -50,6 +55,14 @@ export type AgentEvent = {
   challenge_id?: string;
   image?: string;
   expires_in?: number;
+  missing_field?: string;
+  missing_fields?: string[];
+  suggested_query?: string;
+  ui?: {
+    placement?: string;
+    section?: string;
+    priority?: string;
+  };
 };
 
 export type PlanResponse = {
