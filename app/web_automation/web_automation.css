@@ -1,0 +1,48 @@
+.web-automation-page {
+  --bg-deep: #080b11;
+  --bg-card: rgba(255, 255, 255, 0.035);
+  --bg-input: rgba(3, 7, 18, 0.86);
+  --bg-panel: rgba(15, 20, 29, 0.88);
+  --text-primary: #f8fafc;
+  --text-secondary: #dbe4ee;
+  --text-muted: #b6c2d1;
+  --text-dim: #8290a3;
+  --border-soft: rgba(255, 255, 255, 0.13);
+  --accent: #22d3ee;
+  --accent-light: #67e8f9;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --radius-panel: 8px;
+  color-scheme: dark;
+}
+
+.web-automation-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(103, 232, 249, 0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, black 18%, transparent 94%);
+}
+
+.web-automation-page .web-automation-input {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 0.75rem;
+  background: var(--bg-input);
+  padding: 0.625rem 0.75rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.web-automation-page .web-automation-input:focus {
+  border-color: var(--accent);
+}
+
+@media (max-width: 1279px) {
+  .web-automation-page {
+    overflow: auto;
+    padding-top: 5rem;
+  }
+}
