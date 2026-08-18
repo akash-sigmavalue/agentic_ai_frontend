@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useRef, useCallback } from "react";
-import { Building2, Bot, Map, Workflow, Maximize2 } from "lucide-react";
+import { Building2, Bot, Map, Workflow, Maximize2, Minimize2 } from "lucide-react";
 
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
@@ -37,11 +37,19 @@ export default function HomePage() {
   const containerRef = useRef(null);
 
   // Maximize/Minimize state
+  const ALL_PANELS = ["assistant", "workflow", "visual"];
   const [maximizedPanels, setMaximizedPanels] = useState([]);
   const toggleMaximize = useCallback((panelId) => {
-    setMaximizedPanels((prev) =>
-      prev.includes(panelId) ? prev.filter((id) => id !== panelId) : [...prev, panelId]
-    );
+    setMaximizedPanels((prev) => {
+      if (prev.includes(panelId)) {
+        // Already maximized → restore it
+        return prev.filter((id) => id !== panelId);
+      }
+      const next = [...prev, panelId];
+      // If all 3 would be maximized, revert to initial state instead
+      if (next.length === ALL_PANELS.length) return [];
+      return next;
+    });
   }, []);
 
   const handleEventsReset = useCallback((keepUpToEventType) => {
@@ -208,42 +216,57 @@ export default function HomePage() {
 
           <section ref={containerRef} className={`h-full min-h-0 flex-1 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'flex flex-col min-[1071px]:flex-row'} gap-4 min-[1071px]:gap-0`}>
 
-            {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
-            {maximizedPanels.length > 0 && (
+            {/* Panel Name Bars - Visible when 1 or 2 panels are maximized (i.e. at least one is hidden).
+                Hidden when all 3 are maximized — every panel is visible with its own header, so the bar would duplicate.
+                Active (maximized) bar: highlighted border + tint + Minimize2 icon.
+                Collapsed bar: muted card style + Maximize2 icon. */}
+            {maximizedPanels.length > 0 && maximizedPanels.length < 3 && (
               <div className="hidden shrink-0 gap-4 min-[1071px]:flex">
-                {!maximizedPanels.includes("assistant") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Bot className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">AI Assistant</span>
+                {/* AI Assistant bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("assistant");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-accent/40 bg-accent/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Bot className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-accent' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-accent' : 'text-text-dim'}`}>AI Assistant</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("assistant")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("assistant")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-                {!maximizedPanels.includes("workflow") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Workflow className="h-5 w-5 text-success" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Agentic Execution Flow</span>
+                  );
+                })()}
+                {/* Workflow bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("workflow");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-success/40 bg-success/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Workflow className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-success' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-success' : 'text-text-dim'}`}>Agentic Execution Flow</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("workflow")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("workflow")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-                {!maximizedPanels.includes("visual") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Map className="h-5 w-5 text-accent-purple" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Visual Layer</span>
+                  );
+                })()}
+                {/* Visual Layer bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("visual");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-[var(--accent-purple,#a78bfa)]/40 bg-[var(--accent-purple,#a78bfa)]/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Map className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-accent-purple' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-accent-purple' : 'text-text-dim'}`}>Visual Layer</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("visual")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("visual")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
