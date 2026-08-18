@@ -25,13 +25,13 @@ export function validateDocumentsRequest(formData: FormData) {
   });
 }
 
-export function askQuestionStreamRequest(question: string, session_id?: string) {
+export function askQuestionStreamRequest(question: string, session_id?: string, current_filename?: string | string[]) {
   return fetch(`${API_BASE_URL}/user-input/ask/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ question, session_id }),
+    body: JSON.stringify({ question, session_id, current_filename }),
   });
 }
 

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { parse } from 'marked';
 import Link from 'next/link';
 import { apiUrl } from '@/lib/api-client';
+import RoleGuard from '@/components/shared/RoleGuard';
 import "./web_search.css"
 
 type Message = {
@@ -525,7 +526,7 @@ function PlanningReport({ sections }: { sections: Record<string, PlanningSection
 }
 
 
-export default function Home() {
+function WebSearchV2Component() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -877,3 +878,12 @@ export default function Home() {
     </div>
   );
 }
+
+export default function WebSearchV2Page() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN']} agentKey="web_search">
+      <WebSearchV2Component />
+    </RoleGuard>
+  );
+}
+

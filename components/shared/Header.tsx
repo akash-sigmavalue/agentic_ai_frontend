@@ -64,17 +64,17 @@ const Header = () => {
     : 'bg-slate-100 border-slate-200';
 
   return (
-    <header className={`site-header fixed top-0 left-0 z-[1001] flex h-20 w-full items-center justify-between px-4 sm:px-8 lg:px-10 backdrop-blur-md border-b transition-colors ${shellClass}`}>
+    <header className={`site-header fixed top-0 left-0 z-[1001] flex h-20 w-full items-center justify-between px-3 sm:px-6 lg:px-10 backdrop-blur-md border-b transition-colors ${shellClass}`}>
       {/* Brand Logo */}
-      <Link href="/" className="flex items-center gap-3 sm:gap-4 cursor-pointer shrink-0">
-        <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl overflow-hidden shadow-sm">
-          <img src="/logo.png" alt="Sigmavalue OS Logo" className="h-full w-full object-cover rounded-2xl" />
+      <Link href="/" className="flex items-center gap-2 sm:gap-3.5 cursor-pointer min-w-0 max-w-[62%] sm:max-w-none shrink">
+        <div className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl overflow-hidden shadow-sm shrink-0">
+          <img src="/logo.png" alt="Sigmavalue OS Logo" className="h-full w-full object-cover rounded-xl sm:rounded-2xl" />
         </div>
-        <div className="flex flex-col">
-          <h1 className={`text-base sm:text-xl font-black tracking-tight leading-none mb-0.5 sm:mb-1 ${titleClass}`}>
+        <div className="flex flex-col min-w-0">
+          <h1 className={`text-sm sm:text-lg font-black tracking-tight leading-none mb-0.5 sm:mb-1 truncate ${titleClass}`}>
             Sigmavalue OS
           </h1>
-          <span className={`text-[8px] sm:text-[10px] font-black tracking-[0.2em] uppercase ${subtitleClass}`}>
+          <span className={`text-[7px] sm:text-[9px] font-black tracking-[0.12em] sm:tracking-[0.2em] uppercase truncate ${subtitleClass}`}>
             INTELLIGENT WORKSPACE
           </span>
         </div>
@@ -200,10 +200,11 @@ const Header = () => {
       </div>
 
       {/* Mobile Header Controls (Right side for mobile) */}
-      <div className="flex lg:hidden items-center gap-3">
+      <div className="flex lg:hidden items-center gap-1.5 sm:gap-2.5 shrink-0">
         <button
           onClick={toggleTheme}
           className={`flex items-center p-1 rounded-full border ${toggleClass}`}
+          title="Toggle Theme"
         >
           <div className={`p-1 rounded-full ${!isDark ? 'bg-white shadow-sm' : ''}`}>
             <Sun className={`h-3.5 w-3.5 ${!isDark ? 'text-amber-500' : 'text-slate-400'}`} />
@@ -216,10 +217,10 @@ const Header = () => {
         <button
           type="button"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 shadow-sm"
+          className="p-2 sm:p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 text-slate-800 dark:text-slate-100 shadow-md shrink-0 focus:outline-none"
           aria-label="Toggle mobile menu"
         >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {mobileMenuOpen ? <X className="w-5 h-5 text-indigo-500" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 

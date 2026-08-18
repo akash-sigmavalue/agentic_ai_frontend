@@ -505,7 +505,8 @@ export default function DocumentReader() {
       setHighlightRects([]);
       setHighlightError(null);
 
-      const response = await askQuestionStreamRequest(questionText, sessionId);
+      const currentFiles = Object.keys(fileUrlsBySource);
+      const response = await askQuestionStreamRequest(questionText, sessionId, currentFiles);
       if (!response.ok) throw new Error(await parseApiError(response));
 
       const generateStartedAt = performance.now();
