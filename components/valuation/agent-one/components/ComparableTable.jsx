@@ -1203,7 +1203,7 @@ export default function ComparableTable({
             </div>
           </div>
           {!listingCollapsed && (
-            <div className="mt-3 flex flex-col gap-3">
+            <div className="mt-3 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {renderTabBar()}
                 {renderSearchInput()}
