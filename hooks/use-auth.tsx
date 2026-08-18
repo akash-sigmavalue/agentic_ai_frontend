@@ -42,8 +42,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Pages that don't require authentication */
-const PUBLIC_PATHS = ['/', '/login', '/auth', '/register', '/auth/reset-password', '/pricing', '/office/invite', '/payment', '/valuation'];
+/** Pages that don't require authentication redirect */
+const PUBLIC_PATHS = [
+  '/',
+  '/login',
+  '/auth',
+  '/register',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/pricing',
+  '/office/invite',
+  '/payment',
+  '/valuation',
+  '/data_retrieval',
+  '/visualization_agent',
+  '/web_search',
+  '/web_search_v2',
+  '/feasibility',
+  '/maharera_agent',
+  '/elevation',
+  '/user_input',
+  '/ui_creation',
+  '/market_research',
+  '/connector',
+  '/portfolio-management',
+  '/unauthorized',
+];
 
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
