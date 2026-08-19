@@ -2041,6 +2041,7 @@ const Index = () => {
               title="Generate Feasibility Report"
               description="Compile all land parameters, zoning intelligence, product mix, revenue projections, cost outflow, and IRR calculations into a comprehensive PDF report."
               icon={FaFilePdf}
+              illustration="/assets/illustrations/generate-report.jpg"
             />
 
             <div className="col-12 fade-in-up stagger-7 mb-5">
