@@ -183,20 +183,66 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
     
     if (updatedResult.annual_totals) {
       const grandTotal = updatedResult.cost_rows.reduce((sum, r) => sum + r.total_amount, 0);
-      for (let i = 0; i < updatedResult.annual_totals.length; i++) {
+      const newAnnualTotals = [];
+      for (let i = 0; i < updatedResult.year_labels.length; i++) {
         let yearTotal = 0;
         for (const row of updatedResult.cost_rows) {
           if (row.allocations[i]) {
             yearTotal += row.allocations[i].amount;
           }
         }
-        updatedResult.annual_totals[i].total_outflow = yearTotal;
-        updatedResult.annual_totals[i].share_of_total_cost = grandTotal > 0 ? (yearTotal / grandTotal) * 100 : 0;
+        // Retain existing project stage if any
+        const existingStage = updatedResult.annual_totals[i]?.project_stage || "";
+        newAnnualTotals.push({
+          year_label: updatedResult.year_labels[i],
+          year_index: i,
+          total_outflow: yearTotal,
+          share_of_total_cost: grandTotal > 0 ? (yearTotal / grandTotal) * 100 : 0,
+          project_stage: existingStage,
+        });
       }
+      updatedResult.annual_totals = newAnnualTotals;
     }
     
     setSimResult(updatedResult);
     setEditMode(false);
+  };
+
+  const handleAddYear = () => {
+    if (!simResult) return;
+    const updatedResult = JSON.parse(JSON.stringify(simResult));
+    const nextIdx = updatedResult.year_labels.length;
+    const nextLabel = `Year ${nextIdx}`;
+    
+    updatedResult.year_labels.push(nextLabel);
+    
+    updatedResult.cost_rows.forEach((row) => {
+      row.allocations.push({
+        year_label: nextLabel,
+        year_index: nextIdx,
+        percentage: 0,
+        amount: 0,
+      });
+    });
+    
+    // We intentionally DO NOT update annual_totals here. It will be rebuilt on save.
+    
+    setSimResult(updatedResult);
+  };
+
+  const handleDeleteLastYear = () => {
+    if (!simResult || simResult.year_labels.length <= 1) return;
+    const updatedResult = JSON.parse(JSON.stringify(simResult));
+    
+    updatedResult.year_labels.pop();
+    
+    updatedResult.cost_rows.forEach((row) => {
+      row.allocations.pop();
+    });
+    
+    // We intentionally DO NOT update annual_totals here. It will be rebuilt on save.
+    
+    setSimResult(updatedResult);
   };
 
   // ── Apply to IRR ──────────────────────────────────────────────────────────
@@ -307,7 +353,9 @@ const CostOutflowSimulationModal = ({ isOpen, onClose, onApply, selectedScenario
               allRowsValid={allRowsValid}
               onApply={handleApply}
               onSaveDistribution={handleSaveDistribution}
-              onReSimulate={() => { setStep(3); setSimResult(null); }}
+              onReSimulate={runSimulation}
+              onAddYear={handleAddYear}
+              onDeleteLastYear={handleDeleteLastYear}
             />
           )}
         </div>
@@ -363,76 +411,13 @@ const StepViewData = ({ payload, currency, isRawOpen, setIsRawOpen }) => {
 
   return (
     <div className="co-step-body">
-      {/* Project Context */}
-      <SectionCard title="📍 Project Context">
-        <div style={styles.twoCol}>
-          <InfoRow label="Planning Authority" value={loc.planning_authority || "—"} />
-          <InfoRow label="City" value={[loc.locality, loc.city].filter(Boolean).join(", ") || "—"} />
-          <InfoRow label="Coordinates" value={loc.latitude ? `${loc.latitude.toFixed(4)}°N, ${loc.longitude.toFixed(4)}°E` : "—"} />
-          <InfoRow label="Currency" value={loc.currency || "—"} />
-          <InfoRow label="Asset Class" value={dm.asset_class || "—"} />
-          <InfoRow label="Property Type" value={dm.property_type || "—"} />
-          <InfoRow label="Total Units" value={dm.total_units?.toLocaleString() || "—"} />
-          <InfoRow label="Project Duration" value={dur ? `${dur} Year(s)` : "—"} />
-          <InfoRow label="Total Project Cost" value={fmt(dm.total_project_cost, currency)} />
-          <InfoRow label="Estimated Revenue" value={fmt(dm.estimated_revenue, currency)} />
-        </div>
-      </SectionCard>
-
-      {/* Unit Mix */}
-      {unitMix.length > 0 && (
-        <SectionCard title="🏠 Unit Mix">
-          <div style={{ overflowX: "auto" }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  {["Unit Type", "Carpet Area", "Rate/sqft", "Ticket Size", "Units", "Allotted Area"].map((h) => (
-                    <th key={h} style={styles.th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {unitMix.map((r, i) => (
-                  <tr key={i}>
-                    <td style={styles.td}>{r.unitMix || "—"}</td>
-                    <td style={styles.tdR}>{r.pointArea ? `${r.pointArea.toLocaleString()} sqft` : "—"}</td>
-                    <td style={styles.tdR}>{r.rate ? fmt(r.rate, currency) : "—"}</td>
-                    <td style={styles.tdR}>{r.pointArea && r.rate ? fmt(r.pointArea * r.rate, currency) : "—"}</td>
-                    <td style={styles.tdR}>{r.totalInventory?.toLocaleString() || "—"}</td>
-                    <td style={styles.tdR}>{r.allottedArea ? `${r.allottedArea.toLocaleString()} sqft` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Cost Heads */}
-      <SectionCard title="💰 Cost Outflow">
-        <div style={{ overflowX: "auto" }}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Cost Head</th>
-                <th style={{ ...styles.th, textAlign: "right" }}>Total Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allCosts.map((c, i) => (
-                <tr key={i}>
-                  <td style={styles.td}>{c.label}</td>
-                  <td style={{ ...styles.tdR, fontWeight: 600 }}>{fmt(c.amount, currency)}</td>
-                </tr>
-              ))}
-              <tr style={{ background: "#f1f5f9" }}>
-                <td style={{ ...styles.td, fontWeight: 700 }}>Total</td>
-                <td style={{ ...styles.tdR, fontWeight: 700, color: "#0f172a" }}>{fmt(totalCost, currency)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
+      <div style={{ textAlign: 'center', padding: '60px 20px', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1', marginBottom: '24px' }}>
+        <FaCheckCircle size={56} color="#10b981" style={{ marginBottom: '20px' }} />
+        <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>Simulation Data Ready</h3>
+        <p style={{ color: '#475569', fontSize: '1rem', maxWidth: '450px', margin: '0 auto', lineHeight: '1.5' }}>
+          We have successfully compiled the project context, unit mix, and cost outflow payloads from your previous steps. Click <strong>Next</strong> to proceed with the cash outflow prediction.
+        </p>
+      </div>
 
       {/* Raw Payload */}
       <div
@@ -527,7 +512,7 @@ const StepSimulate = ({ simLoading, simError, progressMsg, onSimulate, hasErrors
 );
 
 // ─── Step 4: Review & Apply ───────────────────────────────────────────────────
-const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handlePctChange, rowTotal, computedAmount, allRowsValid, onApply, onSaveDistribution, onReSimulate }) => {
+const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handlePctChange, rowTotal, computedAmount, allRowsValid, onApply, onSaveDistribution, onReSimulate, onAddYear, onDeleteLastYear }) => {
   const yearLabels = result.year_labels || [];
   const confidence = Math.round((result.overall_confidence || 0) * 100);
   const confColor = confidence >= 75 ? "#10b981" : confidence >= 50 ? "#f59e0b" : "#ef4444";
@@ -577,7 +562,19 @@ const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handle
       </div>
 
       {/* Main cost table */}
-      <SectionCard title="📊 Year-wise Cost Distribution">
+      <SectionCard 
+        title="📊 Year-wise Cost Distribution"
+        headerRight={editMode && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={{ ...styles.btnSecondary, padding: "4px 8px", fontSize: 11 }} onClick={onAddYear}>
+               + Add Year
+            </button>
+            <button style={{ ...styles.btnSecondary, padding: "4px 8px", fontSize: 11, color: "#ef4444", borderColor: "#fecaca", background: "#fef2f2" }} onClick={onDeleteLastYear}>
+               - Delete Last Year
+            </button>
+          </div>
+        )}
+      >
         <div style={{ overflowX: "auto" }}>
           <table style={styles.table}>
             <thead>
@@ -781,10 +778,13 @@ const StepReview = ({ result, currency, editMode, setEditMode, editedPct, handle
 };
 
 // ─── Small reusable bits ──────────────────────────────────────────────────────
-const SectionCard = ({ title, children }) => (
+const SectionCard = ({ title, headerRight, children }) => (
   <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-    <div style={{ fontWeight: 700, fontSize: 12, color: "#0f172a", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-      {title}
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+      <div style={{ fontWeight: 700, fontSize: 12, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        {title}
+      </div>
+      {headerRight && <div>{headerRight}</div>}
     </div>
     {children}
   </div>

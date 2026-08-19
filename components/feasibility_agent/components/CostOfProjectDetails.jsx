@@ -26,20 +26,16 @@ const CostOfProjectDetails = () => {
     // Document Agent - Approval Cost
     const [approvalDocModal, setApprovalDocModal] = useState(false);
     const [approvalDocMinimized, setApprovalDocMinimized] = useState(false);
-    const [approvalFiles, setApprovalFiles] = useState([]);
     const [approvalQuery, setApprovalQuery] = useState("What is the total approval cost including government fees, NOC charges, and related regulatory costs? Provide the amount in local currency.");
     const [approvalDocResult, setApprovalDocResult] = useState(null);
     const [isProcessingApproval, setIsProcessingApproval] = useState(false);
-    const approvalFileRef = useRef(null);
 
     // Document Agent - TDR Cost
     const [tdrDocModal, setTdrDocModal] = useState(false);
     const [tdrDocMinimized, setTdrDocMinimized] = useState(false);
-    const [tdrFiles, setTdrFiles] = useState([]);
     const [tdrQuery, setTdrQuery] = useState("What is the TDR (Transfer of Development Rights) cost per sqft and total TDR cost? Provide the amount in local currency.");
     const [tdrDocResult, setTdrDocResult] = useState(null);
     const [isProcessingTdr, setIsProcessingTdr] = useState(false);
-    const tdrFileRef = useRef(null);
 
     // Default structure for a blank scenario
     const defaultScenarioData = {
@@ -96,6 +92,18 @@ const CostOfProjectDetails = () => {
                 setScenarioData(parsed);
             }
         } catch (e) {}
+
+        // Load document agent state
+        try {
+            const savedAgentData = localStorage.getItem("CostProjectDocAgent");
+            if (savedAgentData) {
+                const parsed = JSON.parse(savedAgentData);
+                if (parsed.approvalQuery) setApprovalQuery(parsed.approvalQuery);
+                if (parsed.approvalDocResult !== undefined) setApprovalDocResult(parsed.approvalDocResult);
+                if (parsed.tdrQuery) setTdrQuery(parsed.tdrQuery);
+                if (parsed.tdrDocResult !== undefined) setTdrDocResult(parsed.tdrDocResult);
+            }
+        } catch(e) {}
     }, []);
 
     useEffect(() => {
@@ -117,6 +125,14 @@ const CostOfProjectDetails = () => {
             } catch (e) {}
         }
     }, [scenarioData]);
+
+    // Save Document Agent state to local storage
+    useEffect(() => {
+        try {
+            const agentData = { approvalQuery, approvalDocResult, tdrQuery, tdrDocResult };
+            localStorage.setItem("CostProjectDocAgent", JSON.stringify(agentData));
+        } catch (e) {}
+    }, [approvalQuery, approvalDocResult, tdrQuery, tdrDocResult]);
 
     const handleScenarioSelect = (id) => {
         setActiveScenarioId(id);
@@ -249,34 +265,14 @@ const CostOfProjectDetails = () => {
 
     // --- Document Agent Handlers ---
     const handleDocumentProceed = async (type) => {
-        const files = type === 'approval' ? approvalFiles : tdrFiles;
         const query = type === 'approval' ? approvalQuery : tdrQuery;
         const setProcessing = type === 'approval' ? setIsProcessingApproval : setIsProcessingTdr;
         const setResult = type === 'approval' ? setApprovalDocResult : setTdrDocResult;
 
-        if (!files || files.length === 0) {
-            alert("Please upload at least one document.");
-            return;
-        }
         setProcessing(true);
         setResult(null);
         try {
-            // 1. Upload Documents
-            const formData = new FormData();
-            files.forEach(f => formData.append('files', f));
-
-            const uploadRes = await fetch(apiUrl("/user-input/documents"), {
-                method: "POST",
-                body: formData,
-            });
-            
-            if (!uploadRes.ok) {
-                setResult({ value: null, type: 'error', context: 'Failed to upload documents.' });
-                return;
-            }
-            await uploadRes.json();
-
-            // 2. Ask Question
+            // 2. Ask Question (reusing already indexed Regulatory Intelligence context)
             const enhancedQuery = `${query}\nIMPORTANT: If you find a numeric cost, include it in your response exactly like this: [COST: 12345] (replace 12345 with the numeric value).`;
             
             const askRes = await fetch(apiUrl("/user-input/ask"), {
@@ -325,23 +321,7 @@ const CostOfProjectDetails = () => {
         }
     };
 
-    const handleFileChange = (type, e) => {
-        const newFiles = Array.from(e.target.files);
-        if (type === 'approval') {
-            setApprovalFiles(prev => [...prev, ...newFiles]);
-        } else {
-            setTdrFiles(prev => [...prev, ...newFiles]);
-        }
-        e.target.value = '';
-    };
 
-    const removeFile = (type, idx) => {
-        if (type === 'approval') {
-            setApprovalFiles(prev => prev.filter((_, i) => i !== idx));
-        } else {
-            setTdrFiles(prev => prev.filter((_, i) => i !== idx));
-        }
-    };
 
     const openDocModal = (type) => {
         if (type === 'approval') {
@@ -358,11 +338,9 @@ const CostOfProjectDetails = () => {
     const closeDocModal = (type) => {
         if (type === 'approval') {
             setApprovalDocModal(false);
-            setApprovalFiles([]);
             setApprovalDocResult(null);
         } else {
             setTdrDocModal(false);
-            setTdrFiles([]);
             setTdrDocResult(null);
         }
     };
@@ -1317,40 +1295,15 @@ const CostOfProjectDetails = () => {
                                 </div>
                             </div>
                             <div className="doc-agent-body">
-                                {/* Section 1: Upload Documents */}
-                                <div className="mb-4">
-                                    <div className="doc-agent-section-label">📂 Section 1 — Upload Documents</div>
-                                    <div className="doc-upload-zone" onClick={() => approvalFileRef.current && approvalFileRef.current.click()}>
-                                        <FaFileUpload size={24} style={{ color: '#94a3b8', marginBottom: 8 }} />
-                                        <div style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Click to upload documents</div>
-                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>PDF, Word, Excel, Images — Multiple files allowed</div>
-                                    </div>
-                                    <input
-                                        ref={approvalFileRef}
-                                        type="file"
-                                        multiple
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
-                                        style={{ display: 'none' }}
-                                        onChange={(e) => handleFileChange('approval', e)}
-                                    />
-                                    {approvalFiles.length > 0 && (
-                                        <div style={{ marginTop: 8 }}>
-                                            {approvalFiles.map((f, i) => (
-                                                <span key={i} className="doc-file-chip">
-                                                    📄 {f.name}
-                                                    <button onClick={() => removeFile('approval', i)} title="Remove"><FaTimes /></button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                {/* Section 2: User Query */}
                                 <div>
-                                    <div className="doc-agent-section-label">💬 Section 2 — Your Query</div>
+                                    <div className="doc-agent-section-label">💬 Section 1 — Your Query</div>
                                     <textarea
                                         className="doc-query-textarea"
                                         value={approvalQuery}
-                                        onChange={e => setApprovalQuery(e.target.value)}
+                                        onChange={e => {
+                                            setApprovalQuery(e.target.value);
+                                            localStorage.setItem(`doc_query_approval_${activeScenarioId}`, e.target.value);
+                                        }}
                                         placeholder="Enter your query about approval costs..."
                                         rows={3}
                                     />
@@ -1395,7 +1348,7 @@ const CostOfProjectDetails = () => {
                                 <button
                                     className="doc-proceed-btn"
                                     onClick={() => handleDocumentProceed('approval')}
-                                    disabled={isProcessingApproval || approvalFiles.length === 0}
+                                    disabled={isProcessingApproval}
                                 >
                                     {isProcessingApproval ? (
                                         <><div className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14, borderWidth: '0.15em' }} /> Processing...</>
@@ -1438,40 +1391,15 @@ const CostOfProjectDetails = () => {
                                 </div>
                             </div>
                             <div className="doc-agent-body">
-                                {/* Section 1: Upload Documents */}
-                                <div className="mb-4">
-                                    <div className="doc-agent-section-label">📂 Section 1 — Upload Documents</div>
-                                    <div className="doc-upload-zone" onClick={() => tdrFileRef.current && tdrFileRef.current.click()}>
-                                        <FaFileUpload size={24} style={{ color: '#94a3b8', marginBottom: 8 }} />
-                                        <div style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Click to upload documents</div>
-                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>PDF, Word, Excel, Images — Multiple files allowed</div>
-                                    </div>
-                                    <input
-                                        ref={tdrFileRef}
-                                        type="file"
-                                        multiple
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
-                                        style={{ display: 'none' }}
-                                        onChange={(e) => handleFileChange('tdr', e)}
-                                    />
-                                    {tdrFiles.length > 0 && (
-                                        <div style={{ marginTop: 8 }}>
-                                            {tdrFiles.map((f, i) => (
-                                                <span key={i} className="doc-file-chip">
-                                                    📄 {f.name}
-                                                    <button onClick={() => removeFile('tdr', i)} title="Remove"><FaTimes /></button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                {/* Section 2: User Query */}
                                 <div>
-                                    <div className="doc-agent-section-label">💬 Section 2 — Your Query</div>
+                                    <div className="doc-agent-section-label">💬 Section 1 — Your Query</div>
                                     <textarea
                                         className="doc-query-textarea"
                                         value={tdrQuery}
-                                        onChange={e => setTdrQuery(e.target.value)}
+                                        onChange={e => {
+                                            setTdrQuery(e.target.value);
+                                            localStorage.setItem(`doc_query_tdr_${activeScenarioId}`, e.target.value);
+                                        }}
                                         placeholder="Enter your query about TDR costs..."
                                         rows={3}
                                     />
@@ -1516,7 +1444,7 @@ const CostOfProjectDetails = () => {
                                 <button
                                     className="doc-proceed-btn"
                                     onClick={() => handleDocumentProceed('tdr')}
-                                    disabled={isProcessingTdr || tdrFiles.length === 0}
+                                    disabled={isProcessingTdr}
                                 >
                                     {isProcessingTdr ? (
                                         <><div className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14, borderWidth: '0.15em' }} /> Processing...</>

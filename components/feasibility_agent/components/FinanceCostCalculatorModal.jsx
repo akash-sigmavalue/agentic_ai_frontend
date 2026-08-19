@@ -286,7 +286,7 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
       warnings.push(`Table disbursement (${currency} ${fmt(totals.disbursement)}) differs from Loan Amount (${currency} ${fmt(loanAmount)}). Verify if intentional.`);
     if (totals.over_repay)
       warnings.push("One or more rows try to repay more than available principal. Repayment is capped at outstanding debt.");
-    if (totals.closing > 0.0001)
+    if (totals.closing > 1.0)
       warnings.push(`Schedule ends with unpaid principal of ${currency} ${fmt(totals.closing)}. Increase repayment if full repayment is needed.`);
   }
 

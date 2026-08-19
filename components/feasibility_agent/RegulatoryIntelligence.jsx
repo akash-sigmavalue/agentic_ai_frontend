@@ -267,6 +267,11 @@ const StatusIcon = ({ status }) => {
 
 /* ─────────────────────── main component ─────────────────────── */
 
+const DOC_CATEGORIES = [
+  { id: "regulatory", label: "Regulatory Document" },
+  { id: "approval", label: "Approval / Building Plan Approval" },
+  { id: "construction", label: "Construction Agreement" }
+];
 
 const RegulatoryIntelligence = () => {
   const { recordLlmCall } = useLedger();
@@ -285,7 +290,9 @@ const RegulatoryIntelligence = () => {
 
   /* ── upload state ── */
   const [pdfFiles, setPdfFiles] = useState([]);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [fileCategories, setFileCategories] = useState({});
+  const [dragOverCategory, setDragOverCategory] = useState(null);
+  const [activeUploadCategory, setActiveUploadCategory] = useState(null);
   const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | indexed | error
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef(null);
@@ -410,6 +417,9 @@ const RegulatoryIntelligence = () => {
         if (parsed.sectionResults) {
           setSectionResults((prev) => ({ ...prev, ...parsed.sectionResults }));
         }
+        if (parsed.fileCategories) {
+          setFileCategories(parsed.fileCategories);
+        }
         // Restore Web Agent state
         if (parsed.regWebAgentQuery)    setRegWebAgentQuery(parsed.regWebAgentQuery);
         if (parsed.regWebAgentStatus)   setRegWebAgentStatus(parsed.regWebAgentStatus);
@@ -426,7 +436,12 @@ const RegulatoryIntelligence = () => {
     const currentResults = newResults || sectionResults;
     const currentQuestions = newQuestions || editableQuestions;
     const payload = {
-      uploadedFiles: pdfFiles.map((f) => ({ name: f.name, size: f.size })),
+      uploadedFiles: pdfFiles.map((f) => ({ 
+        name: f.name, 
+        size: f.size,
+        category: fileCategories[f.name] || "regulatory"
+      })),
+      fileCategories: fileCategories,
       editableQuestions: currentQuestions,
       sectionResults: currentResults,
       regWebAgentQuery:    webAgentOverrides.query    ?? regWebAgentQuery,
@@ -585,7 +600,7 @@ const RegulatoryIntelligence = () => {
   };
 
   /* ── file handling ── */
-  const handleFiles = useCallback((incomingFiles) => {
+  const handleFiles = useCallback((incomingFiles, categoryId) => {
     if (!incomingFiles || incomingFiles.length === 0) return;
 
     const newPdfs = [];
@@ -613,6 +628,13 @@ const RegulatoryIntelligence = () => {
         );
         return [...prev, ...filtered];
       });
+      if (categoryId) {
+        setFileCategories((prev) => {
+          const next = { ...prev };
+          newPdfs.forEach(f => { next[f.name] = categoryId; });
+          return next;
+        });
+      }
       setUploadStatus("idle");
       setSectionResults(
         Object.fromEntries(
@@ -627,23 +649,23 @@ const RegulatoryIntelligence = () => {
     }
   }, []);
 
-  const onDrop = useCallback(
-    (e) => {
+  const onDropCategory = useCallback(
+    (e, categoryId) => {
       e.preventDefault();
-      setIsDragOver(false);
+      setDragOverCategory(null);
       const files = Array.from(e.dataTransfer?.files || []);
-      handleFiles(files);
+      handleFiles(files, categoryId);
     },
     [handleFiles]
   );
 
-  const onFileSelect = useCallback(
+  const onFileSelectCategory = useCallback(
     (e) => {
       const files = Array.from(e.target.files || []);
-      handleFiles(files);
+      handleFiles(files, activeUploadCategory);
       e.target.value = "";
     },
-    [handleFiles]
+    [handleFiles, activeUploadCategory]
   );
 
   const removeFile = (idxToRemove) => {
@@ -914,61 +936,80 @@ const RegulatoryIntelligence = () => {
 
         {/* ── Upload Zone ── */}
         <div style={{ marginBottom: "24px" }}>
-          <label
-            style={{
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "#444",
-              marginBottom: "8px",
-              display: "block",
-            }}
-          >
-            Upload Regulatory Document (PDF)
-          </label>
-
-          <div
-            style={styles.dropZone(isDragOver)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <FaCloudArrowUp style={styles.uploadIcon} />
-            <div
-              style={{
-                fontSize: "15px",
-                fontWeight: 600,
-                color: "#444",
-                marginBottom: "4px",
-              }}
-            >
-              Drag & drop your PDFs here
-            </div>
-            <div style={{ fontSize: "13px", color: "#888" }}>
-              or{" "}
-              <span
-                style={{
-                  color: "#448C74",
-                  fontWeight: 600,
-                  textDecoration: "underline",
-                  cursor: "pointer",
+          <div style={{ display: "flex", gap: "16px", flexDirection: "column" }}>
+            {DOC_CATEGORIES.map((cat) => (
+              <div 
+                key={cat.id} 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between", 
+                  padding: "16px 20px", 
+                  borderRadius: "8px", 
+                  border: `1px solid ${dragOverCategory === cat.id ? "#448C74" : "#e8ecf0"}`,
+                  background: dragOverCategory === cat.id ? "rgba(68,140,116,0.06)" : "#fff",
+                  transition: "all 0.2s ease"
                 }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverCategory(cat.id);
+                }}
+                onDragLeave={() => setDragOverCategory(null)}
+                onDrop={(e) => onDropCategory(e, cat.id)}
               >
-                click to browse
-              </span>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              multiple
-              onChange={onFileSelect}
-              style={{ display: "none" }}
-            />
+                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                  <div style={{
+                    width: "40px", height: "40px", borderRadius: "8px", 
+                    background: "rgba(68,140,116,0.1)", display: "flex", 
+                    alignItems: "center", justifyContent: "center", color: "#448C74"
+                  }}>
+                    <FaFilePdf size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "14px", color: "#333", marginBottom: "2px" }}>
+                      {cat.label}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#888" }}>
+                      Drag & drop here or click upload
+                    </div>
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  className="btn btn-sm shadow-sm"
+                  style={{
+                    background: "#fff",
+                    border: "1px solid #d0d5dd",
+                    color: "#344054",
+                    fontWeight: 600,
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "13px"
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveUploadCategory(cat.id);
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <FaCloudArrowUp /> Upload
+                </button>
+              </div>
+            ))}
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            onChange={onFileSelectCategory}
+            style={{ display: "none" }}
+          />
 
           {pdfFiles.length > 0 && (
             <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -994,7 +1035,14 @@ const RegulatoryIntelligence = () => {
                   <div style={styles.fileChip}>
                     <FaFilePdf style={{ color: "#c62828", fontSize: "16px" }} />
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: "13px", color: "#333" }}>{file.name}</div>
+                      <div style={{ fontWeight: 600, fontSize: "13px", color: "#333" }}>
+                        {file.name}
+                        {fileCategories[file.name] && (
+                          <span style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", background: "#f0f0f0", borderRadius: "4px", color: "#666" }}>
+                            {DOC_CATEGORIES.find(c => c.id === fileCategories[file.name])?.label || fileCategories[file.name]}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: "11px", color: "#888" }}>
                         {formatSize(file.size)}
                         {uploadStatus === "indexed" && (
