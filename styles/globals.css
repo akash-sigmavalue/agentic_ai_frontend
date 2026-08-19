@@ -78,7 +78,7 @@
     background-color: var(--panel-bg-soft);
     color: #0f172a;
     overflow-x: hidden;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
     font-size: 15.5px !important;
   }
 }

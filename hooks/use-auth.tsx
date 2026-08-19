@@ -51,6 +51,11 @@ const PUBLIC_PATHS = [
   '/auth/reset-password',
   '/auth/verify-email',
   '/pricing',
+  '/contact',
+  '/termsandconditions',
+  '/privacypolicy',
+  '/about',
+  '/faq',
   '/office/invite',
   '/payment',
   '/valuation',
@@ -103,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkUser();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   const login = async (identifier: string, password: string) => {
