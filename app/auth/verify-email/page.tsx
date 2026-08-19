@@ -87,7 +87,7 @@ function VerifyEmailForm() {
           justify-content: center;
           padding: 24px;
           background: linear-gradient(135deg, #f0f4ff 0%, #fafbff 50%, #f5f0ff 100%);
-          font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+          font-family: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
           position: relative;
           overflow: hidden;
           transition: background 0.3s ease;

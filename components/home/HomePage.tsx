@@ -37,15 +37,13 @@ export default function HomePage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
         .hp-page {
           min-height: 100vh;
           background: ${isDark
             ? 'linear-gradient(135deg, #090d16 0%, #0f172a 50%, #090d16 100%)'
             : 'linear-gradient(135deg, #f0f4ff 0%, #fafbff 45%, #f5f0ff 100%)'};
           color: ${isDark ? '#f8fafc' : '#0f172a'};
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: inherit;
           position: relative;
           overflow: hidden;
           transition: background 0.3s ease, color 0.3s ease;

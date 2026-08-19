@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import Script from "next/script";
 import "../styles/globals.css";
 import "leaflet/dist/leaflet.css";
@@ -10,8 +10,8 @@ import "./valuation/valuation.css";
 import Header from "@/components/shared/Header";
 import { AuthProvider } from "@/hooks/use-auth";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -42,7 +42,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
@@ -70,7 +70,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className={`${inter.className} min-h-full flex flex-col`}>
         <AuthProvider>
           <Header />
           {children}
