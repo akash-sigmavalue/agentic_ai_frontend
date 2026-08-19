@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useRef, useCallback } from "react";
-import { Building2, Bot, Map, Workflow, Maximize2 } from "lucide-react";
+import { Building2, Bot, Map, Workflow, Maximize2, Minimize2 } from "lucide-react";
 
 import ChatSection from "@/components/valuation/agent-one/ChatSectionNext";
 import WorkflowSection from "@/components/valuation/agent-one/WorkflowSectionNext";
@@ -37,11 +37,19 @@ export default function HomePage() {
   const containerRef = useRef(null);
 
   // Maximize/Minimize state
+  const ALL_PANELS = ["assistant", "workflow", "visual"];
   const [maximizedPanels, setMaximizedPanels] = useState([]);
   const toggleMaximize = useCallback((panelId) => {
-    setMaximizedPanels((prev) =>
-      prev.includes(panelId) ? prev.filter((id) => id !== panelId) : [...prev, panelId]
-    );
+    setMaximizedPanels((prev) => {
+      if (prev.includes(panelId)) {
+        // Already maximized → restore it
+        return prev.filter((id) => id !== panelId);
+      }
+      const next = [...prev, panelId];
+      // If all 3 would be maximized, revert to initial state instead
+      if (next.length === ALL_PANELS.length) return [];
+      return next;
+    });
   }, []);
 
   const handleEventsReset = useCallback((keepUpToEventType) => {
@@ -188,13 +196,15 @@ export default function HomePage() {
       <div className="orb orb-three" />
 
       {/* Responsive panel width overrides */}
-      <style>{`
-        @media (min-width: 1071px) {
-          .resize-panel-left { width: calc(${leftWidth}% - 6px) !important; }
-          .resize-panel-middle { width: calc(${middleWidth}% - 6px) !important; }
-          .resize-panel-right { width: calc(${100 - leftWidth - middleWidth}% - 12px) !important; }
-        }
-      `}</style>
+      {maximizedPanels.length === 0 && (
+        <style>{`
+          @media (min-width: 1071px) {
+            .resize-panel-left { width: calc(${leftWidth}% - 6px) !important; }
+            .resize-panel-middle { width: calc(${middleWidth}% - 6px) !important; }
+            .resize-panel-right { width: calc(${100 - leftWidth - middleWidth}% - 12px) !important; }
+          }
+        `}</style>
+      )}
 
       <div className="relative z-10 mt-20 flex h-[calc(100vh-5rem)] flex-col">
 
@@ -206,42 +216,57 @@ export default function HomePage() {
 
           <section ref={containerRef} className={`h-full min-h-0 flex-1 ${maximizedPanels.length > 0 ? 'flex flex-col' : 'flex flex-col min-[1071px]:flex-row'} gap-4 min-[1071px]:gap-0`}>
 
-            {/* Collapsed Header Bars - Only show on desktop when there are maximized panels */}
-            {maximizedPanels.length > 0 && (
+            {/* Panel Name Bars - Visible when 1 or 2 panels are maximized (i.e. at least one is hidden).
+                Hidden when all 3 are maximized — every panel is visible with its own header, so the bar would duplicate.
+                Active (maximized) bar: highlighted border + tint + Minimize2 icon.
+                Collapsed bar: muted card style + Maximize2 icon. */}
+            {maximizedPanels.length > 0 && maximizedPanels.length < 3 && (
               <div className="hidden shrink-0 gap-4 min-[1071px]:flex">
-                {!maximizedPanels.includes("assistant") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Bot className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">AI Assistant</span>
+                {/* AI Assistant bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("assistant");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-accent/40 bg-accent/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Bot className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-accent' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-accent' : 'text-text-dim'}`}>AI Assistant</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("assistant")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("assistant")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-                {!maximizedPanels.includes("workflow") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Workflow className="h-5 w-5 text-success" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Agentic Execution Flow</span>
+                  );
+                })()}
+                {/* Workflow bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("workflow");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-success/40 bg-success/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Workflow className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-success' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-success' : 'text-text-dim'}`}>Agentic Execution Flow</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("workflow")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("workflow")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-                {!maximizedPanels.includes("visual") && (
-                  <div className="flex flex-1 items-center justify-between rounded-2xl border border-border bg-bg-card/95 px-5 py-3 shadow-panel backdrop-blur">
-                    <div className="flex items-center gap-3">
-                      <Map className="h-5 w-5 text-accent-purple" />
-                      <span className="text-sm font-bold uppercase tracking-wider text-text-primary">Visual Layer</span>
+                  );
+                })()}
+                {/* Visual Layer bar */}
+                {(() => {
+                  const isActive = maximizedPanels.includes("visual");
+                  return (
+                    <div className={`flex flex-1 items-center justify-between rounded-2xl border px-5 py-3 shadow-panel backdrop-blur transition-colors duration-200 ${isActive ? 'border-[var(--accent-purple,#a78bfa)]/40 bg-[var(--accent-purple,#a78bfa)]/10' : 'border-border bg-bg-card/95'}`}>
+                      <div className="flex items-center gap-3">
+                        <Map className={`h-5 w-5 transition-colors duration-200 ${isActive ? 'text-accent-purple' : 'text-text-dim'}`} />
+                        <span className={`text-sm font-bold uppercase tracking-wider transition-colors duration-200 ${isActive ? 'text-accent-purple' : 'text-text-dim'}`}>Visual Layer</span>
+                      </div>
+                      <button onClick={() => toggleMaximize("visual")} title={isActive ? 'Restore' : 'Maximize'} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
+                        {isActive ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
                     </div>
-                    <button onClick={() => toggleMaximize("visual")} className="rounded-lg p-1.5 text-text-dim hover:bg-white/5 hover:text-text-primary transition-colors">
-                      <Maximize2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
@@ -274,8 +299,7 @@ export default function HomePage() {
               {/* Splitter 1 */}
               <div
                 onMouseDown={handleMouseDown(0)}
-                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-              >
+                className={`${maximizedPanels.length > 0 ? "hidden" : "hidden min-[1071px]:flex"} w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch`}>
                 <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
@@ -285,19 +309,22 @@ export default function HomePage() {
               </div>
 
               {/* Workflow Section */}
-              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 resize-panel-middle`}>
+              <div className={`${compactPanel === "workflow" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-w-0 min-h-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("workflow") ? 'flex-1' : 'min-[1071px]:!hidden') : 'resize-panel-middle'}`}>
                 {renderCompactBrandHeader()}
                 <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
                 <div className="min-h-0 flex-1">
-                  <WorkflowSection events={events} />
+                  <WorkflowSection 
+                    events={events}
+                    isMaximized={maximizedPanels.includes("workflow")}
+                    onToggleMaximize={() => toggleMaximize("workflow")}
+                  />
                 </div>
               </div>
 
               {/* Splitter 2 */}
               <div
                 onMouseDown={handleMouseDown(1)}
-                className="hidden min-[1071px]:flex w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch"
-              >
+                className={`${maximizedPanels.length > 0 ? "hidden" : "hidden min-[1071px]:flex"} w-3 hover:w-3.5 bg-transparent cursor-col-resize items-center justify-center z-20 group relative h-full self-stretch`}>
                 <div className="w-[1px] h-20 bg-border/60 group-hover:bg-cyan-500/40 group-active:bg-cyan-500 transition-colors" />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
@@ -307,7 +334,7 @@ export default function HomePage() {
               </div>
 
               {/* Map Section */}
-              <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("visual") ? 'flex-1' : 'min-[1071px]:!hidden') : ''}`}>
+              <div className={`${compactPanel === "visual" ? "fixed inset-0 z-[10000] flex" : "hidden"} min-h-0 min-w-0 flex-col bg-bg-deep p-3 min-[1071px]:static min-[1071px]:z-auto min-[1071px]:flex min-[1071px]:h-full min-[1071px]:bg-transparent min-[1071px]:p-0 ${maximizedPanels.length > 0 ? (maximizedPanels.includes("visual") ? 'flex-1' : 'min-[1071px]:!hidden') : 'resize-panel-right'}`}>
                 {renderCompactBrandHeader()}
                 <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("visual")}</div>
                 <div className="min-h-0 flex-1">

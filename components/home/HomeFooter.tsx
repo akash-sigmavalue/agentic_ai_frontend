@@ -9,7 +9,6 @@ const supportLinks = [
   { label: 'Terms and Conditions', href: '/termsandconditions' },
   { label: 'Privacy policy', href: '/privacypolicy' },
   { label: 'About us', href: '/about' },
-  { label: "FAQ's", href: '/faq' },
 ];
 
 export default function HomeFooter({ isDark }: HomeFooterProps) {

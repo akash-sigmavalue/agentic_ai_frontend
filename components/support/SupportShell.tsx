@@ -21,7 +21,7 @@ export default function SupportShell({ page, children }: { page: SupportPageData
         <div className={styles.contentGrid}>
           <aside className={styles.sidebar} aria-label="Support sections">
             <p>Support sections</p>
-            <nav className ="border border-red">
+            <nav>
               {supportPages.map((item, index) => (
                 <Link className={item.id === page.id ? styles.active : undefined} href={item.path} key={item.id} aria-current={item.id === page.id ? 'page' : undefined}>
                   <span>{String(index + 1).padStart(2, '0')}</span>{item.shortTitle}
