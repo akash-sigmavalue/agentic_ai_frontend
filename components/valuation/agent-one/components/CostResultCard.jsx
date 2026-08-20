@@ -188,7 +188,7 @@ export default function CostResultCard({ data, subjectData }) {
           <div className="flex items-center gap-5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/20 text-success text-xl border border-success/30">🛡️</div>
             <div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.05em] text-white">Cost Approach Valuation Appraisal</h2>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.05em] text-text-primary">Cost Approach Valuation Appraisal</h2>
               <p className="text-[8px] text-text-dim mt-1 uppercase tracking-widest font-bold opacity-40">Audit-Backed Land + Depreciated Structure Method</p>
             </div>
           </div>
@@ -217,13 +217,13 @@ export default function CostResultCard({ data, subjectData }) {
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 1: Land component Valuation</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Land Value</p>
-                  <p className="text-2xl font-black text-sky-400 font-mono leading-none">{fmt(land_value)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-muted">Land Value</p>
+                  <p className="text-2xl font-black text-sky-500 dark:text-sky-400 font-mono leading-none">{fmt(land_value)}</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-white/55">Valuation Base:</p>
-                <p className="font-mono text-white/80 leading-relaxed font-bold">
+              <div className="rounded-xl bg-bg-deep/60 border border-border/50 p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-text-muted">Valuation Base:</p>
+                <p className="font-mono text-text-primary leading-relaxed font-bold">
                   {audit_trail?.land_value_formula || `Land Value = ${fmtRate(derived_plot_rate_per_sqft)}/sqft × ${plot_area_sqft} sqft (Plot Area)`}
                 </p>
               </div>
@@ -234,13 +234,13 @@ export default function CostResultCard({ data, subjectData }) {
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 2: Replacement Construction Cost</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Construction Cost</p>
-                  <p className="text-2xl font-black text-amber-400 font-mono leading-none">{fmt(construction_cost)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-muted">Construction Cost</p>
+                  <p className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono leading-none">{fmt(construction_cost)}</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/[0.05] p-3 text-[10px] text-text-secondary space-y-1">
-                <p className="font-semibold text-amber-400/55">Formula & Inputs:</p>
-                <p className="font-mono text-amber-400/90 leading-relaxed font-bold">
+              <div className="rounded-xl bg-bg-deep/60 border border-border/50 p-3 text-[10px] text-text-secondary space-y-1">
+                <p className="font-semibold text-text-muted">Formula &amp; Inputs:</p>
+                <p className="font-mono text-text-primary leading-relaxed font-bold">
                   {audit_trail?.construction_cost_formula || `Construction Cost = ${fmtRate(construction_rate_per_sqft)}/sqft × ${builtup_area_sqft} sqft (Built-up Area)`}
                 </p>
               </div>
@@ -252,10 +252,10 @@ export default function CostResultCard({ data, subjectData }) {
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 3: Straight-Line Depreciation Rate</span>
                 <div className="mt-2 space-y-0.5">
                   <p className="text-[10px] uppercase font-black tracking-wider text-text-dim">Depreciation %</p>
-                  <p className="text-2xl font-black text-warning font-mono leading-none">{(depreciation_rate * 100).toFixed(2)}%</p>
+                  <p className="text-2xl font-black text-amber-600 dark:text-warning font-mono leading-none">{(depreciation_rate * 100).toFixed(2)}%</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-1">
+              <div className="rounded-xl bg-bg-deep/60 border border-border/50 p-3 text-[10px] text-text-secondary space-y-1">
                 <p className="font-semibold text-text-secondary">Formula:</p>
                 <p className="font-mono text-text-primary leading-relaxed">
                   {audit_trail?.depreciation_formula || `Depreciation = ${age_of_property} yrs / ${total_life_of_building} yrs = ${(depreciation_rate * 100).toFixed(2)}%`}
@@ -268,13 +268,13 @@ export default function CostResultCard({ data, subjectData }) {
               <div>
                 <span className="text-[8px] font-black uppercase tracking-widest text-text-dim">Step 4: Depreciated Structure Value</span>
                 <div className="mt-2 space-y-0.5">
-                  <p className="text-[10px] uppercase font-black tracking-wider text-white/40">Structure Value</p>
-                  <p className="text-2xl font-black text-teal-400 font-mono leading-none">{fmt(depreciated_building_value)}</p>
+                  <p className="text-[10px] uppercase font-black tracking-wider text-text-muted">Structure Value</p>
+                  <p className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono leading-none">{fmt(depreciated_building_value)}</p>
                 </div>
               </div>
-              <div className="rounded-xl bg-bg-dark border border-border-soft p-3 text-[10px] text-text-secondary space-y-2">
+              <div className="rounded-xl bg-bg-deep/60 border border-border/50 p-3 text-[10px] text-text-secondary space-y-2">
                 <div>
-                  <p className="font-mono text-teal-400/80 leading-relaxed font-bold">
+                  <p className="font-mono text-teal-700 dark:text-teal-400 leading-relaxed font-bold">
                     {audit_trail?.depreciated_cost_formula || `Depreciated Value = ${fmt(construction_cost)} × (100% − ${(depreciation_rate * 100).toFixed(2)}%) = ${fmt(depreciated_building_value)}`}
                   </p>
                 </div>
@@ -287,14 +287,23 @@ export default function CostResultCard({ data, subjectData }) {
         <section className="relative">
           <div className="pointer-events-none absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-success/20 to-transparent blur-2xl opacity-40"></div>
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-success/30 bg-gradient-to-b from-[#13241d] to-[#0c1410] p-8 text-center space-y-4 shadow-2xl">
-            <span className="text-[9px] font-black uppercase tracking-[0.05em] text-success/70">Final Cost Approach Villa Value</span>
+          <div
+            style={{
+              background: "var(--cost-hero-bg)",
+              borderColor: "var(--cost-hero-border)"
+            }}
+            className="relative overflow-hidden rounded-[2rem] border p-8 text-center space-y-4 shadow-2xl"
+          >
+            <span className="text-[9px] font-black uppercase tracking-[0.05em] text-success">Final Cost Approach Villa Value</span>
 
             <div className="space-y-1">
-              <h1 className="font-mono text-5xl font-black text-text-primary drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]">
+              <h1
+                style={{ color: "var(--cost-hero-text)" }}
+                className="font-mono text-5xl font-black dark:drop-shadow-[0_0_24px_rgba(34,197,94,0.5)]"
+              >
                 {fmt(final_property_value)}
               </h1>
-              <p className="text-[10px] text-success/60 font-semibold uppercase tracking-widest">
+              <p className="text-[10px] text-text-secondary font-semibold uppercase tracking-widest">
                 Land Value + Depreciated Structure Value
               </p>
             </div>
@@ -302,7 +311,7 @@ export default function CostResultCard({ data, subjectData }) {
             <div className="border-t border-success/20 pt-4 max-w-lg mx-auto">
               <p className="text-[9px] font-mono text-text-secondary leading-relaxed">
                 Appraisal Audit Trail:<br />
-                <span className="text-white/80 font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(land_value)} (Land) + ${fmt(depreciated_building_value)} (Structure) = ${fmt(final_property_value)}`}</span>
+                <span className="text-text-primary font-bold">{audit_trail?.final_value_formula || `Cost Value = ${fmt(land_value)} (Land) + ${fmt(depreciated_building_value)} (Structure) = ${fmt(final_property_value)}`}</span>
               </p>
             </div>
           </div>

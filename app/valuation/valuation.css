@@ -23,6 +23,10 @@
   --danger: #ef4444;
   --radius-panel: 20px;
   
+  --cost-hero-bg: linear-gradient(to bottom, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.03));
+  --cost-hero-border: rgba(16, 185, 129, 0.25);
+  --cost-hero-text: #047857;
+  
   /* Ambient Background Orbs & Grid - Light Mode */
   --orb-one: #c7d2fe;      /* Soft Indigo/Blue */
   --orb-two: #bae6fd;      /* Soft Sky Blue */
@@ -52,6 +56,10 @@
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
+  
+  --cost-hero-bg: linear-gradient(to bottom, #13241d, #0c1410);
+  --cost-hero-border: rgba(52, 211, 153, 0.3);
+  --cost-hero-text: #34d399;
   
   /* Ambient Background Orbs & Grid - Dark Mode */
   --orb-one: #1e1b4b;

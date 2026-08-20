@@ -58,7 +58,7 @@ import CleanedTable from "./components/CleanedTable";
 import ComparableTable, { DroppedComparableTable } from "./components/ComparableTable";
 import FactorialTable from "./components/FactorialTable";
 import FactoringResultCard from "./components/FactoringResultCard";
-import { CostInputsForm } from "./components/CostResultCard";
+import { CostInputsForm, normalizeCostInputSchema, buildCostInputDefaults } from "./components/CostResultCard";
 import CostResultCard from "./components/CostResultCard";
 import QuickEstimatePanel, { QuickEstimateProgressPanel, getQuickEstimateStages, resolveQuickEstimateStageIndex } from "./components/QuickEstimatePanel";
 import { PropertyProfilingLiveCard, StageDetailCard, STAGE_PROFILING_TITLE, STAGE_DETAIL_FIELDS, parseStageDetailMessage } from "./components/PropertyProfilingLiveCard";
