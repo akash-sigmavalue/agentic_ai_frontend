@@ -764,6 +764,8 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       "clear_height",
       "construction_rate_per_sqft",
       "total_life_of_building",
+      "lat",
+      "lng",
     ];
 
     const payload = {

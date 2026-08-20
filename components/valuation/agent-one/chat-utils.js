@@ -30,6 +30,9 @@ export const QUICK_ESTIMATE_DEFAULTS = {
   construction_rate_per_sqft: "",
   total_life_of_building: "",
   currency: "INR",
+  lat: "",
+  lng: "",
+  coordinates: "",
 };
 
 export const QUICK_FIELD_CONFIG = {
@@ -39,6 +42,8 @@ export const QUICK_FIELD_CONFIG = {
   "sub-locality": { label: "Sub-locality", type: "text", placeholder: "Fetched micro-market pockets" },
   city_name: { label: "City", type: "text", placeholder: "City" },
   country: { label: "Country", type: "text", placeholder: "Country" },
+  lat: { label: "Latitude", type: "number", placeholder: "e.g. 19.0760" },
+  lng: { label: "Longitude", type: "number", placeholder: "e.g. 72.8777" },
   salable_area_sqft: { label: "Saleable Area", type: "number", placeholder: "sqft" },
   builtup_area_sqft: { label: "Built-up Area", type: "number", placeholder: "sqft" },
   plot_area_sqft: { label: "Plot Area", type: "number", placeholder: "sqft" },

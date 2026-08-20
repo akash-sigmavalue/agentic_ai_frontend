@@ -17,6 +17,7 @@ import {
   QUICK_REQUIRED_FIELDS,
   QUICK_OPTIONAL_FIELDS
 } from "../chat-utils";
+import { apiUrl } from "@/lib/api-client";
 
 const QUICK_ESTIMATE_PIPELINE_STAGES = [
   { id: "geocoding", label: "Location", desc: "Resolve coordinates for the subject property", icon: MapPin, events: ["geocoding", "geocoding_done"] },
@@ -264,6 +265,62 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
   const fields = [...requiredFields, ...optionalFields].filter((field, index, arr) => arr.indexOf(field) === index);
   const isCostCapable = propertyType === "villa" || propertyType === "building_land";
 
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
+  const [geocodeFetched, setGeocodeFetched] = useState(false);
+
+  const fetchCoordinates = async () => {
+    const locName = values.location_name?.trim() || "";
+    const projName = values.project_name?.trim() || "";
+    const country = values.country?.trim() || "India";
+
+    if (!locName) {
+      setGeocodeError("Please enter a location first (e.g. Baner, Pune).");
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError("");
+
+    try {
+      const response = await fetch(apiUrl("/geocode"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location_name: locName, project_name: projName, country }),
+      });
+
+      if (!response.ok) throw new Error("Failed to contact geocoder API.");
+
+      const result = await response.json();
+      if (result.lat && result.lng) {
+        onChange({
+          ...values,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          coordinates: `${result.lat}, ${result.lng}`,
+        });
+        setGeocodeError("");
+        setGeocodeFetched(true);
+      } else if (result.error) {
+        setGeocodeError(`Error: ${result.error}. Please adjust the Location Name and try again.`);
+      } else {
+        setGeocodeError("Coordinates not found. Please enter them manually or check location name.");
+      }
+    } catch (err) {
+      setGeocodeError(`Failed to fetch coordinates: ${err.message}`);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Auto-fetch coordinates when location_name changes
+  useEffect(() => {
+    if (values.location_name && !values.lat && !geocodeFetched && !isGeocoding) {
+      fetchCoordinates();
+    }
+  }, [values.location_name]);
+
   const updateField = (field, value) => {
     const next = { ...values, [field]: value };
     if (field === "property_type") {
@@ -346,6 +403,95 @@ export default function QuickEstimatePanel({ values, onChange, onSubmit, disable
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {['project_name', 'location_name', 'city_name', 'country'].map(renderField)}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/70 bg-bg-deep/30 p-3.5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.05em] text-accent">Coordinates Verification</p>
+              <p className="mt-1 text-[11px] sm:text-xs text-text-dim leading-relaxed">
+                Verify coordinates based on locality. You can edit them manually or fetch automatically.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchCoordinates}
+              disabled={isGeocoding}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/10 px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-warning transition hover:bg-warning/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isGeocoding ? (
+                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              ) : (
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {isGeocoding ? "Fetching…" : "Fetch Coordinates"}
+            </button>
+          </div>
+
+          {isGeocoding && (
+            <div className="flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-3 py-2.5">
+              <svg className="h-3.5 w-3.5 animate-spin text-accent" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <p className="text-xs text-accent font-semibold">Fetching coordinates from location…</p>
+            </div>
+          )}
+
+          {geocodeError && (
+            <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2.5">
+              <p className="text-xs font-bold text-red-400 leading-relaxed">⚠️ {geocodeError}</p>
+            </div>
+          )}
+
+          {values.lat && values.lng && !isGeocoding && !geocodeError && (
+            <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-3 py-2">
+              <span className="text-green-400 text-sm">✓</span>
+              <p className="text-xs font-semibold text-green-400">Coordinates verified: {values.lat}, {values.lng}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Latitude</span>
+              <input
+                type="text"
+                value={values.lat ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChange({
+                    ...values,
+                    lat: val,
+                    coordinates: val && values.lng ? `${val}, ${values.lng}` : values.coordinates
+                  });
+                }}
+                placeholder="e.g. 19.0760"
+                className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="pl-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-text-dim">Longitude</span>
+              <input
+                type="text"
+                value={values.lng ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChange({
+                    ...values,
+                    lng: val,
+                    coordinates: values.lat && val ? `${values.lat}, ${val}` : values.coordinates
+                  });
+                }}
+                placeholder="e.g. 72.8777"
+                className="h-10 rounded-xl border border-border bg-bg-input px-3 text-xs sm:text-sm text-text-primary outline-none transition placeholder:text-text-dim focus:border-warning focus:bg-warning/5"
+              />
+            </label>
           </div>
         </div>
 
