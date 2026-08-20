@@ -686,6 +686,17 @@ function buildReportHTML(data, logoBase64) {
         </div>
         <div class="table-wrap">
           <table class="data-table compact-table">
+            <colgroup>
+              <col style="width: 12%" />
+              <col style="width: 8%" />
+              <col style="width: 8%" />
+              <col style="width: 10%" />
+              <col style="width: 11%" />
+              <col style="width: 16%" />
+              <col style="width: 8%" />
+              <col style="width: 11%" />
+              <col style="width: 16%" />
+            </colgroup>
             <thead><tr>
               <th>Asset Class</th><th>Type</th><th>Unit Mix</th>
               <th class="tr">Area (sqft)</th><th class="tr">Rate</th><th class="tr">Ticket Size</th>
@@ -832,6 +843,11 @@ function buildReportHTML(data, logoBase64) {
           <div>
             <div class="sub-label">Cost of Project Breakdown</div>
             <table class="data-table compact-table">
+              <colgroup>
+                <col style="width: 45%" />
+                <col style="width: 40%" />
+                <col style="width: 15%" />
+              </colgroup>
               <thead><tr><th>Cost Head</th><th class="tr">Amount (${escHtml(currencyCode)})</th><th class="tr">%</th></tr></thead>
               <tbody>
                 ${costRows.filter(r => r.value > 0).map(r => `
@@ -851,6 +867,11 @@ function buildReportHTML(data, logoBase64) {
           <div>
             <div class="sub-label">Means of Finance Breakdown</div>
             <table class="data-table compact-table">
+              <colgroup>
+                <col style="width: 45%" />
+                <col style="width: 15%" />
+                <col style="width: 40%" />
+              </colgroup>
               <thead><tr><th>Funding Source</th><th class="tr">Share (%)</th><th class="tr">Amount (${escHtml(currencyCode)})</th></tr></thead>
               <tbody>
                 ${allMofRows.length > 0 ? allMofRows.map(r => `
@@ -877,6 +898,10 @@ function buildReportHTML(data, logoBase64) {
               return `
               <div class="sub-label" style="margin-top:10px;">Loan Parameters</div>
               <table class="data-table compact-table">
+                <colgroup>
+                  <col style="width: 60%" />
+                  <col style="width: 40%" />
+                </colgroup>
                 <tbody>
                   <tr><td class="dt-label">Loan Principal</td><td class="mono">${fmtCurrencyCompact(params.loanAmount, pSym)}</td></tr>
                   <tr><td class="dt-label">Annual ROI</td><td class="mono">${params.annualInterest}%</td></tr>
@@ -1046,6 +1071,14 @@ function buildReportHTML(data, logoBase64) {
     <div class="rp-body">
       <div class="section-title">Financial Viability Assessment</div>
       <table class="data-table">
+        <colgroup>
+          <col style="width: 20%" />
+          <col style="width: 20%" />
+          <col style="width: 20%" />
+          <col style="width: 20%" />
+          <col style="width: 10%" />
+          <col style="width: 10%" />
+        </colgroup>
         <thead>
           <tr>
             <th>Scenario</th>
@@ -1261,11 +1294,12 @@ html, body {
 .data-table th {
   background: #f1f5f9; color: #475569; font-weight: 800; text-transform: uppercase;
   letter-spacing: 0.03em; padding: 5px 7px; border-bottom: 2px solid #e2e8f0;
-  text-align: left; font-size: 7.5px; white-space: nowrap;
+  text-align: left; font-size: 7.5px;
+  word-wrap: break-word; overflow-wrap: break-word;
 }
 .data-table td {
   padding: 4px 7px; border-bottom: 1px solid #f1f5f9; color: #334155;
-  vertical-align: top; overflow: hidden; text-overflow: ellipsis;
+  vertical-align: top; word-wrap: break-word; overflow-wrap: break-word;
 }
 .data-table tr:nth-child(even) td { background: #fafbfc; }
 .total-row td { font-weight: 800 !important; background: #f0fdf4 !important; color: #065f46 !important; border-top: 1.5px solid #a7f3d0 !important; }

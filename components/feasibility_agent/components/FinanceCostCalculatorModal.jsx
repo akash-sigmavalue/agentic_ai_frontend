@@ -384,10 +384,10 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                       <tr>
                         <th>Month No.</th>
                         <th>Disbursement{unitSuffix}</th>
-                        <th>Repayment{unitSuffix}</th>
-                        <th>Outstanding Loan{unitSuffix}</th>
                         <th>Interest % (Ann. ROI)</th>
                         <th>Total Interest{unitSuffix}</th>
+                        <th>Repayment{unitSuffix}</th>
+                        <th>Outstanding Loan{unitSuffix}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -395,10 +395,10 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
                         <tr key={row.period}>
                           <td style={{fontWeight:700,color:"#475569",textAlign:"center"}}>{row.period}</td>
                           <td><input className="fcc-table-input" type="number" min={0} step={0.1} value={row.disbursement_amount} onChange={e=>handleCellChange(idx,"disbursement_amount",e.target.value)}/></td>
-                          <td><input className="fcc-table-input" type="number" min={0} step={0.1} value={row.repayment_amount} onChange={e=>handleCellChange(idx,"repayment_amount",e.target.value)}/></td>
-                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.outstanding_loan)}</td>
                           <td><input className="fcc-table-input" type="number" min={0} max={100} step={0.01} value={row.interest_percent} onChange={e=>handleCellChange(idx,"interest_percent",e.target.value)}/></td>
                           <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.total_interest)}</td>
+                          <td><input className="fcc-table-input" type="number" min={0} step={0.1} value={row.repayment_amount} onChange={e=>handleCellChange(idx,"repayment_amount",e.target.value)}/></td>
+                          <td style={{textAlign:"right",color:"#94a3b8",fontWeight:500}}>{fmt(row.outstanding_loan)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -409,9 +409,11 @@ export default function FinanceCostCalculatorModal({ isOpen, onClose, onApply, d
               {totals && (
                 <div style={{display:"flex",gap:16,flexWrap:"wrap",marginTop:10,padding:"10px 16px",background:"#1e293b",borderRadius:10,color:"#fff",fontSize:12,fontWeight:600}}>
                   <span style={{fontWeight:800}}>TABLE TOTAL</span>
-                  <span style={{marginLeft:"auto"}}>Disbursement: {currency} {fmt(totals.disbursement)}</span>
-                  <span>Repayment: {currency} {fmt(totals.entered_repayment)}</span>
-                  <span style={{color:"#fbbf24"}}>Total Interest: {currency} {fmt(totals.interest)}</span>
+                  <div style={{display:"flex",gap:"16px",flexWrap:"wrap",justifyContent:"center"}}>
+                    <span>Disbursement: {currency} {fmt(totals.disbursement)}</span>
+                    <span>Repayment: {currency} {fmt(totals.repayment_used)}</span>
+                    <span style={{color:"#fbbf24"}}>Total Interest: {currency} {fmt(totals.interest)}</span>
+                  </div>
                 </div>
               )}
             </div>

@@ -3010,8 +3010,8 @@ const ProductMixTicketSize = () => {
                         </div>
                         {isAppliedProductMixOpen && (
                             <div className="pm-section-body">
-                                <div className="row mb-4">
-                                    <div className="col-md-2">
+                                <div className="d-flex justify-content-between align-items-end mb-4">
+                                    <div style={{ width: '120px' }}>
                                         <div className="pm-global-label">Area Unit</div>
                                         <input
                                             type="text"
@@ -3021,6 +3021,19 @@ const ProductMixTicketSize = () => {
                                             disabled
                                         />
                                     </div>
+                                    {grossFloorArea > 0 && grossFloorArea !== totalAllottedArea && (
+                                        <div className="d-flex align-items-center px-3 py-2 rounded" style={{ backgroundColor: grossFloorArea >= totalAllottedArea ? '#fffbeb' : '#fef2f2', border: `1px solid ${grossFloorArea >= totalAllottedArea ? '#fef08a' : '#fecaca'}`, color: grossFloorArea >= totalAllottedArea ? '#854d0e' : '#991b1b', fontSize: '12.5px', fontWeight: 600 }}>
+                                            <FaInfoCircle className="me-2" style={{ color: grossFloorArea >= totalAllottedArea ? '#eab308' : '#ef4444' }} size={14} />
+                                            <span>
+                                                {grossFloorArea >= totalAllottedArea ? 'Unused Area:' : 'Over-allotted Area:'} 
+                                                <span className="ms-1 fs-6">{Math.abs(grossFloorArea - totalAllottedArea).toLocaleString()}</span> 
+                                                <span className="ms-1" style={{ fontSize: '11px', textTransform: 'uppercase' }}>{areaUnit}</span>
+                                            </span>
+                                            <span style={{ fontSize: '10px', fontWeight: 700, color: grossFloorArea >= totalAllottedArea ? '#a16207' : '#b91c1c', marginLeft: '8px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                (Gross Floor Area - Total Allotted Area)
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="w-100" style={{ overflow: 'visible' }}>
                                     <table className="pm-table">
