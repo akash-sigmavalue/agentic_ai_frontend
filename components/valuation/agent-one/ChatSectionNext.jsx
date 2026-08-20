@@ -4595,13 +4595,13 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     {message.factorial_analysis_data && subjectData?.recommended_approach === "cost" && (
                       <>
                         {costCalculationData && (
-                          <div className="mt-8 rounded-2xl border border-success/20 bg-[#0f172a]/95 p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/20 text-success border border-success/30 text-sm">
+                          <div className="mt-8 rounded-2xl border border-success/30 bg-[linear-gradient(135deg,rgba(16,185,129,0.05),rgba(52,211,153,0.03))] p-5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-panel">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/15 border border-success/30 text-success text-sm shrink-0">
                               <CheckCircle className="h-4.5 w-4.5 text-success" />
                             </div>
                             <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-white">Cost Approach Calculated</p>
-                              <p className="text-[9px] text-text-dim mt-0.5">Update the cost parameters below and recalculate if needed.</p>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-success">Cost Approach Calculated</p>
+                              <p className="text-[11px] text-text-secondary mt-0.5">Update the cost parameters below and recalculate if needed.</p>
                             </div>
                           </div>
                         )}
