@@ -314,7 +314,7 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
     <div className="relative">
       <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className={`w-full min-w-max text-left ${isMaximized ? "text-sm" : "text-xs sm:text-sm"}`}>
-          <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
+          <thead className="sticky top-0 z-20 bg-[var(--bg-deep)] border-b border-border shadow-md">
             <tr className={`border-b border-border ${isMaximized ? "text-xs" : "text-[10px] sm:text-xs"} uppercase tracking-[0.04em] text-text-dim`}>
               {selectable && (
                 <th className="px-3 py-2.5 font-semibold">
@@ -874,10 +874,10 @@ export default function ComparableTable({
 
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className={`w-full min-w-max text-left ${isMaximized ? "text-sm" : "text-xs sm:text-sm"}`}>
-          <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className={`border-b border-border ${isMaximized ? "text-xs" : "text-[10px] sm:text-xs"} uppercase tracking-[0.04em] text-text-dim bg-[#161922]`}>
+          <thead className="sticky top-0 z-20 bg-[var(--bg-deep)] border-b border-border shadow-md">
+            <tr className={`border-b border-border ${isMaximized ? "text-xs" : "text-[10px] sm:text-xs"} uppercase tracking-[0.04em] text-text-dim bg-[var(--bg-deep)]`}>
               {selectable && (
-                <th className="px-3 py-2.5 font-semibold bg-[#161922]">
+                <th className="px-3 py-2.5 font-semibold bg-[var(--bg-deep)]">
                   <input
                     type="checkbox"
                     checked={isDroppedTab ? allDroppedSelected : allSelected}

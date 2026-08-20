@@ -122,7 +122,7 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
   const renderTable = (maxHeightClass = "") => (
     <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full min-w-max text-left text-xs sm:text-sm">
-        <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
+        <thead className="sticky top-0 z-20 bg-[var(--bg-deep)] border-b border-border shadow-md">
           <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
@@ -245,7 +245,7 @@ export function TransactionTable({ transactions }) {
   const tableContent = (
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full min-w-max text-left text-xs sm:text-sm">
-        <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
+        <thead className="sticky top-0 z-20 bg-[var(--bg-deep)] border-b border-border shadow-md">
           <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
             <TableHeaderCell columnKey="property_type_raw" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />

@@ -140,14 +140,14 @@ function SpreadsheetFilterDropdown({
       <div className="pb-2 border-b border-border/50 space-y-1 shrink-0">
         <button
           onClick={handleSortAsc}
-          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "asc" ? "bg-[#fb923c]/10 text-[#fb923c] hover:bg-[#fb923c]/15" : ""}`}
+          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "asc" ? "bg-[#fb923c]/10 text-[#fb923c] hover:bg-[#fb923c]/15" : ""}`}
         >
           <ArrowUp size={13} className="text-text-dim shrink-0" />
           <span>Sort Smallest to Largest</span>
         </button>
         <button
           onClick={handleSortDesc}
-          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "desc" ? "bg-[#fb923c]/10 text-[#fb923c] hover:bg-[#fb923c]/15" : ""}`}
+          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-text-primary ${sortConfig?.column === columnKey && sortConfig?.direction === "desc" ? "bg-[#fb923c]/10 text-[#fb923c] hover:bg-[#fb923c]/15" : ""}`}
         >
           <ArrowDown size={13} className="text-text-dim shrink-0" />
           <span>Sort Largest to Smallest</span>
@@ -189,7 +189,7 @@ function SpreadsheetFilterDropdown({
 
         <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-1 text-[11px]">
           {searchQuery === "" && (
-            <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-text-secondary select-none font-medium">
+            <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-text-secondary select-none font-medium">
               <input
                 type="checkbox"
                 checked={isAllChecked}
@@ -213,7 +213,7 @@ function SpreadsheetFilterDropdown({
               const displayVal = val === "" ? "(Blanks)" : val;
               const isChecked = isOptionChecked(val);
               return (
-                <div key={idx} className="flex items-center justify-between group/opt rounded hover:bg-white/5 px-2 py-1">
+                <div key={idx} className="flex items-center justify-between group/opt rounded hover:bg-black/5 dark:hover:bg-white/5 px-2 py-1">
                   <label className="flex items-center gap-2 cursor-pointer text-text-secondary select-none flex-1 min-w-0">
                     <input
                       type="checkbox"
@@ -305,7 +305,7 @@ export default function TableHeaderCell({
           <button
             ref={triggerRef}
             onClick={toggleDropdown}
-            className={`opacity-0 group-hover/header:opacity-100 focus:opacity-100 hover:text-accent-light text-text-dim transition p-0.5 rounded ${isOpen ? 'opacity-100 text-accent bg-white/5' : ''}`}
+            className={`opacity-0 group-hover/header:opacity-100 focus:opacity-100 hover:text-accent-light text-text-dim transition p-0.5 rounded ${isOpen ? 'opacity-100 text-accent bg-black/5 dark:bg-white/5' : ''}`}
             title="Sort & Filter"
           >
             <ChevronDown size={12} />

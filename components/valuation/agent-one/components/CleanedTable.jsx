@@ -287,7 +287,7 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
 
       <div className={`hidden sm:block overflow-x-auto overflow-y-auto custom-scrollbar ${isMaximized ? '' : 'max-h-[500px]'}`}>
         <table className="w-full text-left text-xs sm:text-sm relative">
-          <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
+          <thead className="sticky top-0 z-20 bg-[var(--bg-deep)] border-b border-border shadow-md">
             <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
               <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />

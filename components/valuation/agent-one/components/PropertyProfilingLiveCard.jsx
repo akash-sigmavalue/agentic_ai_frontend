@@ -3,30 +3,30 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 export function PropertyProfilingLiveCard({ streamingNote, isStreaming }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md my-1 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+    <div className="rounded-2xl border border-[#0ea5e9]/25 bg-bg-card shadow-xl overflow-hidden backdrop-blur-md my-1 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between gap-3 border-b border-[#0ea5e9]/20 bg-[#0ea5e9]/5 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <div className="flex gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
           </div>
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-slate-400 ml-1">
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-text-dim ml-1">
             Stage 1 • Property Profiling Status
           </span>
         </div>
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 select-none">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-500 dark:text-emerald-400 select-none">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981] dark:shadow-[0_0_6px_#34d399]" />
           {isStreaming ? "Processing" : "Complete"}
         </span>
       </div>
-      <div className="p-4 font-mono text-[11px] leading-relaxed">
+      <div className="p-4 font-mono text-[11px] leading-relaxed bg-bg-deep/30">
         <div className="flex items-center gap-2">
-          <span className="shrink-0 font-bold text-cyan-400">›</span>
-          <span className="text-slate-300 font-semibold break-words">
+          <span className="shrink-0 font-bold text-cyan-500 dark:text-cyan-400">›</span>
+          <span className="text-text-secondary font-semibold break-words">
             {streamingNote || "Running property profiling..."}
           </span>
-          <span className="animate-pulse text-emerald-400">█</span>
+          <span className="animate-pulse text-emerald-500 dark:text-emerald-400">█</span>
         </div>
       </div>
     </div>

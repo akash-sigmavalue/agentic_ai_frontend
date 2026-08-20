@@ -4633,26 +4633,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     />
                   )}
                   {isListingStreaming && (
-                    <div className="rounded-2xl border border-border/60 bg-slate-950/90 shadow-xl overflow-hidden backdrop-blur-md">
-                      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2.5">
+                    <div className="rounded-2xl border border-[#0ea5e9]/25 bg-bg-card shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-[#0ea5e9]/20 bg-[#0ea5e9]/5 px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <div className="flex gap-1.5">
                             <span className="h-2.5 w-2.5 rounded-full bg-cyan-500/70" />
                             <span className="h-2.5 w-2.5 rounded-full bg-sky-500/70" />
                             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
                           </div>
-                          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-slate-500 ml-1">Listing Fetch Status</span>
+                          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-text-dim ml-1">Listing Fetch Status</span>
                         </div>
-                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 mr-2 select-none">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]" />
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-500 dark:text-emerald-400 mr-2 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse shadow-[0_0_6px_#10b981] dark:shadow-[0_0_6px_#34d399]" />
                           Processing
                         </span>
                       </div>
-                      <div className="p-4 font-mono text-[11px] leading-relaxed">
+                      <div className="p-4 font-mono text-[11px] leading-relaxed bg-bg-deep/30">
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 font-bold text-cyan-400">›</span>
-                          <span className="text-slate-300 font-semibold break-words">{listingStatusNote || streamingNote || "Waiting for listing fetch..."}</span>
-                          <span className="animate-pulse text-emerald-400">█</span>
+                          <span className="shrink-0 font-bold text-cyan-500 dark:text-cyan-400">›</span>
+                          <span className="text-text-secondary font-semibold break-words">{listingStatusNote || streamingNote || "Waiting for listing fetch..."}</span>
+                          <span className="animate-pulse text-emerald-500 dark:text-emerald-400">█</span>
                         </div>
                       </div>
                       {Object.keys(projectFetchStatuses).length > 0 && (() => {
@@ -4691,25 +4691,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                               {/* DB Search Group */}
                               {dbStatuses.length > 0 && (
                                 <div className="space-y-1.5">
-                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">🗄️ DB Search -</span>
+                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-border/30">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500 dark:text-emerald-400 font-mono">🗄️ DB Search -</span>
                                   </div>
                                   <div className="grid grid-cols-1 gap-1">
                                     {dbStatuses.map(({ name, status, isSubject }) => {
                                       const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                                      const colors = { pending: "text-text-dim", fetching: "text-emerald-400 animate-pulse", done: "text-emerald-400", error: "text-red-400", skipping: "text-amber-400" };
+                                      const statusColors = { pending: "text-text-dim", fetching: "text-emerald-500 dark:text-emerald-400 animate-pulse", done: "text-emerald-500 dark:text-emerald-400", error: "text-danger", skipping: "text-warning" };
+                                      const rowBg = status === "done" ? "bg-emerald-500/5" : status === "error" ? "bg-danger/5" : "bg-bg-deep/50";
                                       return (
-                                        <div key={`db-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                        <div key={`db-${name}`} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 ${rowBg}`}>
                                           <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                                          <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                          <span className="text-[10px] font-semibold truncate flex-1 font-mono text-text-primary">
                                             {name}
                                             {isSubject && (
-                                              <span className="ml-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400 font-sans">
+                                              <span className="ml-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-sans">
                                                 Subject
                                               </span>
                                             )}
                                           </span>
-                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${statusColors[status] || "text-text-dim"}`}>{status}</span>
                                         </div>
                                       );
                                     })}
@@ -4720,25 +4721,26 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                               {/* Web Search Group */}
                               {webStatuses.length > 0 && (
                                 <div className="space-y-1.5">
-                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-white/[0.04]">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 font-mono">🌐 Web Search -</span>
+                                  <div className="flex items-center gap-1.5 px-1 pb-1 border-b border-border/30">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-500 dark:text-cyan-400 font-mono">🌐 Web Search -</span>
                                   </div>
                                   <div className="grid grid-cols-1 gap-1">
                                     {webStatuses.map(({ name, status, isSubject }) => {
                                       const icons = { pending: "⏳", fetching: "🔄", done: "✅", error: "❌", skipping: "⏩" };
-                                      const colors = { pending: "text-text-dim", fetching: "text-cyan-400 animate-pulse", done: "text-cyan-400", error: "text-red-400", skipping: "text-amber-400" };
+                                      const statusColors = { pending: "text-text-dim", fetching: "text-cyan-500 dark:text-cyan-400 animate-pulse", done: "text-cyan-500 dark:text-cyan-400", error: "text-danger", skipping: "text-warning" };
+                                      const rowBg = status === "done" ? "bg-cyan-500/5" : status === "error" ? "bg-danger/5" : "bg-bg-deep/50";
                                       return (
-                                        <div key={`web-${name}`} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-bg-deep/50">
+                                        <div key={`web-${name}`} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 ${rowBg}`}>
                                           <span className={`text-[11px] ${status === "fetching" ? "animate-spin" : ""}`}>{icons[status] || "⏳"}</span>
-                                          <span className={`text-[10px] font-medium truncate flex-1 font-mono ${colors[status] || "text-text-dim"}`}>
+                                          <span className="text-[10px] font-semibold truncate flex-1 font-mono text-text-primary">
                                             {name}
                                             {isSubject && (
-                                              <span className="ml-2 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-400 font-sans">
+                                              <span className="ml-2 rounded-full bg-cyan-500/10 border border-cyan-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-sans">
                                                 Subject
                                               </span>
                                             )}
                                           </span>
-                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${colors[status] || "text-text-dim"}`}>{status}</span>
+                                          <span className={`text-[9px] uppercase font-bold tracking-wider font-mono ${statusColors[status] || "text-text-dim"}`}>{status}</span>
                                         </div>
                                       );
                                     })}
@@ -4752,55 +4754,55 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     </div>
                   )}
                   {isCleaningStreaming && (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                      <div className="flex items-center justify-between gap-3 border-b border-emerald-500/10 bg-emerald-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-emerald-300">Cleaning Status</span>
-                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-300 select-none">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse shadow-[0_0_6px_#86efac]" />
+                    <div className="rounded-2xl border border-emerald-500/30 bg-bg-card shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-emerald-500/20 bg-emerald-500/8 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-emerald-600 dark:text-emerald-300">Cleaning Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_#10b981]" />
                           Processing
                         </span>
                       </div>
-                      <div className="p-4 font-mono text-[11px] leading-relaxed text-emerald-100">
+                      <div className="p-4 font-mono text-[11px] leading-relaxed bg-bg-deep/30">
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 font-bold text-emerald-300">›</span>
-                          <span className="font-semibold break-words">{cleaningStatusNote || streamingNote || "Cleaning listings..."}</span>
-                          <span className="animate-pulse text-emerald-300">█</span>
+                          <span className="shrink-0 font-bold text-emerald-600 dark:text-emerald-300">›</span>
+                          <span className="font-semibold break-words text-text-secondary">{cleaningStatusNote || streamingNote || "Cleaning listings..."}</span>
+                          <span className="animate-pulse text-emerald-600 dark:text-emerald-300">█</span>
                         </div>
                       </div>
                     </div>
                   )}
                   {isFactorialStreaming && (
-                    <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                      <div className="flex items-center justify-between gap-3 border-b border-purple-500/10 bg-purple-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-purple-300">Factorial Table Status</span>
-                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-300 select-none">
-                          <span className="h-1.5 w-1.5 rounded-full bg-purple-300 animate-pulse shadow-[0_0_6px_#c084fc]" />
+                    <div className="rounded-2xl border border-purple-500/30 bg-bg-card shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-purple-500/20 bg-purple-500/8 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-purple-600 dark:text-purple-300">Factorial Table Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse shadow-[0_0_6px_#a855f7]" />
                           Processing
                         </span>
                       </div>
-                      <div className="p-4 font-mono text-[11px] leading-relaxed text-purple-100">
+                      <div className="p-4 font-mono text-[11px] leading-relaxed bg-bg-deep/30">
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 font-bold text-purple-300">›</span>
-                          <span className="font-semibold break-words">{factorialStatusNote || streamingNote || "Building factorial table..."}</span>
-                          <span className="animate-pulse text-purple-300">█</span>
+                          <span className="shrink-0 font-bold text-purple-600 dark:text-purple-300">›</span>
+                          <span className="font-semibold break-words text-text-secondary">{factorialStatusNote || streamingNote || "Building factorial table..."}</span>
+                          <span className="animate-pulse text-purple-600 dark:text-purple-300">█</span>
                         </div>
                       </div>
                     </div>
                   )}
                   {isFactorialAnalysisStreaming && (
-                    <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 shadow-xl overflow-hidden backdrop-blur-md">
-                      <div className="flex items-center justify-between gap-3 border-b border-pink-500/10 bg-pink-500/5 px-4 py-2.5">
-                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-pink-300">Factorial Analysis Status</span>
-                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-300 select-none">
-                          <span className="h-1.5 w-1.5 rounded-full bg-pink-300 animate-pulse shadow-[0_0_6px_#f9a8d4]" />
+                    <div className="rounded-2xl border border-pink-500/30 bg-bg-card shadow-xl overflow-hidden backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-3 border-b border-pink-500/20 bg-pink-500/8 px-4 py-2.5">
+                        <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.05em] text-pink-600 dark:text-pink-300">Factorial Analysis Status</span>
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-600 dark:text-pink-300 select-none">
+                          <span className="h-1.5 w-1.5 rounded-full bg-pink-500 animate-pulse shadow-[0_0_6px_#ec4899]" />
                           Processing
                         </span>
                       </div>
-                      <div className="p-4 font-mono text-[11px] leading-relaxed text-pink-100">
+                      <div className="p-4 font-mono text-[11px] leading-relaxed bg-bg-deep/30">
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 font-bold text-pink-300">›</span>
-                          <span className="font-semibold break-words">{analysisStatusNote || streamingNote || "Running valuation synthesis..."}</span>
-                          <span className="animate-pulse text-pink-300">█</span>
+                          <span className="shrink-0 font-bold text-pink-600 dark:text-pink-300">›</span>
+                          <span className="font-semibold break-words text-text-secondary">{analysisStatusNote || streamingNote || "Running valuation synthesis..."}</span>
+                          <span className="animate-pulse text-pink-600 dark:text-pink-300">█</span>
                         </div>
                       </div>
                     </div>
