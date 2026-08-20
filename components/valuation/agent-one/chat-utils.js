@@ -451,7 +451,7 @@ export const formatPrice = (value, currency = "INR") => {
 
   if (isIndian) {
     if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
-    if (value >= 100000) return `₹${(value / 100000).toFixed(2)} Lac`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(2)} Lakh`;
     return `₹${Number(value).toLocaleString('en-IN')}`;
   }
 
