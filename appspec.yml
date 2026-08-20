@@ -8,10 +8,10 @@ files:
 hooks:
   AfterInstall:
     - location: scripts/frontend_after_install.sh
-      timeout: 900
+      timeout: 3600
       runas: ubuntu
 
   ValidateService:
     - location: scripts/frontend_validate.sh
-      timeout: 120
+      timeout: 300
       runas: ubuntu
