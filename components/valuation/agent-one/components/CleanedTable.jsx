@@ -288,7 +288,7 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
       <div className={`hidden sm:block overflow-x-auto overflow-y-auto custom-scrollbar ${isMaximized ? '' : 'max-h-[500px]'}`}>
         <table className="w-full text-left text-xs sm:text-sm relative">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
+            <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
               <TableHeaderCell columnKey="cleaned_match_project" label="Matched Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
               <TableHeaderCell columnKey="cleaned_currency" label="Currency" align="center" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={displayedListings} />
@@ -364,7 +364,7 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {lst.project_category ? (
-                      <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${["plot", "land"].includes((lst.project_category || "").toLowerCase())
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${["plot", "land"].includes((lst.project_category || "").toLowerCase())
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                         : ["villa", "building_land"].includes((lst.project_category || "").toLowerCase())
                           ? "bg-purple-500/15 text-purple-400 border-purple-500/30"
@@ -387,14 +387,14 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
                     {formatPrice(lst.cleaned_price_value || lst.price_value, lst.cleaned_currency || lst.currency)}
                   </td>
 
-                  <td className="px-3 py-2 text-center font-mono text-text-secondary text-[11px] whitespace-nowrap">
+                  <td className="px-3 py-2 text-center font-mono text-text-secondary text-xs whitespace-nowrap">
                     {lst.exchange_rate_remark && lst.exchange_rate_remark !== "1.0"
                       ? lst.exchange_rate_remark
                       : "1.0"}
                   </td>
 
                   <td className="px-3 py-2 text-right font-mono text-text-secondary">
-                    {lst.cleaned_area_sqft || "—"} <span className="text-[10px] opacity-50">{lst.cleaned_area_type}</span>
+                    {lst.cleaned_area_sqft || "—"} <span className="text-xs opacity-50">{lst.cleaned_area_type}</span>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-accent-light font-bold">
                     {!isRowPlot && lst.final_super_builtup_area
@@ -469,10 +469,10 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
                           ? (lst.plot_derived_rate_range.low === lst.plot_derived_rate_range.high
                             ? `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()}`
                             : `${rowCurrency} ${lst.plot_derived_rate_range.low.toLocaleString()} - ${lst.plot_derived_rate_range.high.toLocaleString()}`)
-                          : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-[10px]">NEG VALUE</span> : "—")}
+                          : (lst.plot_negative_value_flag ? <span className="text-danger font-bold text-xs">NEG VALUE</span> : "—")}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${lst.plot_derived_by === 'user' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-bg-deep/40 text-text-dim border border-border/30'}`}>
                           {lst.plot_derived_by || "Agent"}
                         </span>
                       </td>
@@ -486,17 +486,17 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
                     {lst.transaction_date ? formatDate(lst.transaction_date) : (lst.posted_date_raw || "—")}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${lst.source === 'Internal DB' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
                       {lst.source === 'Internal DB' ? 'Transaction DB' : (lst.source || "Agent Web Search")}
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
+                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold uppercase ${lst.stat_flag === 'outlier' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'}`}>
                       {lst.stat_flag || "ok"}
                     </span>
                   </td>
                   {showReasonColumn && (
-                    <td className="px-3 py-2 text-[10px] text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
+                    <td className="px-3 py-2 text-xs text-text-dim max-w-[200px] truncate" title={getRowReason(lst)}>
                       {getRowReason(lst)}
                     </td>
                   )}
@@ -520,10 +520,10 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
             <div className="flex items-start gap-2 min-w-0">
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#fb923c]">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.05em] text-[#fb923c]">
                   Stage 3C - Cleaned & Normalized Data
                 </span>
-                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">
+                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-xs font-semibold text-text-dim whitespace-nowrap w-fit">
                   {listings.length} valid records
                 </span>
               </div>
@@ -562,19 +562,19 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
               <div className="flex flex-col sm:flex-row sm:items-center rounded-xl border border-white/[0.06] bg-bg-deep/60 p-1 sm:p-0.5 gap-1 sm:gap-0.5 w-full sm:w-max">
                 <button
                   onClick={() => setActiveTab("valid")}
-                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "valid" ? "bg-success/20 text-success border border-success/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
                 >
                   ✅ Valid ({listings.length})
                 </button>
                 <button
                   onClick={() => setActiveTab("outliers")}
-                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "outliers" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
                 >
                   ⚠️ Outliers ({reviewListings.length})
                 </button>
                 <button
                   onClick={() => setActiveTab("dropped")}
-                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
+                  className={`flex justify-center sm:justify-start items-center whitespace-nowrap w-full sm:w-auto gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${activeTab === "dropped" ? "bg-danger/20 text-danger border border-danger/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "text-text-dim hover:text-text-secondary"}`}
                 >
                   ❌ Dropped ({droppedListings.length})
                 </button>
@@ -583,26 +583,26 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
 
             {showPlotControls && onRecalculate && (
               <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-deep/50 px-4 py-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-text-dim mr-2">Global Overrides:</span>
                 <input
                   type="number"
                   step="0.1"
                   placeholder="FSI"
                   value={fsiGlobal}
                   onChange={e => setFsiGlobal(e.target.value)}
-                  className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                  className="w-24 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-xs text-white outline-none focus:border-[#fb923c]"
                 />
                 <input
                   type="number"
                   placeholder="Construction Cost (₹/sqft)"
                   value={ccGlobal}
                   onChange={e => setCcGlobal(e.target.value)}
-                  className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-[11px] text-white outline-none focus:border-[#fb923c]"
+                  className="w-32 rounded-lg border border-border bg-bg-card px-3 py-1.5 text-xs text-white outline-none focus:border-[#fb923c]"
                 />
                 <div className="h-4 w-px bg-border mx-2" />
                 <button
                   onClick={() => onRecalculate(fsiGlobal, ccGlobal, rowOverrides, "global")}
-                  className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                  className="rounded-lg bg-[#fb923c]/10 text-[#fb923c] border border-[#fb923c]/20 hover:bg-[#fb923c]/20 px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition"
                 >
                   Apply All & Recalculate
                 </button>
@@ -610,13 +610,13 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
                   <>
                     <button
                       onClick={() => onRecalculate("", "", rowOverrides, "edited")}
-                      className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition"
+                      className="rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition"
                     >
                       Recalculate Edits
                     </button>
                     <button
                       onClick={() => setRowOverrides({})}
-                      className="text-[10px] text-danger hover:underline font-bold uppercase ml-2"
+                      className="text-xs text-danger hover:underline font-bold uppercase ml-2"
                     >
                       Reset Edits
                     </button>

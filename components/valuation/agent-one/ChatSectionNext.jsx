@@ -4344,16 +4344,16 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
               <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-border/85 bg-bg-card text-3xl shadow-panel animate-pulse bg-accent/5 border-accent/25">
                 <Bot className="h-8 w-8 text-accent" />
               </div>
-              <h3 className="font-display text-base font-bold uppercase tracking-[0.04em] text-text-primary">
+              <h3 className="font-display text-lg sm:text-xl font-bold uppercase tracking-[0.04em] text-text-primary">
                 Start A Valuation Conversation
               </h3>
-              <p className="mt-2.5 max-w-sm text-sm text-text-secondary leading-relaxed">
+              <p className="mt-2.5 max-w-sm text-sm sm:text-base text-text-secondary leading-relaxed">
                 Ask about a property and the Valuation pipeline will stream entity extraction updates into the workflow view.
               </p>
               <button
                 type="button"
                 onClick={() => setShowQuickEstimateModal(true)}
-                className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-xs font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-6 py-3 text-sm font-bold uppercase tracking-wider text-bg-deep shadow-lg shadow-accent/20 transition hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] cursor-pointer"
               >
                 <Zap className="h-4 w-4" />
                 AI Quick Estimate Valuation
@@ -4364,7 +4364,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                     key={prompt}
                     type="button"
                     onClick={() => submitQuestion(prompt)}
-                    className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-sm text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
+                    className="rounded-2xl border border-border bg-bg-card px-4 py-3.5 text-left text-sm sm:text-base text-text-secondary transition hover:-translate-y-0.5 hover:border-border-glow hover:bg-bg-input hover:text-text-primary font-medium"
                   >
                     {prompt}
                   </button>
@@ -4374,7 +4374,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <button
                   type="button"
                   onClick={() => setShowUserFormModal(true)}
-                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-black uppercase tracking-wider transition ${inputMode === "user_form"
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-sm font-black uppercase tracking-wider transition ${inputMode === "user_form"
                     ? "border-accent/40 bg-accent/15 text-accent shadow-[0_0_14px_rgba(34,211,238,0.12)]"
                     : "border-border bg-bg-card text-text-secondary hover:border-accent/30 hover:text-text-primary"
                     }`}
@@ -4384,7 +4384,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 <button
                   type="button"
                   onClick={() => setInputMode("describe_ai")}
-                  className={`flex-1 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-black uppercase tracking-wider transition ${inputMode === "describe_ai"
+                  className={`flex-1 rounded-2xl border px-4 py-3 text-sm font-black uppercase tracking-wider transition ${inputMode === "describe_ai"
                     ? "border-warning/40 bg-warning/15 text-warning shadow-[0_0_14px_rgba(251,146,60,0.12)]"
                     : "border-border bg-bg-card text-text-secondary hover:border-warning/30 hover:text-text-primary"
                     }`}
@@ -4425,10 +4425,10 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                       message.role === "user" && parseStageDetailMessage(message.content)
                         ? "p-0 bg-transparent border-0 shadow-none"
                         : message.role === "user"
-                          ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm text-white shadow-panel"
+                          ? "rounded-[18px] rounded-br-md bg-[linear-gradient(135deg,var(--accent),var(--accent-purple))] px-4 py-3 text-sm sm:text-base text-white shadow-panel"
                           : message.content === "Running property profiling..." || (message.role === "assistant" && message.meta === "Live" && (message.content === "Running property profiling..." || message.content?.toLowerCase()?.includes("property profiling")))
                             ? "p-0 bg-transparent border-0 shadow-none"
-                            : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm text-text-primary shadow-panel"
+                            : "rounded-[18px] rounded-bl-md border border-border bg-bg-card px-4 py-3 text-sm sm:text-base text-text-primary shadow-panel"
                     }
                   >
                     {message.role === "user" && parseStageDetailMessage(message.content) ? (
@@ -5341,7 +5341,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         </div>
 
         <div className="border-t border-border bg-bg-card px-4 py-2.5 backdrop-blur shrink-0">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.05em] text-text-dim">
+          <div className="flex items-center justify-between text-xs sm:text-sm uppercase tracking-[0.05em] text-text-dim">
             <span className="truncate pr-4">{currentStage}</span>
             <button
               type="button"

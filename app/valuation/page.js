@@ -195,6 +195,12 @@ export default function HomePage() {
       <div className="orb orb-two" />
       <div className="orb orb-three" />
 
+      {/* Decorative vertical lines and ambient glow at the screen boundaries on ultra-wide viewports */}
+      <div className="hidden min-[1780px]:block absolute left-[calc(50%-930px)] top-20 bottom-0 w-[1px] bg-[linear-gradient(180deg,rgba(34,211,238,0.25),rgba(34,211,238,0.08)_50%,transparent)] z-0 pointer-events-none" />
+      <div className="hidden min-[1780px]:block absolute right-[calc(50%-930px)] top-20 bottom-0 w-[1px] bg-[linear-gradient(180deg,rgba(34,211,238,0.25),rgba(34,211,238,0.08)_50%,transparent)] z-0 pointer-events-none" />
+      <div className="hidden min-[1780px]:block absolute left-[calc(50%-1030px)] top-1/4 w-[160px] h-[400px] bg-accent/5 blur-[80px] rounded-full z-0 pointer-events-none" />
+      <div className="hidden min-[1780px]:block absolute right-[calc(50%-1030px)] top-1/4 w-[160px] h-[400px] bg-accent-purple/5 blur-[80px] rounded-full z-0 pointer-events-none" />
+
       {/* Responsive panel width overrides */}
       {maximizedPanels.length === 0 && (
         <style>{`
@@ -209,7 +215,7 @@ export default function HomePage() {
       <div className="relative z-10 mt-20 flex h-[calc(100vh-5rem)] flex-col">
 
 
-        <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-6">
+        <div className="mx-auto flex w-full max-w-[1860px] flex-1 flex-col overflow-hidden px-4 py-4 md:px-6 md:py-6">
           <div className="mb-3 shrink-0 min-[1071px]:hidden">
             {renderCompactNavigation("assistant")}
           </div>
@@ -313,7 +319,7 @@ export default function HomePage() {
                 {renderCompactBrandHeader()}
                 <div className="mb-3 shrink-0 min-[1071px]:hidden">{renderCompactNavigation("workflow")}</div>
                 <div className="min-h-0 flex-1">
-                  <WorkflowSection 
+                  <WorkflowSection
                     events={events}
                     isMaximized={maximizedPanels.includes("workflow")}
                     onToggleMaximize={() => toggleMaximize("workflow")}

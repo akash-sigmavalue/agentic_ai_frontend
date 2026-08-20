@@ -62,7 +62,7 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
     <>
       {rows.length > 0 && (
         <tr>
-          <td colSpan="100" className="bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.05em] text-text-dim">
+          <td colSpan="100" className="bg-[rgba(255,255,255,0.02)] px-3 py-2 text-xs font-bold uppercase tracking-[0.05em] text-text-dim">
             {label} ({rows.length})
           </td>
         </tr>
@@ -90,9 +90,9 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
           <td className="px-3 py-2 text-text-dim">{lst.area_type || "—"}</td>
           <td className="px-3 py-2 text-center">
             {lst.is_subject ? (
-              <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20">Subject</span>
+              <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20">Subject</span>
             ) : (
-              <span className="rounded-md bg-[#fb923c]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#fb923c] border border-[#fb923c]/20">Comparable</span>
+              <span className="rounded-md bg-[#fb923c]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#fb923c] border border-[#fb923c]/20">Comparable</span>
             )}
           </td>
           <td className="px-3 py-2 text-center font-mono text-text-dim">{lst.floor || "—"}</td>
@@ -103,14 +103,14 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
           </td>
           <td className="max-w-[200px] truncate px-3 py-2 text-text-dim">
             {lst._is_db ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
+              <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
             ) : lst.source_url ? (
               user?.role === "ADMIN" ? (
                 <a href={lst.source_url} target="_blank" rel="noreferrer" className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300 font-medium">
                   {lst.source_url}
                 </a>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400">web</span>
+                <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-400">web</span>
               )
             ) : "—"}
           </td>
@@ -123,7 +123,7 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
     <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
       <table className="w-full min-w-max text-left text-xs sm:text-sm">
         <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
+          <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="property_type" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
             <TableHeaderCell columnKey="project_category" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={allListingRowsCombined} />
@@ -161,10 +161,10 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
             <div className="flex items-start gap-2 min-w-0">
               <span className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(34,211,238,0.15)] text-sm shrink-0">📊</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] text-cyan-400 shrink-0">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.05em] text-cyan-400 shrink-0">
                   Stage 3B - Market Signal
                 </span>
-                <span className="mt-1 block rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-dim whitespace-nowrap w-fit">{(listings || []).length} web + {dbRows.length} db records</span>
+                <span className="mt-1 block rounded-full border border-border px-2 py-0.5 text-xs font-semibold text-text-dim whitespace-nowrap w-fit">{(listings || []).length} web + {dbRows.length} db records</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
@@ -207,8 +207,8 @@ export function ListingTable({ listings, dbTransactions, collapsed = false, onTo
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(34,211,238,0.15)] text-lg">📊</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-cyan-400">Market Signal</h3>
-                  <p className="text-[10px] text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
+                  <h3 className="text-sm sm:text-base font-bold uppercase tracking-[0.05em] text-cyan-400">Market Signal</h3>
+                  <p className="text-xs text-text-dim">{((listings || []).length + dbRows.length)} total records found</p>
                 </div>
               </div>
               <button
@@ -246,7 +246,7 @@ export function TransactionTable({ transactions }) {
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full min-w-max text-left text-xs sm:text-sm">
         <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-          <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
+          <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
             <TableHeaderCell columnKey="project_name" label="Project" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
             <TableHeaderCell columnKey="property_type_raw" label="Type" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
             <TableHeaderCell columnKey="property_type" label="Property Category" sortConfig={sortConfig} onSort={(col, dir) => setSortConfig({ column: col, direction: dir })} filterConfig={filterConfig} onFilterChange={(col, list) => setFilterConfig(prev => ({ ...prev, [col]: list }))} allRows={transactions} />
@@ -280,7 +280,7 @@ export function TransactionTable({ transactions }) {
               <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{t.location_name || "—"}</td>
               <td className="px-3 py-2 text-center font-mono text-text-secondary whitespace-nowrap">{formatDate(t.transaction_date)}</td>
               <td className="px-3 py-2">
-                <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                   Transaction DB
                 </span>
               </td>
@@ -299,9 +299,9 @@ export function TransactionTable({ transactions }) {
         <div className="border-b border-emerald-500/20 bg-[rgba(52,211,153,0.06)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(52,211,153,0.15)] text-sm">🗄️</span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</span>
+            <span className="text-xs font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</span>
             <div className="ml-auto flex items-center gap-3">
-              <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">{transactions.length} records</span>
+              <span className="rounded-full border border-emerald-500/30 px-2 py-0.5 text-xs font-semibold text-emerald-400">{transactions.length} records</span>
               <button
                 onClick={() => setIsMaximized(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg border border-border bg-bg-card text-[10px] text-text-dim transition hover:border-emerald-400 hover:text-emerald-400"
@@ -320,8 +320,8 @@ export function TransactionTable({ transactions }) {
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(52,211,153,0.15)] text-lg">🗄️</span>
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</h3>
-                  <p className="text-[10px] text-text-dim">{transactions.length} total records</p>
+                  <h3 className="text-sm sm:text-base font-bold uppercase tracking-[0.05em] text-emerald-400">Transactions</h3>
+                  <p className="text-xs text-text-dim">{transactions.length} total records</p>
                 </div>
               </div>
               <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>

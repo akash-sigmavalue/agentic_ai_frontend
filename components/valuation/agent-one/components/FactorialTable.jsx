@@ -183,7 +183,7 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
         <table className="w-full min-w-max text-left text-xs sm:text-sm">
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
+            <tr className="border-b border-border text-xs uppercase tracking-[0.04em] text-text-dim">
               <th className="px-4 py-3 font-semibold w-10">
                 <span className="sr-only">Select</span>
               </th>
@@ -327,12 +327,12 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                         )}
                         <span>{row.project_name || "—"}</span>
                         {row.is_subject && (
-                          <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
+                          <span className="ml-2 inline-flex items-center rounded-full bg-[rgba(167,139,250,0.18)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a78bfa] border border-[rgba(167,139,250,0.3)]">Subject</span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-[11px] font-bold text-[#c4b5fd]">{row.listing_count}</span>
+                      <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-[rgba(167,139,250,0.12)] px-1.5 text-xs font-bold text-[#c4b5fd]">{row.listing_count}</span>
                     </td>
                     <td className="px-4 py-3 text-center"><RoadTypeBadge type={row.road_type} /></td>
                     <td className="px-4 py-3 text-left">
@@ -362,13 +362,13 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                               {entries.map((item) => (
                                 <span
                                   key={item.label}
-                                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.04em] ${row.is_subject
+                                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold tracking-[0.04em] ${row.is_subject
                                     ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
                                     : "border-blue-500/35 bg-blue-500/10 text-blue-300"
                                     }`}
                                 >
                                   <span className="truncate uppercase">{item.label}</span>
-                                  <span className={`shrink-0 rounded px-1 py-0.5 text-[8px] font-black normal-case tracking-normal ${row.is_subject
+                                  <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-black normal-case tracking-normal ${row.is_subject
                                     ? "bg-emerald-500/15 text-emerald-300"
                                     : "bg-blue-500/15 text-blue-200"
                                     }`}>
@@ -408,7 +408,7 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                       })()}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-bold ${row.builtup_density?.congestion?.level === 'HIGH' ? 'bg-red-500/10 text-red-400' :
+                      <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-bold ${row.builtup_density?.congestion?.level === 'HIGH' ? 'bg-red-500/10 text-red-400' :
                         row.builtup_density?.congestion?.level === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400' :
                           row.builtup_density?.congestion?.level === 'LOW' ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-text-dim'
                         }`}>
@@ -420,21 +420,21 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                     <td className="px-4 py-3 text-right font-mono text-text-dim">{fmt(row.ci_90_upper)}</td>
                     <td className="px-4 py-3 text-center">
                       {!row.rate_derived_from || row.rate_derived_from === "—" || row.rate_derived_from === "-" || row.listing_count === 0 ? (
-                        <span className="text-text-dim text-[9px]">—</span>
+                        <span className="text-text-dim text-[10px]">—</span>
                       ) : row.rate_derived_from === "micromarket" ? (
-                        <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
+                        <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 border border-amber-400/20" title="Rate derived from comparable projects average (±5% CI)">
                           Micromarket
                         </span>
                       ) : row.rate_derived_from === "mixed" ? (
-                        <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
+                        <span className="inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500/10 to-purple-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#d8b4fe] border border-purple-500/20" title="Rate derived from both Web Listings and Internal Database">
                           Web + DB
                         </span>
                       ) : row.rate_derived_from === "internal_db" || row.rate_derived_from === "Internal DB" ? (
-                        <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
+                        <span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-400 border border-purple-500/20" title="Rate derived from internal database transactions">
                           Transaction DB
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
+                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-400/20" title="Rate derived from actual listing data">
                           Listing
                         </span>
                       )}
@@ -445,15 +445,15 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                     return (
                       <tr
                         key={`fact-${row.project_name || i}-sub-${subIdx}`}
-                        className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-[11px] transition hover:bg-bg-deep/40"
+                        className="border-b border-border/30 bg-bg-deep/20 text-text-dim text-xs transition hover:bg-bg-deep/40"
                       >
                         <td className="px-4 py-2"></td>
                         <td className="px-4 py-2 pl-8 font-normal whitespace-nowrap text-text-dim flex items-center gap-1.5">
-                          <span className="text-border">└──</span>
+                           <span className="text-border">└──</span>
                           <span>{isSubDb ? "Internal DB Transactions" : "Web Listings"}</span>
                         </td>
                         <td className="px-4 py-2 text-center">
-                          <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-[10px] font-semibold text-text-dim">
+                          <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded bg-white/5 px-1.5 text-xs font-semibold text-text-dim">
                             {sub.listing_count}
                           </span>
                         </td>
@@ -466,11 +466,11 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                         <td className="px-4 py-2 text-right font-mono text-text-dim/80">{fmt(sub.ci_90_upper)}</td>
                         <td className="px-4 py-2 text-center">
                           {isSubDb ? (
-                            <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
+                            <span className="inline-flex items-center rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-400/80 border border-purple-500/20">
                               Transaction DB
                             </span>
                           ) : (
-                            <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
+                            <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400/80 border border-emerald-400/20">
                               Listing
                             </span>
                           )}
@@ -495,10 +495,10 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(167,139,250,0.15)] text-sm shrink-0">📈</span>
               <div className="min-w-0">
-                <span className="inline-flex min-w-0 items-center rounded-full border border-[#a78bfa]/30 bg-[rgba(167,139,250,0.12)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[#a78bfa] sm:text-[11px] sm:tracking-[0.05em]">
+                <span className="inline-flex min-w-0 items-center rounded-full border border-[#a78bfa]/30 bg-[rgba(167,139,250,0.12)] px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.04em] text-[#a78bfa] sm:text-xs sm:tracking-[0.05em]">
                   Stage 4 - Comparable Project Metrics
                 </span>
-                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-[9px] font-semibold text-text-dim whitespace-nowrap w-fit sm:text-[10px]">
+                <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-xs font-semibold text-text-dim whitespace-nowrap w-fit sm:text-xs">
                   <span className="sm:hidden">{data.table.length} · {data.total_valid}</span>
                   <span className="hidden sm:inline">{data.table.length} projects · {data.total_valid} listings</span>
                 </span>
@@ -508,12 +508,12 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
               {selectedForComparison.size >= 2 && (
                 <button
                   onClick={() => setShowComparison(true)}
-                  className="rounded-full bg-accent px-3 py-1 text-[10px] font-bold text-white shadow-lg hover:scale-105 active:scale-95 transition"
+                  className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-white shadow-lg hover:scale-105 active:scale-95 transition"
                 >
                   Compare {selectedForComparison.size}
                 </button>
               )}
-              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-[10px] text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
+              <button onClick={() => setIsMaximized(true)} className="flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] bg-bg-card text-xs text-text-dim transition hover:border-[#a78bfa] hover:text-[#a78bfa]" title="Maximize Table">⛶</button>
             </div>
           </div>
         </div>
@@ -522,7 +522,7 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
 
       <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-accent/20 bg-accent/10 px-4 py-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.05em] text-accent-light">Ready For Final Rate</p>
+          <p className="text-xs font-black uppercase tracking-[0.05em] text-accent-light">Ready For Final Rate</p>
           <p className="mt-1 text-xs text-text-dim">Review the Comparable Project Metrics and map factors, then calculate the saleable-area rate.</p>
         </div>
         <button
@@ -549,7 +549,7 @@ export default function FactorialTable({ data, onCalculateRate, isCalculatingRat
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(167,139,250,0.15)] text-lg">📈</span>
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.05em] text-[#a78bfa]">Stage 4 - Comparable Project Metrics</h3>
-                  <p className="text-[10px] text-text-dim">{data.table.length} projects · {data.total_valid} listings</p>
+                  <p className="text-xs text-text-dim">{data.table.length} projects · {data.total_valid} listings</p>
                 </div>
               </div>
               <button onClick={() => setIsMaximized(false)} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-bg-input text-lg text-text-dim transition hover:bg-danger/10 hover:text-danger">×</button>

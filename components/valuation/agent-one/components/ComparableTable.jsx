@@ -313,9 +313,9 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
   const renderTable = (maxHeightClass = "") => (
     <div className="relative">
       <div className={`overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-        <table className="w-full min-w-max text-left text-xs sm:text-sm">
+        <table className={`w-full min-w-max text-left ${isMaximized ? "text-sm" : "text-xs sm:text-sm"}`}>
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim">
+            <tr className={`border-b border-border ${isMaximized ? "text-xs" : "text-[10px] sm:text-xs"} uppercase tracking-[0.04em] text-text-dim`}>
               {selectable && (
                 <th className="px-3 py-2.5 font-semibold">
                   <input
@@ -365,15 +365,15 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
                     </td>
                   )}
                   <td className="px-3 py-2.5">
-                    <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${stageConf.color}`}>
+                    <span className={`rounded-md border px-1.5 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider ${stageConf.color}`}>
                       {stageConf.label}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[200px] truncate" title={comp.drop_reason}>{comp.drop_reason || "—"}</td>
+                  <td className={`px-3 py-2.5 text-text-secondary ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"} max-w-[200px] truncate`} title={comp.drop_reason}>{comp.drop_reason || "—"}</td>
                   <td className="px-3 py-2.5 font-medium text-text-primary whitespace-nowrap">{comp.project_name || "—"}</td>
                   <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
                   <td className="px-3 py-2.5">
-                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                    <span className={`rounded-md border border-border bg-bg-input px-1.5 py-0.5 ${isMaximized ? "text-[11px] sm:text-xs" : "text-[10px]"} font-semibold uppercase text-accent-light`}>
                       {comp.property_type || "—"}
                     </span>
                   </td>
@@ -396,7 +396,7 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
                       const src = formatGeocodeSource(comp.geocode_source);
                       return (
                         <div className="inline-flex items-center gap-1.5">
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${src.color}`}>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider ${src.color}`}>
                             {src.label}
                           </span>
                           {isOverride && (
@@ -404,7 +404,7 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
                               type="button"
                               onClick={() => onResetCoordinates?.(originalIndex)}
                               title="Reset to original fetched coordinates"
-                              className="inline-flex items-center gap-0.5 rounded border border-border bg-bg-input px-1.5 py-0.5 text-[9px] font-bold text-text-dim hover:border-amber-500 hover:text-amber-400 transition cursor-pointer"
+                              className={`inline-flex items-center gap-0.5 rounded border border-border bg-bg-input px-1.5 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold text-text-dim hover:border-amber-500 hover:text-amber-400 transition cursor-pointer`}
                             >
                               <span>↺</span>
                               <span>Reset</span>
@@ -414,7 +414,7 @@ export function DroppedComparableTable({ droppedComparables, onRestore, selectab
                       );
                     })()}
                   </td>
-                  <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[250px] truncate" title={comp.drop_detail}>{comp.drop_detail || "—"}</td>
+                  <td className={`px-3 py-2.5 text-text-secondary ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"} max-w-[250px] truncate`} title={comp.drop_detail}>{comp.drop_detail || "—"}</td>
                   <td className="px-3 py-2.5 text-text-secondary truncate max-w-[200px]">
                     {comp.source_url ? (
                       <a href={comp.source_url} target="_blank" rel="noreferrer" className="text-accent-light underline underline-offset-2 hover:text-accent font-medium">
@@ -873,9 +873,9 @@ export default function ComparableTable({
       </div>
 
       <div className={`hidden sm:block overflow-x-auto ${maxHeightClass} custom-scrollbar`}>
-        <table className="w-full min-w-max text-left text-xs sm:text-sm">
+        <table className={`w-full min-w-max text-left ${isMaximized ? "text-sm" : "text-xs sm:text-sm"}`}>
           <thead className="sticky top-0 z-20 bg-[#161922] border-b border-border shadow-md">
-            <tr className="border-b border-border text-[10px] uppercase tracking-[0.04em] text-text-dim bg-[#161922]">
+            <tr className={`border-b border-border ${isMaximized ? "text-xs" : "text-[10px] sm:text-xs"} uppercase tracking-[0.04em] text-text-dim bg-[#161922]`}>
               {selectable && (
                 <th className="px-3 py-2.5 font-semibold bg-[#161922]">
                   <input
@@ -965,7 +965,7 @@ export default function ComparableTable({
                   )}
                   {isDroppedTab && (
                     <td className="px-3 py-2.5">
-                      <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${stageConf.color}`}>
+                      <span className={`rounded-md border px-1.5 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider ${stageConf.color}`}>
                         {stageConf.label}
                       </span>
                     </td>
@@ -974,12 +974,12 @@ export default function ComparableTable({
                   <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.location || "—"}</td>
                   <td className="px-3 py-2.5 text-text-secondary">{comp.country || "—"}</td>
                   <td className="px-3 py-2.5">
-                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                    <span className={`rounded-md border border-border bg-bg-input px-1.5 py-0.5 ${isMaximized ? "text-[11px] sm:text-xs" : "text-[10px]"} font-semibold uppercase text-accent-light`}>
                       {comp.property_type || "—"}
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className="rounded-md border border-border bg-bg-input px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-light">
+                    <span className={`rounded-md border border-border bg-bg-input px-1.5 py-0.5 ${isMaximized ? "text-[11px] sm:text-xs" : "text-[10px]"} font-semibold uppercase text-accent-light`}>
                       {comp.project_category || "—"}
                     </span>
                   </td>
@@ -998,14 +998,14 @@ export default function ComparableTable({
                   </td>
                   {isDroppedTab ? (
                     <>
-                      <td className="px-3 py-2.5 text-text-secondary text-[10px] max-w-[220px] truncate" title={comp.drop_reason || comp.drop_detail}>
+                      <td className={`px-3 py-2.5 text-text-secondary ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"} max-w-[220px] truncate`} title={comp.drop_reason || comp.drop_detail}>
                         {comp.drop_detail || comp.drop_reason || "—"}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <button
                           type="button"
                           onClick={() => onRestoreDropped?.([comp])}
-                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"
+                          className={`rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer`}
                         >
                           ✓ Restore
                         </button>
@@ -1014,7 +1014,7 @@ export default function ComparableTable({
                   ) : (
                     <>
                       <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{comp.possession_status || "—"}</td>
-                      <td className="px-3 py-2.5 text-text-secondary text-xs truncate max-w-[200px]" title={comp.reason}>{comp.reason || "—"}</td>
+                      <td className={`px-3 py-2.5 text-text-secondary ${isMaximized ? "text-sm" : "text-xs"} truncate max-w-[200px]`} title={comp.reason}>{comp.reason || "—"}</td>
                       <td className="px-3 py-2.5 text-center">
                         {comp.confidence_score !== undefined && comp.confidence_score !== null ? (() => {
                           const score = comp.confidence_score;
@@ -1032,30 +1032,30 @@ export default function ComparableTable({
                           ].filter(Boolean).join(" | ");
                           return (
                             <div className="group relative inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums ${tierColor}`}>
+                              <span className={`rounded-md border px-2 py-0.5 ${isMaximized ? "text-xs sm:text-sm" : "text-[11px]"} font-black tabular-nums ${tierColor}`}>
                                 {score}
                               </span>
-                              <span className={`text-[8px] font-bold uppercase tracking-wider ${tierColor.split(" ")[1]}`}>
+                              <span className={`font-bold uppercase tracking-wider ${isMaximized ? "text-[9px] sm:text-[10px]" : "text-[8px]"} ${tierColor.split(" ")[1]}`}>
                                 {tier}
                               </span>
                             </div>
                           );
-                        })() : <span className="text-text-dim text-[10px]">—</span>}
+                        })() : <span className={`text-text-dim ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"}`}>—</span>}
                       </td>
                       <td className="px-3 py-2.5 max-w-[260px]">
                         {comp.confidence_reasoning
-                          ? <p className="text-[10px] leading-relaxed text-text-secondary truncate" title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
-                          : <span className="text-text-dim text-[10px]">—</span>
+                          ? <p className={`leading-relaxed text-text-secondary truncate ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"}`} title={comp.confidence_reasoning}>{comp.confidence_reasoning}</p>
+                          : <span className={`text-text-dim ${isMaximized ? "text-xs sm:text-sm" : "text-[10px]"}`}>—</span>
                         }
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         {comp.location_certainty ? (
-                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                          <span className={`rounded-md px-1.5 py-0.5 ${isMaximized ? "text-[11px] sm:text-xs" : "text-[10px]"} font-bold uppercase ${comp.location_certainty === "Sure" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
                             }`}>
                             {comp.location_certainty}
                           </span>
                         ) : (comp.location_certainty_score !== undefined && comp.location_certainty_score !== null ? (
-                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                          <span className={`rounded-md px-1.5 py-0.5 ${isMaximized ? "text-[11px] sm:text-xs" : "text-[10px]"} font-bold uppercase ${comp.location_certainty_score >= 0.8 ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
                             }`}>
                             {comp.location_certainty_score >= 0.8 ? "Sure" : "Not Sure"}
                           </span>
@@ -1065,11 +1065,11 @@ export default function ComparableTable({
                   )}
                   <td className="px-3 py-2.5">
                     {comp.isDropped ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">Dropped</span>
+                      <span className={`inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider text-amber-400`}>Dropped</span>
                     ) : comp.data_source === "Internal DB" ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Transaction DB</span>
+                      <span className={`inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider text-emerald-400`}>Transaction DB</span>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-400">Agent Web Search</span>
+                      <span className={`inline-flex items-center rounded-full bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 ${isMaximized ? "text-[10px] sm:text-xs" : "text-[9px]"} font-bold uppercase tracking-wider text-blue-400`}>Agent Web Search</span>
                     )}
                   </td>
                 </tr>
@@ -1217,7 +1217,7 @@ export default function ComparableTable({
       {isMaximized && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="flex h-[90vh] w-[95vw] flex-col overflow-hidden rounded-3xl border border-border bg-bg-card shadow-2xl">
-            <div className="relative flex items-center justify-between gap-3 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4">
+            <div className="relative flex flex-col gap-4 border-b border-border bg-[rgba(251,146,60,0.06)] px-6 py-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(251,146,60,0.15)] text-lg">🏘️</span>
                 <div>
@@ -1225,10 +1225,10 @@ export default function ComparableTable({
                   <p className="text-[10px] text-text-dim">{visibleResultLabel}</p>
                 </div>
               </div>
-              <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:flex">
+              <div className="w-full flex justify-center lg:absolute lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-auto z-10">
                 {renderTabBar()}
               </div>
-              <div className="ml-auto flex items-center gap-3 shrink-0">
+              <div className="ml-auto flex items-center gap-3 justify-between sm:justify-end shrink-0 w-full lg:w-auto">
                 {renderSearchInput()}
                 <button
                   onClick={() => setIsMaximized(false)}
