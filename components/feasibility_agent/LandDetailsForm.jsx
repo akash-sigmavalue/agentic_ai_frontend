@@ -942,18 +942,12 @@ const LandDetailsForm = ({ onCalculate, updateingUI, setUpdateUI, onViewChange }
   };
 
   // Helper to persist complete V3 payload
-  const saveV3Payload = (overrideV3Data, overrideQuery, overrideStatus, overrideResponse) => {
+  const saveV3Payload = (overrideV3Data) => {
     const dataToSave = overrideV3Data || v3FormData;
-    const queryToSave = overrideQuery !== undefined ? overrideQuery : webAgentQuery;
-    const statusToSave = overrideStatus !== undefined ? overrideStatus : webAgentStatus;
-    const responseToSave = overrideResponse !== undefined ? overrideResponse : webAgentResponse;
 
     const payload = {
       permissibleFSI_FAR: dataToSave.permissibleFSI_FAR !== "" && dataToSave.permissibleFSI_FAR != null ? Number(dataToSave.permissibleFSI_FAR) : null,
       grossFloorArea: dataToSave.grossFloorArea !== "" && dataToSave.grossFloorArea != null ? Number(dataToSave.grossFloorArea) : null,
-      webAgentQuery: queryToSave || "",
-      webAgentStatus: statusToSave || "idle",
-      webAgentResponse: responseToSave || "",
       updatedAt: new Date().toISOString(),
     };
 

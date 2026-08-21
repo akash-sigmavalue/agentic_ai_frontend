@@ -727,6 +727,8 @@ const RegulatoryIntelligence = () => {
       pdfFiles.forEach((file) => {
         formData.append("files", file);
       });
+      // Force VLM processing mode for lightning-fast OpenAI embeddings instead of slow local BAAI models
+      formData.append("processing_mode", "vlm");
 
       const uploadResp = await fetch(apiUrl("/user-input/documents"), {
         method: "POST",
