@@ -42,7 +42,7 @@ export default function HeroSection({ hasUser, isDark }: HeroSectionProps) {
 
             <Link href="/pricing" className="hp-btn-secondary">
               <Sparkles style={{ width: 16, height: 16, color: '#7c3aed' }} />
-              Get Instant Property Valuation @ 99
+              Get Instant Property Valuation
             </Link>
           </div>
 

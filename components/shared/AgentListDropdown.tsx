@@ -65,7 +65,7 @@ interface AgentListDropdownProps {
 const ALLOWED_AGENTS_BY_ROLE: Record<string, string[] | "*"> = {
   ADMIN: "*",
   FREE: ["valuation"],
-  PAID: ["valuation"],
+  PAID: ["valuation", "rera_automation", "web_automation"],
 };
 
 const agentLayers: AgentLayer[] = [
@@ -99,6 +99,8 @@ const agentLayers: AgentLayer[] = [
       { name: "Document Intelligence Agent", icon: FileText, href: "/user_input", key: "user_input" },
       { name: "Live Data Intelligence Agent", icon: Globe2, href: "/web_search", key: "web_search" },
       { name: "Transaction Intelligence Agent", icon: Server, href: "/data_retrieval", key: "data_retrieval" },
+      { name: "RERA Automation", icon: Building2, href: "/maharera_agent", key: "rera_automation" },
+      { name: "Web Automation", icon: Bot, href: "/web_automation", key: "web_automation" },
       { name: "Analytics", icon: LineChart, key: "analytics" },
       { name: "Legal", icon: Scale, key: "legal" },
     ],

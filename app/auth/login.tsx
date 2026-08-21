@@ -325,7 +325,7 @@ export default function AuthPage() {
           padding: 24px;
           position: relative;
           overflow: hidden;
-          font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+          font-family: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
         }
         /* dot-grid */
         .auth-page::before {

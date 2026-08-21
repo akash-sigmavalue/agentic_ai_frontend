@@ -759,11 +759,11 @@ function StepCard({ step, accent, index }) {
         />
 
         <div className="flex items-start justify-between gap-3 relative z-10">
-          <p className="text-[11px] font-black uppercase tracking-[0.04em] text-text-primary leading-tight flex-1 min-w-0">
+          <p className="text-xs sm:text-sm font-black uppercase tracking-[0.04em] text-text-primary leading-tight flex-1 min-w-0">
             {step.data.title}
           </p>
           <span
-            className="shrink-0 rounded-md px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.05em]"
+            className="shrink-0 rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.05em]"
             style={{
               background: `linear-gradient(90deg, ${accent}25, ${accent}10)`,
               color: accent,
@@ -774,7 +774,7 @@ function StepCard({ step, accent, index }) {
             AG-{String(index + 1).padStart(2, '0')}
           </span>
         </div>
-        <p className="mt-2 text-[10px] leading-5 text-text-secondary break-words font-medium relative z-10">
+        <p className="mt-2 text-xs sm:text-sm leading-relaxed text-text-secondary break-words font-medium relative z-10">
           {step.data.subtitle}
         </p>
         <div className="relative z-10">
@@ -824,11 +824,11 @@ function StageAccordion({ meta, steps, defaultOpen, isActive }) {
         </span>
 
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.05em]" style={{ color: accent }}>
+          <p className="text-xs sm:text-sm font-black uppercase tracking-[0.05em]" style={{ color: accent }}>
             {label}
           </p>
           {description && (
-            <p className="mt-1 text-[10px] leading-4 text-text-dim truncate font-medium">{description}</p>
+            <p className="mt-1 text-xs leading-5 text-text-dim truncate font-medium">{description}</p>
           )}
         </div>
 
@@ -909,22 +909,22 @@ function EmptyState() {
           <Hourglass className="h-3.5 w-3.5 animate-pulse" />
         </span>
       </div>
-      <h3 className="font-display text-xs uppercase tracking-[0.05em] text-text-primary font-black">
+      <h3 className="font-display text-sm sm:text-base uppercase tracking-[0.05em] text-text-primary font-black">
         Valuation Pipeline Inactive
       </h3>
-      <p className="mt-2 max-w-xs text-[10px] leading-5 text-text-dim font-medium">
+      <p className="mt-2 max-w-xs text-xs sm:text-sm leading-relaxed text-text-dim font-medium">
         Enter a property valuation query to initialize the agentic orchestration.
       </p>
 
       <div className="mt-8 w-full max-w-[320px] rounded-2xl border border-white/[0.04] bg-white/[0.01] p-4 backdrop-blur-md text-left">
-        <p className="text-[9px] font-black uppercase tracking-[0.05em] text-text-dim mb-3">Orchestration Blueprint</p>
+        <p className="text-xs font-black uppercase tracking-[0.05em] text-text-dim mb-3">Orchestration Blueprint</p>
         <div className="flex flex-col gap-2">
           {previewStages.map((s, i) => {
             const PreviewIcon = s.icon;
             return (
-              <div key={i} className="flex items-center gap-2.5 rounded-xl border border-white/[0.05] bg-white/[0.01] px-3 py-2 transition hover:bg-white/[0.03]">
+              <div key={i} className="flex items-center gap-2.5 rounded-xl border border-white/[0.05] bg-white/[0.01] px-3 py-2.5 transition hover:bg-white/[0.03]">
                 <PreviewIcon className="h-4 w-4 shrink-0" style={{ color: s.color }} />
-                <span className="text-[9px] uppercase tracking-[0.04em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
+                <span className="text-xs uppercase tracking-[0.04em] font-bold truncate" style={{ color: `${s.color}c0` }}>{s.label}</span>
               </div>
             );
           })}
