@@ -1194,7 +1194,7 @@ const LandIdentification = () => {
                 name="ownershipSummary"
                 value={formData.ownershipSummary}
                 onChange={handleInputChange}
-                placeholder="Enter Ownership Summary" 
+                placeholder="Enter Owner's Name" 
               />
             </div>
           </div>

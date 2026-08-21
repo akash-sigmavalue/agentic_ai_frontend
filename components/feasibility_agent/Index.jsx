@@ -694,20 +694,89 @@ import SectionHero from "./components/SectionHero";
 import { TokenLedgerProvider } from "./contexts/TokenLedgerContext";
 import UsageCostTab from "./components/UsageCostTab";
 
+const BRAND_ACCENT = "#448C74";
+const BRAND_ACCENT_DARK = "#2d6b55";
+const BRAND_ACCENT_BG = "#e6f4f1";
+const BRAND_ACCENT_LIGHT = "#f0fdf9";
+
 const sidebarButtons = [
-  { id: "land-identification", label: "Land Identification", subtitle: "Coordinate based auto-fill", icon: FaMountainCity },
-  { id: "regulatory-intelligence", label: "Regulatory & Document Intelligence", subtitle: "Zoning & rules", icon: FaCircleInfo },
-  { id: "land-fsi", label: "Land And FSI Details", subtitle: "Web + document assisted", icon: FaMountainCity },
-  { id: "market-analysis", label: "Market Research", subtitle: "Market trends", icon: FaChartLine },
-  { id: "predictive-rate-sim", label: "Predictive Rate Simulator", subtitle: "Rate simulation", icon: FaChartBar },
-  { id: "building", label: "Product Mix Design", subtitle: "Mix design", icon: FaCompassDrafting },
-  { id: "revenue-details", label: "Revenue", subtitle: "Detailed projection", icon: FaHandHoldingDollar },
-  { id: "cost-details", label: "Cost Details", subtitle: "Project costs", icon: FaCalculator },
-  { id: "means-finance", label: "Means Of Finance", subtitle: "Funding sources", icon: FaHandHoldingDollar },
-  { id: "irr-calculator", label: "IRR Calculator", subtitle: "Cash inflow & IRR", icon: FaCalculator },
-  { id: "generate-report", label: "Generate Report", subtitle: "Export PDF report", icon: FaFilePdf },
-  // { id: "cashflows", label: "Cashflows and IRR", subtitle: "Monte Carlo + Bayesian", icon: FaChartLine },
-  // { id: "Dashboard", label: "Dashboard", subtitle: "Overview", icon: FaChartLine },
+  {
+    id: "land-identification",
+    label: "Land Identification",
+    subtitle: "Coordinate auto-fill",
+    description: "Locate parcels on map, define boundary coordinates, and auto-populate site parameters.",
+    icon: FaMapLocationDot,
+  },
+  {
+    id: "regulatory-intelligence",
+    label: "Regulatory Intelligence",
+    subtitle: "Zoning & document bylaws",
+    description: "AI-powered zoning extraction, document parsing, setbacks, and local planning regulations.",
+    icon: FaScaleBalanced,
+  },
+  {
+    id: "land-fsi",
+    label: "Land & FSI Details",
+    subtitle: "Web + document assisted",
+    description: "Calculate permissible FSI, TDR loading, road width entitlements, and buildable potential.",
+    icon: FaMountainCity,
+  },
+  {
+    id: "market-analysis",
+    label: "Market Research",
+    subtitle: "Catchment trends & comps",
+    description: "Micro-market intelligence, competitor sales data, historical pricing, and absorption trends.",
+    icon: FaChartLine,
+  },
+  {
+    id: "predictive-rate-sim",
+    label: "Predictive Rate Simulator",
+    subtitle: "Rate simulation engine",
+    description: "Simulate future rate appreciation, launch price corridors, and sensitivity trajectories.",
+    icon: FaChartBar,
+  },
+  {
+    id: "building",
+    label: "Product Mix Design",
+    subtitle: "Unit typologies & layout",
+    description: "Configure unit typologies (1/2/3 BHK), carpet area distribution, and target ticket sizing.",
+    icon: FaCompassDrafting,
+  },
+  {
+    id: "revenue-details",
+    label: "Revenue Projection",
+    subtitle: "Detailed revenue forecast",
+    description: "Phased sales milestones, collection schedules, and gross development value (GDV) forecast.",
+    icon: FaHandHoldingDollar,
+  },
+  {
+    id: "cost-details",
+    label: "Cost Details",
+    subtitle: "Project cost breakdown",
+    description: "Comprehensive budget breakdown including approvals, civil construction, infra, and contingency.",
+    icon: FaCalculator,
+  },
+  {
+    id: "means-finance",
+    label: "Means Of Finance",
+    subtitle: "Funding & capital sources",
+    description: "Structure promoter equity, construction finance loans, mezzanine debt, and customer advances.",
+    icon: FaUsers,
+  },
+  {
+    id: "irr-calculator",
+    label: "IRR Calculator",
+    subtitle: "Cash inflow & returns",
+    description: "Compute Project IRR, Equity IRR, Net Present Value (NPV), and equity multiple return metrics.",
+    icon: FaScaleBalanced,
+  },
+  {
+    id: "generate-report",
+    label: "Generate Report",
+    subtitle: "Export PDF feasibility",
+    description: "Export an executive-ready comprehensive Feasibility PDF report with charts and financial metrics.",
+    icon: FaFilePdf,
+  },
 ];
 
 const Index = () => {
@@ -956,9 +1025,12 @@ const Index = () => {
   return (
     <TokenLedgerProvider>
     <div
-      className={`min-vh-100 theme-${theme}`}
+      className={`theme-${theme}`}
       style={{
         backgroundColor: theme === "dark" ? "#1e1e2f" : "#f3f5f9",
+        height: "calc(100vh - 80px)",
+        marginTop: "80px",
+        overflow: "hidden",
       }}
     >
 
@@ -970,28 +1042,45 @@ const Index = () => {
             backgroundColor: theme === "dark" ? "#2c2e31" : "#ffffff",
           }}
         >
-          <div className="sidebar-header mb-4 d-flex align-items-center">
-            <div className="sidebar-logo-icon me-3">
-              <FaLayerGroup size={20} color="#fff" />
+          {/* Sidebar Header */}
+          <div className="sidebar-header-premium">
+            <div className="sidebar-header-top">
+              <div className="sidebar-logo-icon-premium">
+                <FaLayerGroup size={18} color="#fff" />
+              </div>
+              <div className="sidebar-title-block">
+                <div className="sidebar-title-text">Feasibility Agent</div>
+                <div className="sidebar-title-sub">Section workflow</div>
+              </div>
             </div>
-            <div>
-              <h5 className="fw-bold mb-0 text-dark" style={{fontSize: "18px"}}>
-                Feasibility Agent
-              </h5>
-              <small className="text-muted" style={{fontSize: "13px"}}>Section workflow</small>
+            <div className="sidebar-progress-bar-wrap">
+              <div className="sidebar-progress-label">
+                <span>Workflow Progress</span>
+                <span className="sidebar-progress-pct">
+                  {Math.round(((sidebarButtons.findIndex(b => b.id === activeSection) + 1) / sidebarButtons.length) * 100)}%
+                </span>
+              </div>
+              <div className="sidebar-progress-track">
+                <div
+                  className="sidebar-progress-fill"
+                  style={{ width: `${Math.round(((sidebarButtons.findIndex(b => b.id === activeSection) + 1) / sidebarButtons.length) * 100)}%` }}
+                />
+              </div>
             </div>
           </div>
 
 
 
-          <ul className="sidebar-nav">
+          <ul className="sidebar-nav-premium">
             {sidebarButtons.map((btn, index) => {
               const isActive = activeSection === btn.id;
+              const Icon = btn.icon;
 
               return (
-                <li key={btn.id}>
+                <li key={btn.id} className="sidebar-nav-item-wrap">
                   <button
-                    className={`nav-btn-modern ${isActive ? "active" : ""}`}
+                    className={`nav-btn-premium ${isActive ? "active" : ""}`}
+                    title={`${btn.label} — ${btn.description}`}
                     onClick={() => {
                       if (btn.id === "Dashboard") {
                         setShowDashboard(true);
@@ -1023,56 +1112,75 @@ const Index = () => {
                       }
                     }}
                   >
-                    <div className="nav-btn-modern-left">
-                      <div className="nav-btn-modern-circle">
-                        {index + 1}
-                      </div>
-                      <div className="nav-btn-modern-text text-start">
-                        <div className="nav-btn-modern-title">{btn.label}</div>
-                        <div className="nav-btn-modern-subtitle">{btn.subtitle}</div>
-                      </div>
+                    {/* Icon */}
+                    <div className={`nav-premium-icon-wrap ${isActive ? "active" : ""}`}>
+                      <Icon size={14} />
                     </div>
-                    <FaChevronRight className="nav-btn-modern-chevron" />
+
+                    {/* Text */}
+                    <div className="nav-premium-text">
+                      <div className="nav-premium-title" style={{ color: isActive ? "#0f172a" : "#1e293b" }}>
+                        {btn.label}
+                      </div>
+                      <div className="nav-premium-subtitle">{btn.subtitle}</div>
+                    </div>
+
+                    {/* Step number + chevron */}
+                    <div className="nav-premium-right">
+                      <span className={`nav-premium-step-num ${isActive ? "active" : ""}`}>
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <FaChevronRight
+                        size={9}
+                        style={{
+                          color: isActive ? BRAND_ACCENT : "#94a3b8",
+                          transition: "transform 0.2s ease",
+                          transform: isActive ? "translateX(2px)" : "none",
+                        }}
+                      />
+                    </div>
                   </button>
+
+                  {/* Hover Tooltip Card */}
+                  <div className="nav-hover-tooltip">
+                    <div className="nav-tooltip-header">
+                      <span className="nav-tooltip-step">
+                        Step {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="nav-tooltip-title">{btn.label}</span>
+                    </div>
+                    <div className="nav-tooltip-desc">{btn.description}</div>
+                  </div>
                 </li>
               );
             })}
           </ul>
 
           {/* Separated Monitoring / Token Counter Section */}
-          <div className="mt-auto pt-3 border-top border-light-subtle">
+          <div className="mt-auto pt-3" style={{ borderTop: "1px solid #f0f2f8" }}>
             <button
-              className={`nav-btn-modern w-100 ${activeSection === "usage-cost" ? "active" : ""}`}
-              style={{
-                borderRadius: "12px",
-                border: activeSection === "usage-cost" ? "1px solid #4f46e5" : "1px solid #e2e8f0",
-                backgroundColor: activeSection === "usage-cost" ? "#eef2ff" : "#f8fafc",
-                transition: "all 0.2s ease",
-              }}
+              className={`nav-btn-premium w-100 ${activeSection === "usage-cost" ? "active" : ""}`}
               onClick={() => setActiveSection("usage-cost")}
             >
-              <div className="nav-btn-modern-left">
-                <div
-                  className="d-flex align-items-center justify-content-center rounded-circle"
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    backgroundColor: activeSection === "usage-cost" ? "#4f46e5" : "#6366f115",
-                    color: activeSection === "usage-cost" ? "#ffffff" : "#4f46e5",
-                  }}
-                >
-                  <FaDatabase size={14} />
-                </div>
-                <div className="nav-btn-modern-text text-start">
-                  <div className="nav-btn-modern-title" style={{ color: "#1e293b", fontWeight: 700, fontSize: "13px" }}>
-                    Usage &amp; Cost
-                  </div>
-                  <div className="nav-btn-modern-subtitle" style={{ color: "#64748b", fontSize: "11px" }}>
-                    Token &amp; API Counter
-                  </div>
-                </div>
+              <div className={`nav-premium-icon-wrap ${activeSection === "usage-cost" ? "active" : ""}`}>
+                <FaDatabase size={14} />
               </div>
-              <FaChevronRight className="nav-btn-modern-chevron" style={{ color: "#94a3b8" }} />
+              <div className="nav-premium-text">
+                <div className="nav-premium-title" style={{ color: activeSection === "usage-cost" ? "#0f172a" : "#1e293b" }}>
+                  Usage &amp; Cost
+                </div>
+                <div className="nav-premium-subtitle">Token &amp; API Counter</div>
+              </div>
+              <div className="nav-premium-right">
+                <FaChevronRight
+                  size={9}
+                  style={{
+                    color: activeSection === "usage-cost" ? BRAND_ACCENT : "#94a3b8",
+                    transition: "transform 0.2s ease",
+                    transform: activeSection === "usage-cost" ? "translateX(2px)" : "none",
+                  }}
+                />
+              </div>
             </button>
           </div>
         </aside>
@@ -1285,138 +1393,302 @@ const Index = () => {
           /* Global Dashboard Container */
           .dashboard-container {
             display: flex;
-            height: calc(100vh - 80px); /* Adjust based on global header height */
+            height: 100%;
             width: 100%;
             overflow: hidden;
-            margin-top: 80px; /* Push down below the global fixed header */
+            margin-top: 0;
           }
 
-          /* Sidebar Styling */
+          /* ── Premium Sidebar ── */
           .sidebar {
-            width: 320px;
+            width: 300px;
+            min-width: 300px;
             color: #333;
-            padding: 30px 20px;
+            padding: 16px 12px;
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            border-right: 1px solid #f0f0f0;
-            border-radius: 0 24px 24px 0;
+            overflow-x: visible;
+            border-right: 1px solid #e2e8f0;
             z-index: 100;
+            background: #ffffff;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.02);
           }
 
-          .sidebar-header {
-            margin-bottom: 24px;
+          /* ── Sidebar Header ── */
+          .sidebar-header-premium {
+            margin-bottom: 14px;
+            padding: 14px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #0d4a3c 100%);
+            border-radius: 14px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.15);
           }
-
-          .sidebar-logo-icon {
-            background-color: #1a1c23;
-            width: 48px;
-            height: 48px;
+          .sidebar-header-premium::before {
+            content: '';
+            position: absolute;
+            top: -24px; right: -24px;
+            width: 85px; height: 85px;
+            background: rgba(68,140,116,0.25);
+            border-radius: 50%;
+          }
+          .sidebar-header-top {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+          }
+          .sidebar-logo-icon-premium {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(4px);
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 16px !important;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.22);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+          }
+          .sidebar-title-block { flex: 1; }
+          .sidebar-title-text {
+            font-weight: 800;
+            font-size: 14px;
+            color: #ffffff;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+          }
+          .sidebar-title-sub {
+            font-size: 10px;
+            color: rgba(255,255,255,0.65);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-top: 2px;
+            font-weight: 600;
+          }
+          .sidebar-progress-bar-wrap { position: relative; z-index: 1; }
+          .sidebar-progress-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+          }
+          .sidebar-progress-pct {
+            font-weight: 800;
+            color: #4ade80;
+            font-size: 11px;
+          }
+          .sidebar-progress-track {
+            height: 4px;
+            background: rgba(255,255,255,0.18);
+            border-radius: 100px;
+            overflow: hidden;
+          }
+          .sidebar-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #4ade80);
+            border-radius: 100px;
+            transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
           }
 
-          .sidebar-openai-pill {
+          /* ── Nav List ── */
+          .sidebar-nav-premium {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+          }
+          .sidebar-nav-item-wrap {
+            position: relative;
+          }
+
+          /* ── Nav Button ── */
+          .nav-btn-premium {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            border-radius: 11px !important;
+            padding: 8px 10px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            border: 1px solid #e9ecef;
-            border-radius: 24px !important;
-            padding: 12px 16px;
-            background-color: #fff;
+            gap: 10px;
+            margin-bottom: 4px;
+            text-align: left;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+          }
+          .nav-btn-premium:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            transform: translateX(2px);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+          }
+          .nav-btn-premium.active {
+            background: linear-gradient(135deg, rgba(68,140,116,0.11) 0%, rgba(68,140,116,0.03) 100%) !important;
+            border-color: #448C74 !important;
+            border-left: 3.5px solid #448C74 !important;
+            box-shadow: 0 3px 12px rgba(68,140,116,0.15) !important;
           }
 
+          /* ── Icon ── */
+          .nav-premium-icon-wrap {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            background: #f0fdf9;
+            color: #448C74;
+            border: 1px solid rgba(68, 140, 116, 0.18);
+            box-shadow: 0 1px 2px rgba(68, 140, 116, 0.05);
+          }
+          .nav-premium-icon-wrap.active {
+            background: #e6f4f1;
+            color: #2d6b55;
+            border: 1.5px solid #448C74;
+          }
+          .nav-btn-premium:hover .nav-premium-icon-wrap {
+            transform: scale(1.05);
+            background: #e6f4f1;
+          }
+
+          /* ── Text ── */
+          .nav-premium-text {
+            flex: 1;
+            min-width: 0;
+          }
+          .nav-premium-title {
+            font-weight: 700;
+            font-size: 12.5px;
+            line-height: 1.25;
+            margin-bottom: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: color 0.18s;
+          }
+          .nav-premium-subtitle {
+            font-size: 10.5px;
+            color: #64748b;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 500;
+          }
+
+          /* ── Right (step num + chevron) ── */
+          .nav-premium-right {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
+          }
+          .nav-premium-step-num {
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            padding: 2px 5px;
+            border-radius: 6px;
+            transition: all 0.18s;
+            color: #64748b;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+          }
+          .nav-premium-step-num.active {
+            color: #2d6b55;
+            background: #e6f4f1;
+            border: 1px solid rgba(68, 140, 116, 0.35);
+            font-weight: 800;
+          }
+
+          /* ── Hover Tooltip Card ── */
+          .nav-hover-tooltip {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%) translateX(8px);
+            width: 250px;
+            background: #ffffff;
+            color: #1e293b;
+            padding: 10px 12px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.1), 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+            z-index: 9999;
+          }
+          .nav-hover-tooltip::before {
+            content: '';
+            position: absolute;
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent #ffffff transparent transparent;
+          }
+          .sidebar-nav-item-wrap:hover .nav-hover-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-50%) translateX(12px);
+          }
+          .nav-tooltip-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+          }
+          .nav-tooltip-step {
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: #e6f4f1;
+            color: #2d6b55;
+            border: 1px solid rgba(68, 140, 116, 0.25);
+          }
+          .nav-tooltip-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0f172a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .nav-tooltip-desc {
+            font-size: 11px;
+            line-height: 1.35;
+            color: #64748b;
+          }
+
+          /* Legacy */
           .config-badge {
             background-color: #d1fae5;
             color: #065f46;
             font-weight: 600;
             padding: 6px 12px;
-          }
-
-          .sidebar-nav {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-          }
-
-          .sidebar-nav li {
-            margin-bottom: 12px;
-          }
-
-          .nav-btn-modern {
-            width: 100%;
-            background: #fff;
-            border: 1px solid #f1f3f5;
-            border-radius: 24px !important;
-            padding: 12px 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-          }
-
-          .nav-btn-modern:hover {
-            border-color: #dee2e6;
-            background: #f8f9fa;
-          }
-
-          .nav-btn-modern.active {
-            border: 2px solid #0f172a;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-          }
-
-          .nav-btn-modern-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-          }
-
-          .nav-btn-modern-circle {
-            width: 34px;
-            height: 34px;
-            min-width: 34px;
-            border-radius: 50%;
-            background-color: #f1f3f5;
-            color: #495057;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 14px;
-            transition: all 0.2s ease;
-          }
-
-          .nav-btn-modern.active .nav-btn-modern-circle {
-            background-color: #1a1c23;
-            color: #fff;
-          }
-
-          .nav-btn-modern-text {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-          }
-
-          .nav-btn-modern-title {
-            font-weight: 700;
-            font-size: 14px;
-            color: #212529;
-            margin-bottom: 2px;
-            line-height: 1.2;
-          }
-
-          .nav-btn-modern-subtitle {
-            font-size: 12px;
-            color: #6c757d;
-            line-height: 1.2;
-          }
-
-          .nav-btn-modern-chevron {
-            color: #adb5bd;
-            font-size: 12px;
           }
 
           /* Content Area Styling */

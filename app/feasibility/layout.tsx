@@ -3,7 +3,7 @@ import "@/components/feasibility_agent/index.css";
 
 export default function FeasibilityLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bootstrap-scope">
+    <div className="bootstrap-scope h-full overflow-hidden">
       {children}
     </div>
   );
