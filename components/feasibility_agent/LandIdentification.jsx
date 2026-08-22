@@ -621,7 +621,9 @@ const LandIdentification = () => {
     };
 
     localStorage.setItem('Land Identification', JSON.stringify(payloadToSave));
-    window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: payloadToSave }));
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: payloadToSave }));
+    }, 0);
   };
 
   const deletePolygon = () => {
@@ -687,37 +689,39 @@ const LandIdentification = () => {
     if (name === 'netPlotAreaSqFt' && typeof value === 'string') {
       value = value.replace(/,/g, "");
     }
+
+    const updates = { [name]: value };
+    if (name === 'netPlotAreaSqFt') {
+      updates.isNetPlotAreaAutoDerived = false;
+    }
+    if (name === 'country') {
+      const selected = countries.find(c => c.name === value);
+      updates.currency = selected ? selected.currency : '';
+      setSelectedCountryId(selected ? selected.id : null);
+      updates.location = '';
+      updates.village = '';
+      updates.polygonCenterLat = '';
+      updates.polygonCenterLng = '';
+      setSelectedCityId(null);
+    }
+    if (name === 'location') {
+      const selected = cities.find(c => c.name === value);
+      setSelectedCityId(selected ? selected.id : null);
+      updates.village = '';
+      updates.polygonCenterLat = '';
+      updates.polygonCenterLng = '';
+    }
+
     setFormData(prev => {
-      const updates = { [name]: value };
-      if (name === 'netPlotAreaSqFt') {
-        updates.isNetPlotAreaAutoDerived = false;
-      }
-      if (name === 'country') {
-        const selected = countries.find(c => c.name === value);
-        updates.currency = selected ? selected.currency : '';
-        // Update country_id for chained city fetch; reset city + village
-        setSelectedCountryId(selected ? selected.id : null);
-        updates.location = '';
-        updates.village = '';
-        updates.polygonCenterLat = '';
-        updates.polygonCenterLng = '';
-        setSelectedCityId(null);
-      }
-      if (name === 'location') {
-        // Update city_id for chained village fetch; reset village
-        const selected = cities.find(c => c.name === value);
-        setSelectedCityId(selected ? selected.id : null);
-        updates.village = '';
-        updates.polygonCenterLat = '';
-        updates.polygonCenterLng = '';
-      }
       const updated = { ...prev, ...updates };
       try {
         localStorage.setItem('Land Identification', JSON.stringify(updated));
-        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
       } catch (err) {
         console.error('Error saving Land Identification:', err);
       }
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+      }, 0);
       return updated;
     });
   };
@@ -1069,10 +1073,12 @@ const LandIdentification = () => {
                       };
                       try {
                         localStorage.setItem('Land Identification', JSON.stringify(updated));
-                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
                       } catch (err) {
                         console.error('Error saving Land Identification:', err);
                       }
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                      }, 0);
                       return updated;
                     });
                   } else {
@@ -1084,10 +1090,12 @@ const LandIdentification = () => {
                       };
                       try {
                         localStorage.setItem('Land Identification', JSON.stringify(updated));
-                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
                       } catch (err) {
                         console.error('Error saving Land Identification:', err);
                       }
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                      }, 0);
                       return updated;
                     });
                   }
@@ -1141,10 +1149,12 @@ const LandIdentification = () => {
                     };
                     try {
                       localStorage.setItem('Land Identification', JSON.stringify(updated));
-                      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
                     } catch (err) {
                       console.error('Error saving coordinates:', err);
                     }
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                    }, 0);
                     return updated;
                   });
                 }}
