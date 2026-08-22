@@ -580,7 +580,7 @@ import {
 } from "react-icons/fa6";
 import { FaTools, FaCalendarAlt, FaParking, FaRoad, FaLayerGroup, FaChevronRight, FaMapMarkerAlt, FaCrosshairs, FaRulerCombined, FaCheck, FaSlidersH, FaFilter, FaBuilding, FaPlus, FaRegBuilding, FaFilePdf, FaDownload } from "react-icons/fa";
 import Select from "react-select";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Header from "./Header";
 
 const formatProjectOption = ({ project, index }, { context }) => {
@@ -690,6 +690,7 @@ import ScenarioRevenueDashboard from "./components/ScenarioRevenueDashboard";
 import FeasibilityIrrSection from "./components/FeasibilityIrrSection";
 import { downloadFeasibilityPDF, checkFeasibilityCompleteness } from "./FeasibilityReport";
 import { apiUrl } from "@/lib/api-client";
+import { useMarketResearchData } from "@/hooks/useMarketResearchData";
 import SectionHero from "./components/SectionHero";
 import { TokenLedgerProvider } from "./contexts/TokenLedgerContext";
 import UsageCostTab from "./components/UsageCostTab";
@@ -813,6 +814,65 @@ const Index = () => {
   const [nearbyLimit, setNearbyLimit] = useState(5);
   const [loadingNearbyProjects, setLoadingNearbyProjects] = useState(false);
 
+  // Synced Land Identification context for Market Research
+  const [landPayload, setLandPayload] = useState(() => {
+    if (typeof window === "undefined") return { city: "", villageName: "", lat: null, lng: null };
+    try {
+      const raw = localStorage.getItem("Land Identification");
+      if (!raw) return { city: "", villageName: "", lat: null, lng: null };
+      const parsed = JSON.parse(raw);
+      const latVal = parsed.polygonCenterLat || parsed.latitude || null;
+      const lngVal = parsed.polygonCenterLng || parsed.longitude || null;
+      return {
+        city: parsed.location || parsed.city || "",
+        villageName: parsed.village || parsed.villageName || "",
+        lat: latVal ? parseFloat(latVal) : null,
+        lng: lngVal ? parseFloat(lngVal) : null,
+      };
+    } catch {
+      return { city: "", villageName: "", lat: null, lng: null };
+    }
+  });
+
+  // Lazy loading state: only trigger Market Research data fetch when scrolled into view
+  const [isMarketSectionVisible, setIsMarketSectionVisible] = useState(false);
+
+  useEffect(() => {
+    const handleLandUpdate = (e) => {
+      const detail = e.detail;
+      if (detail) {
+        const latVal = detail.polygonCenterLat || detail.latitude || null;
+        const lngVal = detail.polygonCenterLng || detail.longitude || null;
+        setLandPayload({
+          city: detail.location || detail.city || "",
+          villageName: detail.village || detail.villageName || "",
+          lat: latVal ? parseFloat(latVal) : null,
+          lng: lngVal ? parseFloat(lngVal) : null,
+        });
+      }
+    };
+    window.addEventListener("landIdentificationSaved", handleLandUpdate);
+    return () => window.removeEventListener("landIdentificationSaved", handleLandUpdate);
+  }, []);
+
+  useEffect(() => {
+    const wrapper = document.getElementById("section-market-analysis-wrapper");
+    if (!wrapper || typeof IntersectionObserver === "undefined") {
+      setIsMarketSectionVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsMarketSectionVisible(true);
+        }
+      },
+      { rootMargin: "350px" }
+    );
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     try {
       const existingRaw = localStorage.getItem("market research");
@@ -827,21 +887,9 @@ const Index = () => {
   useEffect(() => {
     if (marketViewMode !== "nearby") return;
 
-    let lat = null;
-    let lng = null;
-    let city = "";
-
-    try {
-      const landRaw = localStorage.getItem("Land Identification");
-      if (landRaw) {
-        const parsed = JSON.parse(landRaw);
-        lat = parsed?.polygonCenterLat || parsed?.latitude || null;
-        lng = parsed?.polygonCenterLng || parsed?.longitude || null;
-        city = parsed?.location || parsed?.city || "";
-      }
-    } catch (e) {
-      console.error("Error parsing Land Identification for nearby projects:", e);
-    }
+    const lat = landPayload.lat;
+    const lng = landPayload.lng;
+    const city = landPayload.city;
 
     if (!lat || !lng) return;
 
@@ -874,7 +922,48 @@ const Index = () => {
     };
 
     fetchNearby();
-  }, [marketViewMode, nearbyLimit]);
+  }, [marketViewMode, nearbyLimit, landPayload.lat, landPayload.lng, landPayload.city]);
+
+  const resolvedMarketProject = useMemo(() => {
+    let pId = null;
+    let pName = "all";
+    if (selectedProject && selectedProject !== "all") {
+      if (String(selectedProject).startsWith("id:")) {
+        const parts = selectedProject.split(":");
+        pId = parts[1];
+        pName = parts.slice(2).join(":");
+      } else {
+        const found = nearbyProjects.find(
+          (p) => String(p.project_id) === String(selectedProject) || p.project_name === selectedProject
+        );
+        if (found) {
+          pId = found.project_id;
+          pName = found.project_name;
+        } else {
+          pName = selectedProject;
+        }
+      }
+    }
+    return { pId, pName };
+  }, [selectedProject, nearbyProjects]);
+
+  // Consolidated Market Research Data Hook
+  const {
+    weightedRate: bundleWeightedRate,
+    salesAnalysis: bundleSalesAnalysis,
+    demand: bundleDemand,
+    loading: bundleLoading,
+  } = useMarketResearchData({
+    viewMode: marketViewMode,
+    catchmentRadius: appliedRadius,
+    selectedProject: resolvedMarketProject.pName,
+    selectedProjectId: resolvedMarketProject.pId,
+    city: landPayload.city,
+    villageName: landPayload.villageName,
+    lat: landPayload.lat,
+    lng: landPayload.lng,
+    enabled: isMarketSectionVisible,
+  });
 
   const [excelLogicSelected, setExcelLogicSelected] = useState(true);
   const [bayesianOptimizationSelected, setBayesianOptimizationSelected] =
@@ -2131,41 +2220,50 @@ const Index = () => {
                   </div>
                 </div>
               </div>
-              {(() => {
-                let pId = null;
-                let pName = "all";
-                if (selectedProject && selectedProject !== "all") {
-                  if (String(selectedProject).startsWith("id:")) {
-                    const parts = selectedProject.split(":");
-                    pId = parts[1];
-                    pName = parts.slice(2).join(":");
-                  } else {
-                    const found = nearbyProjects.find(p => String(p.project_id) === String(selectedProject) || p.project_name === selectedProject);
-                    if (found) {
-                      pId = found.project_id;
-                      pName = found.project_name;
-                    } else {
-                      pName = selectedProject;
-                    }
-                  }
-                }
-                return (
-                  <div className="row g-4">
-                    <div className="col-lg-6">
-                      <PricerateAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
-                    </div>
-                    <div className="col-lg-6">
-                      <SaleAnalysis viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
-                    </div>
-                    <div className="col-lg-6">
-                      <SupplyDemandAnalysis option="demand" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
-                    </div>
-                    <div className="col-lg-6">
-                      <SupplyDemandAnalysis option="supply" viewMode={marketViewMode} catchmentRadius={appliedRadius} selectedProject={pName} selectedProjectId={pId} />
-                    </div>
-                  </div>
-                );
-              })()}
+              <div className="row g-4">
+                <div className="col-lg-6">
+                  <PricerateAnalysis
+                    viewMode={marketViewMode}
+                    catchmentRadius={appliedRadius}
+                    selectedProject={resolvedMarketProject.pName}
+                    selectedProjectId={resolvedMarketProject.pId}
+                    data={bundleWeightedRate}
+                    loading={bundleLoading}
+                  />
+                </div>
+                <div className="col-lg-6">
+                  <SaleAnalysis
+                    viewMode={marketViewMode}
+                    catchmentRadius={appliedRadius}
+                    selectedProject={resolvedMarketProject.pName}
+                    selectedProjectId={resolvedMarketProject.pId}
+                    data={bundleSalesAnalysis}
+                    loading={bundleLoading}
+                  />
+                </div>
+                <div className="col-lg-6">
+                  <SupplyDemandAnalysis
+                    option="demand"
+                    viewMode={marketViewMode}
+                    catchmentRadius={appliedRadius}
+                    selectedProject={resolvedMarketProject.pName}
+                    selectedProjectId={resolvedMarketProject.pId}
+                    data={bundleDemand}
+                    loading={bundleLoading}
+                  />
+                </div>
+                <div className="col-lg-6">
+                  <SupplyDemandAnalysis
+                    option="supply"
+                    viewMode={marketViewMode}
+                    catchmentRadius={appliedRadius}
+                    selectedProject={resolvedMarketProject.pName}
+                    selectedProjectId={resolvedMarketProject.pId}
+                    data={bundleDemand}
+                    loading={bundleLoading}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Section 1.4: Unit Design */}

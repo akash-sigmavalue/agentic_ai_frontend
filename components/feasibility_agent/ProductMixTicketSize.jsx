@@ -554,14 +554,18 @@ const ProductMixTicketSize = () => {
     }, [subjectCity, subjectLocation, fetchTypes]);
 
     const handleAnalyzeAllSequentially = async (overrideTab, overrideStart, overrideEnd) => {
+        const promises = [];
         if (areaAnalysisResults.length > 0) {
-            await handleAnalyzeArea(overrideTab, overrideStart, overrideEnd);
+            promises.push(handleAnalyzeArea(overrideTab, overrideStart, overrideEnd));
         }
         if (rateAnalysisResults.length > 0) {
-            await handleAnalyzeRate(overrideTab, overrideStart, overrideEnd);
+            promises.push(handleAnalyzeRate(overrideTab, overrideStart, overrideEnd));
         }
         if (ticketSizeAnalysisResults.length > 0) {
-            await handleAnalyzeTicketSize(overrideTab, overrideStart, overrideEnd);
+            promises.push(handleAnalyzeTicketSize(overrideTab, overrideStart, overrideEnd));
+        }
+        if (promises.length > 0) {
+            await Promise.all(promises);
         }
     };
 

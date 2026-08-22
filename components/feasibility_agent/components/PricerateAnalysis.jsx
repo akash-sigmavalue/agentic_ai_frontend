@@ -45,7 +45,14 @@ const getLandIdentificationPayload = () => {
   }
 };
 
-const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
+const PricerateAnalysis = ({
+  viewMode = "location",
+  catchmentRadius = 1000,
+  selectedProject = "all",
+  selectedProjectId = null,
+  data: externalData = undefined,
+  loading: externalLoading = undefined,
+}) => {
   const theme = "light";
 
   const [city, setCity] = useState(() => getLandIdentificationPayload().city);
@@ -57,6 +64,9 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
+
+  const activeData = externalData !== undefined ? externalData : chartData;
+  const activeLoading = externalLoading !== undefined ? externalLoading : loading;
 
   // Read from Land Identification localStorage on mount and listen for updates
   useEffect(() => {
@@ -103,8 +113,10 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
     };
   }, []);
 
-  // Fetch YoY data whenever dependencies change
+  // Fetch YoY data whenever dependencies change (only if externalData not provided)
   useEffect(() => {
+    if (externalData !== undefined) return;
+
     const cacheKey = selectedProjectId || selectedProject;
 
     let currentLat = lat;
@@ -216,16 +228,16 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
   }, [city, villageName, lat, lng, viewMode, catchmentRadius, selectedProject, selectedProjectId]);
 
   const years = useMemo(() => {
-    const allYears = chartData.map((d) => d.year);
+    const allYears = (activeData || []).map((d) => d.year);
     return Array.from(new Set(allYears)).sort((a, b) => a - b).map(String);
-  }, [chartData]);
+  }, [activeData]);
 
   const propertyTypes = useMemo(() => {
-    const allTypes = chartData.map((d) => d.property_type);
+    const allTypes = (activeData || []).map((d) => d.property_type);
     return Array.from(new Set(allTypes))
       .filter((type) => Boolean(type) && !String(type).toLowerCase().startsWith("other"))
       .sort();
-  }, [chartData]);
+  }, [activeData]);
 
   // Generate dynamic series per property type
   const series = useMemo(() => {
@@ -233,14 +245,14 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
       return {
         name: type,
         data: years.map((yr) => {
-          const record = chartData.find(
+          const record = (activeData || []).find(
             (d) => String(d.year) === yr && d.property_type === type
           );
           return record ? Math.round(record.avg_rate_per_sqft) : 0;
         }),
       };
     });
-  }, [years, propertyTypes, chartData]);
+  }, [years, propertyTypes, activeData]);
 
   const isDark = theme === "dark";
   const textColor = isDark ? "#e2e8f0" : "#1e293b";
@@ -401,7 +413,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
       {/* Card Body */}
       <div className="card-body px-3 py-3">
         {/* Loading State */}
-        {loading && (
+        {activeLoading && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -418,7 +430,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
         )}
 
         {/* Error State */}
-        {!loading && error && (
+        {!activeLoading && error && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -434,7 +446,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
         )}
 
         {/* No Data State */}
-        {!loading && !error && years.length === 0 && (
+        {!activeLoading && !error && years.length === 0 && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -468,7 +480,7 @@ const PricerateAnalysis = ({ viewMode = "location", catchmentRadius = 1000, sele
         )}
 
         {/* Chart */}
-        {!loading && !error && years.length > 0 && (
+        {!activeLoading && !error && years.length > 0 && (
           <div style={{ overflow: "auto", maxHeight: "80vh" }}>
             <Chart
               options={chartOptions}

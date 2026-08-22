@@ -48,7 +48,14 @@ const getLandIdentificationPayload = () => {
   }
 };
 
-const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
+const SaleAnalysis = ({
+  viewMode = "location",
+  catchmentRadius = 1000,
+  selectedProject = "all",
+  selectedProjectId = null,
+  data: externalData = undefined,
+  loading: externalLoading = undefined,
+}) => {
   const theme = "light";
   const isDark = false;
 
@@ -61,6 +68,9 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
+
+  const activeData = externalData !== undefined ? externalData : salesData;
+  const activeLoading = externalLoading !== undefined ? externalLoading : loading;
 
   // metric can be "value" (total_agreement_price) or "volume" (total_transactions)
   const [metric, setMetric] = useState("value");
@@ -110,8 +120,10 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
     };
   }, []);
 
-  // Fetch YoY sales analysis whenever dependencies change
+  // Fetch YoY sales analysis whenever dependencies change (only if externalData not provided)
   useEffect(() => {
+    if (externalData !== undefined) return;
+
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
     const cacheKey = selectedProjectId || selectedProject;
 
@@ -224,16 +236,16 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
 
   // Compute unique years and property types dynamically for ApexCharts
   const years = useMemo(() => {
-    const allYears = salesData.map((d) => d.year);
+    const allYears = (activeData || []).map((d) => d.year);
     return Array.from(new Set(allYears)).sort((a, b) => a - b);
-  }, [salesData]);
+  }, [activeData]);
 
   const propertyTypes = useMemo(() => {
-    const allTypes = salesData.map((d) => d.property_type);
+    const allTypes = (activeData || []).map((d) => d.property_type);
     return Array.from(new Set(allTypes))
       .filter((type) => Boolean(type) && !String(type).toLowerCase().startsWith("other"))
       .sort();
-  }, [salesData]);
+  }, [activeData]);
 
   // Map backend data to series structure dynamically by property type
   const series = useMemo(() => {
@@ -241,7 +253,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
       return {
         name: type,
         data: years.map((yr) => {
-          const record = salesData.find(
+          const record = (activeData || []).find(
             (d) => d.year === yr && d.property_type === type
           );
           if (!record) return 0;
@@ -251,7 +263,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         }),
       };
     });
-  }, [years, propertyTypes, salesData, metric]);
+  }, [years, propertyTypes, activeData, metric]);
 
   const textColor = isDark ? "#e2e8f0" : "#1e293b";
   const gridColor = isDark ? "#334155" : "#e2e8f0";
@@ -475,7 +487,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
       {/* Card Body */}
       <div className="card-body px-3 py-3">
         {/* Loading State */}
-        {loading && (
+        {activeLoading && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -492,7 +504,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         )}
 
         {/* Error State */}
-        {!loading && error && (
+        {!activeLoading && error && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -508,7 +520,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         )}
 
         {/* No Data State */}
-        {!loading && !error && years.length === 0 && (
+        {!activeLoading && !error && years.length === 0 && (
           <div
             className="d-flex flex-column align-items-center justify-content-center"
             style={{ minHeight: 300 }}
@@ -542,7 +554,7 @@ const SaleAnalysis = ({ viewMode = "location", catchmentRadius = 1000, selectedP
         )}
 
         {/* Chart */}
-        {!loading && !error && years.length > 0 && (
+        {!activeLoading && !error && years.length > 0 && (
           <div style={{ overflow: "auto", maxHeight: "80vh" }}>
             <Chart
               options={chartOptions}

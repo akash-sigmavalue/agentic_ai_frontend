@@ -59,6 +59,11 @@ const LandIdentification = () => {
   const [cities, setCities] = useState([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
 
+  // IDs used for chained filtering — not stored in formData (which keeps names)
+  const [selectedCountryId, setSelectedCountryId] = useState(null);
+  const [selectedCityId, setSelectedCityId] = useState(null);
+
+  // 1. Fetch countries on mount — returns id + name + currency from dim_country
   useEffect(() => {
     const fetchCountries = async () => {
       try {
@@ -74,16 +79,18 @@ const LandIdentification = () => {
     fetchCountries();
   }, []);
 
+  // 2. Fetch cities whenever the selected country_id changes
   useEffect(() => {
-    if (!formData.country) {
+    if (!selectedCountryId) {
       setCities([]);
+      setSelectedCityId(null);
+      setVillages([]);
       return;
     }
-    
     const fetchCities = async () => {
       setCitiesLoading(true);
       try {
-        const res = await fetch(apiUrl(`/data_db/get_cities/?country=${encodeURIComponent(formData.country)}`));
+        const res = await fetch(apiUrl(`/data_db/get_cities/?country_id=${selectedCountryId}`));
         const data = await res.json();
         if (data.ok) {
           setCities(data.cities || []);
@@ -95,7 +102,7 @@ const LandIdentification = () => {
       }
     };
     fetchCities();
-  }, [formData.country]);
+  }, [selectedCountryId]);
   const [selectedVillageCoords, setSelectedVillageCoords] = useState(null);
   const [planningAdvisoryLoading, setPlanningAdvisoryLoading] = useState(false);
   const [roadWidthLoading, setRoadWidthLoading] = useState(false);
@@ -109,37 +116,24 @@ const LandIdentification = () => {
     }
   }, [formData.polygonCenterLat, formData.polygonCenterLng]);
 
-  // --- Dynamic Backend Data Logic ---
+  // 3. Fetch locations (villages) whenever the selected city_id changes
   useEffect(() => {
-    const ALLOWED_CITIES = [
-      "Pune", "Thane", "Abu Dhabi", "Dubai", 
-      "Hyderabad", "Medchal-Malkajgiri", "Mumbai", 
-      "Rangareddy", "Sangareddy", "Yadadri Bhuvanagiri"
-    ];
-    const allowed = new Set(ALLOWED_CITIES);
-    const city = (formData.location ?? "").trim();
-    if (!allowed.has(city)) {
+    if (!selectedCityId) {
       setVillages([]);
+      setVillagesError("");
       return;
     }
-
     let isMounted = true;
     setVillagesLoading(true);
     setVillagesError("");
-
     (async () => {
       try {
-        const res = await fetch(apiUrl("/geospatial/villages_by_coordinates"), {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ City: city }),
-        });
+        const res = await fetch(apiUrl(`/data_db/get_locations/?city_id=${selectedCityId}`));
         const json = await res.json();
-        if (!json?.villages) throw new Error("No villages returned");
-        if (isMounted) setVillages(json.villages);
+        if (!json?.ok) throw new Error(json?.error || "No locations returned");
+        if (isMounted) setVillages(json.locations || []);
       } catch (err) {
-        console.error("get_villages error:", err);
+        console.error("get_locations error:", err);
         if (isMounted) {
           setVillages([]);
           setVillagesError("Unable to load villages. Please try again later.");
@@ -149,11 +143,13 @@ const LandIdentification = () => {
       }
     })();
     return () => { isMounted = false; };
-  }, [formData.location]);
+  }, [selectedCityId]);
 
+  // Village options use location_id as key; lat/lng come from the new endpoint
   const villageOptions = villages.map((v) => ({
-    value: v.village,
-    label: v.village,
+    value: v.name,
+    label: v.name,
+    locationId: v.id,
     lat: v.lat,
     lng: v.lng,
   }));
@@ -699,8 +695,30 @@ const LandIdentification = () => {
       if (name === 'country') {
         const selected = countries.find(c => c.name === value);
         updates.currency = selected ? selected.currency : '';
+        // Update country_id for chained city fetch; reset city + village
+        setSelectedCountryId(selected ? selected.id : null);
+        updates.location = '';
+        updates.village = '';
+        updates.polygonCenterLat = '';
+        updates.polygonCenterLng = '';
+        setSelectedCityId(null);
       }
-      return { ...prev, ...updates };
+      if (name === 'location') {
+        // Update city_id for chained village fetch; reset village
+        const selected = cities.find(c => c.name === value);
+        setSelectedCityId(selected ? selected.id : null);
+        updates.village = '';
+        updates.polygonCenterLat = '';
+        updates.polygonCenterLng = '';
+      }
+      const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem('Land Identification', JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+      } catch (err) {
+        console.error('Error saving Land Identification:', err);
+      }
+      return updated;
     });
   };
 
@@ -997,7 +1015,7 @@ const LandIdentification = () => {
               >
                 <option value="">Select Country</option>
                 {countries.map((c) => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
               </select>
             </div>
@@ -1012,10 +1030,13 @@ const LandIdentification = () => {
                 name="location"
                 value={formData.location}
                 onChange={handleInputChange}
+                disabled={!selectedCountryId}
               >
-                <option value="">{citiesLoading ? "Loading cities..." : "Select location"}</option>
+                <option value="">
+                  {citiesLoading ? "Loading cities..." : selectedCountryId ? "Select city" : "Select Country first"}
+                </option>
                 {cities.map((c) => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
                 <option value="Other Location">Other Location</option>
               </select>
@@ -1034,11 +1055,41 @@ const LandIdentification = () => {
                 }
                 onChange={(opt) => {
                   if (opt) {
-                    handleInputChange({ target: { name: "village", value: opt.value } });
+                    const latStr = opt.lat != null ? String(opt.lat) : "";
+                    const lngStr = opt.lng != null ? String(opt.lng) : "";
                     setSelectedVillageCoords({ lat: opt.lat, lng: opt.lng });
+                    setFormData(prev => {
+                      const updated = {
+                        ...prev,
+                        village: opt.value,
+                        polygonCenterLat: prev.polygonCenterLat || latStr,
+                        polygonCenterLng: prev.polygonCenterLng || lngStr,
+                        latitude: prev.polygonCenterLat || latStr,
+                        longitude: prev.polygonCenterLng || lngStr,
+                      };
+                      try {
+                        localStorage.setItem('Land Identification', JSON.stringify(updated));
+                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                      } catch (err) {
+                        console.error('Error saving Land Identification:', err);
+                      }
+                      return updated;
+                    });
                   } else {
-                    handleInputChange({ target: { name: "village", value: "" } });
                     setSelectedVillageCoords(null);
+                    setFormData(prev => {
+                      const updated = {
+                        ...prev,
+                        village: "",
+                      };
+                      try {
+                        localStorage.setItem('Land Identification', JSON.stringify(updated));
+                        window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                      } catch (err) {
+                        console.error('Error saving Land Identification:', err);
+                      }
+                      return updated;
+                    });
                   }
                 }}
                 isLoading={villagesLoading}
@@ -1069,16 +1120,33 @@ const LandIdentification = () => {
                 value={formData.polygonCenterLat && formData.polygonCenterLng ? `${formData.polygonCenterLat}, ${formData.polygonCenterLng}` : formData.polygonCenterLat ? formData.polygonCenterLat : ''}
                 onChange={(e) => {
                   const value = e.target.value.trim();
-                  if (value === '') {
-                    setFormData({ ...formData, polygonCenterLat: '', polygonCenterLng: '' });
-                  } else {
-                    const parts = value.split(',').map(p => p.trim());
-                    if (parts.length === 2) {
-                      setFormData({ ...formData, polygonCenterLat: parts[0], polygonCenterLng: parts[1] });
-                    } else if (parts.length === 1) {
-                      setFormData({ ...formData, polygonCenterLat: parts[0], polygonCenterLng: '' });
+                  setFormData(prev => {
+                    let lat = '';
+                    let lng = '';
+                    if (value !== '') {
+                      const parts = value.split(',').map(p => p.trim());
+                      if (parts.length === 2) {
+                        lat = parts[0];
+                        lng = parts[1];
+                      } else if (parts.length === 1) {
+                        lat = parts[0];
+                      }
                     }
-                  }
+                    const updated = {
+                      ...prev,
+                      polygonCenterLat: lat,
+                      polygonCenterLng: lng,
+                      latitude: lat,
+                      longitude: lng,
+                    };
+                    try {
+                      localStorage.setItem('Land Identification', JSON.stringify(updated));
+                      window.dispatchEvent(new CustomEvent('landIdentificationSaved', { detail: updated }));
+                    } catch (err) {
+                      console.error('Error saving coordinates:', err);
+                    }
+                    return updated;
+                  });
                 }}
                 placeholder="e.g., 18.623724, 73.724565"
               />

@@ -37,7 +37,15 @@ const formatNumberRaw = (val, country = "India") => {
   return Math.round(Number(val)).toLocaleString(locale);
 };
 
-const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius = 1000, selectedProject = "all", selectedProjectId = null }) => {
+const SupplyDemandAnalysis = ({
+  option,
+  viewMode = "location",
+  catchmentRadius = 1000,
+  selectedProject = "all",
+  selectedProjectId = null,
+  data: externalData = undefined,
+  loading: externalLoading = undefined,
+}) => {
   const theme = "light";
   const isDark = false;
 
@@ -56,6 +64,9 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
   const [lat, setLat] = useState(() => getLandIdentificationPayload().lat);
   const [lng, setLng] = useState(() => getLandIdentificationPayload().lng);
   const cacheRef = React.useRef({ location: null, catchment: {}, nearby: {} });
+
+  const activeData = externalData !== undefined ? externalData : demandData;
+  const activeLoading = externalLoading !== undefined ? externalLoading : loading;
 
   // Sync state from Land Identification on mount/change
   useEffect(() => {
@@ -89,9 +100,9 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
     };
   }, []);
 
-  // Fetch demand data when option === "demand"
+  // Fetch demand data when option === "demand" (only if externalData not provided)
   useEffect(() => {
-    if (option !== "demand") return;
+    if (option !== "demand" || externalData !== undefined) return;
     const radiusKm = (catchmentRadius || 1000) / 1000.0;
     const cacheKey = selectedProjectId || selectedProject;
 
@@ -201,8 +212,8 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
   const country = useMemo(() => getCountryFromCity(currentCity), [currentCity]);
 
   // Demand computations
-  const demandYears = useMemo(() => demandData.map((d) => String(d.year)), [demandData]);
-  const demandUnits = useMemo(() => demandData.map((d) => d.total_units_sold), [demandData]);
+  const demandYears = useMemo(() => (activeData || []).map((d) => String(d.year)), [activeData]);
+  const demandUnits = useMemo(() => (activeData || []).map((d) => d.total_units_sold), [activeData]);
 
   // Styling & Theme options
   const textColor = isDark ? "#e2e8f0" : "#1e293b";
@@ -262,7 +273,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
     };
   }, [demandYears, textColor, gridColor, isDark, country]);
 
-  const hasData = demandData.length > 0;
+  const hasData = (activeData || []).length > 0;
 
   return (
     <div
@@ -384,7 +395,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
         ) : (
           <>
             {/* Loading State */}
-            {loading && (
+            {activeLoading && (
               <div
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
@@ -405,7 +416,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
             )}
 
             {/* Error State */}
-            {!loading && error && (
+            {!activeLoading && error && (
               <div
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
@@ -421,7 +432,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
             )}
 
             {/* No Data State */}
-            {!loading && !error && !hasData && (
+            {!activeLoading && !error && !hasData && (
               <div
                 className="d-flex flex-column align-items-center justify-content-center"
                 style={{ minHeight: 300 }}
@@ -459,7 +470,7 @@ const SupplyDemandAnalysis = ({ option, viewMode = "location", catchmentRadius =
             )}
 
             {/* Chart */}
-            {!loading && !error && hasData && (
+            {!activeLoading && !error && hasData && (
               <div style={{ overflow: "auto", maxHeight: "80vh" }}>
                 <Chart
                   options={chartOptionsDemand}
