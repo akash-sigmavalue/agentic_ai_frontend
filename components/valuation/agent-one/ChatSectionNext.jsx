@@ -1039,6 +1039,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       { role: "assistant", content: "Searching for listings for the subject project only...", meta: "Live" },
     ]);
 
+    let finalSubjectListings = [];
     try {
       const response = await fetch(apiUrl("/listing_stream"), {
         method: "POST",
@@ -1078,6 +1079,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
           if (event.type === "listing_results") {
             const allListings = event.content?.listings || [];
+            finalSubjectListings = allListings;
             setListingData(allListings);
             setMessages((prev) => {
               const next = [...prev];
@@ -1101,6 +1103,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
           }
         }
       }
+
+      if (finalSubjectListings.length > 0) {
+        submitCleaning(finalSubjectListings, []);
+      }
+
     } catch (error) {
       setStreamingNote(`Subject-only listing search failed: ${error.message}`);
     } finally {
@@ -2115,6 +2122,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 const mergedListings = isIncremental
                   ? [...activePreviousListings, ...freshListings]
                   : listings;
+                listings = mergedListings;
                 setListingData(mergedListings);
                 setTokenStats((prev) => {
                   const nextModelBreakdown = { ...prev.model_breakdown };
@@ -2246,14 +2254,17 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
 
       // Execute all DB fetches and Web listings fetch concurrently in parallel
       let dbResults = [];
+      let finalWebListings = [];
       if (shouldFetchWebListings) {
-        const [dbRes, _] = await Promise.all([
+        const [dbRes, webRes] = await Promise.all([
           Promise.all(fetchPromises),
           fetchWebListings()
         ]);
         dbResults = dbRes;
+        finalWebListings = webRes || [];
       } else {
         // No web listings to fetch. Use active previous listings as is, and just fetch DB transactions
+        finalWebListings = activePreviousListings;
         setListingData(activePreviousListings);
         setMessages((prev) => {
           const next = [...prev];
@@ -2275,7 +2286,6 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
       const newDbTransactions = dbResults.flat();
 
       // ── No-evidence guard: if BOTH web listings AND DB transactions are empty, show a clear error ──
-      const finalWebListings = listingData || [];
       if (finalWebListings.length === 0 && newDbTransactions.length === 0) {
         setMessages((prev) => [
           ...prev,
@@ -2329,6 +2339,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         });
       }
 
+      // Automatically trigger cleaning
+      if (finalWebListings.length > 0 || mergedDbTransactions.length > 0) {
+        submitCleaning(finalWebListings, mergedDbTransactions);
+      }
+
     } catch (error) {
       setMessages((prev) => {
         const next = [...prev];
@@ -2344,15 +2359,18 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
   };
 
   // ── Proceed to Data Cleaning (Step 3) ──────────────────────────
-  const submitCleaning = async () => {
+  const submitCleaning = async (customListings = null, customDbTransactions = null) => {
+    const activeListings = customListings !== null ? customListings : listingData;
+    const activeDbTx = customDbTransactions !== null ? customDbTransactions : dbTransactions;
+
     // Trigger if we have web listings OR db transactions (or both)
-    const hasWebListings = listingData && listingData.length > 0;
-    const hasDbTx = dbTransactions && dbTransactions.length > 0;
+    const hasWebListings = activeListings && activeListings.length > 0;
+    const hasDbTx = activeDbTx && activeDbTx.length > 0;
     if ((!hasWebListings && !hasDbTx) || !subjectData || isCleaningStreaming) return;
 
     const selected = Array.from(selectedComps).map((i) => comparableData[i]);
-    const webCount = (listingData || []).length;
-    const dbCount = dbTransactions.length;
+    const webCount = (activeListings || []).length;
+    const dbCount = activeDbTx.length;
 
     setIsCleaningStreaming(true);
     pendingCleaningResultRef.current = null;
@@ -2378,11 +2396,11 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          listings: listingData || [],          // web listings only — cleaning applies here
+          listings: activeListings || [],          // web listings only — cleaning applies here
           subject: subjectData,
           comparables: selected,
           property_type: subjectData.property_type || "apartment",
-          db_transactions: dbTransactions,      // passed through as-is, merged after cleaning
+          db_transactions: activeDbTx,      // passed through as-is, merged after cleaning
         }),
       });
 
@@ -4911,68 +4929,7 @@ export default function ChatSectionNext({ onEvent, onClear, onEventsReset, onMar
                 </div>
               )}
 
-              {/* ── Proceed to Data Cleaning CTA ────────────────── */}
-              {(listingData !== null || dbTransactions.length > 0) && !cleanedData && !isCleaningStreaming && !isListingStreaming && !hasPendingFetch && (listingData?.length > 0 || dbTransactions.length > 0) && (
-                <div className="mb-3 overflow-hidden rounded-2xl border border-[#fb923c]/30 bg-bg-card/95 shadow-panel">
-                  <div
-                    onClick={() => setCtaCleanCollapsed(!ctaCleanCollapsed)}
-                    className="border-b border-[#fb923c]/15 bg-[#fb923c]/5 px-4 py-3 cursor-pointer select-none"
-                  >
-                    <div className="flex items-start justify-between w-full gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#fb923c]/20 bg-[#fb923c]/10 text-base font-semibold text-[#fb923c]">
-                          <Sparkles className="h-5 w-5 text-[#fb923c]" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#fb923c]">
-                              Step 3 — Clean Raw Listings
-                            </p>
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowCleaningInfo((prev) => !prev);
-                                }}
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 text-[10px] font-black text-[#fb923c] leading-none transition hover:bg-[#fb923c]/20 focus:outline-none focus:ring-2 focus:ring-[#fb923c]/40"
-                                aria-label="Show cleaning info"
-                                title="Show cleaning info"
-                              >
-                                i
-                              </button>
-                              {showCleaningInfo && (
-                                <div className="absolute left-1/2 top-full z-30 mt-2 w-[280px] -translate-x-1/2 rounded-xl border border-[#fb923c]/35 bg-[#11161f] px-3 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-sm">
-                                  <p className="text-xs leading-relaxed text-slate-100">
-                                    The smart cleaning engine will apply area-type multipliers and statistical outlier flagging.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <p className="mt-1 text-sm text-text-secondary">
-                            {(listingData || []).length} web listing(s) and {dbTransactions?.length || 0} DB transaction(s) found. Proceed to intelligently clean, deduct duplicates, and normalize prices/areas.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center shrink-0 mt-0.5">
-                        {ctaCleanCollapsed ? <ChevronRight className="h-4 w-4 text-[#fb923c]" /> : <ChevronDown className="h-4 w-4 text-[#fb923c]" />}
-                      </div>
-                    </div>
-                  </div>
-                  {!ctaCleanCollapsed && (
-                    <div className="flex items-center gap-3 px-4 py-3 animate-in fade-in duration-200">
-                      <button
-                        type="button"
-                        onClick={submitCleaning}
-                        className="ml-auto shrink-0 rounded-xl bg-[#fb923c] px-5 py-2.5 text-sm font-semibold text-bg-deep transition hover:scale-[1.02] hover:brightness-110 cursor-pointer"
-                      >
-                        Start Data Cleaning →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+
 
               {/* ── Proceed to Factorial Table CTA ────────────────── */}
               {cleanedData && cleanedData.length > 0 && (!factorialData || needsFactorialRegeneration) && !isFactorialStreaming && (

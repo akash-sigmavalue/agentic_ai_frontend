@@ -58,11 +58,11 @@ const STAGE_META = {
     description: "Agent web search × 2 passes → geocode → confidence scoring → 15km filter",
   },
   "Stage 3B": {
-    label: "Stage 3B— Market Data Collection",
+    label: "Stage 3B — Market Data Collection & Cleaning",
     icon: Database,
     accent: "#f97316",
     accentGlow: "rgba(249,115,22,0.18)",
-    description: "Fetch web listing data (asking prices) & government registered transactions (historical agreements)",
+    description: "Fetch web listing data (asking prices) & government registered transactions (historical agreements) & clean/normalize data",
   },
   "Stage 3C": {
     label: "Stage 3C — Data Cleaning & Normalization",
@@ -106,8 +106,7 @@ const PROGRESS_STAGES = [
   { key: "Stage 1", label: "S1", matchKeys: ["Stage 1", "Stage 1 Halt"] },
   { key: "Stage 2", label: "S2", matchKeys: ["Stage 2"] },
   { key: "Stage 3A", label: "S3A", matchKeys: ["Stage 3A"] },
-  { key: "Stage 3B", label: "S3B", matchKeys: ["Stage 3B"] },
-  { key: "Stage 3C", label: "S3C", matchKeys: ["Stage 3C"] },
+  { key: "Stage 3B", label: "S3B", matchKeys: ["Stage 3B", "Stage 3C"] },
   { key: "Stage 4", label: "S4", matchKeys: ["Stage 4"] },
   { key: "Stage 5", label: "S5", matchKeys: ["Stage 5", "Complete"] },
 ];
@@ -115,7 +114,7 @@ const PROGRESS_STAGES = [
 // Stage ordering for accordion display
 const STAGE_ORDER = [
   "Stage 1", "Stage 1 Halt", "Stage 2",
-  "Stage 3A", "Stage 3B", "Stage 3C",
+  "Stage 3A", "Stage 3B",
   "Stage 4", "Stage 5",
   "Complete", "Attention",
 ];
@@ -414,7 +413,7 @@ function StepDetails({ step }) {
     const STEP_STAGE_MAP = {
       comparable_identification: "→ Stage 3A",
       rate_data_fetch: "→ Stage 3B",
-      outlier_removal: "→ Stage 3C",
+      outlier_removal: "→ Stage 3B",
       Factorial_table: "→ Stage 4",
       factorial_table: "→ Stage 4",
       rate_derivation: "→ Stage 5",
@@ -876,8 +875,7 @@ function EmptyState() {
     { label: "Stage 1 — Property Profiling", icon: Box, color: "#22d3ee" },
     { label: "Stage 2 — Workflow Planning", icon: ClipboardList, color: "#a78bfa" },
     { label: "Stage 3A  — Comparable Discovery", icon: Search, color: "#fb923c" },
-    { label: "Stage 3B— Market Data Collection", icon: Database, color: "#f97316" },
-    { label: "Stage 3C — Data Cleaning", icon: Sparkles, color: "#60a5fa" },
+    { label: "Stage 3B — Market Data Collection & Cleaning", icon: Database, color: "#f97316" },
     { label: "Stage 4 — Factorial Table", icon: Table, color: "#34d399" },
     { label: "Stage 5 — Valuation Synthesis", icon: Brain, color: "#f472b6" },
   ];

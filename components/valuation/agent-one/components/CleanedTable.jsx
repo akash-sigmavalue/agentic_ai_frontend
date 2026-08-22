@@ -521,7 +521,7 @@ export default function CleanedTable({ listings, reviewListings = [], droppedLis
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[rgba(251,146,60,0.15)] text-sm">🧹</span>
               <div className="min-w-0">
                 <span className="inline-flex min-w-0 items-center rounded-full border border-[#fb923c]/30 bg-[#fb923c]/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.05em] text-[#fb923c]">
-                  Stage 3C - Cleaned & Normalized Data
+                  Stage 3B - Cleaned & Normalized Data
                 </span>
                 <span className="mt-1 block rounded-full border border-white/[0.08] px-2 py-0.5 text-xs font-semibold text-text-dim whitespace-nowrap w-fit">
                   {listings.length} valid records
